@@ -221,10 +221,27 @@ class ItemNameTranslator {
         const cnName = this.cnNames[itemHrid];
         if (cnName) return cnName;
 
+        // Trigger one-time DOM scan to capture any available Chinese names
+        if (!this._didInitialScan) {
+            this._didInitialScan = true;
+            this._scanDomNow();
+        }
+
+        const freshName = this.cnNames[itemHrid];
+        if (freshName) return freshName;
+
         const itemDetails = dataManager.getItemDetails(itemHrid);
         if (itemDetails?.name) return itemDetails.name;
 
         return itemHrid.split('/').pop().replace(/_/g, ' ');
+    }
+
+    _scanDomNow() {
+        for (const selector of MUTATION_SELECTORS) {
+            for (const el of document.querySelectorAll(selector)) {
+                this._tryCaptureFromElement(el);
+            }
+        }
     }
 
     getHridFromChineseName(chineseName) {
