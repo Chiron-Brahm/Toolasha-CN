@@ -56,15 +56,8 @@ class AutoClickMax {
             return;
         }
 
-        const headerText = header.textContent;
-
-        // Skip all buy modals (Buy Listing, Buy Now)
-        if (headerText.includes('Buy')) {
-            return;
-        }
-
-        // Only process sell modals (Sell Listing, Sell Now)
-        if (!headerText.includes('Sell')) {
+        // Only process sell modals — detected by Button_sell class presence
+        if (!modal.querySelector('[class*="Button_sell"]')) {
             return;
         }
 

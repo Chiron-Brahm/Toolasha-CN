@@ -290,16 +290,21 @@ class AlchemyProfitDisplay {
                 // Not actively performing - check which tab is selected in the DOM
                 // Use [role="tab"] selector which reliably matches MUI tab elements
                 const tabContainer = document.querySelector('[class*="AlchemyPanel_tabsComponentContainer"]');
-                const selectedTab = tabContainer?.querySelector('[role="tab"][aria-selected="true"]');
-                const tabText = selectedTab?.textContent?.trim()?.toLowerCase() || '';
+                const tablist = tabContainer?.querySelector('[role="tablist"]');
+                if (tablist) {
+                    const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+                    const selectedIdx = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
+                    // Alchemy tabs order: [Coinify=0, Transmute=1, Decompose=2]
+                    if (selectedIdx === 0) {
+                        isCoinify = true;
+                    } else if (selectedIdx === 1) {
+                        isTransmute = true;
+                    } else if (selectedIdx === 2) {
+                        isDecompose = true;
+                    }
+                }
 
-                if (tabText.includes('coinify')) {
-                    isCoinify = true;
-                } else if (tabText.includes('transmute')) {
-                    isTransmute = true;
-                } else if (tabText.includes('decompose')) {
-                    isDecompose = true;
-                } else {
+                if (!isCoinify && !isTransmute && !isDecompose) {
                     // Final fallback: use drop/item data heuristics
                     isCoinify = drops.length > 0 && drops[0].itemHrid === '/items/coin';
                     if (!isCoinify && requirements && requirements.length > 0) {

@@ -77,12 +77,9 @@ class AutoFillPrice {
             return;
         }
 
-        // Determine if this is a buy or sell order
-        const labelParent = bestPriceLabel.parentElement;
-        const labelText = labelParent.textContent.toLowerCase();
-
-        const isBuyOrder = labelText.includes('best buy');
-        const isSellOrder = labelText.includes('best sell');
+        // Determine if this is a buy or sell order from modal button structure
+        const isSellOrder = modal.querySelector('[class*="Button_sell"]') !== null;
+        const isBuyOrder = modal.querySelector('[class*="Button_buy"]') !== null;
 
         if (!isBuyOrder && !isSellOrder) {
             return;

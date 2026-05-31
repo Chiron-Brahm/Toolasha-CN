@@ -391,14 +391,11 @@ class PopOutChat {
         const chatPanel = document.querySelector('[class*="GamePage_chatPanel"]');
         if (!chatPanel) return;
 
-        const channelName = CHANNEL_NAME_MAP[channelHrid];
-        if (!channelName) return;
-
         const tabButtons = Array.from(chatPanel.querySelectorAll('button[role="tab"]'));
         const tabBtn = tabButtons.find((btn) => {
-            const label = btn.textContent?.trim().replace(/\d+$/, '').trim();
-            return label === channelName;
+            return btn.getAttribute('data-mention-channel') === channelHrid;
         });
+        if (!tabBtn) return;
 
         const doSend = () => {
             const input = chatPanel.querySelector('[class*="Chat_chatInputContainer"] input');

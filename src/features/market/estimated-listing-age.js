@@ -697,7 +697,9 @@ class EstimatedListingAge {
                 cell.style.fontSize = '0.9em';
             } else {
                 // Beyond top 20 - YOUR listings only
-                const hasCancel = row.textContent.includes('Cancel');
+                const hasCancel = row.querySelector(
+                    '[class*="Cancel_"], [class*="Button_cancel"], button[class*="cancel"]'
+                );
                 if (hasCancel) {
                     // Extract price and quantity for matching
                     const priceText = row.querySelector('[class*="price"]')?.textContent || '';
@@ -780,7 +782,9 @@ class EstimatedListingAge {
         for (const table of tables) {
             const rows = table.querySelectorAll('tbody tr');
             for (const row of rows) {
-                const hasCancel = row.textContent.includes('Cancel');
+                const hasCancel = row.querySelector(
+                    '[class*="Cancel_"], [class*="Button_cancel"], button[class*="cancel"]'
+                );
                 if (hasCancel) {
                     const priceText = row.querySelector('[class*="price"]')?.textContent || '';
                     const quantityText = row.children[0]?.textContent || '';

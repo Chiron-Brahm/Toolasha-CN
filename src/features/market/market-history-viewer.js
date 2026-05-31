@@ -304,9 +304,9 @@ class MarketHistoryViewer {
                 const statusCell = row.querySelector('td:nth-child(1)');
                 if (!statusCell) continue;
 
-                const statusText = statusCell.textContent.trim();
-
-                if (statusText !== 'Expired') continue;
+                // Check for expired/canceled status using CSS class instead of text
+                const isExpired = statusCell.querySelector('[class*="Status_cancel"], [class*="Cancel_"]');
+                if (!isExpired) continue;
 
                 // This row is expired - now match it to our stored listings
                 // Extract identifying information from the row
@@ -320,7 +320,8 @@ class MarketHistoryViewer {
                     continue;
                 }
 
-                const isSell = typeCell.textContent.trim() === 'Sell';
+                // Determine buy/sell from CSS class instead of text content
+                const isSell = typeCell.querySelector('[class*="sell"], [class*="Sell"]') !== null;
                 const priceText = priceCell.textContent.trim();
                 const price = this.parsePrice(priceText);
                 const progressText = progressCell.textContent.trim();

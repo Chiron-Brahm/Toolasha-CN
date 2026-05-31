@@ -96,8 +96,11 @@ class MarketplaceShortcuts {
         const itemDetails = gameData.itemDetailMap[itemHrid];
         if (!itemDetails?.isTradable) return;
 
-        // Find "View Marketplace" button
-        const viewMarketplaceBtn = this.findButtonByText(actionMenu, 'View Marketplace');
+        // Find "View Marketplace" button — last game button in action menu (excludes injected mwi- buttons)
+        const gameButtons = Array.from(actionMenu.querySelectorAll('button')).filter(
+            (b) => !b.className.includes('mwi-')
+        );
+        const viewMarketplaceBtn = gameButtons[gameButtons.length - 1];
         if (!viewMarketplaceBtn) return;
 
         // Build and insert dropdown
@@ -643,20 +646,6 @@ class MarketplaceShortcuts {
         }
 
         return allInputs[0];
-    }
-
-    /**
-     * Find a button by its text content
-     * @param {HTMLElement} container - Container to search in
-     * @param {string} text - Button text to find
-     * @returns {HTMLElement|null} Button element or null
-     */
-    findButtonByText(container, text) {
-        const buttons = container.querySelectorAll('button');
-        for (const btn of buttons) {
-            if (btn.textContent.trim() === text) return btn;
-        }
-        return null;
     }
 
     /**

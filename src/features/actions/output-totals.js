@@ -142,8 +142,8 @@ class OutputTotals {
                 return;
             }
 
-            // Check for essences
-            if (container.innerText.toLowerCase().includes('essence')) {
+            // Check for essences using CSS class (locale-safe)
+            if (container.querySelector('[class*="essence"]')) {
                 this.processDropContainer(container, amount, isIndeterminate, placeholderLabel);
                 processedContainers.add(container);
                 return;

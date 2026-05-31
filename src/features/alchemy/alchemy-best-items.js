@@ -164,11 +164,13 @@ class AlchemyBestItems {
      */
     detectAlchemyType() {
         const tabContainer = document.querySelector('[class*="AlchemyPanel_tabsComponentContainer"]');
-        const selectedTab = tabContainer?.querySelector('[role="tab"][aria-selected="true"]');
-        const text = selectedTab?.textContent?.trim()?.toLowerCase() || '';
-
-        if (text.includes('decompose')) return 'decompose';
-        if (text.includes('transmute')) return 'transmute';
+        const tablist = tabContainer?.querySelector('[role="tablist"]');
+        if (!tablist) return 'coinify';
+        const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+        const selectedIdx = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
+        // Alchemy tabs order: [Coinify=0, Transmute=1, Decompose=2]
+        if (selectedIdx === 1) return 'transmute';
+        if (selectedIdx === 2) return 'decompose';
         return 'coinify';
     }
 

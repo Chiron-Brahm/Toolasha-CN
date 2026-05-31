@@ -273,12 +273,14 @@ class AlchemyActionProtection {
 
     _getAlchemyType() {
         const tabContainer = document.querySelector('[class*="AlchemyPanel_tabsComponentContainer"]');
-        const selectedTab = tabContainer?.querySelector('[role="tab"][aria-selected="true"]');
-        const tabText = selectedTab?.textContent?.trim()?.toLowerCase() || '';
-
-        if (tabText.includes('transmute')) return 'transmute';
-        if (tabText.includes('decompose')) return 'decompose';
-        if (tabText.includes('coinify')) return 'coinify';
+        const tablist = tabContainer?.querySelector('[role="tablist"]');
+        if (!tablist) return null;
+        const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+        const selectedIdx = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
+        // Alchemy tabs order: [Coinify=0, Transmute=1, Decompose=2]
+        if (selectedIdx === 0) return 'coinify';
+        if (selectedIdx === 1) return 'transmute';
+        if (selectedIdx === 2) return 'decompose';
         return null;
     }
 
