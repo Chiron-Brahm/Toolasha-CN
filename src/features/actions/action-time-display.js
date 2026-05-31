@@ -1199,7 +1199,8 @@ class ActionTimeDisplay {
         // Append to game's div (with marker for cleanup)
         this.appendStatsToActionName(actionNameElement, statsToAppend.join(' · '));
 
-        // Time estimates in our div
+        // Line 2: Time estimates in our div
+        console.log('[TimeDebug] remainingQueuedActions:', remainingQueuedActions, 'totalTimeSeconds:', totalTimeSeconds, 'showTime:', config.getSetting('actionBar_showTimeRemaining'));
         if (
             config.getSetting('actionBar_showTimeRemaining') &&
             remainingQueuedActions !== Infinity &&
