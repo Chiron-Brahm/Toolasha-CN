@@ -177,7 +177,9 @@ class ActionTimeDisplay {
         // Wait for action name element to exist
         this.waitForActionPanel();
 
+        console.log('[TimeDebug] before initializeActionNameWatcher');
         this.initializeActionNameWatcher();
+        console.log('[TimeDebug] before initializeQueueObserver');
 
         // Initialize queue tooltip observer
         this.initializeQueueObserver();
