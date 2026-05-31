@@ -187,6 +187,7 @@ class ItemNameTranslator {
     startObserver() {
         if (this._observerStarted) return;
         this._observerStarted = true;
+        console.log('[ItemNameTranslator] Observer starting, selectors:', MUTATION_SELECTORS);
 
         const processNode = (node) => {
             if (!node || node.nodeType !== 1) return;
@@ -255,6 +256,13 @@ class ItemNameTranslator {
         if (hrid) {
             this.cnNames[hrid] = baseName;
             this._scheduleSave();
+        } else {
+            // Log first 5 failures
+            if (!this._failCount) this._failCount = 0;
+            if (this._failCount < 5) {
+                console.log('[ItemNameTranslator] CJK text found but no HRID match:', baseName);
+                this._failCount++;
+            }
         }
     }
 }
