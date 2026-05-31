@@ -40,8 +40,6 @@ import { calculateEnhancementPredictions } from '../enhancement/enhancement-xp.j
 import { BASE_SUCCESS_RATES } from '../../utils/enhancement-calculator.js';
 import { t } from '../../core/i18n.js';
 
-console.log('[TimeDebug] action-time-display.js module loaded, timeReadableZh(3661) =', timeReadableZh(3661));
-
 /**
  * ActionTimeDisplay class manages the time display panel and queue tooltips
  */
@@ -70,9 +68,7 @@ class ActionTimeDisplay {
         }
 
         // Migrate old display mode setting to new granular toggles
-        console.log('[TimeDebug] before migrateDisplayMode');
-        await this.migrateDisplayMode().catch((e) => console.error('[TimeDebug] migrateDisplayMode FAILED:', e));
-        console.log('[TimeDebug] after migrateDisplayMode');
+        await this.migrateDisplayMode();
 
         if (!config.getSetting('actionBar_enabled')) {
             return;
@@ -179,9 +175,7 @@ class ActionTimeDisplay {
         // Wait for action name element to exist
         this.waitForActionPanel();
 
-        console.log('[TimeDebug] before initializeActionNameWatcher');
         this.initializeActionNameWatcher();
-        console.log('[TimeDebug] before initializeQueueObserver');
 
         // Initialize queue tooltip observer
         this.initializeQueueObserver();
@@ -215,7 +209,6 @@ class ActionTimeDisplay {
      * Initialize observer for queue tooltip
      */
     initializeQueueObserver() {
-        console.log('[TimeDebug] initializeQueueObserver() registering for QueuedActions_queuedActionsEditMenu');
         // Register with centralized DOM observer to watch for queue menu
         this.unregisterQueueObserver = domObserver.onClass(
             'ActionTimeDisplay-Queue',
@@ -724,7 +717,6 @@ class ActionTimeDisplay {
      * Update the display with current action data
      */
     updateDisplay() {
-        console.log('[TimeDebug] updateDisplay() called');
         if (!this.displayElement) {
             this.createDisplayPanel();
             if (!this.displayElement) {
@@ -1148,7 +1140,6 @@ class ActionTimeDisplay {
 
         // Format time strings (timeReadable handles days/hours/minutes properly)
         const timeStr = timeReadableZh(totalTimeSeconds);
-        console.log('[TimeDebug] timeStr from timeReadableZh:', timeStr, 'totalTimeSeconds:', totalTimeSeconds);
 
         // Format completion time
         const now = new Date();
@@ -1202,16 +1193,11 @@ class ActionTimeDisplay {
         // Actions/hr and items/hr
         if (config.getSetting('actionBar_showActionsPerHour')) {
             const msg = `${actionsPerHourWithEfficiency.toFixed(0)} ${t('actions/hr')} (${itemsPerHour.toFixed(0)} ${t('items/hr')})`;
-            console.log('[TimeDebug] actions/hr line:', msg);
             statsToAppend.push(msg);
         }
 
         // Append to game's div (with marker for cleanup)
         this.appendStatsToActionName(actionNameElement, statsToAppend.join(' · '));
-
-        console.log('[TimeDebug] showTimeRemaining setting:', config.getSetting('actionBar_showTimeRemaining'));
-        console.log('[TimeDebug] remainingQueuedActions:', remainingQueuedActions);
-        console.log('[TimeDebug] totalTimeSeconds:', totalTimeSeconds, 'timeStr:', timeStr);
 
         // Time estimates in our div
         if (
@@ -1220,7 +1206,6 @@ class ActionTimeDisplay {
             !isNaN(remainingQueuedActions) &&
             remainingQueuedActions > 0
         ) {
-            console.log('[TimeDebug] Showing time estimate, timeStr:', timeStr, 'clockTime:', clockTime);
             const itemIconHtml = this.getItemIconHtml(limitingItemHrid);
             const matsLabel = itemIconHtml ? `${itemIconHtml}:` : '';
             let recycleHtml = '';
@@ -2048,7 +2033,6 @@ class ActionTimeDisplay {
      * @param {HTMLElement} queueMenu - Queue menu container element
      */
     injectQueueTimes(queueMenu) {
-        console.log('[TimeDebug] injectQueueTimes called, currentActions:', dataManager.getCurrentActions()?.length);
         let shouldReconnectObserver = false;
 
         try {
