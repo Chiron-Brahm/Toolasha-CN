@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Toolasha
+// @name         Toolasha-CN
 // @namespace    http://tampermonkey.net/
 // @version      2.58.4
 // @downloadURL  https://greasyfork.org/scripts/562662-toolasha/code/Toolasha.user.js
