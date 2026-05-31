@@ -1193,13 +1193,17 @@ class ActionTimeDisplay {
 
         // Actions/hr and items/hr
         if (config.getSetting('actionBar_showActionsPerHour')) {
-            statsToAppend.push(
-                `${actionsPerHourWithEfficiency.toFixed(0)} ${t('actions/hr')} (${itemsPerHour.toFixed(0)} ${t('items/hr')})`
-            );
+            const msg = `${actionsPerHourWithEfficiency.toFixed(0)} ${t('actions/hr')} (${itemsPerHour.toFixed(0)} ${t('items/hr')})`;
+            console.log('[TimeDebug] actions/hr line:', msg);
+            statsToAppend.push(msg);
         }
 
         // Append to game's div (with marker for cleanup)
         this.appendStatsToActionName(actionNameElement, statsToAppend.join(' · '));
+
+        console.log('[TimeDebug] showTimeRemaining setting:', config.getSetting('actionBar_showTimeRemaining'));
+        console.log('[TimeDebug] remainingQueuedActions:', remainingQueuedActions);
+        console.log('[TimeDebug] totalTimeSeconds:', totalTimeSeconds, 'timeStr:', timeStr);
 
         // Time estimates in our div
         if (
