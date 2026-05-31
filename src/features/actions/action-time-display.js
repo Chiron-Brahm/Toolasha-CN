@@ -211,6 +211,7 @@ class ActionTimeDisplay {
      * Initialize observer for queue tooltip
      */
     initializeQueueObserver() {
+        console.log('[TimeDebug] initializeQueueObserver() registering for QueuedActions_queuedActionsEditMenu');
         // Register with centralized DOM observer to watch for queue menu
         this.unregisterQueueObserver = domObserver.onClass(
             'ActionTimeDisplay-Queue',
