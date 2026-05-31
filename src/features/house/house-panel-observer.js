@@ -104,44 +104,54 @@ class HousePanelObserver {
      * @returns {string|null} House room HRID
      */
     identifyRoomFromModal(modalContent) {
-        const header = modalContent.querySelector('[class*="HousePanel_header"]');
-
-        // Try to find the room image/icon and extract room ID from its src
-        const headerImg = header?.querySelector('img');
-        const allSvgs = header?.querySelectorAll('svg');
-        console.log('[HouseDebug] Header img src:', headerImg?.getAttribute('src'));
-        allSvgs?.forEach((s, i) => {
-            const use = s.querySelector('use');
-            console.log(`[HouseDebug] SVG[${i}] use href:`, use?.getAttribute('href'));
-        });
+        // Try to extract room HRID from React Fiber (locale-independent)
+        const fiberKey = Object.keys(modalContent).find((k) => k.startsWith('__reactFiber'));
+        if (fiberKey) {
+            let fiber = modalContent[fiberKey];
+            // Walk up the fiber tree looking for room data
+            for (let i = 0; i < 20 && fiber; i++) {
+                const props = fiber.memoizedProps || fiber.pendingProps || {};
+                // Check for houseRoomHrid in component props
+                if (props.houseRoomHrid) {
+                    console.log('[HouseDebug] Room identified via React fiber:', props.houseRoomHrid);
+                    return props.houseRoomHrid;
+                }
+                // Also check children props for room data
+                if (props.room?.hrid) {
+                    console.log('[HouseDebug] Room identified via React fiber room.hrid:', props.room.hrid);
+                    return props.room.hrid;
+                }
+                // Check for houseRoomHrid in state
+                const state = fiber.memoizedState;
+                if (state && typeof state === 'object' && state.memoizedState?.houseRoomHrid) {
+                    console.log('[HouseDebug] Room via memoizedState');
+                    return state.memoizedState.houseRoomHrid;
+                }
+                fiber = fiber.return;
+            }
+        }
 
         // Primary: extract room ID from SVG sprite href
         const svgUse = modalContent.querySelector('[class*="HousePanel_header"] svg use');
         if (svgUse) {
             const hrefValue = svgUse.getAttribute('href') || '';
             const roomId = hrefValue.split('#')[1];
-            if (roomId) {
-                console.log('[HouseDebug] Room identified via SVG:', roomId);
-                return `/house_rooms/${roomId}`;
-            }
+            if (roomId) return `/house_rooms/${roomId}`;
         }
 
         // Fallback: match header text against game data room names
         const initData = dataManager.getInitClientData();
         if (initData?.houseRoomDetailMap) {
+            const header = modalContent.querySelector('[class*="HousePanel_header"]');
             const roomName = header?.textContent?.trim();
-            console.log('[HouseDebug] Header text:', JSON.stringify(roomName));
             if (roomName) {
                 for (const [hrid, roomData] of Object.entries(initData.houseRoomDetailMap)) {
-                    if (roomData.name === roomName) {
-                        console.log('[HouseDebug] Room identified via text match:', hrid);
-                        return hrid;
-                    }
+                    if (roomData.name === roomName) return hrid;
                 }
-                console.warn('[HouseDebug] No room matched header text. Game has English names, UI is Chinese.');
             }
         }
 
+        console.warn('[HouseDebug] All identification methods failed');
         return null;
     }
         }
