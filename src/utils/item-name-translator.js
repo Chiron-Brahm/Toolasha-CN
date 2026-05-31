@@ -55,166 +55,37 @@ class ItemNameTranslator {
     }
 
     _bulkImportFromGameI18n() {
-        const initData = dataManager.getInitClientData();
-        if (!initData?.itemDetailMap) return;
-
-        // Try to access game's react-i18next instance or translation store
-        // The game stores translations; if we can find them, we can map English→Chinese
-        let i18nStore = null;
-
-        // Method 1: Check for i18n on window
+        // Directly read game's initClientData from localStorage (like Edible Tools does)
+        // When the game is in Chinese, itemDetailMap[].name contains Chinese names
         try {
-            const w = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-            // React i18next stores translations in a global or on the i18n instance
-            if (w.i18n?.store?.data?.zh) i18nStore = w.i18n.store.data.zh;
-            if (w.i18next?.store?.data?.zh) i18nStore = w.i18next.store.data.zh;
-            if (w.__i18n?.store?.data?.zh) i18nStore = w.__i18n.store.data.zh;
-        } catch (_) { /* unsafeWindow may not be available */ }
-
-        // Method 2: Walk React fiber tree to find i18n context
-        if (!i18nStore) {
+            const raw = localStorage.getItem('initClientData');
+            if (!raw) return;
+            // Try LZString decompress (same as Edible Tools)
+            let data = raw;
             try {
-                const rootEl = document.getElementById('root') || document.body?.firstElementChild;
-                const fiberKey = Object.keys(rootEl || {}).find((k) => k.startsWith('__reactFiber'));
-                if (fiberKey) {
-                    let fiber = rootEl[fiberKey];
-                    let depth = 0;
-                    for (let i = 0; i < 50 && fiber; i++) {
-                        try {
-                            const hooks = fiber.memoizedState;
-                            let hook = hooks;
-                            let hookCount = 0;
-                            while (hook) {
-                                const val = hook.memoizedState;
-                                if (val?.i18n?.store?.data?.zh) {
-                                    i18nStore = val.i18n.store.data.zh;
-                                    break;
-                                }
-                                if (val?.store?.data?.zh) {
-                                    i18nStore = val.store.data.zh;
-                                    break;
-                                }
-                                hook = hook.next;
-                                hookCount++;
-                            }
-                            if (i18nStore) break;
-                        } catch (_) { /* skip broken fibers */ }
-                        fiber = fiber.return;
-                    }
+                if (typeof LZString !== 'undefined' && LZString.decompressFromUTF16) {
+                    data = LZString.decompressFromUTF16(raw);
                 }
-            } catch (_) { /* fiber walk failed */ }
-        }
+            } catch (_) { /* not compressed */ }
+            const parsed = JSON.parse(data);
+            if (parsed?.type !== 'init_client_data' || !parsed?.itemDetailMap) return;
 
-        if (!i18nStore) {
-            return;
-        }
+            const initData = dataManager.getInitClientData();
+            if (!initData?.itemDetailMap) return;
 
-
-        // Map English item names → Chinese using the i18n store
-        let count = 0;
-        for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-            const enName = item.name;
-            // Try common i18n key patterns
-            const cnName =
-                i18nStore[enName] ||
-                i18nStore[`items.${enName}`] ||
-                i18nStore[enName.toLowerCase()] ||
-                i18nStore[enName.replace(/\s+/g, '_').toLowerCase()];
-            if (cnName && typeof cnName === 'string' && CJK_REGEX.test(cnName)) {
-                this.cnNames[hrid] = cnName;
-                count++;
+            let count = 0;
+            for (const [hrid, item] of Object.entries(parsed.itemDetailMap)) {
+                if (item.name && CJK_REGEX.test(item.name) && !this.cnNames[hrid]) {
+                    this.cnNames[hrid] = item.name;
+                    count++;
+                }
             }
-        }
-
-        if (count > 0) {
-            this._scheduleSave();
-        }
-    }
-
-    _scheduleSave() {
-        if (!this.isLoaded) return;
-        this._dirty = true;
-        if (this._saveTimer) return;
-        this._saveTimer = setTimeout(async () => {
-            this._saveTimer = null;
-            if (!this._dirty) return;
-            this._dirty = false;
-            try {
-                const data = { ...this.cnNames, _version: CACHE_VERSION };
-                await storage.set(STORAGE_KEY, data, 'settings', true);
-            } catch (error) {
-                console.warn('[ItemNameTranslator] Failed to save names:', error);
+            if (count > 0) {
+                this._scheduleSave();
             }
-        }, DEBOUNCE_DELAY);
-    }
-
-    flush() {
-        if (this._saveTimer) {
-            clearTimeout(this._saveTimer);
-            this._saveTimer = null;
+        } catch (_) {
+            // localStorage read failed, fall back to DOM capture
         }
-        if (this._dirty) {
-            this._dirty = false;
-            const data = { ...this.cnNames, _version: CACHE_VERSION };
-            storage.set(STORAGE_KEY, data, 'settings', true).catch(() => {});
-        }
-    }
-
-    _ensureHRIDMaps() {
-        const initData = dataManager.getInitClientData();
-        if (!initData?.itemDetailMap) {
-            this._enToHrid = null;
-            this._hridToEn = null;
-            return false;
-        }
-        const source = initData.itemDetailMap;
-        if (this._hridToEnSource === source) return true;
-        this._enToHrid = new Map();
-        this._hridToEn = new Map();
-        for (const [hrid, item] of Object.entries(source)) {
-            this._enToHrid.set(item.name, hrid);
-            this._hridToEn.set(hrid, item.name);
-        }
-        this._hridToEnSource = source;
-        return true;
-    }
-
-    findHridFromDomName(domName) {
-        if (!domName) return null;
-        const baseName = domName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-        if (!this._ensureHRIDMaps() || !this._enToHrid) return null;
-
-        let hrid = this._enToHrid.get(baseName);
-        if (hrid) return hrid;
-
-        const starVariant = baseName.replace(/\s*\(R\)$/g, ' ★');
-        hrid = this._enToHrid.get(starVariant);
-        if (hrid) return hrid;
-
-        const rVariant = baseName.replace(/\s*★$/g, ' (R)').replace(/\s+/g, ' ').trim();
-        hrid = this._enToHrid.get(rVariant);
-        if (hrid) return hrid;
-
-        for (const [cachedHrid, cnName] of Object.entries(this.cnNames)) {
-            if (cnName === baseName) return cachedHrid;
-        }
-
-        return null;
-    }
-
-    captureFromDOM(element, itemHrid) {
-        if (!element || !itemHrid) return;
-        const text = (element.textContent || element.getAttribute('aria-label') || '').trim();
-        if (!text) return;
-        const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-        if (!baseName) return;
-
-        if (!CJK_REGEX.test(baseName)) return;
-
-        if (this.cnNames[itemHrid] === baseName) return;
-
-        this.cnNames[itemHrid] = baseName;
-        this._scheduleSave();
     }
 
     getDisplayName(itemHrid) {
