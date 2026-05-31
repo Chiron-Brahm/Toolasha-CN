@@ -39,6 +39,7 @@ import {
 import { calculateEnhancementPredictions } from '../enhancement/enhancement-xp.js';
 import { BASE_SUCCESS_RATES } from '../../utils/enhancement-calculator.js';
 import { t } from '../../core/i18n.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 /**
  * ActionTimeDisplay class manages the time display panel and queue tooltips
@@ -778,6 +779,10 @@ class ActionTimeDisplay {
         if (cachedActions.length > 0) {
             const sorted = cachedActions.sort((a, b) => a.ordinal - b.ordinal);
             action = this.matchCurrentActionFromText(sorted.slice(0, 1), actionNameText);
+            // Fallback: if name matching fails (e.g. Chinese UI), use the first action directly
+            if (!action) {
+                action = sorted[0];
+            }
         }
 
         if (!action) {
@@ -1200,7 +1205,6 @@ class ActionTimeDisplay {
         this.appendStatsToActionName(actionNameElement, statsToAppend.join(' · '));
 
         // Line 2: Time estimates in our div
-        console.log('[TimeDebug] remainingQueuedActions:', remainingQueuedActions, 'totalTimeSeconds:', totalTimeSeconds, 'showTime:', config.getSetting('actionBar_showTimeRemaining'));
         if (
             config.getSetting('actionBar_showTimeRemaining') &&
             remainingQueuedActions !== Infinity &&
@@ -1556,7 +1560,11 @@ class ActionTimeDisplay {
 
     matchCurrentActionFromText(currentActions, actionNameText) {
         const { actionNameFromDom, itemNameFromDom } = this.parseActionNameFromDom(actionNameText);
-        const itemHridFromDom = this.buildItemHridFromName(itemNameFromDom || actionNameFromDom);
+        let itemHridFromDom = this.buildItemHridFromName(itemNameFromDom || actionNameFromDom);
+        // Fallback: Chinese name → HRID via itemNameTranslator
+        if (!itemHridFromDom) {
+            itemHridFromDom = itemNameTranslator.getHridFromChineseName(itemNameFromDom || actionNameFromDom);
+        }
 
         return currentActions.find((currentAction) => {
             const actionDetails = dataManager.getActionDetails(currentAction.actionHrid);
@@ -1995,7 +2003,7 @@ class ActionTimeDisplay {
         }
 
         // Match action from cache (same logic as main display, excluding already-used actions)
-        return cachedActions.find((a) => {
+        const match = cachedActions.find((a) => {
             if (usedActionIds.has(a.id)) {
                 return false; // Skip already-matched actions
             }
@@ -2019,14 +2027,19 @@ class ActionTimeDisplay {
                 }
             }
 
-            // If there's an item name, match on primaryItemHash
-            if (itemNameFromDiv && a.primaryItemHash) {
-                const itemHrid = '/items/' + itemNameFromDiv.toLowerCase().replace(/\s+/g, '_');
-                return a.primaryItemHash.includes(itemHrid);
-            }
-
             return true;
         });
+        if (match) return match;
+
+        // Fallback: if name matching fails (Chinese UI), match by ordinal order
+        const unmatched = cachedActions.filter((a) => !usedActionIds.has(a.id));
+        if (unmatched.length > 0) {
+            const fallback = unmatched[0];
+            usedActionIds.add(fallback.id);
+            return fallback;
+        }
+
+        return null;
     }
 
     /**

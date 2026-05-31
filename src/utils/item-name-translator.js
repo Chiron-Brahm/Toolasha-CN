@@ -35,6 +35,7 @@ class ItemNameTranslator {
     }
 
     async load() {
+        console.log('[ItemNameTranslator] load() called, isLoaded:', this.isLoaded);
         if (this.isLoaded) return;
         try {
             const saved = await storage.get(STORAGE_KEY, 'settings');
@@ -73,14 +74,16 @@ class ItemNameTranslator {
         // Method 2: Walk React fiber tree to find i18n context
         if (!i18nStore) {
             try {
-                const rootEl = document.getElementById('root') || document.body.firstElementChild;
-                const fiberKey = Object.keys(rootEl).find((k) => k.startsWith('__reactFiber'));
+                const rootEl = document.getElementById('root') || document.body?.firstElementChild;
+                const fiberKey = Object.keys(rootEl || {}).find((k) => k.startsWith('__reactFiber'));
                 if (fiberKey) {
                     let fiber = rootEl[fiberKey];
+                    let depth = 0;
                     for (let i = 0; i < 50 && fiber; i++) {
                         try {
                             const hooks = fiber.memoizedState;
                             let hook = hooks;
+                            let hookCount = 0;
                             while (hook) {
                                 const val = hook.memoizedState;
                                 if (val?.i18n?.store?.data?.zh) {
@@ -92,6 +95,7 @@ class ItemNameTranslator {
                                     break;
                                 }
                                 hook = hook.next;
+                                hookCount++;
                             }
                             if (i18nStore) break;
                         } catch (_) { /* skip broken fibers */ }
@@ -104,6 +108,7 @@ class ItemNameTranslator {
         if (!i18nStore) {
             return;
         }
+
 
         // Map English item names → Chinese using the i18n store
         let count = 0;

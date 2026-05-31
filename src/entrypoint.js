@@ -19,6 +19,9 @@ const Actions = window.Toolasha.Actions;
 const Combat = window.Toolasha.Combat;
 const UI = window.Toolasha.UI;
 
+// Import item name translator (not in global namespace, part of this bundle)
+import { itemNameTranslator } from './utils/item-name-translator.js';
+
 // Destructure core modules
 const { storage, config, webSocketHook, domObserver, dataManager, featureRegistry } = Core;
 
@@ -727,11 +730,20 @@ if (isCombatSimulatorPage()) {
             // Add beforeunload handler to flush all pending writes
             window.addEventListener('beforeunload', () => {
                 storage.flushAll();
+                itemNameTranslator.flush();
             });
 
             // Initialize Data Manager immediately
             // Don't wait for localStorageUtil - it handles missing data gracefully
             dataManager.initialize();
+
+            // Load Chinese item name cache from storage + bulk import from game i18n
+            await itemNameTranslator.load();
+            if (document.body) {
+                itemNameTranslator.startObserver();
+            } else {
+                document.addEventListener('DOMContentLoaded', () => itemNameTranslator.startObserver(), { once: true });
+            }
         } catch (error) {
             console.error('[Toolasha] Storage/config initialization failed:', error);
             // Initialize anyway
