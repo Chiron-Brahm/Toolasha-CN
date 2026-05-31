@@ -259,6 +259,35 @@ class ItemNameTranslator {
         this._scheduleSave();
     }
 
+    _scheduleSave() {
+        if (!this.isLoaded) return;
+        this._dirty = true;
+        if (this._saveTimer) return;
+        this._saveTimer = setTimeout(async () => {
+            this._saveTimer = null;
+            if (!this._dirty) return;
+            this._dirty = false;
+            try {
+                const data = { ...this.cnNames, _version: CACHE_VERSION };
+                await storage.set(STORAGE_KEY, data, 'settings', true);
+            } catch (error) {
+                console.warn('[ItemNameTranslator] Failed to save names:', error);
+            }
+        }, DEBOUNCE_DELAY);
+    }
+
+    flush() {
+        if (this._saveTimer) {
+            clearTimeout(this._saveTimer);
+            this._saveTimer = null;
+        }
+        if (this._dirty) {
+            this._dirty = false;
+            const data = { ...this.cnNames, _version: CACHE_VERSION };
+            storage.set(STORAGE_KEY, data, 'settings', true).catch(() => {});
+        }
+    }
+
     _scanDomNow() {
         for (const selector of MUTATION_SELECTORS) {
             for (const el of document.querySelectorAll(selector)) {
