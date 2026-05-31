@@ -1271,15 +1271,15 @@ class MarketHistoryViewer {
         `;
 
         const columns = [
-            { key: 'createdTimestamp', label: 'Date' },
-            { key: 'itemHrid', label: 'Item' },
-            { key: 'enhancementLevel', label: 'Enh Lvl' },
-            { key: 'isSell', label: 'Type' },
-            { key: 'status', label: 'Status' },
-            { key: 'price', label: 'Price' },
-            { key: 'orderQuantity', label: 'Quantity' },
-            { key: 'filledQuantity', label: 'Filled' },
-            { key: 'total', label: 'Total' },
+            { key: 'createdTimestamp', label: t('Date') },
+            { key: 'itemHrid', label: t('Item') },
+            { key: 'enhancementLevel', label: t('Enh Lvl') },
+            { key: 'isSell', label: t('Type') },
+            { key: 'status', label: t('Status') },
+            { key: 'price', label: t('Price') },
+            { key: 'orderQuantity', label: t('Quantity') },
+            { key: 'filledQuantity', label: t('Filled') },
+            { key: 'total', label: t('Total') },
             { key: '_delete', label: '' },
         ];
 
@@ -1450,7 +1450,8 @@ class MarketHistoryViewer {
                 // Status
                 const statusCell = document.createElement('td');
                 const status = listing.status || 'unknown';
-                statusCell.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+                const statusKey = status.charAt(0).toUpperCase() + status.slice(1);
+                statusCell.textContent = t(statusKey);
                 const statusColors = {
                     active: '#60a5fa',
                     filled: '#4ade80',

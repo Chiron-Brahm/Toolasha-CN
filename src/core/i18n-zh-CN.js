@@ -1978,4 +1978,22 @@ registerLocale('zh-CN', {
     '📊 Costs by Enhancement Level': '📊 各等级强化成本',
     '🔄 Fetch Latest Prices': '🔄 获取最新价格',
     '🔍 Auto': '🔍 自动',
+
+    'Date': '日期',
+    'Item': '物品',
+    'Enh Lvl': '强化等级',
+    'Type': '类型',
+    'Status': '状态',
+    'Price': '价格',
+    'Quantity': '数量',
+    'Filled': '已成交',
+    'Total': '总计',
+    'Enhancement': '强化',
+    'Active': '活跃',
+    'Canceled': '已取消',
+    'Expired': '已过期',
+    'Unknown': '未知',
+    'Sell': '卖出',
+    'Buy': '买入',
+
 });
