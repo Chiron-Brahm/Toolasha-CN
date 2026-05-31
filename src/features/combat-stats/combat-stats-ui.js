@@ -929,7 +929,7 @@ class CombatStatsUI {
                                 const hasActualData = firstItem.actualConsumed > 0;
 
                                 if (!hasActualData) {
-                                    trackingNote.textContent = `📊 Tracked ${formatTrackingDuration(trackingDuration)} - No consumption yet (rate decreases over time)`;
+                                    trackingNote.textContent = `${t('📊 Tracked {0} - No consumption yet (rate decreases over time)', formatTrackingDuration(trackingDuration))}`;
                                 } else {
                                     trackingNote.textContent = `📊 Tracked ${formatTrackingDuration(trackingDuration)} - 90% actual + 10% baseline blend`;
                                 }

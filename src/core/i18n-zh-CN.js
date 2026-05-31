@@ -1982,7 +1982,6 @@ registerLocale('zh-CN', {
     's/action': '秒/次',
     'actions/hr': '次/时',
     'items/hr': '个/时',
-    'Complete at': '完成于',
-    'Total time': '总时间',
+    '📊 Tracked {0} - No consumption yet (rate decreases over time)': '📊 已追踪 {0} - 暂无消耗（速率随时间衰减）',
 
 });
