@@ -8,6 +8,7 @@ import { t } from '../../core/i18n.js';
 import config from '../../core/config.js';
 import dataManager from '../../core/data-manager.js';
 import domObserver from '../../core/dom-observer.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import dom from '../../utils/dom.js';
 import { formatKMB } from '../../utils/formatters.js';
 import { getItemPrices } from '../../utils/market-data.js';
@@ -234,7 +235,9 @@ class DungeonTokenTooltips {
         }
 
         if (this.itemNameToHridCache && this.itemNameToHridCacheSource === gameData.itemDetailMap) {
-            return this.itemNameToHridCache.get(itemName) || null;
+            const hrid = this.itemNameToHridCache.get(itemName);
+            if (hrid) return hrid;
+            return itemNameTranslator.getHridFromChineseName(itemName) || null;
         }
 
         const map = new Map();
@@ -247,7 +250,9 @@ class DungeonTokenTooltips {
             this.itemNameToHridCacheSource = gameData.itemDetailMap;
         }
 
-        return map.get(itemName) || null;
+        const hrid = map.get(itemName);
+        if (hrid) return hrid;
+        return itemNameTranslator.getHridFromChineseName(itemName) || null;
     }
 
     /**

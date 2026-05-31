@@ -102,7 +102,6 @@ class ItemNameTranslator {
         }
 
         if (!i18nStore) {
-            console.log('[ItemNameTranslator] Could not find game i18n data, will learn from DOM');
             return;
         }
 
@@ -123,10 +122,7 @@ class ItemNameTranslator {
         }
 
         if (count > 0) {
-            console.log(`[ItemNameTranslator] Bulk imported ${count} Chinese item names from game i18n`);
             this._scheduleSave();
-        } else {
-            console.log('[ItemNameTranslator] Game i18n found but no item names matched, will learn from DOM');
         }
     }
 

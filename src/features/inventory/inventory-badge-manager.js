@@ -316,10 +316,9 @@ class InventoryBadgeManager {
             const itemName = svg.getAttribute('aria-label');
             if (!itemName) continue;
 
-            // Find item HRID
+            // Find item HRID (English name lookup + Chinese fallback)
             const itemHrid = this.findItemHrid(itemName, gameData);
             if (!itemHrid) {
-                console.warn('[InventoryBadgeManager] Could not find HRID for item:', itemName);
                 continue;
             }
 
@@ -601,8 +600,12 @@ class InventoryBadgeManager {
             this.buildNameToHridMap(gameData);
         }
 
-        // O(1) lookup
-        return this.nameToHridMap.get(itemName) || null;
+        // O(1) English name lookup
+        const hrid = this.nameToHridMap.get(itemName);
+        if (hrid) return hrid;
+
+        // Fallback: Chinese name lookup via itemNameTranslator
+        return itemNameTranslator.getHridFromChineseName(itemName) || null;
     }
 
     /**
