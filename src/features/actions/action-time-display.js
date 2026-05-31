@@ -1140,6 +1140,7 @@ class ActionTimeDisplay {
 
         // Format time strings (timeReadable handles days/hours/minutes properly)
         const timeStr = timeReadableZh(totalTimeSeconds);
+        console.log('[TimeDebug] timeStr from timeReadableZh:', timeStr, 'totalTimeSeconds:', totalTimeSeconds);
 
         // Format completion time
         const now = new Date();
@@ -1200,13 +1201,14 @@ class ActionTimeDisplay {
         // Append to game's div (with marker for cleanup)
         this.appendStatsToActionName(actionNameElement, statsToAppend.join(' · '));
 
-        // Line 2: Time estimates in our div
+        // Time estimates in our div
         if (
             config.getSetting('actionBar_showTimeRemaining') &&
             remainingQueuedActions !== Infinity &&
             !isNaN(remainingQueuedActions) &&
             remainingQueuedActions > 0
         ) {
+            console.log('[TimeDebug] Showing time estimate, timeStr:', timeStr, 'clockTime:', clockTime);
             const itemIconHtml = this.getItemIconHtml(limitingItemHrid);
             const matsLabel = itemIconHtml ? `${itemIconHtml}:` : '';
             let recycleHtml = '';
