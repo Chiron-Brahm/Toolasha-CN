@@ -35,7 +35,6 @@ class ItemNameTranslator {
     }
 
     async load() {
-        console.log('[ItemNameTranslator] load() called, isLoaded:', this.isLoaded);
         if (this.isLoaded) return;
         try {
             const saved = await storage.get(STORAGE_KEY, 'settings');
@@ -56,38 +55,10 @@ class ItemNameTranslator {
 
     _bulkImportFromGameI18n() {
         try {
-            // Method 1: Use game's official API (handles decompression)
-            let parsed = null;
-            const hasLocalStorageUtil = typeof localStorageUtil !== 'undefined' && typeof localStorageUtil.getInitClientData === 'function';
-            if (hasLocalStorageUtil) {
-                parsed = localStorageUtil.getInitClientData();
-                console.log('[ItemNameTranslator] localStorageUtil result:', !!parsed, 'items:', parsed?.itemDetailMap ? Object.keys(parsed.itemDetailMap).length : 0);
-            }
-            // Method 2: Try raw JSON parse if not compressed
-            if (!parsed) {
-                const raw = localStorage.getItem('initClientData');
-                if (raw) {
-                    try { parsed = JSON.parse(raw); console.log('[ItemNameTranslator] Raw JSON parsed, items:', Object.keys(parsed.itemDetailMap || {}).length); } catch (_) {
-                        // Method 3: LZString decompress if available
-                        if (typeof LZString !== 'undefined' && LZString.decompressFromUTF16) {
-                            parsed = JSON.parse(LZString.decompressFromUTF16(raw));
-                            console.log('[ItemNameTranslator] LZString decompressed, items:', Object.keys(parsed.itemDetailMap || {}).length);
-                        }
-                    }
-                }
-            }
-            if (!parsed || !parsed.itemDetailMap) { console.log('[ItemNameTranslator] No itemDetailMap found'); return; }
-
-            let count = 0;
-            for (const [hrid, item] of Object.entries(parsed.itemDetailMap)) {
-                if (item.name && CJK_REGEX.test(item.name) && !this.cnNames[hrid]) {
-                    this.cnNames[hrid] = item.name;
-                    count++;
-                }
-            }
-            console.log('[ItemNameTranslator] Bulk import count:', count);
-            if (count > 0) this._scheduleSave();
-        } catch (_) { console.log('[ItemNameTranslator] Bulk import error:', _); }
+            // Game initClientData always has English names regardless of locale.
+            // Chinese names only exist in the rendered DOM (react-i18next).
+            // Use the MutationObserver in startObserver() to capture them.
+        } catch (_) { /* fall back to DOM capture */ }
     }
 
     getDisplayName(itemHrid) {
