@@ -29,7 +29,7 @@ import {
     parseTeaEfficiencyBreakdown,
     parseTeaSkillLevelBonus,
 } from '../../utils/tea-parser.js';
-import { formatPercentage, timeReadable, formatWithSeparator, formatKMB } from '../../utils/formatters.js';
+import { formatPercentage, timeReadableZh, formatWithSeparator, formatKMB } from '../../utils/formatters.js';
 import { calculateHouseEfficiency } from '../../utils/house-efficiency.js';
 import { stackAdditive } from '../../utils/efficiency.js';
 import { calculateExperienceMultiplier } from '../../utils/experience-parser.js';
@@ -554,7 +554,7 @@ class QuickInputButtons {
                         // Calculate time-consuming actions needed
                         const baseActionsNeeded = Math.ceil(queueCount / efficiencyMultiplier);
                         const totalSeconds = baseActionsNeeded * actionTime;
-                        totalTimeLine.textContent = t('Total time: {0}', timeReadable(totalSeconds));
+                        totalTimeLine.textContent = t('Total time: {0}', timeReadableZh(totalSeconds));
                     } else {
                         totalTimeLine.textContent = t('Total time: 0s');
                     }
@@ -635,7 +635,7 @@ class QuickInputButtons {
                                 speedSummaryDiv.textContent = t(
                                     '{0}/hr | Total time: {1}',
                                     actionsPerHourWithEfficiency,
-                                    timeReadable(totalSeconds)
+                                    timeReadableZh(totalSeconds)
                                 );
                             } else {
                                 speedSummaryDiv.textContent = t(
@@ -1336,7 +1336,7 @@ class QuickInputButtons {
                 `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">To Level ${nextLevel}:</span>`
             );
             lines.push(`  Actions: ${formatWithSeparator(singleLevel.actionsNeeded)}`);
-            lines.push(`  Time: ${timeReadable(singleLevel.timeNeeded)}`);
+            lines.push(`  Time: ${timeReadableZh(singleLevel.timeNeeded)}`);
 
             lines.push('');
 
@@ -1367,7 +1367,7 @@ class QuickInputButtons {
 
             // Dynamic result line (will be updated by JS)
             lines.push(`<div id="mwi-target-level-result" style="margin-top: 4px; margin-left: 8px;">
-                ${formatWithSeparator(singleLevel.actionsNeeded)} actions | ${timeReadable(singleLevel.timeNeeded)}
+                ${formatWithSeparator(singleLevel.actionsNeeded)} actions | ${timeReadableZh(singleLevel.timeNeeded)}
             </div>`);
 
             lines.push('');
@@ -1396,7 +1396,7 @@ class QuickInputButtons {
                     );
 
                     targetLevelResult.innerHTML = `
-                        ${formatWithSeparator(result.actionsNeeded)} actions | ${timeReadable(result.timeNeeded)}
+                        ${formatWithSeparator(result.actionsNeeded)} actions | ${timeReadableZh(result.timeNeeded)}
                     `;
                     targetLevelResult.style.color = 'var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY})';
 
@@ -1412,7 +1412,7 @@ class QuickInputButtons {
             targetLevelInput.addEventListener('change', updateTargetLevel);
 
             // Create summary for collapsed view (time to next level)
-            const summary = `${timeReadable(singleLevel.timeNeeded)} to Level ${nextLevel}`;
+            const summary = `${timeReadableZh(singleLevel.timeNeeded)} to Level ${nextLevel}`;
 
             // Create collapsible section
             return createCollapsibleSection(

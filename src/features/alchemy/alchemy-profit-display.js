@@ -9,7 +9,7 @@ import domObserver from '../../core/dom-observer.js';
 import dataManager from '../../core/data-manager.js';
 import alchemyProfit from './alchemy-profit.js';
 import alchemyProfitCalculator from '../market/alchemy-profit-calculator.js';
-import { formatWithSeparator, formatPercentage, formatLargeNumber, timeReadable } from '../../utils/formatters.js';
+import { formatWithSeparator, formatPercentage, formatLargeNumber, timeReadableZh } from '../../utils/formatters.js';
 import { createCollapsibleSection } from '../../utils/ui-components.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { calculateExperienceMultiplier } from '../../utils/experience-parser.js';
@@ -1129,7 +1129,7 @@ class AlchemyProfitDisplay {
                 if (repeatCount > 0) {
                     const baseActionsNeeded = Math.ceil(repeatCount / efficiencyMultiplier);
                     const totalSeconds = baseActionsNeeded * actionTime;
-                    totalTimeLine.textContent = `Total time: ${timeReadable(totalSeconds)}`;
+                    totalTimeLine.textContent = `Total time: ${timeReadableZh(totalSeconds)}`;
                 } else {
                     totalTimeLine.textContent = t('Total time: 0s');
                 }
@@ -1158,7 +1158,7 @@ class AlchemyProfitDisplay {
                 if (repeatCount > 0) {
                     const baseActionsNeeded = Math.ceil(repeatCount / efficiencyMultiplier);
                     const totalSeconds = baseActionsNeeded * actionTime;
-                    return `${effectiveActionsPerHour}/hr | Total time: ${timeReadable(totalSeconds)}`;
+                    return `${effectiveActionsPerHour}/hr | Total time: ${timeReadableZh(totalSeconds)}`;
                 }
                 return `${effectiveActionsPerHour}/hr | Total time: 0s`;
             };
@@ -1313,7 +1313,7 @@ class AlchemyProfitDisplay {
                 `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">To Level ${nextLevel}:</span>`
             );
             lines.push(`  Actions: ${formatWithSeparator(actionsNeeded)}`);
-            lines.push(`  Time: ${timeReadable(timeNeeded)}`);
+            lines.push(`  Time: ${timeReadableZh(timeNeeded)}`);
 
             lines.push('');
 
@@ -1342,7 +1342,7 @@ class AlchemyProfitDisplay {
                 <span>:</span>
             </div>`);
             lines.push(`<div id="mwi-alchemy-target-level-result" style="margin-top: 4px; margin-left: 8px;">
-                ${formatWithSeparator(actionsNeeded)} actions | ${timeReadable(timeNeeded)}
+                ${formatWithSeparator(actionsNeeded)} actions | ${timeReadableZh(timeNeeded)}
             </div>`);
 
             lines.push('');
@@ -1369,7 +1369,7 @@ class AlchemyProfitDisplay {
                         xpPerAction,
                         levelExperienceTable
                     );
-                    targetLevelResult.innerHTML = `${formatWithSeparator(result.actionsNeeded)} actions | ${timeReadable(result.timeNeeded)}`;
+                    targetLevelResult.innerHTML = `${formatWithSeparator(result.actionsNeeded)} actions | ${timeReadableZh(result.timeNeeded)}`;
                     targetLevelResult.style.color = `var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY})`;
                 } else {
                     targetLevelResult.textContent = t('Invalid level');
@@ -1381,7 +1381,7 @@ class AlchemyProfitDisplay {
             targetLevelInput.addEventListener('change', updateTargetLevel);
 
             // Create summary for collapsed view
-            const summary = `${timeReadable(timeNeeded)} to Level ${nextLevel}`;
+            const summary = `${timeReadableZh(timeNeeded)} to Level ${nextLevel}`;
 
             return this.createTrackedCollapsible('📈', 'Level Progress', summary, content, false);
         } catch (error) {

@@ -12,7 +12,7 @@ import { getEnhancingParams } from '../../utils/enhancement-config.js';
 import { calculateEnhancement, BASE_SUCCESS_RATES } from '../../utils/enhancement-calculator.js';
 import { getEnhancingSpeedBreakdown } from '../enhancement/enhancement-xp.js';
 import { MIN_ACTION_TIME_SECONDS } from '../../utils/profit-constants.js';
-import { timeReadable } from '../../utils/formatters.js';
+import { timeReadableZh } from '../../utils/formatters.js';
 import marketAPI from '../../api/marketplace.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
 import { itemNameTranslator } from '../../utils/item-name-translator.js';
@@ -411,7 +411,7 @@ function generateCostsByLevelTable(
             }
         });
 
-        lines.push(`<td style="padding: 6px 4px; text-align: right; color: #ccc;">${timeReadable(data.time)}</td>`);
+        lines.push(`<td style="padding: 6px 4px; text-align: right; color: #ccc;">${timeReadableZh(data.time)}</td>`);
         lines.push(
             `<td style="padding: 6px 4px; text-align: right; color: ${config.COLOR_XP_RATE};">${data.xpPerHour > 0 ? data.xpPerHour.toLocaleString() : '-'}</td>`
         );

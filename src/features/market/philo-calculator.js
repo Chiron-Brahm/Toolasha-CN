@@ -10,7 +10,7 @@ import dataManager from '../../core/data-manager.js';
 import marketAPI from '../../api/marketplace.js';
 import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import storage from '../../core/storage.js';
-import { formatLargeNumber, formatPercentage, timeReadable } from '../../utils/formatters.js';
+import { formatLargeNumber, formatPercentage, timeReadableZh } from '../../utils/formatters.js';
 import { getEnhancementMultiplier } from '../../utils/enhancement-multipliers.js';
 import { t } from '../../core/i18n.js';
 
@@ -907,7 +907,7 @@ class PhiloCalculator {
                         td.style.color = value >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                         break;
                     case 'timePerPhiloSeconds':
-                        td.textContent = timeReadable(value);
+                        td.textContent = timeReadableZh(value);
                         break;
                     case 'profitPerPhilo':
                     case 'profitPerHour':

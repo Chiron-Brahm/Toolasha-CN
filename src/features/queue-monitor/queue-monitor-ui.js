@@ -8,7 +8,7 @@ import config from '../../core/config.js';
 import dataManager from '../../core/data-manager.js';
 import storage from '../../core/storage.js';
 import { t } from '../../core/i18n.js';
-import { timeReadable } from '../../utils/formatters.js';
+import { timeReadableZh } from '../../utils/formatters.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { registerFloatingPanel, unregisterFloatingPanel, bringPanelToFront } from '../../utils/panel-z-index.js';
 import queueSnapshot from './queue-snapshot.js';
@@ -226,7 +226,7 @@ class QueueMonitorUI {
             } else if (remaining <= 0) {
                 timeDisplay = t('Done');
             } else {
-                timeDisplay = timeReadable(remaining);
+                timeDisplay = timeReadableZh(remaining);
                 if (snap.hasInfiniteAction) {
                     timeDisplay += ' + ∞';
                 }
@@ -254,7 +254,7 @@ class QueueMonitorUI {
                         actionTimeStr = '∞';
                     } else if (action.estimatedSeconds !== null) {
                         const actionRemaining = Math.max(0, action.estimatedSeconds - Math.max(0, actionElapsed));
-                        actionTimeStr = actionRemaining <= 0 ? t('Done') : timeReadable(actionRemaining);
+                        actionTimeStr = actionRemaining <= 0 ? t('Done') : timeReadableZh(actionRemaining);
                     } else {
                         actionTimeStr = '?';
                     }

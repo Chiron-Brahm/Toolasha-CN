@@ -10,7 +10,7 @@ import dataManager from '../../core/data-manager.js';
 import { t } from '../../core/i18n.js';
 import { computeBestCraftingPlan } from './crafting-plan-calculator.js';
 import { createCollapsibleSection } from '../../utils/ui-components.js';
-import { formatKMB, formatWithSeparator, timeReadable } from '../../utils/formatters.js';
+import { formatKMB, formatWithSeparator, timeReadableZh } from '../../utils/formatters.js';
 import { getActionHridFromName } from '../../utils/game-lookups.js';
 import { findActionInput } from '../../utils/action-panel-helper.js';
 import {
@@ -484,14 +484,14 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
                     const effMultiplier = calculateEfficiencyMultiplier(stats.totalEfficiency);
                     const totalSeconds = (stats.actionTime * step.actionsNeeded) / effMultiplier;
                     totalCraftSeconds += totalSeconds;
-                    timeStr = ` (${timeReadable(totalSeconds)})`;
+                    timeStr = ` (${timeReadableZh(totalSeconds)})`;
                 }
             }
             content.appendChild(createRow(`${i + 1}. ${step.itemName}`, `x${qty}${timeStr}`));
         }
 
         if (totalCraftSeconds > 0) {
-            const totalTimeRow = createRow(t('Total craft time'), timeReadable(totalCraftSeconds), {
+            const totalTimeRow = createRow(t('Total craft time'), timeReadableZh(totalCraftSeconds), {
                 leftColor: 'var(--text-color-primary, #fff)',
             });
             totalTimeRow.style.borderTop = '1px solid var(--border-color, #333)';

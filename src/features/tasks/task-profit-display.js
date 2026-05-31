@@ -13,7 +13,7 @@ import { setReactInputValue } from '../../utils/react-input.js';
 import { findActionInput } from '../../utils/action-panel-helper.js';
 import { calculateTaskProfit, calculateTaskRewardValue } from './task-profit-calculator.js';
 import expectedValueCalculator from '../market/expected-value-calculator.js';
-import { timeReadable, formatPercentage, formatKMB } from '../../utils/formatters.js';
+import { timeReadableZh, formatPercentage, formatKMB } from '../../utils/formatters.js';
 import { GAME, TOOLASHA } from '../../utils/selectors.js';
 import { calculateSecondsForActions, calculateEffectiveActionsPerHour } from '../../utils/profit-helpers.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
@@ -1043,7 +1043,7 @@ class TaskProfitDisplay {
             const killsPerHour = Math.round(kills / SIM_HOURS);
             const remaining = Math.max((taskData.quantity ?? 0) - (taskData.currentProgress ?? 0), 0);
             const completionSeconds = killsPerHour > 0 ? Math.round((remaining / killsPerHour) * 3600) : null;
-            const timeEstimate = completionSeconds !== null ? timeReadable(completionSeconds) : '???';
+            const timeEstimate = completionSeconds !== null ? timeReadableZh(completionSeconds) : '???';
 
             const playerHrid = players[0]?.hrid || 'player1';
             const { netPerHour, dropEntries, consumableEntries } = calculateSimRevenue(
@@ -1251,7 +1251,7 @@ class TaskProfitDisplay {
 
         // Calculate time estimate for task completion
         const completionSeconds = calculateTaskCompletionSeconds(profitData);
-        const timeEstimate = completionSeconds !== null ? timeReadable(completionSeconds) : '???';
+        const timeEstimate = completionSeconds !== null ? timeReadableZh(completionSeconds) : '???';
 
         // Store machine-readable value for task sorter
         if (completionSeconds !== null) {

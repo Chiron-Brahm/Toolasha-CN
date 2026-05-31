@@ -11,7 +11,7 @@ import domObserver from '../../core/dom-observer.js';
 import marketAPI from '../../api/marketplace.js';
 import { calculateTaskProfit, calculateTaskTokenValue, calculateTaskRewardValue } from './task-profit-calculator.js';
 import { calculateTaskCompletionSeconds } from './task-profit-display.js';
-import { timeReadable, formatKMB } from '../../utils/formatters.js';
+import { timeReadableZh, formatKMB } from '../../utils/formatters.js';
 import { TOOLASHA } from '../../utils/selectors.js';
 
 class TaskStatistics {
@@ -500,7 +500,7 @@ class TaskStatistics {
         if (overflow.isOverflowing) {
             section.appendChild(this.createRow(t('Status'), t('Tasks full!'), config.COLOR_LOSS));
         } else {
-            const overflowTimeStr = timeReadable(overflow.msUntilOverflow / 1000);
+            const overflowTimeStr = timeReadableZh(overflow.msUntilOverflow / 1000);
             const overflowDateStr = overflow.overflowDate.toLocaleString();
             section.appendChild(this.createRow(t('Full in'), overflowTimeStr, config.COLOR_INFO));
             section.appendChild(this.createRow(t('Full at'), overflowDateStr, config.COLOR_TEXT_SECONDARY));
@@ -625,7 +625,7 @@ class TaskStatistics {
             const timeStr = detail.isCombat
                 ? t('N/A (combat)')
                 : detail.completionSeconds !== null
-                  ? timeReadable(detail.completionSeconds)
+                  ? timeReadableZh(detail.completionSeconds)
                   : t('N/A');
 
             const progressStr = detail.currentCount > 0 ? ` (${detail.currentCount}/${detail.goalCount})` : '';
@@ -645,7 +645,7 @@ class TaskStatistics {
         section.appendChild(separator);
 
         const totalTimeStr =
-            rewards.totalCompletionSeconds !== null ? timeReadable(rewards.totalCompletionSeconds) : t('N/A');
+            rewards.totalCompletionSeconds !== null ? timeReadableZh(rewards.totalCompletionSeconds) : t('N/A');
 
         section.appendChild(this.createRow(t('Total (non-combat)'), totalTimeStr, config.COLOR_INFO));
 
