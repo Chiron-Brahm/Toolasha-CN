@@ -8,6 +8,7 @@ import dataManager from '../core/data-manager.js';
 import storage from '../core/storage.js';
 
 const STORAGE_KEY = 'Toolasha_cnItemNames';
+const CACHE_VERSION = 2;
 const DEBOUNCE_DELAY = 5000;
 
 const MUTATION_SELECTORS = [
@@ -37,13 +38,96 @@ class ItemNameTranslator {
         if (this.isLoaded) return;
         try {
             const saved = await storage.get(STORAGE_KEY, 'settings');
-            if (saved && typeof saved === 'object') {
+            // Invalidate old cache versions (v1 didn't have bulk import)
+            if (saved && typeof saved === 'object' && saved._version === CACHE_VERSION && Object.keys(saved).length > 1) {
                 this.cnNames = saved;
             }
         } catch (error) {
             console.warn('[ItemNameTranslator] Failed to load names:', error);
         }
         this.isLoaded = true;
+
+        // If cache is empty or outdated, try bulk import from game i18n data
+        if (Object.keys(this.cnNames).length <= 1) {
+            this._bulkImportFromGameI18n();
+        }
+    }
+
+    _bulkImportFromGameI18n() {
+        const initData = dataManager.getInitClientData();
+        if (!initData?.itemDetailMap) return;
+
+        // Try to access game's react-i18next instance or translation store
+        // The game stores translations; if we can find them, we can map English→Chinese
+        let i18nStore = null;
+
+        // Method 1: Check for i18n on window
+        try {
+            const w = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+            // React i18next stores translations in a global or on the i18n instance
+            if (w.i18n?.store?.data?.zh) i18nStore = w.i18n.store.data.zh;
+            if (w.i18next?.store?.data?.zh) i18nStore = w.i18next.store.data.zh;
+            if (w.__i18n?.store?.data?.zh) i18nStore = w.__i18n.store.data.zh;
+        } catch (_) { /* unsafeWindow may not be available */ }
+
+        // Method 2: Walk React fiber tree to find i18n context
+        if (!i18nStore) {
+            try {
+                const rootEl = document.getElementById('root') || document.body.firstElementChild;
+                const fiberKey = Object.keys(rootEl).find((k) => k.startsWith('__reactFiber'));
+                if (fiberKey) {
+                    let fiber = rootEl[fiberKey];
+                    for (let i = 0; i < 50 && fiber; i++) {
+                        try {
+                            const hooks = fiber.memoizedState;
+                            let hook = hooks;
+                            while (hook) {
+                                const val = hook.memoizedState;
+                                if (val?.i18n?.store?.data?.zh) {
+                                    i18nStore = val.i18n.store.data.zh;
+                                    break;
+                                }
+                                if (val?.store?.data?.zh) {
+                                    i18nStore = val.store.data.zh;
+                                    break;
+                                }
+                                hook = hook.next;
+                            }
+                            if (i18nStore) break;
+                        } catch (_) { /* skip broken fibers */ }
+                        fiber = fiber.return;
+                    }
+                }
+            } catch (_) { /* fiber walk failed */ }
+        }
+
+        if (!i18nStore) {
+            console.log('[ItemNameTranslator] Could not find game i18n data, will learn from DOM');
+            return;
+        }
+
+        // Map English item names → Chinese using the i18n store
+        let count = 0;
+        for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
+            const enName = item.name;
+            // Try common i18n key patterns
+            const cnName =
+                i18nStore[enName] ||
+                i18nStore[`items.${enName}`] ||
+                i18nStore[enName.toLowerCase()] ||
+                i18nStore[enName.replace(/\s+/g, '_').toLowerCase()];
+            if (cnName && typeof cnName === 'string' && CJK_REGEX.test(cnName)) {
+                this.cnNames[hrid] = cnName;
+                count++;
+            }
+        }
+
+        if (count > 0) {
+            console.log(`[ItemNameTranslator] Bulk imported ${count} Chinese item names from game i18n`);
+            this._scheduleSave();
+        } else {
+            console.log('[ItemNameTranslator] Game i18n found but no item names matched, will learn from DOM');
+        }
     }
 
     _scheduleSave() {
@@ -55,7 +139,8 @@ class ItemNameTranslator {
             if (!this._dirty) return;
             this._dirty = false;
             try {
-                await storage.set(STORAGE_KEY, this.cnNames, 'settings', true);
+                const data = { ...this.cnNames, _version: CACHE_VERSION };
+                await storage.set(STORAGE_KEY, data, 'settings', true);
             } catch (error) {
                 console.warn('[ItemNameTranslator] Failed to save names:', error);
             }
@@ -69,7 +154,8 @@ class ItemNameTranslator {
         }
         if (this._dirty) {
             this._dirty = false;
-            storage.set(STORAGE_KEY, this.cnNames, 'settings', true).catch(() => {});
+            const data = { ...this.cnNames, _version: CACHE_VERSION };
+            storage.set(STORAGE_KEY, data, 'settings', true).catch(() => {});
         }
     }
 
