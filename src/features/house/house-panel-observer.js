@@ -55,19 +55,13 @@ class HousePanelObserver {
      * @param {Element} modalContent - The house panel modal content element
      */
     async handleHouseModal(modalContent) {
-        console.log('[HouseDebug] Modal detected via domObserver');
-
         // Wait a moment for content to fully load
         await new Promise((resolve) => {
             const loadTimeout = setTimeout(resolve, 100);
             this.cleanupRegistry.registerTimeout(loadTimeout);
         });
 
-        // Modal shows one room at a time, not a grid
-        // Process the currently displayed room
         await this.processModalContent(modalContent);
-
-        // Set up observer for room switching
         this.observeModalChanges(modalContent);
     }
 
@@ -76,25 +70,12 @@ class HousePanelObserver {
      * @param {Element} modalContent - The house panel modal content
      */
     async processModalContent(modalContent) {
-        // Identify which room is currently displayed
         const houseRoomHrid = this.identifyRoomFromModal(modalContent);
+        if (!houseRoomHrid) return;
 
-        if (!houseRoomHrid) {
-            console.warn('[HouseDebug] identifyRoomFromModal returned null');
-            return;
-        }
-        console.log('[HouseDebug] Room identified:', houseRoomHrid);
-
-        // Find the costs section to add our column
         const costsSection = modalContent.querySelector('[class*="HousePanel_costs"]');
+        if (!costsSection) return;
 
-        if (!costsSection) {
-            console.warn('[HouseDebug] costsSection not found');
-            return;
-        }
-        console.log('[HouseDebug] costsSection found, adding cost column');
-
-        // Add our cost display as a column
         await houseCostDisplay.addCostColumn(costsSection, houseRoomHrid, modalContent);
     }
 
@@ -104,80 +85,42 @@ class HousePanelObserver {
      * @returns {string|null} House room HRID
      */
     identifyRoomFromModal(modalContent) {
-        // Try to extract room HRID from React Fiber (locale-independent)
-        const fiberKey = Object.keys(modalContent).find((k) => k.startsWith('__reactFiber'));
-        if (fiberKey) {
-            let fiber = modalContent[fiberKey];
-            // Walk up the fiber tree looking for room data
-            for (let i = 0; i < 20 && fiber; i++) {
-                const props = fiber.memoizedProps || fiber.pendingProps || {};
-                // Check for houseRoomHrid in component props
-                if (props.houseRoomHrid) {
-                    console.log('[HouseDebug] Room identified via React fiber:', props.houseRoomHrid);
-                    return props.houseRoomHrid;
-                }
-                // Also check children props for room data
-                if (props.room?.hrid) {
-                    console.log('[HouseDebug] Room identified via React fiber room.hrid:', props.room.hrid);
-                    return props.room.hrid;
-                }
-                // Check for houseRoomHrid in state
-                const state = fiber.memoizedState;
-                if (state && typeof state === 'object' && state.memoizedState?.houseRoomHrid) {
-                    console.log('[HouseDebug] Room via memoizedState');
-                    return state.memoizedState.houseRoomHrid;
-                }
-                fiber = fiber.return;
-            }
+        // Chinese → HRID mapping (game data stores English names, UI shows Chinese)
+        const CN_ROOM_MAP = {
+            射箭场: '/house_rooms/archery_range',
+            军械库: '/house_rooms/armory',
+            冲泡坊: '/house_rooms/brewery',
+            奶牛棚: '/house_rooms/dairy_barn',
+            餐厅: '/house_rooms/dining_room',
+            道场: '/house_rooms/dojo',
+            锻造间: '/house_rooms/forge',
+            花园: '/house_rooms/garden',
+            健身房: '/house_rooms/gym',
+            厨房: '/house_rooms/kitchen',
+            实验室: '/house_rooms/laboratory',
+            图书馆: '/house_rooms/library',
+            木棚: '/house_rooms/log_shed',
+            神秘研究室: '/house_rooms/mystical_study',
+            天文台: '/house_rooms/observatory',
+            缝纫室: '/house_rooms/sewing_parlor',
+            工作间: '/house_rooms/workshop',
+        };
+
+        const header = modalContent.querySelector('[class*="HousePanel_header"]');
+        const roomName = header?.textContent?.trim();
+        if (roomName && CN_ROOM_MAP[roomName]) {
+            return CN_ROOM_MAP[roomName];
         }
 
-        // Primary: extract room ID from SVG sprite href
-        const svgUse = modalContent.querySelector('[class*="HousePanel_header"] svg use');
-        if (svgUse) {
-            const hrefValue = svgUse.getAttribute('href') || '';
-            const roomId = hrefValue.split('#')[1];
-            if (roomId) return `/house_rooms/${roomId}`;
-        }
-
-        // Fallback: match header text against game data room names
+        // Fallback: match against English game data names
         const initData = dataManager.getInitClientData();
-        if (initData?.houseRoomDetailMap) {
-            const header = modalContent.querySelector('[class*="HousePanel_header"]');
-            const roomName = header?.textContent?.trim();
-            if (roomName) {
-                for (const [hrid, roomData] of Object.entries(initData.houseRoomDetailMap)) {
-                    if (roomData.name === roomName) return hrid;
-                }
+        if (initData?.houseRoomDetailMap && roomName) {
+            for (const [hrid, roomData] of Object.entries(initData.houseRoomDetailMap)) {
+                if (roomData.name === roomName) return hrid;
             }
         }
 
-        console.warn('[HouseDebug] All identification methods failed');
-        return null;
-    }
-        }
-
-        // Fallback: match header text against game data room names
-        const initData = dataManager.getInitClientData();
-        const hasRoomMap = !!(initData?.houseRoomDetailMap);
-        console.log('[HouseDebug] Game data houseRoomDetailMap available:', hasRoomMap);
-        if (initData?.houseRoomDetailMap) {
-            const header = modalContent.querySelector('[class*="HousePanel_header"]');
-            const roomName = header?.textContent?.trim();
-            console.log('[HouseDebug] Header text:', JSON.stringify(roomName));
-            if (roomName) {
-                const allRoomNames = Object.entries(initData.houseRoomDetailMap).map(([h, r]) => `${h}:${r.name}`);
-                console.log('[HouseDebug] Available rooms:', allRoomNames);
-                for (const [hrid, roomData] of Object.entries(initData.houseRoomDetailMap)) {
-                    if (roomData.name === roomName) {
-                        console.log('[HouseDebug] Room identified via text match:', hrid);
-                        return hrid;
-                    }
-                }
-                console.warn('[HouseDebug] No room matched header text');
-            }
-        }
-
-        console.warn('[HouseDebug] All identification methods failed');
+        console.warn('[HouseDebug] Room not found:', roomName);
         return null;
     }
 
