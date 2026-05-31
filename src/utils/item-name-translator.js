@@ -54,11 +54,41 @@ class ItemNameTranslator {
     }
 
     _bulkImportFromGameI18n() {
-        try {
-            // Game initClientData always has English names regardless of locale.
-            // Chinese names only exist in the rendered DOM (react-i18next).
-            // Use the MutationObserver in startObserver() to capture them.
-        } catch (_) { /* fall back to DOM capture */ }
+        // Try to fetch game's i18n translation JSON from server
+        const urls = [
+            '/locales/zh-CN/translation.json',
+            '/locales/zh/translation.json',
+            '/i18n/zh.json',
+        ];
+        const tryFetch = (index) => {
+            if (index >= urls.length) return;
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', urls[index]);
+            xhr.onload = () => {
+                if (xhr.status === 200) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        if (data && typeof data === 'object') {
+                            const initData = dataManager.getInitClientData();
+                            if (initData?.itemDetailMap) {
+                                let count = 0;
+                                for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
+                                    const cnName = data[item.name] || data[item.name.toLowerCase()];
+                                    if (cnName && typeof cnName === 'string' && CJK_REGEX.test(cnName) && !this.cnNames[hrid]) {
+                                        this.cnNames[hrid] = cnName;
+                                        count++;
+                                    }
+                                }
+                                if (count > 0) this._scheduleSave();
+                            }
+                        }
+                    } catch (_) { tryFetch(index + 1); }
+                } else { tryFetch(index + 1); }
+            };
+            xhr.onerror = () => tryFetch(index + 1);
+            xhr.send();
+        };
+        tryFetch(0);
     }
 
     getDisplayName(itemHrid) {
