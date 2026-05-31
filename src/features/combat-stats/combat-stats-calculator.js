@@ -7,6 +7,7 @@ import marketAPI from '../../api/marketplace.js';
 import dataManager from '../../core/data-manager.js';
 import config from '../../core/config.js';
 import expectedValueCalculator from '../market/expected-value-calculator.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 // Maps regular dungeon chest HRIDs to their required entry key HRIDs (1:1 relationship)
 const DUNGEON_CHEST_KEYS = {
@@ -105,7 +106,7 @@ export function calculateIncomeBreakdown(lootMap) {
 
         breakdown.push({
             itemHrid: loot.itemHrid,
-            itemName: itemDetails.name,
+            itemName: itemNameTranslator.getDisplayName(loot.itemHrid),
             count: loot.count,
             evPerChest,
             totalValue,
@@ -229,8 +230,7 @@ export function calculateConsumableCosts(consumables, durationSeconds) {
         totalCost += itemCost;
 
         // Get item name from data manager
-        const itemDetails = dataManager.getItemDetails(consumable.itemHrid);
-        const itemName = itemDetails?.name || consumable.itemHrid;
+        const itemName = itemNameTranslator.getDisplayName(consumable.itemHrid);
 
         breakdown.push({
             itemHrid: consumable.itemHrid,
@@ -321,7 +321,7 @@ export function formatLootList(lootMap) {
         items.push({
             count: loot.count,
             itemHrid: loot.itemHrid,
-            itemName: itemDetails?.name || 'Unknown',
+            itemName: itemNameTranslator.getDisplayName(loot.itemHrid),
             rarity: itemDetails?.rarity || 0,
             totalValue,
         });
