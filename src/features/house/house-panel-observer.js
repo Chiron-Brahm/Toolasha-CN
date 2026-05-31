@@ -104,6 +104,9 @@ class HousePanelObserver {
      * @returns {string|null} House room HRID
      */
     identifyRoomFromModal(modalContent) {
+        const header = modalContent.querySelector('[class*="HousePanel_header"]');
+        console.log('[HouseDebug] Header HTML:', header?.innerHTML?.substring(0, 500));
+
         // Primary: extract room ID from SVG sprite href (locale-independent)
         const svg = modalContent.querySelector('[class*="HousePanel_header"] svg use');
         console.log('[HouseDebug] SVG use element found:', !!svg);
@@ -115,6 +118,31 @@ class HousePanelObserver {
                 console.log('[HouseDebug] Room identified via SVG:', roomId);
                 return `/house_rooms/${roomId}`;
             }
+        }
+
+        // Fallback: match header text against game data room names
+        const initData = dataManager.getInitClientData();
+        const hasRoomMap = !!(initData?.houseRoomDetailMap);
+        console.log('[HouseDebug] Game data houseRoomDetailMap available:', hasRoomMap);
+        if (initData?.houseRoomDetailMap) {
+            const roomName = header?.textContent?.trim();
+            console.log('[HouseDebug] Header text:', JSON.stringify(roomName));
+            if (roomName) {
+                const allRoomNames = Object.entries(initData.houseRoomDetailMap).map(([h, r]) => `${h}:${r.name}`);
+                console.log('[HouseDebug] Available rooms:', allRoomNames);
+                for (const [hrid, roomData] of Object.entries(initData.houseRoomDetailMap)) {
+                    if (roomData.name === roomName) {
+                        console.log('[HouseDebug] Room identified via text match:', hrid);
+                        return hrid;
+                    }
+                }
+                console.warn('[HouseDebug] No room matched header text');
+            }
+        }
+
+        console.warn('[HouseDebug] All identification methods failed');
+        return null;
+    }
         }
 
         // Fallback: match header text against game data room names
