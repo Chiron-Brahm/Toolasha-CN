@@ -130,6 +130,40 @@ class ItemNameTranslator {
         return null;
     }
 
+    _ensureHRIDMaps() {
+        const initData = dataManager.getInitClientData();
+        if (!initData?.itemDetailMap) {
+            this._enToHrid = null;
+            this._hridToEn = null;
+            return false;
+        }
+        const source = initData.itemDetailMap;
+        if (this._hridToEnSource === source) return true;
+        this._enToHrid = new Map();
+        this._hridToEn = new Map();
+        for (const [hrid, item] of Object.entries(source)) {
+            this._enToHrid.set(item.name, hrid);
+            this._hridToEn.set(hrid, item.name);
+        }
+        this._hridToEnSource = source;
+        return true;
+    }
+
+    captureFromDOM(element, itemHrid) {
+        if (!element || !itemHrid) return;
+        const text = (element.textContent || element.getAttribute('aria-label') || '').trim();
+        if (!text) return;
+        const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+        if (!baseName) return;
+
+        if (!CJK_REGEX.test(baseName)) return;
+
+        if (this.cnNames[itemHrid] === baseName) return;
+
+        this.cnNames[itemHrid] = baseName;
+        this._scheduleSave();
+    }
+
     _scanDomNow() {
         for (const selector of MUTATION_SELECTORS) {
             for (const el of document.querySelectorAll(selector)) {
