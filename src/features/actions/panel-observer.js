@@ -514,13 +514,9 @@ function setupTabClickListeners(panel) {
 
     while (current && depth < maxDepth) {
         const buttons = Array.from(current.querySelectorAll('button[role="tab"]'));
-        const foundTabs = buttons.filter((btn) => {
-            const text = btn.textContent.trim();
-            return text === 'Enhance' || text === 'Current Action';
-        });
-
-        if (foundTabs.length === 2) {
-            tabButtons = foundTabs;
+        // Position-based: tab bar has at least 2 tabs (Enhance=0, Current Action=1)
+        if (buttons.length >= 2) {
+            tabButtons = buttons;
             break;
         }
 

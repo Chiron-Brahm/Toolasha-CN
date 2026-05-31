@@ -8,7 +8,7 @@ import dataManager from '../../core/data-manager.js';
 import domObserver from '../../core/dom-observer.js';
 
 // Compiled regex pattern (created once, reused for performance)
-const REGEX_COMBAT_TASK = /(?:Kill|Defeat)\s*-\s*(.+)$/;
+const REGEX_COMBAT_TASK = /[-–—]\s*(.+)$/;
 
 /**
  * ZoneIndices class manages zone index display on maps and tasks

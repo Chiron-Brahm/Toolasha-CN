@@ -29,10 +29,12 @@ function getCurrentLocationTab() {
     for (const button of tabButtons) {
         // Check if this tab is selected
         if (button.getAttribute('aria-selected') === 'true') {
-            const text = button.textContent?.trim();
-            // Skip special tabs that aren't locations
-            if (text && !['Enhance', 'Current Action', 'Decompose', 'Transmute'].includes(text)) {
-                return text;
+            // Skip action tabs (first 2-3 tabs in enhancing/alchemy panels)
+            const tablist = button.closest('[role="tablist"]');
+            const allButtons = Array.from(tablist?.querySelectorAll('button[role="tab"]') || []);
+            const tabIndex = allButtons.indexOf(button);
+            if (tabIndex >= 0 && allButtons.length - tabIndex > 1) {
+                return button.textContent?.trim() || null;
             }
         }
     }

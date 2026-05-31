@@ -309,7 +309,7 @@ class TaskRerollTracker {
         let goalCount = 0;
         if (progressDiv) {
             const text = progressDiv.textContent.trim();
-            const match = text.match(/Progress:\s*\d+\s*\/\s*(\d+)/);
+            const match = text.match(/(\d+)\s*\/\s*(\d+)/);
             if (match) {
                 goalCount = parseInt(match[1]);
             }
