@@ -719,6 +719,7 @@ class ActionTimeDisplay {
      * Update the display with current action data
      */
     updateDisplay() {
+        console.log('[TimeDebug] updateDisplay() called');
         if (!this.displayElement) {
             this.createDisplayPanel();
             if (!this.displayElement) {
@@ -2042,7 +2043,7 @@ class ActionTimeDisplay {
      * @param {HTMLElement} queueMenu - Queue menu container element
      */
     injectQueueTimes(queueMenu) {
-        // Track if we need to reconnect observer at the end
+        console.log('[TimeDebug] injectQueueTimes called, currentActions:', dataManager.getCurrentActions()?.length);
         let shouldReconnectObserver = false;
 
         try {
