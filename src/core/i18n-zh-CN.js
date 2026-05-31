@@ -1982,5 +1982,7 @@ registerLocale('zh-CN', {
     's/action': '秒/次',
     'actions/hr': '次/时',
     'items/hr': '个/时',
+    'Complete at': '完成于',
+    'Total time': '总时间',
 
 });

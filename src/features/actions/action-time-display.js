@@ -19,7 +19,7 @@ import marketAPI from '../../api/marketplace.js';
 import { calculateGatheringProfit } from './gathering-profit.js';
 import profitCalculator from '../market/profit-calculator.js';
 import { calculateActionStats } from '../../utils/action-calculator.js';
-import { timeReadable, formatWithSeparator } from '../../utils/formatters.js';
+import { timeReadableZh, formatWithSeparator } from '../../utils/formatters.js';
 import { calculateEfficiencyMultiplier } from '../../utils/efficiency.js';
 import { createCleanupRegistry } from '../../utils/cleanup-registry.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
@@ -308,10 +308,10 @@ class ActionTimeDisplay {
                 if (result.isTrulyInfinite) {
                     timeText = t('[∞]');
                 } else if (result.isInfinite && result.materialLimit !== null) {
-                    const timeStr = timeReadable(result.totalTime);
+                    const timeStr = timeReadableZh(result.totalTime);
                     timeText = `[${timeStr} · ${result.limitLabel}: ${this.formatLargeNumber(result.materialLimit)}]`;
                 } else {
-                    const timeStr = timeReadable(result.totalTime);
+                    const timeStr = timeReadableZh(result.totalTime);
                     timeText = `[${timeStr}]`;
                 }
 
@@ -346,9 +346,9 @@ class ActionTimeDisplay {
                 let totalText;
                 if (hasInfinite) {
                     totalText =
-                        accumulatedTime > 0 ? t('Total: {0} + [∞]', timeReadable(accumulatedTime)) : t('Total: [∞]');
+                        accumulatedTime > 0 ? t('Total: {0} + [∞]', timeReadableZh(accumulatedTime)) : t('Total: [∞]');
                 } else {
-                    totalText = t('Total: {0}', timeReadable(accumulatedTime));
+                    totalText = t('Total: {0}', timeReadableZh(accumulatedTime));
                 }
                 totalDiv.textContent = totalText;
                 actionsContainer.appendChild(totalDiv);
@@ -1139,7 +1139,7 @@ class ActionTimeDisplay {
         completionTime.setSeconds(completionTime.getSeconds() + totalTimeSeconds);
 
         // Format time strings (timeReadable handles days/hours/minutes properly)
-        const timeStr = timeReadable(totalTimeSeconds);
+        const timeStr = timeReadableZh(totalTimeSeconds);
 
         // Format completion time
         const now = new Date();
@@ -1148,21 +1148,15 @@ class ActionTimeDisplay {
         let clockTime;
         if (isToday) {
             // Today: Just show time in 12-hour format
-            clockTime = completionTime.toLocaleString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true,
-            });
+            clockTime = completionTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         } else {
             // Future date: Show date and time in 12-hour format
-            clockTime = completionTime.toLocaleString('en-US', {
+            clockTime = completionTime.toLocaleString('zh-CN', {
                 month: 'numeric',
                 day: 'numeric',
-                hour: 'numeric',
+                hour: '2-digit',
                 minute: '2-digit',
                 second: '2-digit',
-                hour12: true,
             });
         }
 
@@ -1219,7 +1213,7 @@ class ActionTimeDisplay {
             if (recycleTimeSeconds !== null) {
                 const recycleCompletion = new Date();
                 recycleCompletion.setSeconds(recycleCompletion.getSeconds() + recycleTimeSeconds);
-                const recycleTimeStr = timeReadable(recycleTimeSeconds);
+                const recycleTimeStr = timeReadableZh(recycleTimeSeconds);
                 const recycleIsToday = recycleCompletion.toDateString() === new Date().toDateString();
                 const recycleClockTime = recycleCompletion.toLocaleString(
                     'en-US',
@@ -1432,7 +1426,7 @@ class ActionTimeDisplay {
             materialTime > 0 &&
             isFinite(materialTime)
         ) {
-            const timeStr = timeReadable(materialTime);
+            const timeStr = timeReadableZh(materialTime);
 
             const completionTime = new Date();
             completionTime.setSeconds(completionTime.getSeconds() + materialTime);
@@ -1442,20 +1436,14 @@ class ActionTimeDisplay {
 
             let clockTime;
             if (isToday) {
-                clockTime = completionTime.toLocaleString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: true,
-                });
+                clockTime = completionTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             } else {
-                clockTime = completionTime.toLocaleString('en-US', {
+                clockTime = completionTime.toLocaleString('zh-CN', {
                     month: 'numeric',
                     day: 'numeric',
-                    hour: 'numeric',
+                    hour: '2-digit',
                     minute: '2-digit',
                     second: '2-digit',
-                    hour12: true,
                 });
             }
 
@@ -2367,7 +2355,7 @@ class ActionTimeDisplay {
                     const minutes = String(completionDate.getMinutes()).padStart(2, '0');
                     const seconds = String(completionDate.getSeconds()).padStart(2, '0');
 
-                    completionText = ` Complete at ${hours}:${minutes}:${seconds}`;
+                    completionText = ` ${t('Complete at')} ${hours}:${minutes}:${seconds}`;
                 }
 
                 // Create time display element
@@ -2393,10 +2381,10 @@ class ActionTimeDisplay {
                     } else {
                         limitLabel = 'max';
                     }
-                    const timeStr = timeReadable(totalTime);
+                    const timeStr = timeReadableZh(totalTime);
                     timeDiv.textContent = `[${timeStr} · ${limitLabel}: ${this.formatLargeNumber(materialLimit)}]${completionText}`;
                 } else {
-                    const timeStr = timeReadable(totalTime);
+                    const timeStr = timeReadableZh(totalTime);
                     timeDiv.textContent = `[${timeStr}]${completionText}`;
                 }
 
@@ -2453,12 +2441,11 @@ class ActionTimeDisplay {
             if (hasInfinite) {
                 // Show finite time first, then add infinity indicator
                 if (accumulatedTime > 0) {
-                    totalText = `Total time: ${timeReadable(accumulatedTime)} + [∞]`;
-                } else {
-                    totalText = 'Total time: [∞]';
-                }
-            } else {
-                totalText = `Total time: ${timeReadable(accumulatedTime)}`;
+            totalText = `${t('Total time')}: ${timeReadableZh(accumulatedTime)} + [∞]`;
+        } else if (accumulatedTime === Infinity) {
+            totalText = `${t('Total time')}: [∞]`;
+        } else {
+            totalText = `${t('Total time')}: ${timeReadableZh(accumulatedTime)}`;
             }
 
             totalDiv.innerHTML = totalText;
