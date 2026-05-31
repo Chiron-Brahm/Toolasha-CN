@@ -16,6 +16,7 @@ const MUTATION_SELECTORS = [
     '[class*="Item_itemName"]',
     '[class*="ItemTooltipText_name"]',
     '[class*="Item_craftingItemName"]',
+    'svg[aria-label]',
 ];
 
 const ENHANCEMENT_STRIP_REGEX = /\s*\+\d+$/;
