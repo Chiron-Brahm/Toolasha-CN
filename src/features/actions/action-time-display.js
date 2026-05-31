@@ -2439,13 +2439,13 @@ class ActionTimeDisplay {
             // Build total time text
             let totalText = '';
             if (hasInfinite) {
-                // Show finite time first, then add infinity indicator
                 if (accumulatedTime > 0) {
-            totalText = `${t('Total time')}: ${timeReadableZh(accumulatedTime)} + [∞]`;
-        } else if (accumulatedTime === Infinity) {
-            totalText = `${t('Total time')}: [∞]`;
-        } else {
-            totalText = `${t('Total time')}: ${timeReadableZh(accumulatedTime)}`;
+                    totalText = `${t('Total time')}: ${timeReadableZh(accumulatedTime)} + [∞]`;
+                } else {
+                    totalText = `${t('Total time')}: [∞]`;
+                }
+            } else {
+                totalText = `${t('Total time')}: ${timeReadableZh(accumulatedTime)}`;
             }
 
             totalDiv.innerHTML = totalText;

@@ -1,0 +1,81 @@
+- generic [ref=e5]:
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - img "Milky Way Idle Game - logo" [ref=e9]
+      - img "Milky Way Idle Game - logo" [ref=e12]
+    - generic [ref=e14]:
+      - generic [ref=e15] [cursor=pointer]: 首页
+      - generic [ref=e16] [cursor=pointer]: 新闻
+      - generic [ref=e17] [cursor=pointer]: 更新日志
+      - generic [ref=e18] [cursor=pointer]: 游戏指南
+      - generic [ref=e22]:
+        - combobox [ref=e23] [cursor=pointer]: 简体
+        - textbox: zh
+        - img
+  - generic [ref=e24]:
+    - generic [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e27]: 多人放置RPG
+        - heading "Milky Way Idle" [level=1] [ref=e28]:
+          - img "Milky Way Idle" [ref=e29]
+        - generic [ref=e31]: 踏上一段穿越银河奶牛放置的旅程，这是一款独特的多人放置游戏。无论你喜欢收集资源、制作物品，还是参与与外星怪物的史诗战斗，这里都有属于你的乐趣！你可以沉浸在我们繁荣的社区中，在玩家驱动的市场中交易物品，与朋友组建公会、畅聊交流，甚至冲击排行榜巅峰！
+      - generic [ref=e32]:
+        - generic [ref=e33]:
+          - generic [ref=e34]:
+            - tablist [ref=e37]:
+              - tab "游客登录" [selected] [ref=e38] [cursor=pointer]: 游客登录
+              - tab "注册" [ref=e39] [cursor=pointer]: 注册
+              - tab "登录" [ref=e40] [cursor=pointer]: 登录
+            - generic [ref=e42]:
+              - heading "以访客身份游玩" [level=1] [ref=e43]
+              - generic [ref=e44]: 你的会话将保存在此浏览器中。要跨多个设备游玩，你可以在游戏中的设置中找到你的访客密码或进行完整注册。
+              - generic [ref=e45] [cursor=pointer]:
+                - generic [ref=e46]:
+                  - checkbox "我同意《使用条款》、《隐私政策》、和《游戏规则》" [ref=e47]
+                  - img [ref=e48]
+                - generic [ref=e51]:
+                  - text: 我同意
+                  - link "《使用条款》" [ref=e52]:
+                    - /url: /termsOfUse
+                  - text: 、
+                  - link "《隐私政策》" [ref=e53]:
+                    - /url: /privacyPolicy
+                  - text: 、和
+                  - link "《游戏规则》" [ref=e54]:
+                    - /url: /rules
+              - generic [ref=e55] [cursor=pointer]:
+                - generic [ref=e56]:
+                  - checkbox "我同意我只可玩一个账户" [ref=e57]
+                  - img [ref=e58]
+                - generic [ref=e60]: 我同意我只可玩一个账户
+              - button "游玩" [ref=e61] [cursor=pointer]: 游玩
+          - generic [ref=e62]: 当前有 35417 名活跃玩家！
+        - img "purple cow" [ref=e64]
+    - generic [ref=e66]:
+      - generic [ref=e67]:
+        - img "Milky Way Idle Game - Non-combat" [ref=e69]
+        - generic [ref=e70]:
+          - heading "收集和制作" [level=2] [ref=e71]
+          - generic [ref=e72]: 挤奶、采集、伐木、奶酪锻造、制作、缝纫、烹饪、冲泡、炼金、强化
+      - generic [ref=e73]:
+        - img "Milky Way Idle Game - Combat" [ref=e75]
+        - generic [ref=e76]:
+          - heading "战斗" [level=2] [ref=e77]
+          - generic [ref=e78]: 多种战斗风格，可定义消耗品和技能的自动使用。单人或组队战斗
+      - generic [ref=e79]:
+        - img "Milky Way Idle Game - Marketplace" [ref=e81]
+        - generic [ref=e82]:
+          - heading "市场" [level=2] [ref=e83]
+          - generic [ref=e84]: 买卖资源、消耗品、装备等物品
+      - generic [ref=e85]:
+        - img "Milky Way Idle Game - Leaderboard" [ref=e87]
+        - generic [ref=e88]:
+          - heading "社区" [level=2] [ref=e89]
+          - generic [ref=e90]: 与朋友组队聊天，争夺排行榜的一席之地！
+    - generic [ref=e91]:
+      - link "使用条款" [ref=e92] [cursor=pointer]:
+        - /url: /termsOfUse
+      - link "隐私政策" [ref=e93] [cursor=pointer]:
+        - /url: /privacyPolicy
+      - link "联系我们" [ref=e94] [cursor=pointer]:
+        - /url: mailto:contact@milkywayidle.com
