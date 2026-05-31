@@ -58,22 +58,25 @@ class ItemNameTranslator {
         try {
             // Method 1: Use game's official API (handles decompression)
             let parsed = null;
-            if (typeof localStorageUtil !== 'undefined' && typeof localStorageUtil.getInitClientData === 'function') {
+            const hasLocalStorageUtil = typeof localStorageUtil !== 'undefined' && typeof localStorageUtil.getInitClientData === 'function';
+            if (hasLocalStorageUtil) {
                 parsed = localStorageUtil.getInitClientData();
+                console.log('[ItemNameTranslator] localStorageUtil result:', !!parsed, 'items:', parsed?.itemDetailMap ? Object.keys(parsed.itemDetailMap).length : 0);
             }
             // Method 2: Try raw JSON parse if not compressed
             if (!parsed) {
                 const raw = localStorage.getItem('initClientData');
                 if (raw) {
-                    try { parsed = JSON.parse(raw); } catch (_) {
+                    try { parsed = JSON.parse(raw); console.log('[ItemNameTranslator] Raw JSON parsed, items:', Object.keys(parsed.itemDetailMap || {}).length); } catch (_) {
                         // Method 3: LZString decompress if available
                         if (typeof LZString !== 'undefined' && LZString.decompressFromUTF16) {
                             parsed = JSON.parse(LZString.decompressFromUTF16(raw));
+                            console.log('[ItemNameTranslator] LZString decompressed, items:', Object.keys(parsed.itemDetailMap || {}).length);
                         }
                     }
                 }
             }
-            if (!parsed || !parsed.itemDetailMap) return;
+            if (!parsed || !parsed.itemDetailMap) { console.log('[ItemNameTranslator] No itemDetailMap found'); return; }
 
             let count = 0;
             for (const [hrid, item] of Object.entries(parsed.itemDetailMap)) {
@@ -82,8 +85,9 @@ class ItemNameTranslator {
                     count++;
                 }
             }
+            console.log('[ItemNameTranslator] Bulk import count:', count);
             if (count > 0) this._scheduleSave();
-        } catch (_) { /* fall back to DOM capture */ }
+        } catch (_) { console.log('[ItemNameTranslator] Bulk import error:', _); }
     }
 
     getDisplayName(itemHrid) {
