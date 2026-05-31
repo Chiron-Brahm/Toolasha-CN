@@ -24,9 +24,13 @@ export function isMarketplacePanel(tablistContainer) {
  * @returns {Element|null} The "My Listings" tab element, or null if not found
  */
 export function getMyListingsTab(tablist) {
-    // Skip custom tabs (e.g. Toolasha inventory tabs, missing material tabs)
+    // Skip non-native tabs (Toolasha inventory tabs, missing material tabs)
     // to find the second native marketplace tab
-    const nativeTabs = Array.from(tablist.children).filter((child) => !child.hasAttribute('data-mwi-custom-tab'));
+    const nativeTabs = Array.from(tablist.children).filter(
+        (child) =>
+            !child.hasAttribute('data-mwi-custom-tab') &&
+            !child.classList.contains('toolasha-inv-tab')
+    );
     return nativeTabs[1] || null;
 }
 
