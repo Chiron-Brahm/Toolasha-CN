@@ -304,17 +304,14 @@ class TaskRerollTracker {
             return null;
         }
 
-        // Get quantity from progress text
-        const progressDivs = taskElement.querySelectorAll('div');
+        // Get quantity from progress div (use CSS class instead of text matching)
+        const progressDiv = taskElement.querySelector('[class*="progress"]');
         let goalCount = 0;
-        for (const div of progressDivs) {
-            const text = div.textContent.trim();
-            if (text.startsWith('Progress:')) {
-                const match = text.match(/Progress:\s*\d+\s*\/\s*(\d+)/);
-                if (match) {
-                    goalCount = parseInt(match[1]);
-                    break;
-                }
+        if (progressDiv) {
+            const text = progressDiv.textContent.trim();
+            const match = text.match(/Progress:\s*\d+\s*\/\s*(\d+)/);
+            if (match) {
+                goalCount = parseInt(match[1]);
             }
         }
 

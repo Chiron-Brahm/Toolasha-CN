@@ -1220,7 +1220,7 @@ class ActionTimeDisplay {
                 const recycleTimeStr = timeReadableZh(recycleTimeSeconds);
                 const recycleIsToday = recycleCompletion.toDateString() === new Date().toDateString();
                 const recycleClockTime = recycleCompletion.toLocaleString(
-                    'en-US',
+                    'zh-CN',
                     recycleIsToday
                         ? { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }
                         : {

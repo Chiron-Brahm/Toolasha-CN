@@ -831,20 +831,16 @@ class TaskProfitDisplay {
             ? nameNode.textContent.replace(zoneSpan.textContent, '').trim()
             : nameNode.textContent.trim();
 
-        // Get quantity from progress (plain div with text "Progress: 0 / 1562")
-        // Find all divs in taskInfo and look for the one containing "Progress:"
+        // Get quantity from progress div (use CSS class instead of text matching)
         let quantity = 0;
         let currentProgress = 0;
-        const taskInfoDivs = taskNode.querySelectorAll('div');
-        for (const div of taskInfoDivs) {
-            const text = div.textContent.trim();
-            if (text.startsWith('Progress:')) {
-                const match = text.match(REGEX_TASK_PROGRESS);
-                if (match) {
-                    currentProgress = parseInt(match[1]); // Current progress
-                    quantity = parseInt(match[2]); // Total quantity
-                }
-                break;
+        const progressDiv = taskNode.querySelector('[class*="progress"]');
+        if (progressDiv) {
+            const text = progressDiv.textContent.trim();
+            const match = text.match(REGEX_TASK_PROGRESS);
+            if (match) {
+                currentProgress = parseInt(match[1]); // Current progress
+                quantity = parseInt(match[2]); // Total quantity
             }
         }
 

@@ -164,8 +164,9 @@ class ZoneIndices {
 
             const taskText = nameElement.textContent;
 
-            // Check if this is a combat task (contains "Kill" or "Defeat")
-            if (!taskText.includes('Kill') && !taskText.includes('Defeat')) {
+            // Check if this is a combat task via CSS class instead of text matching
+            const taskCard = nameElement.closest('[class*="RandomTask_randomTask"]');
+            if (!taskCard || !taskCard.querySelector('[class*="TaskPanel_monster"]')) {
                 continue; // Not a combat task, skip
             }
 

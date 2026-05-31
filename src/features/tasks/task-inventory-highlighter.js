@@ -280,22 +280,19 @@ class TaskInventoryHighlighter {
 
         const description = nameNode.textContent.trim();
 
-        // Check if combat task (contains "Defeat")
-        const isCombat = description.includes('Defeat');
+        // Check if combat task via CSS class
+        const isCombat = !!taskNode.querySelector('[class*="TaskPanel_monster"]');
 
-        // Get quantity from progress (plain div with text "Progress: 0 / 1562")
+        // Get quantity from progress div (use CSS class instead of text matching)
         let quantity = 0;
         let currentProgress = 0;
-        const taskInfoDivs = taskNode.querySelectorAll('div');
-        for (const div of taskInfoDivs) {
-            const text = div.textContent.trim();
-            if (text.startsWith('Progress:')) {
-                const progressMatch = text.match(/(\d+)\s*\/\s*(\d+)/);
-                if (progressMatch) {
-                    currentProgress = parseInt(progressMatch[1], 10);
-                    quantity = parseInt(progressMatch[2], 10);
-                }
-                break;
+        const progressDiv = taskNode.querySelector('[class*="progress"]');
+        if (progressDiv) {
+            const text = progressDiv.textContent.trim();
+            const progressMatch = text.match(/(\d+)\s*\/\s*(\d+)/);
+            if (progressMatch) {
+                currentProgress = parseInt(progressMatch[1], 10);
+                quantity = parseInt(progressMatch[2], 10);
             }
         }
 

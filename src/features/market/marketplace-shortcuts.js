@@ -580,14 +580,11 @@ class MarketplaceShortcuts {
             const itemHrid = `/items/${itemSlug}`;
 
             // Determine enhancement level from modal (if present)
+            // Enhancement level is the FIRST number input in equipment modals
             let enhancementLevel = 0;
             const allInputs = modal.querySelectorAll('input[type="number"]');
-            for (const input of allInputs) {
-                const parent = input.closest('div');
-                if (parent?.textContent?.includes('Enhancement Level')) {
-                    enhancementLevel = parseInt(input.value) || 0;
-                    break;
-                }
+            if (allInputs.length >= 2) {
+                enhancementLevel = parseInt(allInputs[0].value) || 0;
             }
 
             // Look up inventory count for this specific item + enhancement level
@@ -621,8 +618,8 @@ class MarketplaceShortcuts {
 
     /**
      * Find the quantity input in a marketplace modal.
-     * Equipment items have multiple number inputs (enhancement level + quantity),
-     * so we identify the correct one by checking parent containers.
+     * Equipment items have multiple number inputs (enhancement level + quantity).
+     * Quantity is the last number input in equipment modals.
      * @param {HTMLElement} modal - Modal container element
      * @returns {HTMLInputElement|null} Quantity input element or null
      */
@@ -632,23 +629,8 @@ class MarketplaceShortcuts {
         if (allInputs.length === 0) return null;
         if (allInputs.length === 1) return allInputs[0];
 
-        // Multiple inputs — find the one near "Quantity" text, not "Enhancement Level"
-        for (let level = 0; level < 4; level++) {
-            for (const input of allInputs) {
-                let parent = input.parentElement;
-                for (let j = 0; j < level && parent; j++) {
-                    parent = parent.parentElement;
-                }
-                if (!parent) continue;
-
-                const text = parent.textContent;
-                if (text.includes('Quantity') && !text.includes('Enhancement Level')) {
-                    return input;
-                }
-            }
-        }
-
-        return allInputs[0];
+        // Quantity is the LAST number input in equipment modals
+        return allInputs[allInputs.length - 1];
     }
 
     /**
