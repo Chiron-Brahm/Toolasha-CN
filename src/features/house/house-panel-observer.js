@@ -55,6 +55,8 @@ class HousePanelObserver {
      * @param {Element} modalContent - The house panel modal content element
      */
     async handleHouseModal(modalContent) {
+        console.log('[HouseDebug] Modal detected via domObserver');
+
         // Wait a moment for content to fully load
         await new Promise((resolve) => {
             const loadTimeout = setTimeout(resolve, 100);
@@ -78,15 +80,19 @@ class HousePanelObserver {
         const houseRoomHrid = this.identifyRoomFromModal(modalContent);
 
         if (!houseRoomHrid) {
+            console.warn('[HouseDebug] identifyRoomFromModal returned null');
             return;
         }
+        console.log('[HouseDebug] Room identified:', houseRoomHrid);
 
         // Find the costs section to add our column
         const costsSection = modalContent.querySelector('[class*="HousePanel_costs"]');
 
         if (!costsSection) {
+            console.warn('[HouseDebug] costsSection not found');
             return;
         }
+        console.log('[HouseDebug] costsSection found, adding cost column');
 
         // Add our cost display as a column
         await houseCostDisplay.addCostColumn(costsSection, houseRoomHrid, modalContent);
@@ -100,29 +106,39 @@ class HousePanelObserver {
     identifyRoomFromModal(modalContent) {
         // Primary: extract room ID from SVG sprite href (locale-independent)
         const svg = modalContent.querySelector('[class*="HousePanel_header"] svg use');
+        console.log('[HouseDebug] SVG use element found:', !!svg);
         if (svg) {
             const hrefValue = svg.getAttribute('href') || '';
+            console.log('[HouseDebug] SVG href:', hrefValue);
             const roomId = hrefValue.split('#')[1]; // e.g., "brewery" from "#brewery"
             if (roomId) {
+                console.log('[HouseDebug] Room identified via SVG:', roomId);
                 return `/house_rooms/${roomId}`;
             }
         }
 
         // Fallback: match header text against game data room names
-        // (game data names are localized, so they match the UI language)
         const initData = dataManager.getInitClientData();
+        const hasRoomMap = !!(initData?.houseRoomDetailMap);
+        console.log('[HouseDebug] Game data houseRoomDetailMap available:', hasRoomMap);
         if (initData?.houseRoomDetailMap) {
             const header = modalContent.querySelector('[class*="HousePanel_header"]');
             const roomName = header?.textContent?.trim();
+            console.log('[HouseDebug] Header text:', JSON.stringify(roomName));
             if (roomName) {
+                const allRoomNames = Object.entries(initData.houseRoomDetailMap).map(([h, r]) => `${h}:${r.name}`);
+                console.log('[HouseDebug] Available rooms:', allRoomNames);
                 for (const [hrid, roomData] of Object.entries(initData.houseRoomDetailMap)) {
                     if (roomData.name === roomName) {
+                        console.log('[HouseDebug] Room identified via text match:', hrid);
                         return hrid;
                     }
                 }
+                console.warn('[HouseDebug] No room matched header text');
             }
         }
 
+        console.warn('[HouseDebug] All identification methods failed');
         return null;
     }
 
