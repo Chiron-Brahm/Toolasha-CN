@@ -8,6 +8,7 @@ import domObserver from '../../core/dom-observer.js';
 import config from '../../core/config.js';
 import dataManager from '../../core/data-manager.js';
 import { navigateToMarketplace } from '../../utils/marketplace-tabs.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { setReactInputValue } from '../../utils/react-input.js';
 import estimatedListingAge from './estimated-listing-age.js';
@@ -78,6 +79,8 @@ class MarketplaceShortcuts {
         const itemName = nameEl.textContent.trim();
         const itemHrid = this.findItemHrid(itemName);
         if (!itemHrid) return;
+
+        itemNameTranslator.captureFromDOM(nameEl, itemHrid);
 
         // Get enhancement level (e.g. "+3" → 3, absent → 0)
         let enhancementLevel = 0;

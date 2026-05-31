@@ -13,6 +13,8 @@
  * Formula: actionTime = baseTime / (1 + totalEfficiency + totalSpeed)
  */
 
+import { itemNameTranslator } from './item-name-translator.js';
+
 /**
  * Map action type HRID to equipment field name
  * @param {string} actionTypeHrid - Action type HRID (e.g., "/action_types/cheesesmithing")
@@ -448,7 +450,7 @@ export function debugEquipmentSpeedBonuses(characterEquipment, itemDetailMap) {
                 const scaledValue = calculateEnhancementScaling(value, enhancementLevel, slotHrid);
 
                 bonuses.push({
-                    itemName: itemDetails.name,
+                    itemName: itemNameTranslator.getDisplayName(equippedItem.itemHrid),
                     itemHrid: equippedItem.itemHrid,
                     slot: slotHrid,
                     speedType: statName,

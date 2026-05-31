@@ -23,6 +23,7 @@ import {
     calculateTeaCostsPerHour,
     createPriceCache,
 } from '../../utils/profit-helpers.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 /**
  * Cache for processing action conversions (inputItemHrid → conversion data)
@@ -173,7 +174,7 @@ export async function calculateGatheringProfit(actionHrid) {
         let rawPerAction = 0;
         let processedPerAction = 0;
 
-        const rawItemName = gameData.itemDetailMap[drop.itemHrid]?.name || 'Unknown';
+        const rawItemName = itemNameTranslator.getDisplayName(drop.itemHrid);
         const baseItemsPerHour = actionsPerHour * drop.dropRate * avgAmountPerAction * efficiencyMultiplier;
         const baseItemsPerAction = drop.dropRate * avgAmountPerAction;
         const baseRevenuePerAction = baseItemsPerAction * resolvedRawPrice;
@@ -216,7 +217,7 @@ export async function calculateGatheringProfit(actionHrid) {
             const processedItemsPerAction = drop.dropRate * processedPerAction;
 
             // Track processing details
-            const processedItemName = gameData.itemDetailMap[processedItemHrid]?.name || 'Unknown';
+            const processedItemName = itemNameTranslator.getDisplayName(processedItemHrid);
 
             // Value gain per conversion = cheese value - cost of milk used
             const costOfMilkUsed = conversionRatio * resolvedRawPrice;

@@ -6,6 +6,7 @@
 import config from '../../core/config.js';
 import dataManager from '../../core/data-manager.js';
 import marketAPI from '../../api/marketplace.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import {
     createSession,
     recordSuccess,
@@ -91,7 +92,7 @@ class EnhancementTracker {
             throw new Error(`Item not found: ${itemHrid}`);
         }
 
-        const itemName = itemDetails.name;
+        const itemName = itemNameTranslator.getDisplayName(itemHrid);
 
         // Create new session
         const session = createSession(itemHrid, itemName, startLevel, targetLevel, protectFrom);

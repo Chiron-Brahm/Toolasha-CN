@@ -14,6 +14,7 @@ import {
 } from '../../utils/material-calculator.js';
 import { formatWithSeparator } from '../../utils/formatters.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import { createAutofillManager } from '../../utils/marketplace-autofill.js';
 import {
     createMaterialTab,
@@ -823,7 +824,7 @@ function createReturnTab(referenceTab) {
         if (storedNumActions > 0) displayName += ` (\u00d7${formatWithSeparator(storedNumActions)})`;
     } else if (storedEnhancementContext) {
         const ctx = storedEnhancementContext;
-        const itemName = dataManager.getItemDetails(ctx.itemHrid)?.name || '...';
+        const itemName = itemNameTranslator.getDisplayName(ctx.itemHrid);
         displayName = `${itemName} +${ctx.startLevel}\u2192+${ctx.targetLevel}`;
     } else {
         return null;

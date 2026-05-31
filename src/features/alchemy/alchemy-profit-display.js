@@ -15,6 +15,7 @@ import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { calculateExperienceMultiplier } from '../../utils/experience-parser.js';
 import { calculateActionsPerHour } from '../../utils/profit-helpers.js';
 import { calculateMultiLevelProgress } from '../../utils/experience-calculator.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 class AlchemyProfitDisplay {
     constructor() {
@@ -459,8 +460,7 @@ class AlchemyProfitDisplay {
             let normalDropsRevenue = 0;
 
             for (const drop of normalDrops) {
-                const itemDetails = dataManager.getItemDetails(drop.itemHrid);
-                const itemName = itemDetails?.name || drop.itemHrid;
+                const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
                 const decimals = 2; // Always use 2 decimals
                 const dropRatePct = formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
 
@@ -498,8 +498,7 @@ class AlchemyProfitDisplay {
             let essenceRevenue = 0;
 
             for (const drop of essenceDrops) {
-                const itemDetails = dataManager.getItemDetails(drop.itemHrid);
-                const itemName = itemDetails?.name || drop.itemHrid;
+                const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
                 const decimals = 2; // Always use 2 decimals
                 const dropRatePct = formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
 
@@ -528,8 +527,7 @@ class AlchemyProfitDisplay {
             let rareRevenue = 0;
 
             for (const drop of rareDrops) {
-                const itemDetails = dataManager.getItemDetails(drop.itemHrid);
-                const itemName = itemDetails?.name || drop.itemHrid;
+                const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
                 const decimals = drop.dropsPerHour < 1 ? 2 : 1;
                 const baseDropRatePct = formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
                 const effectiveDropRatePct = formatPercentage(
@@ -572,8 +570,7 @@ class AlchemyProfitDisplay {
         if (profitData.requirementCosts && profitData.requirementCosts.length > 0) {
             const materialCostsContent = document.createElement('div');
             for (const material of profitData.requirementCosts) {
-                const itemDetails = dataManager.getItemDetails(material.itemHrid);
-                const itemName = itemDetails?.name || material.itemHrid;
+                const itemName = itemNameTranslator.getDisplayName(material.itemHrid);
                 const amountPerHour = material.count * profitData.actionsPerHour;
 
                 const line = document.createElement('div');
@@ -613,8 +610,7 @@ class AlchemyProfitDisplay {
         // Catalyst Cost subsection (consumed only on success)
         if (profitData.catalystCost && profitData.catalystCost.itemHrid) {
             const catalystContent = document.createElement('div');
-            const itemDetails = dataManager.getItemDetails(profitData.catalystCost.itemHrid);
-            const itemName = itemDetails?.name || profitData.catalystCost.itemHrid;
+            const itemName = itemNameTranslator.getDisplayName(profitData.catalystCost.itemHrid);
 
             // Calculate catalysts per hour (only consumed on success)
             const catalystsPerHour = profitData.actionsPerHour * profitData.successRate;
@@ -645,8 +641,7 @@ class AlchemyProfitDisplay {
         if (profitData.consumableCosts && profitData.consumableCosts.length > 0) {
             const drinkCostsContent = document.createElement('div');
             for (const drink of profitData.consumableCosts) {
-                const itemDetails = dataManager.getItemDetails(drink.itemHrid);
-                const itemName = itemDetails?.name || drink.itemHrid;
+                const itemName = itemNameTranslator.getDisplayName(drink.itemHrid);
 
                 // Format drinks per hour
                 const formattedDrinkAmount =

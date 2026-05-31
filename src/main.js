@@ -14,6 +14,7 @@ import * as combatSimIntegration from './features/combat/combat-sim-integration.
 import settingsUI from './features/settings/settings-ui.js';
 import { setupScrollTooltipDismissal } from './utils/dom.js';
 import guildXPTrackerFeature from './features/guild/guild-xp-tracker.js';
+import { itemNameTranslator } from './utils/item-name-translator.js';
 
 /**
  * Detect if running on Combat Simulator page
@@ -59,11 +60,18 @@ if (isCombatSimulatorPage()) {
             // Add beforeunload handler to flush all pending writes
             window.addEventListener('beforeunload', () => {
                 storage.flushAll();
+                itemNameTranslator.flush();
             });
 
             // Initialize Data Manager immediately
             // Don't wait for localStorageUtil - it handles missing data gracefully
             dataManager.initialize();
+
+            // Load Chinese item name cache from storage
+            await itemNameTranslator.load();
+
+            // Start observing DOM for Chinese item names
+            itemNameTranslator.startObserver();
         } catch (error) {
             console.error('[Toolasha] Storage/config initialization failed:', error);
             // Initialize anyway

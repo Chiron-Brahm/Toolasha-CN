@@ -13,6 +13,7 @@ import { calculateEnhancementPath } from '../enhancement/tooltip-enhancement.js'
 import { getEnhancingParams } from '../../utils/enhancement-config.js';
 import networthCache from '../networth/networth-cache.js';
 import expectedValueCalculator from '../market/expected-value-calculator.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import { getItemPrice } from '../../utils/market-data.js';
 import { parseItemCount } from '../../utils/number-parser.js';
 import { MARKET_TAX, COWBELL_BAG_HRID, COWBELL_BAG_TAX } from '../../utils/profit-constants.js';
@@ -321,6 +322,8 @@ class InventoryBadgeManager {
                 console.warn('[InventoryBadgeManager] Could not find HRID for item:', itemName);
                 continue;
             }
+
+            itemNameTranslator.captureFromDOM(svg, itemHrid);
 
             // Skip actual currency items
             if (currencyHrids.has(itemHrid)) {

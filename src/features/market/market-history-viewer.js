@@ -10,6 +10,7 @@
  */
 
 import storage from '../../core/storage.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import config from '../../core/config.js';
 import dataManager from '../../core/data-manager.js';
 import { formatWithSeparator, formatKMB } from '../../utils/formatters.js';
@@ -597,14 +598,11 @@ class MarketHistoryViewer {
      * Get item name from HRID (with caching for performance)
      */
     getItemName(itemHrid) {
-        // Check cache first
         if (this.itemNameCache.has(itemHrid)) {
             return this.itemNameCache.get(itemHrid);
         }
 
-        // Get item name and cache it
-        const itemDetails = dataManager.getItemDetails(itemHrid);
-        const name = itemDetails?.name || itemHrid.split('/').pop().replace(/_/g, ' ');
+        const name = itemNameTranslator.getDisplayName(itemHrid);
         this.itemNameCache.set(itemHrid, name);
         return name;
     }

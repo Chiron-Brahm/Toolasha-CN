@@ -8,6 +8,7 @@ import marketAPI from '../api/marketplace.js';
 import expectedValueCalculator from '../features/market/expected-value-calculator.js';
 import dataManager from '../core/data-manager.js';
 import { parseEssenceFindBonus, parseRareFindBonus, parseRareFindBreakdown } from './equipment-parser.js';
+import { itemNameTranslator } from './item-name-translator.js';
 import { calculateHouseRareFind } from './house-efficiency.js';
 
 /**
@@ -86,7 +87,7 @@ export function calculateBonusRevenue(actionDetails, actionsPerHour, characterEq
 
             bonusDrops.push({
                 itemHrid: drop.itemHrid,
-                itemName: itemDetails.name,
+                itemName: itemNameTranslator.getDisplayName(drop.itemHrid),
                 dropRate: finalDropRate,
                 dropsPerHour,
                 dropsPerAction,
@@ -146,7 +147,7 @@ export function calculateBonusRevenue(actionDetails, actionsPerHour, characterEq
 
             bonusDrops.push({
                 itemHrid: drop.itemHrid,
-                itemName: itemDetails.name,
+                itemName: itemNameTranslator.getDisplayName(drop.itemHrid),
                 dropRate: finalDropRate,
                 dropsPerHour,
                 dropsPerAction,

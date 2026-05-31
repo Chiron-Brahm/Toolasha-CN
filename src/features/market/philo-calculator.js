@@ -8,6 +8,7 @@
 import config from '../../core/config.js';
 import dataManager from '../../core/data-manager.js';
 import marketAPI from '../../api/marketplace.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import storage from '../../core/storage.js';
 import { formatLargeNumber, formatPercentage, timeReadable } from '../../utils/formatters.js';
 import { getEnhancementMultiplier } from '../../utils/enhancement-multipliers.js';
@@ -128,9 +129,7 @@ class PhiloCalculator {
      * @returns {string} Item name
      */
     getItemName(itemHrid) {
-        const initData = dataManager.getInitClientData();
-        const itemData = initData?.itemDetailMap?.[itemHrid];
-        return itemData?.name || itemHrid.replace('/items/', '').replaceAll('_', ' ');
+        return itemNameTranslator.getDisplayName(itemHrid);
     }
 
     /**

@@ -6,6 +6,7 @@
 import config from '../../core/config.js';
 import dataManager from '../../core/data-manager.js';
 import domObserver from '../../core/dom-observer.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import actionFilter from './action-filter.js';
 import alchemyProfit from '../alchemy/alchemy-profit.js';
 import { findOptimalTeas, getTeaBuffDescription, getRelevantTeas } from '../../utils/tea-optimizer.js';
@@ -77,8 +78,7 @@ async function getAlchemyContext() {
     if (!itemHrid) return null;
 
     const enhancementLevel = requirements[0].enhancementLevel || 0;
-    const itemDetails = dataManager.getItemDetails(itemHrid);
-    const itemName = itemDetails?.name || itemHrid.split('/').pop().replace(/_/g, ' ');
+    const itemName = itemNameTranslator.getDisplayName(itemHrid);
 
     return { actionType, itemHrid, enhancementLevel, itemName };
 }

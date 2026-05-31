@@ -6,8 +6,8 @@
 
 import { t } from '../../core/i18n.js';
 import config from '../../core/config.js';
-import dataManager from '../../core/data-manager.js';
 import { decomposeHistoryTracker } from './decompose-history-tracker.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import { formatKMB } from '../../utils/formatters.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
 import { isAlchemyPanel, getAlchemyTab } from '../../utils/game-locale.js';
@@ -1316,8 +1316,7 @@ class DecomposeHistoryViewer {
         if (this.itemNameCache.has(itemHrid)) {
             return this.itemNameCache.get(itemHrid);
         }
-        const details = dataManager.getItemDetails(itemHrid);
-        const name = details?.name || itemHrid.split('/').pop().replace(/_/g, ' ');
+        const name = itemNameTranslator.getDisplayName(itemHrid);
         this.itemNameCache.set(itemHrid, name);
         return name;
     }

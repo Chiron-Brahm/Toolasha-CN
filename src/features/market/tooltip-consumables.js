@@ -9,6 +9,7 @@ import dataManager from '../../core/data-manager.js';
 import { numberFormatter } from '../../utils/formatters.js';
 import dom from '../../utils/dom.js';
 import domObserver from '../../core/dom-observer.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 /**
  * TooltipConsumables class handles injecting consumable stats into item tooltips
@@ -135,6 +136,10 @@ class TooltipConsumables {
 
         // Get item details
         const itemDetails = dataManager.getItemDetails(itemHrid);
+
+        if (itemHrid && nameElement) {
+            itemNameTranslator.captureFromDOM(nameElement, itemHrid);
+        }
 
         if (!itemDetails || !itemDetails.consumableDetail) {
             return; // Not a consumable

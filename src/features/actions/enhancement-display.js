@@ -15,6 +15,7 @@ import { MIN_ACTION_TIME_SECONDS } from '../../utils/profit-constants.js';
 import { timeReadable } from '../../utils/formatters.js';
 import marketAPI from '../../api/marketplace.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 /**
  * Format a number with thousands separator and 2 decimal places
@@ -223,7 +224,7 @@ function generateCostsByLevelTable(
                 materialCost += itemCost;
 
                 // Store breakdown by item name with quantity and unit price
-                const itemName = itemDetail?.name || cost.itemHrid;
+                const itemName = itemNameTranslator.getDisplayName(cost.itemHrid);
                 materialBreakdown[itemName] = {
                     cost: itemCost,
                     quantity: quantity,
@@ -778,7 +779,7 @@ function formatEnhancementDisplay(
         // Materials per attempt with pricing
         enhancementCosts.forEach((cost) => {
             const itemDetail = gameData.itemDetailMap[cost.itemHrid];
-            const itemName = itemDetail ? itemDetail.name : cost.itemHrid;
+            const itemName = itemNameTranslator.getDisplayName(cost.itemHrid);
 
             // Get price
             let itemPrice = 0;

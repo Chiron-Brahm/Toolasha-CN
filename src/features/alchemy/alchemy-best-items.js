@@ -14,6 +14,7 @@ import { getItemPrice } from '../../utils/market-data.js';
 import assetManifest from '../../utils/asset-manifest.js';
 import { isAlchemyPanel, getAlchemyTab } from '../../utils/game-locale.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 const ALCHEMY_TYPES = ['coinify', 'decompose', 'transmute'];
 
@@ -218,7 +219,7 @@ class AlchemyBestItems {
 
             results.push({
                 itemHrid,
-                name: itemDetails.name,
+                name: itemNameTranslator.getDisplayName(itemHrid),
                 itemLevel,
                 itemPrice: getItemPrice(itemHrid, { context: 'profit', side: 'buy' }) || 0,
                 profitPerHour: profitData.profitPerHour,
@@ -689,8 +690,7 @@ class AlchemyBestItems {
             container.appendChild(revenueHeader);
 
             for (const drop of profitData.dropRevenues) {
-                const itemDetails = dataManager.getItemDetails(drop.itemHrid);
-                const itemName = itemDetails?.name || drop.itemHrid.split('/').pop();
+                const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
                 const dropRatePct = formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
                 const dropsDisplay =
                     drop.dropsPerHour >= 10000
@@ -723,8 +723,7 @@ class AlchemyBestItems {
             // Input materials
             if (profitData.requirementCosts) {
                 for (const req of profitData.requirementCosts) {
-                    const itemDetails = dataManager.getItemDetails(req.itemHrid);
-                    const itemName = itemDetails?.name || req.itemHrid.split('/').pop();
+                    const itemName = itemNameTranslator.getDisplayName(req.itemHrid);
                     const line = document.createElement('div');
                     line.style.cssText = 'margin-left: 8px; color: #aaa;';
                     line.textContent = `\u2022 ${itemName}: ${req.count}\u00d7 @ ${formatWithSeparator(Math.round(req.price))} \u2192 ${formatKMB(Math.round(req.costPerHour))}/hr`;
@@ -734,8 +733,7 @@ class AlchemyBestItems {
 
             // Catalyst
             if (profitData.catalystCost?.itemHrid && profitData.catalystCostPerHour > 0) {
-                const catDetails = dataManager.getItemDetails(profitData.catalystCost.itemHrid);
-                const catName = catDetails?.name || profitData.catalystCost.itemHrid.split('/').pop();
+                const catName = itemNameTranslator.getDisplayName(profitData.catalystCost.itemHrid);
                 const line = document.createElement('div');
                 line.style.cssText = 'margin-left: 8px; color: #aaa;';
                 line.textContent = `\u2022 ${catName} @ ${formatWithSeparator(Math.round(profitData.catalystCost.price))} \u2192 ${formatKMB(Math.round(profitData.catalystCostPerHour))}/hr`;
@@ -745,8 +743,7 @@ class AlchemyBestItems {
             // Tea
             if (profitData.consumableCosts?.length > 0) {
                 for (const tea of profitData.consumableCosts) {
-                    const teaDetails = dataManager.getItemDetails(tea.itemHrid);
-                    const teaName = teaDetails?.name || tea.itemHrid.split('/').pop();
+                    const teaName = itemNameTranslator.getDisplayName(tea.itemHrid);
                     const line = document.createElement('div');
                     line.style.cssText = 'margin-left: 8px; color: #aaa;';
                     line.textContent = `\u2022 ${teaName} \u2192 ${formatKMB(Math.round(tea.costPerHour))}/hr`;

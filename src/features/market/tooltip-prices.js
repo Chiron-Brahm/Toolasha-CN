@@ -27,6 +27,7 @@ import { DUNGEON_CHEST_CHEST_KEYS } from '../combat-stats/combat-stats-calculato
 import { calculateArtisanBonus } from '../../utils/material-calculator.js';
 import { getActionHridFromName } from '../../utils/game-lookups.js';
 import { t } from '../../core/i18n.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 // Compiled regex patterns (created once, reused for performance)
 const REGEX_ENHANCEMENT_LEVEL = /\+(\d+)$/;
@@ -247,6 +248,13 @@ class TooltipPrices {
 
         // Get the item HRID from the name
         const itemHrid = this.extractItemHridFromName(itemName);
+
+        if (itemHrid) {
+            const capturedEl = isCollectionTooltip
+                ? tooltipElement.querySelector('div.Collection_name__10aep')
+                : nameElement;
+            if (capturedEl) itemNameTranslator.captureFromDOM(capturedEl, itemHrid);
+        }
 
         if (!itemHrid) {
             return;

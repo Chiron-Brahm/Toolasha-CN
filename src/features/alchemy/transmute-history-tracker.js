@@ -19,6 +19,7 @@ import storage from '../../core/storage.js';
 import webSocketHook from '../../core/websocket.js';
 import dataManager from '../../core/data-manager.js';
 import { getItemPrice } from '../../utils/market-data.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 const TRANSMUTE_ACTION_HRID = '/actions/alchemy/transmute';
 const COIN_ITEM_HRID = '/items/coin';
@@ -344,8 +345,7 @@ class TransmuteHistoryTracker {
      * @returns {string} Item display name
      */
     getItemName(itemHrid) {
-        const details = dataManager.getItemDetails(itemHrid);
-        return details?.name || itemHrid.split('/').pop().replace(/_/g, ' ');
+        return itemNameTranslator.getDisplayName(itemHrid);
     }
 }
 

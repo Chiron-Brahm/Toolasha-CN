@@ -15,6 +15,7 @@ import { formatKMB, formatWithSeparator } from '../../utils/formatters.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { registerFloatingPanel, unregisterFloatingPanel, bringPanelToFront } from '../../utils/panel-z-index.js';
 import { getCheapestProtectionPrice } from './tooltip-enhancement.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 const PANEL_ID = 'mwi-xph-calc-panel';
 const BTN_CLASS = 'mwi-xph-calc-btn';
@@ -96,7 +97,7 @@ function calculateItemXPH(itemHrid, itemDetails, maxLevel, protectFrom, params) 
             const totalCost = (materialCost || 0) + protCost;
             goldPerXP = totalCost / totalXP;
             costPerHour = goldPerXP * xph;
-            protectionItemName = dataManager.getInitClientData()?.itemDetailMap[protectionInfo.itemHrid]?.name || null;
+            protectionItemName = itemNameTranslator.getDisplayName(protectionInfo.itemHrid);
         } else {
             costPartial = true;
         }
@@ -104,7 +105,7 @@ function calculateItemXPH(itemHrid, itemDetails, maxLevel, protectFrom, params) 
 
     return {
         itemHrid,
-        name: itemDetails.name,
+        name: itemNameTranslator.getDisplayName(itemHrid),
         protectionItemName,
         xph,
         goldPerXP,

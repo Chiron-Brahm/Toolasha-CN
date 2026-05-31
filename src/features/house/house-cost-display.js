@@ -10,6 +10,7 @@ import { coinFormatter, formatWithSeparator } from '../../utils/formatters.js';
 import dataManager from '../../core/data-manager.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { createAutofillManager } from '../../utils/marketplace-autofill.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import { isMarketplacePanel, getMyListingsTab } from '../../utils/game-locale.js';
 import {
     createMaterialTab,
@@ -516,7 +517,7 @@ class HouseCostDisplay {
                 if (itemDetails) {
                     missing.push({
                         itemHrid: material.itemHrid,
-                        itemName: itemDetails.name,
+                        itemName: itemNameTranslator.getDisplayName(material.itemHrid),
                         missing: missingAmount,
                         isTradeable: itemDetails.isTradable === true,
                     });

@@ -21,6 +21,7 @@ import { getItemPrice } from './market-data.js';
 import { getCustomPrice } from '../features/settings/custom-price-overrides.js';
 import { getShopCoinCost } from './game-lookups.js';
 import { getProductionCost } from '../features/enhancement/tooltip-enhancement.js';
+import { itemNameTranslator } from './item-name-translator.js';
 
 /**
  * Calculate actions per hour from action time
@@ -185,8 +186,7 @@ export function calculateTeaCostsPerHour({
             return entries;
         }
 
-        const itemDetails = itemDetailMap[drink.itemHrid];
-        const itemName = itemDetails?.name || 'Unknown';
+        const itemName = itemNameTranslator.getDisplayName(drink.itemHrid);
         const price =
             typeof getItemPrice === 'function'
                 ? getItemPrice(drink.itemHrid, { context: 'profit', side: 'buy' })

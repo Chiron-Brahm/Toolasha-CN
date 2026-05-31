@@ -10,6 +10,7 @@ import { SessionState, getSessionDuration } from './enhancement-session.js';
 import dataManager from '../../core/data-manager.js';
 import config from '../../core/config.js';
 import domObserver from '../../core/dom-observer.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import { formatPercentage } from '../../utils/formatters.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { registerFloatingPanel, unregisterFloatingPanel, bringPanelToFront } from '../../utils/panel-z-index.js';
@@ -646,9 +647,7 @@ class EnhancementUI {
 
         if (sessions.length === 0 || !session) return;
 
-        const gameData = dataManager.getInitClientData();
-        const itemDetails = gameData?.itemDetailMap?.[session.itemHrid];
-        const itemName = itemDetails?.name || t('Unknown Item');
+        const itemName = itemNameTranslator.getDisplayName(session.itemHrid);
 
         const totalAttempts = session.totalAttempts;
         const totalSuccess = session.totalSuccesses;
@@ -808,9 +807,7 @@ class EnhancementUI {
      * Generate HTML for session display
      */
     generateSessionHTML(session) {
-        const gameData = dataManager.getInitClientData();
-        const itemDetails = gameData?.itemDetailMap?.[session.itemHrid];
-        const itemName = itemDetails?.name || t('Unknown Item');
+        const itemName = itemNameTranslator.getDisplayName(session.itemHrid);
 
         // Calculate stats
         const totalAttempts = session.totalAttempts;
@@ -1040,8 +1037,7 @@ class EnhancementUI {
                 ':</div>';
 
             for (const [itemHrid, data] of Object.entries(session.materialCosts)) {
-                const itemDetails = gameData?.itemDetailMap?.[itemHrid];
-                const itemName = itemDetails?.name || itemHrid;
+                const itemName = itemNameTranslator.getDisplayName(itemHrid);
                 const unitCost = Math.floor(data.totalCost / data.count);
 
                 html += `

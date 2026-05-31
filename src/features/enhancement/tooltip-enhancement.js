@@ -18,6 +18,7 @@ import { getItemPrice, getItemPrices } from '../../utils/market-data.js';
 import { parseArtisanBonus, getDrinkConcentration } from '../../utils/tea-parser.js';
 import { t } from '../../core/i18n.js';
 import marketAPI from '../../api/marketplace.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 const _costCache = new Map();
 const _chainTimeCache = new Map();
@@ -485,7 +486,7 @@ function calculateTotalCost(itemHrid, targetLevel, protectFrom, config) {
             const totalQuantity = material.count * pathResult.attempts;
             materialBreakdown.push({
                 itemHrid: material.itemHrid,
-                name: materialDetail?.name || material.itemHrid,
+                name: itemNameTranslator.getDisplayName(material.itemHrid),
                 countPerAction: material.count,
                 totalQuantity,
                 unitPrice: price,

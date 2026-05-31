@@ -8,6 +8,7 @@ import dataManager from '../core/data-manager.js';
 import { parseArtisanBonus, getDrinkConcentration } from './tea-parser.js';
 import { getEnhancingParams } from './enhancement-config.js';
 import { calculateEnhancement } from './enhancement-calculator.js';
+import { itemNameTranslator } from './item-name-translator.js';
 
 export const ARTISAN_MATERIAL_MODE = {
     EXPECTED: 'expected',
@@ -177,7 +178,7 @@ export function calculateMaterialRequirements(actionHrid, numActions, accountFor
 
             materials.push({
                 itemHrid: input.itemHrid,
-                itemName: itemDetails.name,
+                itemName: itemNameTranslator.getDisplayName(input.itemHrid),
                 required: totalRequired,
                 have: have,
                 queued: queued,
@@ -207,7 +208,7 @@ export function calculateMaterialRequirements(actionHrid, numActions, accountFor
         if (itemDetails) {
             materials.push({
                 itemHrid: actionDetails.upgradeItemHrid,
-                itemName: itemDetails.name,
+                itemName: itemNameTranslator.getDisplayName(actionDetails.upgradeItemHrid),
                 required: totalRequired,
                 have: have,
                 queued: queued,
@@ -324,7 +325,7 @@ export function calculateEnhancementMaterialRequirements(
 
         materials.push({
             itemHrid: cost.itemHrid,
-            itemName: matDetails.name,
+            itemName: itemNameTranslator.getDisplayName(cost.itemHrid),
             required: totalQuantity,
             have: have,
             queued: 0,
@@ -349,7 +350,7 @@ export function calculateEnhancementMaterialRequirements(
 
             materials.push({
                 itemHrid: protectionItemHrid,
-                itemName: protDetails.name,
+                itemName: itemNameTranslator.getDisplayName(protectionItemHrid),
                 required: totalProtection,
                 have: have,
                 queued: 0,

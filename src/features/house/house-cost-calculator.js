@@ -7,6 +7,7 @@ import { t } from '../../core/i18n.js';
 import dataManager from '../../core/data-manager.js';
 import marketAPI from '../../api/marketplace.js';
 import { getItemPrice } from '../../utils/market-data.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 class HouseCostCalculator {
     constructor() {
@@ -184,9 +185,7 @@ class HouseCostCalculator {
             return t('Gold');
         }
 
-        const initData = dataManager.getInitClientData();
-        const itemData = initData?.itemDetailMap?.[itemHrid];
-        return itemData?.name || t('Unknown Item');
+        return itemNameTranslator.getDisplayName(itemHrid);
     }
 
     /**
