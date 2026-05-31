@@ -107,6 +107,29 @@ class ItemNameTranslator {
         return itemHrid.split('/').pop().replace(/_/g, ' ');
     }
 
+    findHridFromDomName(domName) {
+        if (!domName) return null;
+        const baseName = domName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+        if (!this._ensureHRIDMaps() || !this._enToHrid) return null;
+
+        let hrid = this._enToHrid.get(baseName);
+        if (hrid) return hrid;
+
+        const starVariant = baseName.replace(/\s*\(R\)$/g, ' ★');
+        hrid = this._enToHrid.get(starVariant);
+        if (hrid) return hrid;
+
+        const rVariant = baseName.replace(/\s*★$/g, ' (R)').replace(/\s+/g, ' ').trim();
+        hrid = this._enToHrid.get(rVariant);
+        if (hrid) return hrid;
+
+        for (const [cachedHrid, cnName] of Object.entries(this.cnNames)) {
+            if (cnName === baseName) return cachedHrid;
+        }
+
+        return null;
+    }
+
     _scanDomNow() {
         for (const selector of MUTATION_SELECTORS) {
             for (const el of document.querySelectorAll(selector)) {
