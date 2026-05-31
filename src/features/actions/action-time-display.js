@@ -1193,13 +1193,13 @@ class ActionTimeDisplay {
 
         // Time per action
         if (config.getSetting('actionBar_showActionDuration')) {
-            statsToAppend.push(`${actionTime.toFixed(2)}s/action`);
+            statsToAppend.push(`${actionTime.toFixed(2)}${t('s/action')}`);
         }
 
         // Actions/hr and items/hr
         if (config.getSetting('actionBar_showActionsPerHour')) {
             statsToAppend.push(
-                `${actionsPerHourWithEfficiency.toFixed(0)} actions/hr (${itemsPerHour.toFixed(0)} items/hr)`
+                `${actionsPerHourWithEfficiency.toFixed(0)} ${t('actions/hr')} (${itemsPerHour.toFixed(0)} ${t('items/hr')})`
             );
         }
 
@@ -1414,7 +1414,7 @@ class ActionTimeDisplay {
         const statsToAppend = [];
 
         if (config.getSetting('actionBar_showActionDuration')) {
-            statsToAppend.push(`${perActionTime.toFixed(2)}s/action`);
+            statsToAppend.push(`${perActionTime.toFixed(2)}${t('s/action')}`);
         }
         statsToAppend.push(`${actualSuccessRate.toFixed(1)}${t('% success')}`);
         statsToAppend.push(`${t('~{0} to target', formatWithSeparator(expectedAttempts))}`);

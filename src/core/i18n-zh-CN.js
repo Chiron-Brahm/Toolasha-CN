@@ -1978,4 +1978,9 @@ registerLocale('zh-CN', {
     '📊 Costs by Enhancement Level': '📊 各等级强化成本',
     '🔄 Fetch Latest Prices': '🔄 获取最新价格',
     '🔍 Auto': '🔍 自动',
+    'queued': '已排队',
+    's/action': '秒/次',
+    'actions/hr': '次/时',
+    'items/hr': '个/时',
+
 });
