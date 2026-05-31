@@ -55,23 +55,25 @@ class ItemNameTranslator {
     }
 
     _bulkImportFromGameI18n() {
-        // Directly read game's initClientData from localStorage (like Edible Tools does)
-        // When the game is in Chinese, itemDetailMap[].name contains Chinese names
         try {
-            const raw = localStorage.getItem('initClientData');
-            if (!raw) return;
-            // Try LZString decompress (same as Edible Tools)
-            let data = raw;
-            try {
-                if (typeof LZString !== 'undefined' && LZString.decompressFromUTF16) {
-                    data = LZString.decompressFromUTF16(raw);
+            // Method 1: Use game's official API (handles decompression)
+            let parsed = null;
+            if (typeof localStorageUtil !== 'undefined' && typeof localStorageUtil.getInitClientData === 'function') {
+                parsed = localStorageUtil.getInitClientData();
+            }
+            // Method 2: Try raw JSON parse if not compressed
+            if (!parsed) {
+                const raw = localStorage.getItem('initClientData');
+                if (raw) {
+                    try { parsed = JSON.parse(raw); } catch (_) {
+                        // Method 3: LZString decompress if available
+                        if (typeof LZString !== 'undefined' && LZString.decompressFromUTF16) {
+                            parsed = JSON.parse(LZString.decompressFromUTF16(raw));
+                        }
+                    }
                 }
-            } catch (_) { /* not compressed */ }
-            const parsed = JSON.parse(data);
-            if (parsed?.type !== 'init_client_data' || !parsed?.itemDetailMap) return;
-
-            const initData = dataManager.getInitClientData();
-            if (!initData?.itemDetailMap) return;
+            }
+            if (!parsed || !parsed.itemDetailMap) return;
 
             let count = 0;
             for (const [hrid, item] of Object.entries(parsed.itemDetailMap)) {
@@ -80,12 +82,8 @@ class ItemNameTranslator {
                     count++;
                 }
             }
-            if (count > 0) {
-                this._scheduleSave();
-            }
-        } catch (_) {
-            // localStorage read failed, fall back to DOM capture
-        }
+            if (count > 0) this._scheduleSave();
+        } catch (_) { /* fall back to DOM capture */ }
     }
 
     getDisplayName(itemHrid) {
