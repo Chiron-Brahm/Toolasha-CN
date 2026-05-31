@@ -39,8 +39,14 @@ function handleBuyModal(modal, activeQuantity, pendingCalculation) {
         return;
     }
 
-    // Check if this is a buy modal (has quantity input + buy button, no sell button)
-    const isBuyModal = modal.querySelector('[class*="Button_buy"]') && !modal.querySelector('[class*="Button_sell"]');
+    // Check if this is a buy modal (has a buy/confirm button)
+    // A sell modal would have a sell button instead
+    const isBuyModal =
+        modal.querySelector('[class*="Button_buy"]') ||
+        modal.textContent.includes('Buy Now') ||
+        modal.textContent.includes('Buy Listing') ||
+        modal.textContent.includes('立即购买') ||
+        modal.textContent.includes('买入挂单');
     if (!isBuyModal) {
         return;
     }
