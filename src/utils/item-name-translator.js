@@ -92,13 +92,76 @@ class ItemNameTranslator {
     }
 
     getDisplayName(itemHrid) {
+        // 1. Direct cache hit
         const cnName = this.cnNames[itemHrid];
         if (cnName) return cnName;
 
-        // Trigger one-time DOM scan to capture any available Chinese names
+        // 2. Check pending names for a match
+        const enName = dataManager.getItemDetails(itemHrid)?.name;
+        if (enName && this._pendingNames) {
+            const enLower = enName.toLowerCase();
+            // Try direct match first
+            const direct = this._pendingNames.get(enLower);
+            if (direct) { this.cnNames[itemHrid] = direct; this._pendingNames.delete(enLower); this._scheduleSave(); return direct; }
+            // Try word-level match: "gold coin" should match "金币" if "gold" or "coin" appears somewhere
+            for (const [pendingEn, pendingCn] of this._pendingNames) {
+                const enWords = enLower.split(/\s+/);
+                const penWords = pendingEn.split(/[\s_]+/);
+                const overlap = enWords.filter(w => penWords.includes(w)).length;
+                if (overlap >= Math.min(enWords.length, penWords.length) * 0.5 && overlap > 0) {
+                    this.cnNames[itemHrid] = pendingCn;
+                    this._pendingNames.delete(pendingEn);
+                    this._scheduleSave();
+                    return pendingCn;
+                }
+            }
+        }
+
+        // 3. Trigger one-time DOM scan
         if (!this._didInitialScan) {
             this._didInitialScan = true;
             this._scanDomNow();
+            const fresh = this.cnNames[itemHrid];
+            if (fresh) return fresh;
+        }
+
+        // 4. Fallback to English
+        if (enName) return enName;
+        return itemHrid.split('/').pop().replace(/_/g, ' ');
+    }
+
+    _tryCaptureFromElement(el) {
+        if (!el) return;
+        const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
+        if (!text || !CJK_REGEX.test(text)) return;
+        const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+        if (!baseName) return;
+
+        // Already cached
+        for (const cnName of Object.values(this.cnNames)) {
+            if (cnName === baseName) return;
+        }
+
+        // Try HRID from the element itself (aria-label on SVG)
+        const svg = el.closest('svg') || el.querySelector('svg');
+        const use = svg?.querySelector('use');
+        const href = use?.getAttribute('href') || '';
+        const spriteName = href.split('#').pop();
+        if (spriteName) {
+            const hrid = `/items/${spriteName}`;
+            const details = dataManager.getItemDetails(hrid);
+            if (details) {
+                this.cnNames[hrid] = baseName;
+                this._scheduleSave();
+                return;
+            }
+        }
+
+        // Try HRID lookup via English name matching
+        const hrid = this.findHridFromDomName(baseName);
+        if (hrid) {
+            this.cnNames[hrid] = baseName;
+            this._scheduleSave();
         }
 
         const freshName = this.cnNames[itemHrid];
@@ -115,17 +178,18 @@ class ItemNameTranslator {
         const baseName = domName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
         if (!this._ensureHRIDMaps() || !this._enToHrid) return null;
 
+        // 1. Direct English name match
         let hrid = this._enToHrid.get(baseName);
         if (hrid) return hrid;
-
+        // ★ / (R) variants
         const starVariant = baseName.replace(/\s*\(R\)$/g, ' ★');
         hrid = this._enToHrid.get(starVariant);
         if (hrid) return hrid;
-
         const rVariant = baseName.replace(/\s*★$/g, ' (R)').replace(/\s+/g, ' ').trim();
         hrid = this._enToHrid.get(rVariant);
         if (hrid) return hrid;
 
+        // 2. Check cached Chinese names
         for (const [cachedHrid, cnName] of Object.entries(this.cnNames)) {
             if (cnName === baseName) return cachedHrid;
         }
