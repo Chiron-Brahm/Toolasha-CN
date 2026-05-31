@@ -97,28 +97,19 @@ class ItemNameTranslator {
         const cnName = this.cnNames[itemHrid];
         if (cnName) return cnName;
 
-        // 2. Check pending names for a match
-        const enName = dataManager.getItemDetails(itemHrid)?.name;
-        if (enName && this._pendingNames) {
-            const enLower = enName.toLowerCase();
-            // Try direct match first
-            const direct = this._pendingNames.get(enLower);
-            if (direct) { this.cnNames[itemHrid] = direct; this._pendingNames.delete(enLower); this._scheduleSave(); return direct; }
-            // Try word-level match: "gold coin" should match "金币" if "gold" or "coin" appears somewhere
-            for (const [pendingEn, pendingCn] of this._pendingNames) {
-                const enWords = enLower.split(/\s+/);
-                const penWords = pendingEn.split(/[\s_]+/);
-                const overlap = enWords.filter(w => penWords.includes(w)).length;
-                if (overlap >= Math.min(enWords.length, penWords.length) * 0.5 && overlap > 0) {
-                    this.cnNames[itemHrid] = pendingCn;
-                    this._pendingNames.delete(pendingEn);
-                    this._scheduleSave();
-                    return pendingCn;
-                }
+        // 2. Active lookup: find this item's SVG in the DOM and capture its Chinese aria-label
+        const spriteId = itemHrid.split('/').pop();
+        const svg = document.querySelector(`svg use[href$="#${spriteId}"]`)?.closest('svg');
+        if (svg) {
+            const ariaLabel = svg.getAttribute('aria-label');
+            if (ariaLabel && CJK_REGEX.test(ariaLabel)) {
+                this.cnNames[itemHrid] = ariaLabel;
+                this._scheduleSave();
+                return ariaLabel;
             }
         }
 
-        // 3. Trigger one-time DOM scan
+        // 3. One-time DOM scan
         if (!this._didInitialScan) {
             this._didInitialScan = true;
             this._scanDomNow();
@@ -127,6 +118,7 @@ class ItemNameTranslator {
         }
 
         // 4. Fallback to English
+        const enName = dataManager.getItemDetails(itemHrid)?.name;
         if (enName) return enName;
         return itemHrid.split('/').pop().replace(/_/g, ' ');
     }
@@ -135,7 +127,8 @@ class ItemNameTranslator {
         if (!el) return;
         const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
         if (!text || !CJK_REGEX.test(text)) return;
-        const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+        // Strip parenthetical quantities like "(10个)" or "(10)"
+        const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').replace(/\s*\(\d+个?\)\s*$/, '').trim();
         if (!baseName) return;
 
         // Already cached
@@ -143,26 +136,60 @@ class ItemNameTranslator {
             if (cnName === baseName) return;
         }
 
-        // Try HRID from the element itself (aria-label on SVG)
+        // Method 1: Extract HRID from SVG sprite href
         const svg = el.closest('svg') || el.querySelector('svg');
-        const use = svg?.querySelector('use');
-        const href = use?.getAttribute('href') || '';
-        const spriteName = href.split('#').pop();
-        if (spriteName) {
-            const hrid = `/items/${spriteName}`;
-            const details = dataManager.getItemDetails(hrid);
-            if (details) {
-                this.cnNames[hrid] = baseName;
-                this._scheduleSave();
-                return;
+        if (svg) {
+            const use = svg.querySelector('use');
+            if (use) {
+                const href = use.getAttribute('href') || '';
+                const spriteName = href.split('#').pop();
+                if (spriteName) {
+                    const hrid = `/items/${spriteName}`;
+                    if (dataManager.getItemDetails(hrid)) {
+                        this.cnNames[hrid] = baseName;
+                        this._scheduleSave();
+                        return;
+                    }
+                }
+            }
+            // Method 2: Try aria-label → item name lookup in game data
+            const ariaLabel = svg.getAttribute('aria-label') || '';
+            if (ariaLabel) {
+                this._ensureHRIDMaps();
+                if (this._enToHrid) {
+                    for (const [enName, hrid] of this._enToHrid) {
+                        // Try fuzzy: CN text might match English name parts
+                        const enLower = enName.toLowerCase().replace(/\s+/g, ' ');
+                        const cnLower = baseName.toLowerCase();
+                        if (enLower === cnLower || enLower.includes(cnLower) || cnLower.includes(enLower)) {
+                            continue; // no match - different languages
+                        }
+                        // Try matching by word count heuristic
+                        const enWords = enLower.split(/\s+/);
+                        if (enWords.length >= 2 && cnLower.length >= 2) {
+                            // Skip - can't match with just heuristic
+                        }
+                    }
+                }
             }
         }
 
-        // Try HRID lookup via English name matching
+        // Method 3: Try existing English name lookup
         const hrid = this.findHridFromDomName(baseName);
         if (hrid) {
             this.cnNames[hrid] = baseName;
             this._scheduleSave();
+            return;
+        }
+
+        // Method 4: Fuzzy match against all game data item names
+        // For items without SVG use elements (coins, teas, bags)
+        this._ensureHRIDMaps();
+        if (this._enToHrid && this._hridToEn) {
+            for (const [h, enName] of this._hridToEn) {
+                if (enName === baseName) { this.cnNames[h] = baseName; this._scheduleSave(); return; }
+            }
+            // No exact English match - this is expected for Chinese names with no sprite
         }
 
         const freshName = this.cnNames[itemHrid];
