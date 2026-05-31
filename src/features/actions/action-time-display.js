@@ -40,6 +40,8 @@ import { calculateEnhancementPredictions } from '../enhancement/enhancement-xp.j
 import { BASE_SUCCESS_RATES } from '../../utils/enhancement-calculator.js';
 import { t } from '../../core/i18n.js';
 
+console.log('[TimeDebug] action-time-display.js module loaded, timeReadableZh(3661) =', timeReadableZh(3661));
+
 /**
  * ActionTimeDisplay class manages the time display panel and queue tooltips
  */
