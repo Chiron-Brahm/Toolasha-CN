@@ -21,6 +21,7 @@ import {
     setupMarketplaceCleanupObserver,
     navigateToMarketplace,
 } from '../../utils/marketplace-tabs.js';
+import { isMarketplacePanel, getMyListingsTab } from '../../utils/game-locale.js';
 import { getProtectionItemFromUI, getProtectFromLevelFromUI } from './enhancement-display.js';
 import { calculateEnhancementPath } from '../enhancement/tooltip-enhancement.js';
 import { getEnhancingParams } from '../../utils/enhancement-config.js';
@@ -337,13 +338,9 @@ function getCurrentEnhancementLevel(panel) {
  * @returns {number} Repeat count (defaults to 1 if not found)
  */
 function getRepeatCountFromUI(panel) {
-    const labels = Array.from(panel.querySelectorAll('*')).filter(
-        (el) => el.textContent.trim() === 'Repeat' && el.children.length === 0
-    );
-
-    if (labels.length > 0) {
-        const parent = labels[0].parentElement;
-        const input = parent.querySelector('input[type="number"], input[type="text"]');
+    const inputs = Array.from(panel.querySelectorAll('input[type="number"]'));
+    if (inputs.length > 0) {
+        const input = inputs[0]; // Repeat is the first number input
         if (input) {
             if (input.value === '∞') return null;
             const value = parseInt(input.value, 10);
@@ -355,13 +352,9 @@ function getRepeatCountFromUI(panel) {
 }
 
 function getTargetLevelFromUI(panel) {
-    const labels = Array.from(panel.querySelectorAll('*')).filter(
-        (el) => el.textContent.trim() === 'Target Level' && el.children.length === 0
-    );
-
-    if (labels.length > 0) {
-        const parent = labels[0].parentElement;
-        const input = parent.querySelector('input[type="number"], input[type="text"]');
+    const inputs = Array.from(panel.querySelectorAll('input[type="number"]'));
+    if (inputs.length > 1) {
+        const input = inputs[1]; // Target Level is the second number input
         if (input && input.value) {
             const value = parseInt(input.value, 10);
             if (!isNaN(value)) return Math.max(1, Math.min(20, value));
@@ -723,14 +716,8 @@ async function waitForMarketplace() {
     for (let i = 0; i < maxAttempts; i++) {
         // Check for marketplace panel by looking for tabs container
         const tabsContainer = document.querySelector('.MuiTabs-flexContainer[role="tablist"]');
-        if (tabsContainer) {
-            // Verify it's the marketplace tabs (has "Market Listings" tab)
-            const hasMarketListings = Array.from(tabsContainer.children).some((btn) =>
-                btn.textContent.includes('Market Listings')
-            );
-            if (hasMarketListings) {
-                return true;
-            }
+        if (tabsContainer && isMarketplacePanel(tabsContainer)) {
+            return true;
         }
 
         await new Promise((resolve) => {
@@ -920,7 +907,7 @@ function createMissingMaterialTabs(missingMaterials, strategyInfo = null) {
     currentMaterialsTabs.length = 0;
 
     // Get reference tab for cloning (use "My Listings" as template)
-    const referenceTab = Array.from(tabsContainer.children).find((btn) => btn.textContent.includes('My Listings'));
+    const referenceTab = getMyListingsTab(tabsContainer);
 
     if (!referenceTab) {
         console.error('[MissingMats] Reference tab not found');

@@ -12,6 +12,7 @@ import { calculateExperienceMultiplier } from '../../utils/experience-parser.js'
 import { formatKMB, formatWithSeparator, formatPercentage } from '../../utils/formatters.js';
 import { getItemPrice } from '../../utils/market-data.js';
 import assetManifest from '../../utils/asset-manifest.js';
+import { isAlchemyPanel, getAlchemyTab } from '../../utils/game-locale.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
 
 const ALCHEMY_TYPES = ['coinify', 'decompose', 'transmute'];
@@ -104,18 +105,13 @@ class AlchemyBestItems {
             if (!tablist) return;
 
             // Verify this is the alchemy tablist
-            const hasCoinify = Array.from(tablist.children).some(
-                (btn) => btn.textContent.includes('Coinify') && !btn.dataset.mwiBestItemsTab
-            );
-            if (!hasCoinify) return;
+            if (!isAlchemyPanel(tablist)) return;
 
             // Already injected?
             if (tablist.querySelector('[data-mwi-best-items-tab="true"]')) return;
 
             // Clone an existing tab for structure
-            const referenceTab = Array.from(tablist.children).find(
-                (btn) => btn.textContent.includes('Coinify') && !btn.dataset.mwiBestItemsTab
-            );
+            const referenceTab = getAlchemyTab(tablist, 0);
             if (!referenceTab) return;
 
             const tab = referenceTab.cloneNode(true);

@@ -133,7 +133,11 @@ class AlchemyItemDimming {
             const alchemyLabels = document.querySelectorAll('div.ItemSelector_label__22ds9');
 
             for (const label of alchemyLabels) {
-                if (label.textContent.trim() === 'Alchemize Item') {
+                // Locale-safe: detect alchemy panel by CSS class context instead of text content
+                if (
+                    label.closest('[class*="AlchemyPanel_"]') ||
+                    label.closest('[class*="SkillActionDetail_skillActionDetail"]')
+                ) {
                     // Found the alchemy label, this menu is likely the alchemy selector
                     return menu;
                 }

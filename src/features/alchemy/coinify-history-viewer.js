@@ -10,6 +10,7 @@ import dataManager from '../../core/data-manager.js';
 import { coinifyHistoryTracker } from './coinify-history-tracker.js';
 import { formatKMB } from '../../utils/formatters.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
+import { isAlchemyPanel, getAlchemyTab } from '../../utils/game-locale.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 
 const CATALYST_OF_COINIFICATION_HRID = '/items/catalyst_of_coinification';
@@ -98,19 +99,14 @@ class CoinifyHistoryViewer {
             const tablist = document.querySelector('[role="tablist"]');
             if (!tablist) return;
 
-            // Verify this is the alchemy tablist by checking for "Coinify" tab
-            const hasCoinify = Array.from(tablist.children).some(
-                (btn) => btn.textContent.includes('Coinify') && !btn.dataset.mwiCoinifyHistoryTab
-            );
-            if (!hasCoinify) return;
+            // Verify this is the alchemy tablist
+            if (!isAlchemyPanel(tablist)) return;
 
             // Already injected?
             if (tablist.querySelector('[data-mwi-coinify-history-tab="true"]')) return;
 
             // Clone an existing tab for structure
-            const referenceTab = Array.from(tablist.children).find(
-                (btn) => btn.textContent.includes('Coinify') && !btn.dataset.mwiCoinifyHistoryTab
-            );
+            const referenceTab = getAlchemyTab(tablist, 0);
             if (!referenceTab) return;
 
             const tab = referenceTab.cloneNode(true);

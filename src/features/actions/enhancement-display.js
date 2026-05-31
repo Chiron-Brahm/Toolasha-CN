@@ -450,14 +450,9 @@ function generateCostsByLevelTable(
  * @returns {number} Protect from level (0 = never, 1-20)
  */
 export function getProtectFromLevelFromUI(panel) {
-    // Find the "Protect From Level" input
-    const labels = Array.from(panel.querySelectorAll('*')).filter(
-        (el) => el.textContent.trim() === 'Protect From Level' && el.children.length === 0
-    );
-
-    if (labels.length > 0) {
-        const parent = labels[0].parentElement;
-        const input = parent.querySelector('input[type="number"], input[type="text"]');
+    const inputs = Array.from(panel.querySelectorAll('input[type="number"]'));
+    if (inputs.length > 2) {
+        const input = inputs[2]; // Protect From Level is the third number input
         if (input && input.value) {
             const value = parseInt(input.value, 10);
             return Math.max(0, Math.min(20, value)); // Clamp 0-20
@@ -876,7 +871,7 @@ function findCurrentActionTab(panel) {
 
     while (current && depth < maxDepth) {
         const buttons = Array.from(current.querySelectorAll('button[role="tab"]'));
-        const currentActionTab = buttons.find((btn) => btn.textContent.trim() === 'Current Action');
+        const currentActionTab = buttons[0]; // Current Action is the first tab
 
         if (currentActionTab) {
             // Cache it on the panel for future lookups

@@ -293,24 +293,24 @@ class MarketplaceShortcuts {
         try {
             switch (actionType) {
                 case 'sell':
-                    await this.clickInstantActionButton('Sell');
+                    await this.clickInstantActionButton();
                     break;
                 case 'buy':
-                    await this.clickInstantActionButton('Buy');
+                    await this.clickInstantActionButton();
                     break;
                 case 'sell-listing':
-                    await this.clickListingButton('+ New Sell Listing', 'Button_sell');
+                    await this.clickListingButton('Button_sell');
                     break;
                 case 'buy-listing':
-                    await this.clickListingButton('+ New Buy Listing', 'Button_buy');
+                    await this.clickListingButton('Button_buy');
                     break;
             }
         } catch {
             // Instant sell/buy failed (no matching orders) — fall back to listing form
             if (actionType === 'sell') {
-                await this.clickListingButton('+ New Sell Listing', 'Button_sell').catch(() => {});
+                await this.clickListingButton('Button_sell').catch(() => {});
             } else if (actionType === 'buy') {
-                await this.clickListingButton('+ New Buy Listing', 'Button_buy').catch(() => {});
+                await this.clickListingButton('Button_buy').catch(() => {});
             }
         }
     }
@@ -322,7 +322,7 @@ class MarketplaceShortcuts {
      * @param {number} timeout - Max wait time in ms (default 3000)
      * @returns {Promise<void>}
      */
-    async clickInstantActionButton(buttonText, timeout = 3000) {
+    async clickInstantActionButton(timeout = 3000) {
         const start = Date.now();
 
         return new Promise((resolve, reject) => {
@@ -330,7 +330,7 @@ class MarketplaceShortcuts {
                 const actionTexts = document.querySelectorAll('[class*="MarketplacePanel_actionButtonText"]');
                 for (const div of actionTexts) {
                     // Skip entries with SVGs (those are icon-only buttons)
-                    if (!div.querySelector('svg') && div.textContent.trim() === buttonText) {
+                    if (!div.querySelector('svg')) {
                         const parentBtn = div.closest('button');
                         if (parentBtn) {
                             clearInterval(interval);
@@ -343,7 +343,7 @@ class MarketplaceShortcuts {
 
                 if (Date.now() - start > timeout) {
                     clearInterval(interval);
-                    reject(new Error(`Timeout waiting for instant action button: ${buttonText}`));
+                    reject(new Error('Timeout waiting for instant action button'));
                 }
             }, 50);
 
@@ -359,14 +359,14 @@ class MarketplaceShortcuts {
      * @param {number} timeout - Max wait time in ms (default 3000)
      * @returns {Promise<void>}
      */
-    async clickListingButton(buttonText, partialClass, timeout = 3000) {
+    async clickListingButton(partialClass, timeout = 3000) {
         const start = Date.now();
 
         return new Promise((resolve, reject) => {
             const interval = setInterval(() => {
                 const candidates = document.querySelectorAll(`[class*="${partialClass}"]`);
                 for (const btn of candidates) {
-                    if (btn.textContent.trim() === buttonText) {
+                    if (!btn.disabled) {
                         clearInterval(interval);
                         btn.click();
                         resolve();
@@ -376,7 +376,7 @@ class MarketplaceShortcuts {
 
                 if (Date.now() - start > timeout) {
                     clearInterval(interval);
-                    reject(new Error(`Timeout waiting for listing button: ${buttonText}`));
+                    reject(new Error(`Timeout waiting for listing button (class: ${partialClass})`));
                 }
             }, 50);
 
@@ -392,17 +392,9 @@ class MarketplaceShortcuts {
     autofillQuantity(modal) {
         if (!this.pendingQuantity) return;
 
-        // Check if this is a marketplace action modal (Sell Now, Buy Now, or listing form)
+        // Check if this is a marketplace action modal
         const header = modal.querySelector('div[class*="MarketplacePanel_header"]');
         if (!header) return;
-
-        const headerText = header.textContent.trim();
-        const isMarketplaceModal =
-            headerText.includes('Buy Now') ||
-            headerText.includes('Buy Listing') ||
-            headerText.includes('Sell Now') ||
-            headerText.includes('Sell Listing');
-        if (!isMarketplaceModal) return;
 
         // Delay to run after auto-click-max which fires synchronously on modal appearance
         const qty = this.pendingQuantity;
@@ -426,13 +418,8 @@ class MarketplaceShortcuts {
         const header = modal.querySelector('div[class*="MarketplacePanel_header"]');
         if (!header) return;
 
-        const headerText = header.textContent.trim();
-        if (
-            !headerText.includes('Buy Now') &&
-            !headerText.includes('Buy Listing')
-            // !headerText.includes('Sell Now') &&
-            // !headerText.includes('Sell Listing')
-        ) {
+        // Only focus for buy modals — sell modals have Button_sell class
+        if (modal.querySelector('[class*="Button_sell"]')) {
             return;
         }
 
@@ -457,14 +444,6 @@ class MarketplaceShortcuts {
         // Check if this is a marketplace modal
         const header = modal.querySelector('div[class*="MarketplacePanel_header"]');
         if (!header) return;
-
-        const headerText = header.textContent.trim();
-        const isMarketplaceModal =
-            headerText.includes('Buy Now') ||
-            headerText.includes('Buy Listing') ||
-            headerText.includes('Sell Now') ||
-            headerText.includes('Sell Listing');
-        if (!isMarketplaceModal) return;
 
         // Delay to let the modal fully render
         setTimeout(() => {
@@ -578,8 +557,8 @@ class MarketplaceShortcuts {
         const header = modal.querySelector('div[class*="MarketplacePanel_header"]');
         if (!header) return;
 
-        const headerText = header.textContent.trim();
-        if (!headerText.includes('Buy Now') && !headerText.includes('Buy Listing')) return;
+        // Only show owned count for buy modals — sell modals have Button_sell class
+        if (modal.querySelector('[class*="Button_sell"]')) return;
 
         setTimeout(() => {
             if (modal.querySelector('.mwi-owned-count')) return;
@@ -711,14 +690,6 @@ class MarketplaceShortcuts {
 
         const header = modal.querySelector('div[class*="MarketplacePanel_header"]');
         if (!header) return;
-
-        const headerText = header.textContent.trim();
-        const isMarketplaceModal =
-            headerText.includes('Buy Now') ||
-            headerText.includes('Buy Listing') ||
-            headerText.includes('Sell Now') ||
-            headerText.includes('Sell Listing');
-        if (!isMarketplaceModal) return;
 
         setTimeout(() => {
             if (modal.querySelector('.mwi-mp-multiplier')) return;

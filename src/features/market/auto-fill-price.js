@@ -47,11 +47,10 @@ class AutoFillPrice {
             const header = modal.querySelector('div[class*="MarketplacePanel_header"]');
             if (!header) return;
 
-            const headerText = header.textContent.trim();
-
-            // Skip instant buy/sell modals (contain "Now" in title)
-            if (headerText.includes(' Now')) {
-                return;
+            // Skip instant buy/sell modals — they don't have best price / duration fields
+            const bestPriceLabel = modal.querySelector('span[class*="MarketplacePanel_bestPrice"]');
+            if (!bestPriceLabel) {
+                return; // This is an instant modal (Buy Now / Sell Now), skip
             }
 
             // Handle the order modal

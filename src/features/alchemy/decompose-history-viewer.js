@@ -10,6 +10,7 @@ import dataManager from '../../core/data-manager.js';
 import { decomposeHistoryTracker } from './decompose-history-tracker.js';
 import { formatKMB } from '../../utils/formatters.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
+import { isAlchemyPanel, getAlchemyTab } from '../../utils/game-locale.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 
 const CATALYST_OF_DECOMPOSITION_HRID = '/items/catalyst_of_decomposition';
@@ -99,19 +100,14 @@ class DecomposeHistoryViewer {
             const tablist = document.querySelector('[role="tablist"]');
             if (!tablist) return;
 
-            // Verify this is the alchemy tablist by checking for "Decompose" tab
-            const hasDecompose = Array.from(tablist.children).some(
-                (btn) => btn.textContent.includes('Decompose') && !btn.dataset.mwiDecomposeHistoryTab
-            );
-            if (!hasDecompose) return;
+            // Verify this is the alchemy tablist
+            if (!isAlchemyPanel(tablist)) return;
 
             // Already injected?
             if (tablist.querySelector('[data-mwi-decompose-history-tab="true"]')) return;
 
             // Clone an existing tab for structure
-            const referenceTab = Array.from(tablist.children).find(
-                (btn) => btn.textContent.includes('Decompose') && !btn.dataset.mwiDecomposeHistoryTab
-            );
+            const referenceTab = getAlchemyTab(tablist, 2);
             if (!referenceTab) return;
 
             const tab = referenceTab.cloneNode(true);

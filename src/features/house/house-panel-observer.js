@@ -6,7 +6,7 @@
 import domObserver from '../../core/dom-observer.js';
 import houseCostCalculator from './house-cost-calculator.js';
 import houseCostDisplay from './house-cost-display.js';
-import dataManager from '../../core/data-manager.js';
+import { t } from '../../core/i18n.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
 import { createCleanupRegistry } from '../../utils/cleanup-registry.js';
 
@@ -98,23 +98,13 @@ class HousePanelObserver {
      * @returns {string|null} House room HRID
      */
     identifyRoomFromModal(modalContent) {
-        const initData = dataManager.getInitClientData();
-        if (!initData || !initData.houseRoomDetailMap) {
-            return null;
-        }
-
-        // Get room name from header
-        const header = modalContent.querySelector('[class*="HousePanel_header"]');
-        if (!header) {
-            return null;
-        }
-
-        const roomName = header.textContent.trim();
-
-        // Match against room names in game data
-        for (const [hrid, roomData] of Object.entries(initData.houseRoomDetailMap)) {
-            if (roomData.name === roomName) {
-                return hrid;
+        // Extract room ID from SVG sprite href (locale-independent)
+        const svg = modalContent.querySelector('[class*="HousePanel_header"] svg use');
+        if (svg) {
+            const hrefValue = svg.getAttribute('href') || '';
+            const roomId = hrefValue.split('#')[1]; // e.g., "brewery" from "#brewery"
+            if (roomId) {
+                return `/house_rooms/${roomId}`;
             }
         }
 

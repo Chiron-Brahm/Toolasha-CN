@@ -141,28 +141,27 @@ class DungeonTrackerChatAnnotations {
      * Observe chat tab switches to trigger batch annotation when user views party chat
      */
     observeTabSwitches() {
-        // Find all chat tab buttons
-        const tabButtons = document.querySelectorAll('.Chat_tabsComponentContainer__3ZoKe .MuiButtonBase-root');
+        // Party tab is at fixed position (index 2 in chat tab bar: Global=0, Trade=1, Party=2)
+        const container = document.querySelector('.Chat_tabsComponentContainer__3ZoKe');
+        const partyTab = container?.querySelectorAll('.MuiButtonBase-root')[2];
 
-        for (const button of tabButtons) {
-            if (button.textContent.includes('Party')) {
-                // Remove old listener if exists
-                const oldHandler = this.tabClickHandlers.get(button);
-                if (oldHandler) {
-                    button.removeEventListener('click', oldHandler);
-                }
-
-                // Create new handler
-                const handler = () => {
-                    // Delay to let DOM update
-                    const annotateTimeout = setTimeout(() => this.annotateAllMessages(), 300);
-                    this.timerRegistry.registerTimeout(annotateTimeout);
-                };
-
-                // Store and add new listener
-                this.tabClickHandlers.set(button, handler);
-                button.addEventListener('click', handler);
+        if (partyTab) {
+            // Remove old listener if exists
+            const oldHandler = this.tabClickHandlers.get(partyTab);
+            if (oldHandler) {
+                partyTab.removeEventListener('click', oldHandler);
             }
+
+            // Create new handler
+            const handler = () => {
+                // Delay to let DOM update
+                const annotateTimeout = setTimeout(() => this.annotateAllMessages(), 300);
+                this.timerRegistry.registerTimeout(annotateTimeout);
+            };
+
+            // Store and add new listener
+            this.tabClickHandlers.set(partyTab, handler);
+            partyTab.addEventListener('click', handler);
         }
     }
 
@@ -706,6 +705,8 @@ class DungeonTrackerChatAnnotations {
      * @returns {boolean} True if party chat is visible
      */
     isPartySelected() {
+        const container = document.querySelector('.Chat_tabsComponentContainer__3ZoKe');
+        const partyTab = container?.querySelectorAll('.MuiButtonBase-root')[2];
         const selectedTabEl = document.querySelector(
             `.Chat_tabsComponentContainer__3ZoKe .MuiButtonBase-root[aria-selected="true"]`
         );
@@ -714,8 +715,9 @@ class DungeonTrackerChatAnnotations {
         );
         return (
             selectedTabEl &&
+            partyTab &&
+            selectedTabEl === partyTab &&
             tabsEl &&
-            selectedTabEl.textContent.includes('Party') &&
             !tabsEl.classList.contains('TabsComponent_hidden__255ag')
         );
     }

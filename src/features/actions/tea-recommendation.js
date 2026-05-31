@@ -141,8 +141,9 @@ class TeaRecommendation {
      * @param {HTMLElement} labelElement - The label element
      */
     checkAndInjectButtons(labelElement) {
-        // Only inject on "Consumables" label
-        if (labelElement.textContent.trim() !== 'Consumables') {
+        // Locale-safe: CSS class match — labelElement was already selected by
+        // domObserver.onClass for GatheringProductionSkillPanel_label or AlchemyPanel_label
+        if (!labelElement.matches('[class*="GatheringProductionSkillPanel_label"], [class*="AlchemyPanel_label"]')) {
             return;
         }
 

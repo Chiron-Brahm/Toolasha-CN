@@ -10,6 +10,7 @@ import { coinFormatter, formatWithSeparator } from '../../utils/formatters.js';
 import dataManager from '../../core/data-manager.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { createAutofillManager } from '../../utils/marketplace-autofill.js';
+import { isMarketplacePanel, getMyListingsTab } from '../../utils/game-locale.js';
 import {
     createMaterialTab,
     removeMaterialTabs,
@@ -629,13 +630,8 @@ class HouseCostDisplay {
 
         for (let i = 0; i < maxAttempts; i++) {
             const tabsContainer = document.querySelector('.MuiTabs-flexContainer[role="tablist"]');
-            if (tabsContainer) {
-                const hasMarketListings = Array.from(tabsContainer.children).some((btn) =>
-                    btn.textContent.includes('Market Listings')
-                );
-                if (hasMarketListings) {
-                    return true;
-                }
+            if (tabsContainer && isMarketplacePanel(tabsContainer)) {
+                return true;
             }
 
             await new Promise((resolve) => {
@@ -663,7 +659,7 @@ class HouseCostDisplay {
         removeMaterialTabs();
 
         // Get reference tab
-        const referenceTab = Array.from(tabsContainer.children).find((btn) => btn.textContent.includes('My Listings'));
+        const referenceTab = getMyListingsTab(tabsContainer);
         if (!referenceTab) {
             console.error('[HouseCostDisplay] Reference tab not found');
             return;

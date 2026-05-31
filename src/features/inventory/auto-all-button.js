@@ -116,7 +116,8 @@ class AutoAllButton {
         const buttons = container.querySelectorAll('button');
 
         for (const button of buttons) {
-            if (button.textContent.trim() === 'All' && !button.disabled) {
+            // Locale-safe: "All" button identified by CSS class (not text content)
+            if (button.matches('[class*="Button_all"]') && !button.disabled) {
                 button.click();
                 break;
             }

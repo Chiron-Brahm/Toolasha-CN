@@ -19,6 +19,7 @@ import {
     setupMarketplaceCleanupObserver,
     navigateToMarketplace,
 } from '../../utils/marketplace-tabs.js';
+import { isMarketplacePanel, getMyListingsTab } from '../../utils/game-locale.js';
 import { createAutofillManager } from '../../utils/marketplace-autofill.js';
 import { calculateActionStats } from '../../utils/action-calculator.js';
 import { calculateEfficiencyMultiplier } from '../../utils/efficiency.js';
@@ -435,12 +436,7 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
             // Wait for marketplace to appear
             for (let i = 0; i < 50; i++) {
                 const tabsContainer = document.querySelector('.MuiTabs-flexContainer[role="tablist"]');
-                if (tabsContainer) {
-                    const hasMarketListings = Array.from(tabsContainer.children).some((btn) =>
-                        btn.textContent.includes('Market Listings')
-                    );
-                    if (hasMarketListings) break;
-                }
+                if (tabsContainer && isMarketplacePanel(tabsContainer)) break;
                 await new Promise((resolve) => setTimeout(resolve, 100));
             }
 
@@ -524,7 +520,7 @@ function createCraftingPlanTabs(missingMaterials) {
     removeMaterialTabs();
     craftingPlanTabs.length = 0;
 
-    const referenceTab = Array.from(tabsContainer.children).find((btn) => btn.textContent.includes('My Listings'));
+    const referenceTab = getMyListingsTab(tabsContainer);
     if (!referenceTab) return;
 
     tabsContainer.style.flexWrap = 'wrap';

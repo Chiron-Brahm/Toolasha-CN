@@ -372,7 +372,7 @@ function getCurrentActionTabButton(panel) {
 
     while (current && depth < maxDepth) {
         const buttons = Array.from(current.querySelectorAll('button[role="tab"]'));
-        const currentActionTab = buttons.find((btn) => btn.textContent.trim() === 'Current Action');
+        const currentActionTab = buttons[0]; // Current Action is the first tab
 
         if (currentActionTab) {
             // Cache it on the panel for future lookups

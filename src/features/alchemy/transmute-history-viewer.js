@@ -10,6 +10,7 @@ import dataManager from '../../core/data-manager.js';
 import { transmuteHistoryTracker } from './transmute-history-tracker.js';
 import { formatKMB } from '../../utils/formatters.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
+import { isAlchemyPanel, getAlchemyTab } from '../../utils/game-locale.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 
 class TransmuteHistoryViewer {
@@ -96,19 +97,14 @@ class TransmuteHistoryViewer {
             const tablist = document.querySelector('[role="tablist"]');
             if (!tablist) return;
 
-            // Verify this is the alchemy tablist by checking for "Transmute" tab
-            const hasTransmute = Array.from(tablist.children).some(
-                (btn) => btn.textContent.includes('Transmute') && !btn.dataset.mwiTransmuteHistoryTab
-            );
-            if (!hasTransmute) return;
+            // Verify this is the alchemy tablist
+            if (!isAlchemyPanel(tablist)) return;
 
             // Already injected?
             if (tablist.querySelector('[data-mwi-transmute-history-tab="true"]')) return;
 
             // Clone an existing tab for structure
-            const referenceTab = Array.from(tablist.children).find(
-                (btn) => btn.textContent.includes('Transmute') && !btn.dataset.mwiTransmuteHistoryTab
-            );
+            const referenceTab = getAlchemyTab(tablist, 1);
             if (!referenceTab) return;
 
             const tab = referenceTab.cloneNode(true);

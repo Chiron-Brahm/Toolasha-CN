@@ -29,13 +29,10 @@ function getStorageKey() {
  * @returns {HTMLElement|null}
  */
 function findCharacterTabList() {
-    const allTabLists = document.querySelectorAll('[role="tablist"]');
-    for (const tl of allTabLists) {
-        for (const tab of tl.querySelectorAll('[role="tab"]')) {
-            if (tab.textContent.trim() === 'Inventory') return tl;
-        }
-    }
-    return null;
+    const tablist = document.querySelector('.MuiTabs-root [role="tablist"]');
+    if (!tablist) return null;
+    // Inventory tab is always the first tab (index 0) in the character panel
+    return tablist.children[0] ? tablist : null;
 }
 
 class TabReorder {

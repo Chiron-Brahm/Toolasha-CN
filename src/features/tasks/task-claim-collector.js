@@ -93,9 +93,8 @@ class TaskClaimCollector {
      * Return all enabled Claim Reward buttons in the task list.
      */
     _getClaimableButtons(taskList) {
-        return Array.from(taskList.querySelectorAll(CLAIM_BTN_SELECTOR)).filter(
-            (btn) => btn.textContent.trim() === 'Claim Reward' && !btn.disabled
-        );
+        // Locale-safe: CLAIM_BTN_SELECTOR already uniquely identifies claim buttons by CSS class
+        return Array.from(taskList.querySelectorAll(CLAIM_BTN_SELECTOR)).filter((btn) => !btn.disabled);
     }
 
     /**

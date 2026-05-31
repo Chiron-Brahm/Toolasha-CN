@@ -122,8 +122,9 @@ class TaskSorter {
      * Check if task is completed (has Claim Reward button)
      */
     isTaskCompleted(taskCard) {
+        // Locale-safe: CSS class selector uniquely identifies the claim button in task cards
         const claimButton = taskCard.querySelector('button.Button_button__1Fe9z.Button_buy__3s24l');
-        return claimButton && claimButton.textContent.includes('Claim Reward');
+        return claimButton !== null && !claimButton.disabled;
     }
 
     /**

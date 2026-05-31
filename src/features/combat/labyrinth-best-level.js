@@ -105,7 +105,7 @@ class LabyrinthBestLevel {
      */
     attachAutomationClickListener(container) {
         const buttons = Array.from(container.querySelectorAll('button[role="tab"]'));
-        const automationBtn = buttons.find((btn) => btn.textContent.trim().startsWith('Automation'));
+        const automationBtn = buttons[1]; // Automation is the 2nd tab (index 1)
 
         if (!automationBtn) {
             return;

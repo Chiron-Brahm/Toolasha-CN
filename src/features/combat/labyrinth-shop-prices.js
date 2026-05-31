@@ -75,7 +75,7 @@ class LabyrinthShopPrices {
      */
     attachShopClickListener(container) {
         const buttons = Array.from(container.querySelectorAll('button[role="tab"]'));
-        const shopBtn = buttons.find((btn) => btn.textContent.trim().startsWith('Shop'));
+        const shopBtn = buttons[2]; // Shop is the 3rd tab (index 2)
 
         if (!shopBtn) {
             return;

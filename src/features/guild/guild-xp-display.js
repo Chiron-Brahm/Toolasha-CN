@@ -458,7 +458,7 @@ class GuildXPDisplay {
             const dataBlocks = dataGridEl.querySelectorAll('.GuildPanel_dataBlock__3qVhK');
             for (const block of dataBlocks) {
                 const label = block.querySelector('.GuildPanel_label__-A63g');
-                if (label && label.textContent.includes('Exp to')) {
+                if (label) {
                     block.insertAdjacentHTML('beforeend', ttlHTML);
                     break;
                 }
@@ -530,8 +530,8 @@ class GuildXPDisplay {
         const theadTr = tableEl.querySelector('thead tr');
         if (!theadTr) return;
 
-        // Find Activity column index for inserting before it
-        const activityIndex = Array.from(theadTr.children).findIndex((el) => el.textContent.trim() === 'Activity');
+        // Activity column is at index 3
+        const activityIndex = 3;
         const insertAfter = activityIndex > 0 ? activityIndex - 1 : theadTr.children.length - 1;
 
         const gameModes = { standard: 'MC', ironcow: 'IC', legacy_ironcow: 'LC' };
@@ -596,7 +596,7 @@ class GuildXPDisplay {
         }
 
         // Guild Exp column
-        const expHeader = Array.from(theadTr.children).find((el) => el.textContent.includes('Guild Exp'));
+        const expHeader = theadTr.children[4];
         if (expHeader && !expHeader.querySelector(`.${CSS_PREFIX}__sort-icon`)) {
             makeColumnSortable(expHeader, {
                 sortId: 'xp',
@@ -610,7 +610,7 @@ class GuildXPDisplay {
 
         // Role column
         const rolePriority = { Leader: 1, General: 2, Officer: 3, Member: 4 };
-        const roleHeader = Array.from(theadTr.children).find((el) => el.textContent.trim() === 'Role');
+        const roleHeader = theadTr.children[5];
         if (roleHeader && !roleHeader.querySelector(`.${CSS_PREFIX}__sort-icon`)) {
             const roleColIndex = Array.from(theadTr.children).indexOf(roleHeader);
             makeColumnSortable(roleHeader, {
@@ -623,7 +623,7 @@ class GuildXPDisplay {
         }
 
         // Activity column
-        const activityHeader = Array.from(theadTr.children).find((el) => el.textContent.trim() === 'Activity');
+        const activityHeader = theadTr.children[3];
         if (activityHeader && !activityHeader.querySelector(`.${CSS_PREFIX}__sort-icon`)) {
             const activityColIndex = Array.from(theadTr.children).indexOf(activityHeader);
             makeColumnSortable(activityHeader, {
@@ -648,7 +648,7 @@ class GuildXPDisplay {
         }
 
         // Status column
-        const statusHeader = Array.from(theadTr.children).find((el) => el.textContent.trim() === 'Status');
+        const statusHeader = theadTr.children[1];
         if (statusHeader && !statusHeader.querySelector(`.${CSS_PREFIX}__sort-icon`)) {
             const statusColIndex = Array.from(theadTr.children).indexOf(statusHeader);
             makeColumnSortable(statusHeader, {
@@ -780,7 +780,7 @@ class GuildXPDisplay {
         });
 
         // Make Rank column sortable
-        const rankHeader = Array.from(theadTr.children).find((el) => el.textContent.trim() === 'Rank');
+        const rankHeader = theadTr.children[0];
         if (rankHeader && !rankHeader.querySelector(`.${CSS_PREFIX}__sort-icon`)) {
             makeColumnSortable(rankHeader, {
                 sortId: 'rank',

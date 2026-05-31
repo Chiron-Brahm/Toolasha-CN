@@ -647,13 +647,10 @@ export default class CustomTabsUI {
     // -----------------------------------------------------------------------
 
     _findCharacterTabList() {
-        const allTabLists = document.querySelectorAll('[role="tablist"]');
-        for (const tl of allTabLists) {
-            for (const tab of tl.querySelectorAll('[role="tab"]')) {
-                if (tab.textContent.trim() === 'Inventory') return tl;
-            }
-        }
-        return null;
+        const tablist = document.querySelector('.MuiTabs-root [role="tablist"]');
+        if (!tablist) return null;
+        // Inventory tab is always the first tab (index 0) in the character panel
+        return tablist.children[0] ? tablist : null;
     }
 
     _tryInjectTabButton() {
@@ -675,9 +672,7 @@ export default class CustomTabsUI {
                 this._activatePanel();
             });
 
-            const inventoryTab = [...tabList.querySelectorAll('[role="tab"]')].find(
-                (t) => t.textContent.trim() === 'Inventory'
-            );
+            const inventoryTab = tabList.children[0];
             if (inventoryTab) this._inventoryTabEl = inventoryTab;
             if (inventoryTab?.nextSibling) {
                 tabList.insertBefore(btn, inventoryTab.nextSibling);

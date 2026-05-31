@@ -15,6 +15,7 @@ import dataManager from '../../core/data-manager.js';
 import { formatWithSeparator, formatKMB } from '../../utils/formatters.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
+import { isMarketplacePanel, getMyListingsTab } from '../../utils/game-locale.js';
 import estimatedListingAge from './estimated-listing-age.js';
 import { t } from '../../core/i18n.js';
 
@@ -139,11 +140,8 @@ class MarketHistoryViewer {
             const tabsContainer = document.querySelector('.MuiTabs-flexContainer[role="tablist"]');
             if (!tabsContainer) return;
 
-            // Verify this is the marketplace tabs (check for Market Listings tab)
-            const hasMarketListingsTab = Array.from(tabsContainer.children).some((btn) =>
-                btn.textContent.includes('Market Listings')
-            );
-            if (!hasMarketListingsTab) return;
+            // Verify this is the marketplace tabs
+            if (!isMarketplacePanel(tabsContainer)) return;
 
             // Check if tab already exists
             if (tabsContainer.querySelector('[data-mwi-market-history-tab="true"]')) {
@@ -151,9 +149,7 @@ class MarketHistoryViewer {
             }
 
             // Get reference tab (My Listings) to clone structure
-            const referenceTab = Array.from(tabsContainer.children).find((btn) =>
-                btn.textContent.includes('My Listings')
-            );
+            const referenceTab = getMyListingsTab(tabsContainer);
             if (!referenceTab) return;
 
             // Clone reference tab
@@ -214,10 +210,8 @@ class MarketHistoryViewer {
                         return;
                     }
 
-                    // Check if this is still the marketplace (Market Listings tab exists)
-                    const hasMarketListingsTab = Array.from(tabsContainer.children).some((btn) =>
-                        btn.textContent.includes('Market Listings')
-                    );
+                    // Check if this is still the marketplace
+                    const hasMarketListingsTab = isMarketplacePanel(tabsContainer);
 
                     if (!hasMarketListingsTab) {
                         // No longer on marketplace, clean up
