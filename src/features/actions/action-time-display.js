@@ -70,7 +70,9 @@ class ActionTimeDisplay {
         }
 
         // Migrate old display mode setting to new granular toggles
-        await this.migrateDisplayMode();
+        console.log('[TimeDebug] before migrateDisplayMode');
+        await this.migrateDisplayMode().catch((e) => console.error('[TimeDebug] migrateDisplayMode FAILED:', e));
+        console.log('[TimeDebug] after migrateDisplayMode');
 
         if (!config.getSetting('actionBar_enabled')) {
             return;
