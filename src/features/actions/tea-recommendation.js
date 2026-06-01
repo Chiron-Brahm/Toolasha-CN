@@ -34,6 +34,9 @@ function getCurrentLocationTab() {
             const allButtons = Array.from(tablist?.querySelectorAll('button[role="tab"]') || []);
             const tabIndex = allButtons.indexOf(button);
             if (tabIndex >= 0 && allButtons.length - tabIndex > 1) {
+                // Prefer data attribute for locale-safe HRID matching
+                const hrid = button.getAttribute('data-category-hrid') || button.getAttribute('data-hrid');
+                if (hrid) return hrid;
                 return button.textContent?.trim() || null;
             }
         }
@@ -239,7 +242,7 @@ class TeaRecommendation {
         const isAlchemy = !!anchorButton.closest('[class*="AlchemyPanel_"]');
 
         // Get current skill name — action filter doesn't track alchemy, so override when needed
-        const skillName = isAlchemy ? 'Alchemy' : actionFilter.getCurrentSkillName();
+        const skillName = isAlchemy ? 'Alchemy' : actionFilter.getCurrentSkillEnglishName();
         if (!skillName) {
             this.showError(anchorButton, t('Could not detect current skill'));
             return;
@@ -404,7 +407,7 @@ class TeaRecommendation {
                 color: #fff;
                 font-weight: 500;
             `;
-                teaName.textContent = tea.name;
+                teaName.textContent = itemNameTranslator.getDisplayName(tea.hrid);
 
                 const teaBuffs = document.createElement('span');
                 teaBuffs.style.cssText = `
@@ -787,12 +790,10 @@ class TeaRecommendation {
 
         const relevantTeas = getRelevantTeas(skillName.toLowerCase(), goal);
         const allConstraintTeas = [...relevantTeas.skillTeas, ...relevantTeas.generalTeas];
-        const gameData = dataManager.getInitClientData();
-
         for (const hrid of allConstraintTeas) {
             const isPinned = this.pinnedTeas.has(hrid);
             const isBanned = this.bannedTeas.has(hrid);
-            const teaDisplayName = gameData?.itemDetailMap?.[hrid]?.name || hrid;
+            const teaDisplayName = itemNameTranslator.getDisplayName(hrid);
 
             const row = document.createElement('div');
             row.style.cssText = `
@@ -970,7 +971,7 @@ class TeaRecommendation {
                     color: rgba(255, 255, 255, 0.8);
                     padding: 2px 0;
                 `;
-                teaRow.textContent = tea.name;
+                teaRow.textContent = itemNameTranslator.getDisplayName(tea.hrid);
                 xpCol.appendChild(teaRow);
             }
 
@@ -999,7 +1000,7 @@ class TeaRecommendation {
                     color: rgba(255, 255, 255, 0.8);
                     padding: 2px 0;
                 `;
-                teaRow.textContent = tea.name;
+                teaRow.textContent = itemNameTranslator.getDisplayName(tea.hrid);
                 goldCol.appendChild(teaRow);
             }
 

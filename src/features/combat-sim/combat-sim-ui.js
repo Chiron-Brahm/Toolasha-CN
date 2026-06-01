@@ -26,6 +26,7 @@ import { runUpgradeAnalysis } from './upgrade-advisor.js';
 import { SimEditor } from './sim-editor.js';
 import { t } from '../../core/i18n.js';
 import { getZoneDisplayName, getMonsterDisplayName } from '../../utils/game-locale.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 const PANEL_ID = 'mwi-combat-sim-panel';
 const ACCENT = '#4a9eff';
@@ -619,11 +620,14 @@ class CombatSimUI {
         for (const zone of zones) {
             const option = document.createElement('option');
             option.value = zone.hrid;
+            const monsterDisplay = getMonsterDisplayName(zone.hrid);
+            const rawSegment = zone.hrid.split('/').pop();
+            const monsterMatched = monsterDisplay !== rawSegment;
             option.textContent = zone.isDungeon
-                ? `[D] ${getMonsterDisplayName(zone.hrid)}`
-                : zone.hrid.includes('/actions/combat/')
-                    ? getMonsterDisplayName(zone.hrid)
-                    : getZoneDisplayName(zone);
+                ? `[D] ${monsterMatched ? monsterDisplay : getZoneDisplayName(zone)}`
+                : monsterMatched
+                  ? monsterDisplay
+                  : getZoneDisplayName(zone);
             zoneSelect.appendChild(option);
         }
 
@@ -1014,7 +1018,7 @@ class CombatSimUI {
             const el = document.createElement('div');
             el.style.cssText =
                 'padding:3px 0; font-size:12px; color:#ccc; cursor:pointer; border-bottom:1px solid #1a1a2e;';
-            el.textContent = item.name;
+            el.textContent = itemNameTranslator.getDisplayName(item.itemHrid);
             el.addEventListener('mousedown', () => {
                 this._seekSelectedItem = item;
                 const input = this.panel.querySelector('#mwi-csim-seek-input');
@@ -1210,9 +1214,17 @@ class CombatSimUI {
         const sortAsc = this._seekSortAsc;
         const sorted = [...rows].sort((a, b) => {
             const va =
-                sortCol === 'zone' ? a.zone.name : sortCol === 'tier' ? a.zone.difficultyTier : (a[sortCol] ?? 0);
+                sortCol === 'zone'
+                    ? getZoneDisplayName({ name: a.zone.name })
+                    : sortCol === 'tier'
+                      ? a.zone.difficultyTier
+                      : (a[sortCol] ?? 0);
             const vb =
-                sortCol === 'zone' ? b.zone.name : sortCol === 'tier' ? b.zone.difficultyTier : (b[sortCol] ?? 0);
+                sortCol === 'zone'
+                    ? getZoneDisplayName({ name: b.zone.name })
+                    : sortCol === 'tier'
+                      ? b.zone.difficultyTier
+                      : (b[sortCol] ?? 0);
             if (typeof va === 'string') return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
             return sortAsc ? va - vb : vb - va;
         });
@@ -1247,7 +1259,7 @@ class CombatSimUI {
                         const cellStyle = 'padding:2px 4px; font-size:10px; white-space:nowrap;';
 
                         if (col.key === 'zone') {
-                            display = row.zone;
+                            display = getZoneDisplayName(row.zone);
                         } else if (col.key === 'tier') {
                             display = String(row.tier);
                         } else if (col.key === 'itemsPerHour') {

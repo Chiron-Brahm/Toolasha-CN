@@ -29,6 +29,26 @@ const SKILL_TO_ACTION_TYPE = {
 const GATHERING_SKILLS = ['milking', 'foraging', 'woodcutting'];
 const PRODUCTION_SKILLS = ['cheesesmithing', 'crafting', 'tailoring', 'cooking', 'brewing', 'alchemy'];
 
+// Chinese locale support: translate Chinese skill names to English
+const SKILL_ZH_TO_EN = {
+    挤奶: 'milking',
+    采集: 'foraging',
+    伐木: 'woodcutting',
+    奶酪锻造: 'cheesesmithing',
+    制作: 'crafting',
+    缝纫: 'tailoring',
+    编织: 'weaving',
+    烹饪: 'cooking',
+    酿造: 'brewing',
+    炼金: 'alchemy',
+    强化: 'enhancing',
+};
+
+const SKILL_ZH_TO_EN_LOWER = {};
+Object.entries(SKILL_ZH_TO_EN).forEach(([zh, en]) => {
+    SKILL_ZH_TO_EN_LOWER[zh.toLowerCase()] = en;
+});
+
 /**
  * Get all relevant teas for a skill and optimization goal
  * Returns teas grouped by exclusivity (skill teas are mutually exclusive)
@@ -37,7 +57,7 @@ const PRODUCTION_SKILLS = ['cheesesmithing', 'crafting', 'tailoring', 'cooking',
  * @returns {Object} { skillTeas: [], generalTeas: [] }
  */
 export function getRelevantTeas(skillName, goal) {
-    const skill = skillName.toLowerCase();
+    const skill = SKILL_ZH_TO_EN_LOWER[skillName.toLowerCase()] || skillName.toLowerCase();
     const isGathering = GATHERING_SKILLS.includes(skill);
 
     // Skill-specific teas (mutually exclusive - can only equip ONE)
@@ -800,7 +820,7 @@ export function findOptimalTeas(
     constraints = null,
     alchemyContext = null
 ) {
-    const normalizedSkill = skillName.toLowerCase();
+    const normalizedSkill = SKILL_ZH_TO_EN_LOWER[skillName.toLowerCase()] || skillName.toLowerCase();
     const isGathering = GATHERING_SKILLS.includes(normalizedSkill);
     const isProduction = PRODUCTION_SKILLS.includes(normalizedSkill);
 
@@ -839,6 +859,23 @@ export function findOptimalTeas(
 
     // Filter to specific location if provided (using game data category)
     if (locationName && gameData.actionCategoryDetailMap) {
+        // Translate Chinese location names to English for comparison against game data
+        const ZH_LOCATION_TO_EN = {
+            奶牛谷: 'Silly Cow Valley',
+            森林: 'Forest',
+            神秘森林: 'Mythic Forest',
+            树木: 'Trees',
+            特殊树木: 'Special Trees',
+            地狱: 'Hell',
+            蘑菇: 'Mushrooms',
+            浮岛: 'Floating Island',
+            魔法森林: 'Magic Forest',
+            沙漠: 'Desert',
+            水果: 'Fruit',
+            山脉: 'Mountains',
+        };
+        const comparedName = ZH_LOCATION_TO_EN[locationName] || locationName;
+
         // Find the category HRID that matches this location name AND skill
         // Multiple skills can have categories with the same name (e.g., "Material" exists for both Tailoring and Cheesesmithing)
         // So we need to match the skill-specific category path
@@ -847,7 +884,7 @@ export function findOptimalTeas(
 
         for (const [categoryHrid, categoryDetail] of Object.entries(gameData.actionCategoryDetailMap)) {
             // Match both the category name AND ensure it's for the correct skill
-            if (categoryDetail.name === locationName && categoryHrid.startsWith(skillPrefix)) {
+            if (categoryDetail.name === comparedName && categoryHrid.startsWith(skillPrefix)) {
                 targetCategoryHrid = categoryHrid;
                 break;
             }

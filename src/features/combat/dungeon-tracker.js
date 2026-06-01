@@ -388,8 +388,8 @@ class DungeonTracker {
                         continue; // Skip player messages
                     }
 
-                    // Look for "Battle started:" messages
-                    if (text.includes('Battle started:')) {
+                    // Look for "Battle started:" messages (English or Chinese)
+                    if (text.includes('Battle started:') || text.includes('战斗开始：')) {
                         // Try to extract timestamp
                         // Try to extract timestamp from message display format: [MM/DD HH:MM:SS AM/PM] or [DD-M HH:MM:SS]
                         const timestampMatch = text.match(
@@ -430,8 +430,8 @@ class DungeonTracker {
                         }
                     }
 
-                    // Look for "Key counts:" messages
-                    if (text.includes('Key counts:')) {
+                    // Look for "Key counts:" messages (English or Chinese)
+                    if (text.includes('Key counts:') || text.includes('钥匙数量：')) {
                         // Parse the message
                         const keyCountsMap = this.parseKeyCountsFromMessage(text);
 
@@ -1394,8 +1394,8 @@ class DungeonTracker {
                 const now = new Date();
                 const timestamp = new Date(now.getFullYear(), month - 1, day, hour, min, sec, 0);
 
-                // Extract "Battle started:" messages
-                if (text.includes('Battle started:')) {
+                // Extract "Battle started:" messages (English or Chinese)
+                if (text.includes('Battle started:') || text.includes('战斗开始：')) {
                     const dungeonName = text.split('Battle started:')[1]?.split(']')[0]?.trim();
                     if (dungeonName) {
                         events.push({
@@ -1405,8 +1405,8 @@ class DungeonTracker {
                         });
                     }
                 }
-                // Extract "Key counts:" messages
-                else if (text.includes('Key counts:')) {
+                // Extract "Key counts:" messages (English or Chinese)
+                else if (text.includes('Key counts:') || text.includes('钥匙数量：')) {
                     // Parse team composition from key counts
                     const keyCountsMap = this.parseKeyCountsFromMessage(text);
                     const playerNames = Object.keys(keyCountsMap).sort();
@@ -1420,15 +1420,15 @@ class DungeonTracker {
                         });
                     }
                 }
-                // Extract "Party failed" messages
-                else if (text.match(/Party failed on wave \d+/)) {
+                // Extract "Party failed" messages (English or Chinese)
+                else if (text.match(/Party failed on wave \d+/) || text.match(/队伍在第\d+波失败/)) {
                     events.push({
                         type: 'fail',
                         timestamp,
                     });
                 }
-                // Extract "Battle ended:" messages (fled/canceled)
-                else if (text.includes('Battle ended:')) {
+                // Extract "Battle ended:" messages (fled/canceled, English or Chinese)
+                else if (text.includes('Battle ended:') || text.includes('战斗结束：')) {
                     const dungeonName = text.split('Battle ended:')[1]?.split(']')[0]?.trim();
                     events.push({
                         type: 'cancel',

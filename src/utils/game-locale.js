@@ -27,9 +27,7 @@ export function getMyListingsTab(tablist) {
     // Skip non-native tabs (Toolasha inventory tabs, missing material tabs)
     // to find the second native marketplace tab
     const nativeTabs = Array.from(tablist.children).filter(
-        (child) =>
-            !child.hasAttribute('data-mwi-custom-tab') &&
-            !child.classList.contains('toolasha-inv-tab')
+        (child) => !child.hasAttribute('data-mwi-custom-tab') && !child.classList.contains('toolasha-inv-tab')
     );
     return nativeTabs[1] || null;
 }
@@ -155,24 +153,6 @@ const CN_MONSTER_NAMES = {
     sinister_circus: '阴森马戏团',
     enchanted_fortress: '秘法要塞',
     pirate_cove: '海盗基地',
-    // House rooms
-    'Archery Range': '射箭场',
-    Armory: '军械库',
-    Brewery: '冲泡坊',
-    'Dairy Barn': '奶牛棚',
-    'Dining Room': '餐厅',
-    Dojo: '道场',
-    Forge: '锻造间',
-    Garden: '花园',
-    Gym: '健身房',
-    Kitchen: '厨房',
-    Laboratory: '实验室',
-    Library: '图书馆',
-    'Log Shed': '木棚',
-    'Mystical Study': '神秘研究室',
-    Observatory: '天文台',
-    'Sewing Parlor': '缝纫室',
-    Workshop: '工作间',
 };
 
 export function getMonsterDisplayName(monsterHrid) {
@@ -183,7 +163,7 @@ export function getMonsterDisplayName(monsterHrid) {
 // Chinese zone name mapping (from game's official Chinese translation)
 const CN_ZONE_NAMES = {
     // Non-dungeon zones
-    'Farmlands': '农田',
+    Farmlands: '农田',
     'Autumn Fields': '秋田',
     'Quiet Valley': '幽谷',
     'Misty Marsh': '雾沼',
@@ -217,6 +197,24 @@ const CN_ZONE_NAMES = {
     'Undead Crypt': '亡灵地窖',
     'Vampire Mansion': '吸血鬼庄园',
     'Werewolf Den': '狼人洞穴',
+    // House rooms
+    'Archery Range': '射箭场',
+    Armory: '军械库',
+    Brewery: '冲泡坊',
+    'Dairy Barn': '奶牛棚',
+    'Dining Room': '餐厅',
+    Dojo: '道场',
+    Forge: '锻造间',
+    Garden: '花园',
+    Gym: '健身房',
+    Kitchen: '厨房',
+    Laboratory: '实验室',
+    Library: '图书馆',
+    'Log Shed': '木棚',
+    'Mystical Study': '神秘研究室',
+    Observatory: '天文台',
+    'Sewing Parlor': '缝纫室',
+    Workshop: '工作间',
 };
 
 export function getZoneDisplayName(zone) {

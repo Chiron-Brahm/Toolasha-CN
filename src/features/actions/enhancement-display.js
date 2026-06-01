@@ -127,7 +127,8 @@ export async function displayEnhancementStats(panel, itemHrid) {
             effectiveProtectFrom,
             itemDetails.enhancementCosts || [],
             protectionItemHrid,
-            speedBreakdown
+            speedBreakdown,
+            itemHrid
         );
         injectDisplay(panel, html);
 
@@ -247,7 +248,7 @@ function generateCostsByLevelTable(
             }
 
             protectionCost = calc.protectionCount * protectionPrice;
-            const protectionName = protectionItemDetail?.name || protectionItemHrid;
+            const protectionName = itemNameTranslator.getDisplayName(protectionItemHrid);
             materialBreakdown[protectionName] = {
                 cost: protectionCost,
                 quantity: calc.protectionCount,
@@ -484,7 +485,8 @@ function formatEnhancementDisplay(
     protectFromLevel,
     enhancementCosts,
     protectionItemHrid,
-    speedBreakdown
+    speedBreakdown,
+    itemHrid
 ) {
     const lines = [];
 
@@ -502,7 +504,7 @@ function formatEnhancementDisplay(
 
     // Item info
     lines.push(
-        `<div style="color: #ddd; margin-bottom: 12px; font-weight: bold;">${itemDetails.name} <span style="color: #888;">(Item Level ${itemDetails.itemLevel})</span></div>`
+        `<div style="color: #ddd; margin-bottom: 12px; font-weight: bold;">${itemNameTranslator.getDisplayName(itemHrid)} <span style="color: #888;">(Item Level ${itemDetails.itemLevel})</span></div>`
     );
 
     // Current stats section
@@ -526,22 +528,22 @@ function formatEnhancementDisplay(
     // Display each equipment slot
     if (params.toolSlot) {
         lines.push(
-            `<div style="color: #ccc;"><span style="color: #888;">${t('Tool:')}</span> ${params.toolSlot.name}${params.toolSlot.enhancementLevel > 0 ? ` +${params.toolSlot.enhancementLevel}` : ''}</div>`
+            `<div style="color: #ccc;"><span style="color: #888;">${t('Tool:')}</span> ${itemNameTranslator.getDisplayName(params.toolSlot.hrid)}${params.toolSlot.enhancementLevel > 0 ? ` +${params.toolSlot.enhancementLevel}` : ''}</div>`
         );
     }
     if (params.bodySlot) {
         lines.push(
-            `<div style="color: #ccc;"><span style="color: #888;">${t('Body:')}</span> ${params.bodySlot.name}${params.bodySlot.enhancementLevel > 0 ? ` +${params.bodySlot.enhancementLevel}` : ''}</div>`
+            `<div style="color: #ccc;"><span style="color: #888;">${t('Body:')}</span> ${itemNameTranslator.getDisplayName(params.bodySlot.hrid)}${params.bodySlot.enhancementLevel > 0 ? ` +${params.bodySlot.enhancementLevel}` : ''}</div>`
         );
     }
     if (params.legsSlot) {
         lines.push(
-            `<div style="color: #ccc;"><span style="color: #888;">${t('Legs:')}</span> ${params.legsSlot.name}${params.legsSlot.enhancementLevel > 0 ? ` +${params.legsSlot.enhancementLevel}` : ''}</div>`
+            `<div style="color: #ccc;"><span style="color: #888;">${t('Legs:')}</span> ${itemNameTranslator.getDisplayName(params.legsSlot.hrid)}${params.legsSlot.enhancementLevel > 0 ? ` +${params.legsSlot.enhancementLevel}` : ''}</div>`
         );
     }
     if (params.handsSlot) {
         lines.push(
-            `<div style="color: #ccc;"><span style="color: #888;">${t('Hands:')}</span> ${params.handsSlot.name}${params.handsSlot.enhancementLevel > 0 ? ` +${params.handsSlot.enhancementLevel}` : ''}</div>`
+            `<div style="color: #ccc;"><span style="color: #888;">${t('Hands:')}</span> ${itemNameTranslator.getDisplayName(params.handsSlot.hrid)}${params.handsSlot.enhancementLevel > 0 ? ` +${params.handsSlot.enhancementLevel}` : ''}</div>`
         );
     }
     lines.push('</div>');
@@ -806,8 +808,7 @@ function formatEnhancementDisplay(
         // Show protection item cost if protection is active (level 2+) AND item is equipped
         if (protectFromLevel >= 2) {
             if (protectionItemHrid) {
-                const protectionItemDetail = gameData.itemDetailMap[protectionItemHrid];
-                const protectionItemName = protectionItemDetail?.name || protectionItemHrid;
+                const protectionItemName = itemNameTranslator.getDisplayName(protectionItemHrid);
 
                 // Get protection item price
                 let protectionPrice = 0;
@@ -815,6 +816,7 @@ function formatEnhancementDisplay(
                 if (protectionMarketData && protectionMarketData.ask) {
                     protectionPrice = protectionMarketData.ask;
                 } else {
+                    const protectionItemDetail = gameData.itemDetailMap[protectionItemHrid];
                     protectionPrice = protectionItemDetail?.sellPrice || 0;
                 }
 

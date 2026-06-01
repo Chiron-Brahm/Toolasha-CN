@@ -10,6 +10,7 @@ import { calculateDungeonTokenValue } from '../../utils/token-valuation.js';
 import { getItemPrice } from '../../utils/market-data.js';
 import { calculatePriceAfterTax } from '../../utils/profit-helpers.js';
 import { calculateEVBatch } from '../../utils/ev-worker-manager.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 /**
  * ExpectedValueCalculator class handles EV calculations for openable containers
@@ -311,7 +312,7 @@ class ExpectedValueCalculator {
         const expectedReturn = drops.reduce((sum, drop) => sum + drop.expectedValue, 0);
 
         return {
-            itemName: itemDetails.name,
+            itemName: itemNameTranslator.getDisplayName(itemHrid),
             itemHrid,
             expectedValue: expectedReturn,
             drops,
@@ -384,7 +385,7 @@ class ExpectedValueCalculator {
 
             drops.push({
                 itemHrid,
-                itemName: itemDetails.name,
+                itemName: itemNameTranslator.getDisplayName(itemHrid),
                 dropRate,
                 avgCount,
                 priceEach: price || 0,

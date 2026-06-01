@@ -13,6 +13,7 @@ import dataManager from '../../core/data-manager.js';
 import domObserver from '../../core/dom-observer.js';
 import storage from '../../core/storage.js';
 import webSocketHook from '../../core/websocket.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 const STORAGE_KEY_PREFIX = 'taskAutoRerollHrids';
 
@@ -346,7 +347,7 @@ class TaskAutoReroll {
                 " onmouseover="this.style.background='rgba(255,255,255,0.04)'"
                    onmouseout="this.style.background=''">
                     <span style="width:18px; text-align:center; color:${checkColor}; font-weight:700;">${checkmark}</span>
-                    <span style="flex:1; color:${nameColor};">${item.name}</span>
+                    <span style="flex:1; color:${nameColor};">${itemNameTranslator.getDisplayName(item.hrid)}</span>
                     <span style="color:#666; font-size:11px;">${typeLabel}</span>
                 </div>`;
             }

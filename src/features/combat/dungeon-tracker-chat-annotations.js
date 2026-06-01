@@ -600,8 +600,8 @@ class DungeonTrackerChatAnnotations {
             const text = node.textContent.trim();
 
             // Check message relevance FIRST before parsing timestamp
-            // Battle started message
-            if (text.includes('Battle started:')) {
+            // Battle started message (English or Chinese)
+            if (text.includes('Battle started:') || text.includes('战斗开始：')) {
                 const timestamp = this.getTimestampFromMessage(node);
                 if (!timestamp) {
                     console.warn('[Dungeon Tracker Debug] Battle started message has no timestamp:', text);
@@ -623,8 +623,8 @@ class DungeonTrackerChatAnnotations {
                 // Do NOT mark battle_start as processed — it must persist across passes
                 // as a session boundary for the forward-scan pairing logic.
             }
-            // Key counts message (warn if timestamp fails - these should always have timestamps)
-            else if (text.includes('Key counts:')) {
+            // Key counts message (English or Chinese, warn if timestamp fails)
+            else if (text.includes('Key counts:') || text.includes('钥匙数量：')) {
                 const timestamp = this.getTimestampFromMessage(node, true);
                 if (!timestamp) continue;
 
@@ -638,8 +638,8 @@ class DungeonTrackerChatAnnotations {
                     msg: node,
                 });
             }
-            // Party failed message
-            else if (text.match(/Party failed on wave \d+/)) {
+            // Party failed message (English or Chinese)
+            else if (text.match(/Party failed on wave \d+/) || text.match(/队伍在第\d+波失败/)) {
                 const timestamp = this.getTimestampFromMessage(node);
                 if (!timestamp) continue;
 
@@ -650,8 +650,8 @@ class DungeonTrackerChatAnnotations {
                 });
                 // Do NOT mark fail as processed — must persist as session context.
             }
-            // Battle ended (canceled/fled)
-            else if (text.includes('Battle ended:')) {
+            // Battle ended (canceled/fled, English or Chinese)
+            else if (text.includes('Battle ended:') || text.includes('战斗结束：')) {
                 const timestamp = this.getTimestampFromMessage(node);
                 if (!timestamp) continue;
 

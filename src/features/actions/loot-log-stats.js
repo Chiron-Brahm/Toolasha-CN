@@ -14,6 +14,7 @@ import { formatKMB, numberFormatter } from '../../utils/formatters.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import expectedValueCalculator from '../market/expected-value-calculator.js';
 import lootLogHistory from './loot-log-history.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 class LootLogStats {
     constructor() {
@@ -368,8 +369,8 @@ class LootLogStats {
                 askPerItem = 1;
                 bidPerItem = 1;
             } else {
+                name = itemNameTranslator.getDisplayName(baseHrid);
                 const itemDetails = dataManager.getItemDetails(baseHrid);
-                name = itemDetails?.name || baseHrid.split('/').pop().replace(/_/g, ' ');
 
                 // Check for openable containers — use expected value
                 if (itemDetails?.isOpenable && expectedValueCalculator.isInitialized) {

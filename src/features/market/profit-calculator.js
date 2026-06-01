@@ -12,6 +12,7 @@ import { calculateBonusRevenue } from '../../utils/bonus-revenue-calculator.js';
 import { getProductionCost, getProductionChainTime } from '../enhancement/tooltip-enhancement.js';
 import { getItemPrice } from '../../utils/market-data.js';
 import { MARKET_TAX } from '../../utils/profit-constants.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import {
     calculateActionsPerHour,
     calculatePriceAfterTax,
@@ -251,7 +252,7 @@ class ProfitCalculator {
         const pricingMode = config.getSettingValue('profitCalc_pricingMode', 'hybrid');
 
         return {
-            itemName: itemDetails.name,
+            itemName: itemNameTranslator.getDisplayName(itemHrid),
             itemHrid,
             actionTime: effectiveActionTime,
             actionsPerHour,
@@ -391,7 +392,7 @@ class ProfitCalculator {
 
                 costs.push({
                     itemHrid: actionDetails.upgradeItemHrid,
-                    itemName: itemDetails.name,
+                    itemName: itemNameTranslator.getDisplayName(actionDetails.upgradeItemHrid),
                     baseAmount: 1,
                     amount: reducedAmount,
                     askPrice: resolved.price,
@@ -428,7 +429,7 @@ class ProfitCalculator {
 
                 costs.push({
                     itemHrid: input.itemHrid,
-                    itemName: itemDetails.name,
+                    itemName: itemNameTranslator.getDisplayName(input.itemHrid),
                     baseAmount: baseAmount,
                     amount: reducedAmount,
                     askPrice: resolved.price,

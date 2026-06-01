@@ -155,6 +155,7 @@ export function detectSkillGear(skillName, equipment, itemDetailMap) {
         gear.rareFindBonus += bestTool.rareFindBonus;
         gear.experienceBonus += bestTool.experienceBonus;
         gear.toolSlot = {
+            hrid: bestTool.item.itemHrid,
             name: bestTool.itemDetails.name,
             enhancementLevel: bestTool.enhancementLevel,
         };
@@ -166,6 +167,7 @@ export function detectSkillGear(skillName, equipment, itemDetailMap) {
         gear.rareFindBonus += bestBody.rareFindBonus;
         gear.experienceBonus += bestBody.experienceBonus;
         gear.bodySlot = {
+            hrid: bestBody.item.itemHrid,
             name: bestBody.itemDetails.name,
             enhancementLevel: bestBody.enhancementLevel,
         };
@@ -177,6 +179,7 @@ export function detectSkillGear(skillName, equipment, itemDetailMap) {
         gear.rareFindBonus += bestLegs.rareFindBonus;
         gear.experienceBonus += bestLegs.experienceBonus;
         gear.legsSlot = {
+            hrid: bestLegs.item.itemHrid,
             name: bestLegs.itemDetails.name,
             enhancementLevel: bestLegs.enhancementLevel,
         };
@@ -188,6 +191,7 @@ export function detectSkillGear(skillName, equipment, itemDetailMap) {
         gear.rareFindBonus += bestHands.rareFindBonus;
         gear.experienceBonus += bestHands.experienceBonus;
         gear.handsSlot = {
+            hrid: bestHands.item.itemHrid,
             name: bestHands.itemDetails.name,
             enhancementLevel: bestHands.enhancementLevel,
         };

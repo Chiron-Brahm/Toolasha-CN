@@ -25,6 +25,7 @@ import {
     initCustomPriceOverrides,
 } from './custom-price-overrides.js';
 import { t } from '../../core/i18n.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 const COLLAPSED_GROUPS_KEY = 'toolasha_collapsedGroups';
 
@@ -1784,9 +1785,9 @@ class SettingsUI {
         const itemDetailMap = gameData?.itemDetailMap || {};
 
         // Build item list for search
-        const allItems = Object.entries(itemDetailMap).map(([hrid, detail]) => ({
+        const allItems = Object.entries(itemDetailMap).map(([hrid, _detail]) => ({
             hrid,
-            name: detail.name || hrid.replace('/items/', ''),
+            name: itemNameTranslator.getDisplayName(hrid),
         }));
 
         // Get sprite URL for item icons
@@ -2080,8 +2081,7 @@ class SettingsUI {
             for (const [key, override] of entries) {
                 const [itemHrid, enhLevel] = key.split(':');
                 const enhNum = parseInt(enhLevel) || 0;
-                const itemDetail = itemDetailMap[itemHrid];
-                const itemName = itemDetail?.name || itemHrid.replace('/items/', '');
+                const itemName = itemNameTranslator.getDisplayName(itemHrid);
                 const enhSuffix = enhNum > 0 ? ` +${enhNum}` : '';
 
                 const row = document.createElement('div');

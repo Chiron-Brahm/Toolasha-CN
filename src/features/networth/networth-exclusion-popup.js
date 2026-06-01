@@ -12,6 +12,7 @@ import { registerFloatingPanel, unregisterFloatingPanel, bringPanelToFront } fro
 import { networthFormatter } from '../../utils/formatters.js';
 import { getExclusions, isExcluded, addExclusion, removeExclusion, clearExclusions } from './networth-exclusions.js';
 import loadoutSnapshot from '../combat/loadout-snapshot.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 class NetworthExclusionPopup {
     constructor() {
@@ -421,10 +422,9 @@ class NetworthExclusionPopup {
             const snapshot = loadoutSnapshot.getAllSnapshots().find((s) => s.name === entry.value);
             if (snapshot) {
                 return snapshot.equipment.map((eq) => {
-                    const details = dataManager.getItemDetails(eq.itemHrid);
-                    const name = details?.name || eq.itemHrid.replace('/items/', '');
+                    const name = itemNameTranslator.getDisplayName(eq.itemHrid);
                     const price = marketAPI.getPrice(eq.itemHrid);
-                    return { name, value: price?.ask ?? 0 };
+                    return { name, value: price?.ask ?? 0, itemHrid: eq.itemHrid };
                 });
             }
         }
@@ -494,7 +494,7 @@ class NetworthExclusionPopup {
                 });
             }
 
-            nameSpan.appendChild(document.createTextNode(entry.name));
+            nameSpan.appendChild(document.createTextNode(itemNameTranslator.getDisplayName(entry.value) || entry.name));
 
             const amountSpan = document.createElement('span');
             amountSpan.style.cssText = `color: rgba(255,255,255,0.5); white-space: nowrap; font-size: 0.78rem;`;
@@ -551,7 +551,7 @@ class NetworthExclusionPopup {
                     `;
                     const subName = document.createElement('span');
                     subName.style.cssText = `flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;`;
-                    subName.textContent = sub.name;
+                    subName.textContent = itemNameTranslator.getDisplayName(sub.itemHrid) || sub.name;
 
                     const subVal = document.createElement('span');
                     subVal.style.cssText = `white-space: nowrap; color: rgba(255,255,255,0.4);`;
@@ -596,7 +596,7 @@ class NetworthExclusionPopup {
             const name = gd.itemCategoryDetailMap?.[exc.value]?.name;
             return name ? t('{name} (category)', { name }) : exc.value;
         }
-        if (exc.type === 'item') return gd.itemDetailMap?.[exc.value]?.name ?? exc.value;
+        if (exc.type === 'item') return itemNameTranslator.getDisplayName(exc.value);
         if (exc.type === 'houseRoom') return gd.houseRoomDetailMap?.[exc.value]?.name ?? exc.value;
         if (exc.type === 'ability') return gd.abilityDetailMap?.[exc.value]?.name ?? exc.value;
         return exc.value;

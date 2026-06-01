@@ -40,16 +40,19 @@ class ItemNameTranslator {
         if (this.isLoaded) return;
         try {
             const saved = await storage.get(STORAGE_KEY, 'settings');
-            if (saved && typeof saved === 'object' && saved._version === CACHE_VERSION && Object.keys(saved).length > 1) {
+            if (
+                saved &&
+                typeof saved === 'object' &&
+                saved._version === CACHE_VERSION &&
+                Object.keys(saved).length > 1
+            ) {
                 this.cnNames = saved;
             }
-        } catch (_) { /* ignore */ }
-        this.isLoaded = true;
-
-        // Bulk import from static Chinese name mapping (Edible Tools translations)
-        if (Object.keys(this.cnNames).length <= 1) {
-            this._importStaticMapping();
+        } catch (_) {
+            /* ignore */
         }
+        this.isLoaded = true;
+        this._importStaticMapping();
     }
 
     captureFromDOM(element, itemHrid) {
@@ -114,19 +117,88 @@ class ItemNameTranslator {
         }
     }
 
+    getDisplayName(itemHrid) {
+        if (!itemHrid) return '';
+        if (!this.isLoaded) this._lazyLoad();
+
+        const cached = this.cnNames[itemHrid];
+        if (cached) return cached;
+
+        const item = dataManager.getItemDetails(itemHrid);
+        const enName = item?.name;
+        if (!enName) return itemHrid;
+
+        const staticCn = itemNamesZh[enName];
+        if (staticCn) {
+            this.cnNames[itemHrid] = staticCn;
+            return staticCn;
+        }
+
+        return enName;
+    }
+
+    _lazyLoad() {
+        this.load().catch(() => {});
+    }
+
     getHridFromChineseName(chineseName) {
         if (!chineseName) return null;
         const baseName = chineseName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
         for (const [hrid, cnName] of Object.entries(this.cnNames)) {
             if (cnName === baseName) return hrid;
         }
+        for (const [enName, cnName] of Object.entries(itemNamesZh)) {
+            if (cnName === baseName) {
+                const initData = dataManager.getInitClientData();
+                if (initData?.itemDetailMap) {
+                    for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
+                        if (item.name === enName) return hrid;
+                    }
+                }
+            }
+        }
         return null;
+    }
+
+    findHridFromDomName(chineseName) {
+        if (!chineseName) return null;
+        for (const [hrid, cnName] of Object.entries(this.cnNames)) {
+            if (cnName === chineseName) return hrid;
+        }
+        for (const [enName, cnName] of Object.entries(itemNamesZh)) {
+            if (cnName === chineseName) {
+                const initData = dataManager.getInitClientData();
+                if (initData?.itemDetailMap) {
+                    for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
+                        if (item.name === enName) return hrid;
+                    }
+                }
+            }
+        }
+        const initData = dataManager.getInitClientData();
+        if (initData?.itemDetailMap) {
+            for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
+                if (item.name === chineseName) return hrid;
+            }
+        }
+        return null;
+    }
+
+    _ensureHRIDMaps() {
+        if (this._hridToEn && this._enToHrid) return;
+        this._enToHrid = {};
+        this._hridToEn = {};
+        const initData = dataManager.getInitClientData();
+        if (!initData?.itemDetailMap) return;
+        for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
+            this._enToHrid[item.name] = hrid;
+            this._hridToEn[hrid] = item.name;
+        }
     }
 
     startObserver() {
         if (this._observerStarted) return;
         this._observerStarted = true;
-        console.log('[ItemNameTranslator] Observer starting, selectors:', MUTATION_SELECTORS);
 
         const processNode = (node) => {
             if (!node || node.nodeType !== 1) return;

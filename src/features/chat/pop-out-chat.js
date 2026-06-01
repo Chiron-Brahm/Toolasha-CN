@@ -12,6 +12,8 @@ import domObserver from '../../core/dom-observer.js';
 import { formatKMB } from '../../utils/formatters.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { chatBlockList } from './chat-block-list.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
+import { getZoneDisplayName, getMonsterDisplayName } from '../../utils/game-locale.js';
 
 const RELAY_CHANNEL = 'mwi-chat-relay';
 const SEND_CHANNEL = 'mwi-chat-send';
@@ -75,8 +77,7 @@ function resolveSystemMessage(messageKey, meta) {
  */
 function resolveLink(link) {
     if (link.linkType === '/chat_link_types/market_listing') {
-        const itemDetails = dataManager.getItemDetails(link.itemHrid);
-        const itemName = itemDetails?.name || link.itemHrid.split('/').pop().replace(/_/g, ' ');
+        const itemName = itemNameTranslator.getDisplayName(link.itemHrid);
         const enhancement = link.itemEnhancementLevel > 0 ? ` +${link.itemEnhancementLevel}` : '';
         const count = link.itemCount > 1 ? ` ×${link.itemCount}` : '';
         const price = formatKMB(link.price);
@@ -84,8 +85,7 @@ function resolveLink(link) {
         return `[${itemName}${enhancement}${count} @ ${price} ${side}]`;
     }
     if (link.linkType === '/chat_link_types/item') {
-        const itemDetails = dataManager.getItemDetails(link.itemHrid);
-        const itemName = itemDetails?.name || link.itemHrid.split('/').pop().replace(/_/g, ' ');
+        const itemName = itemNameTranslator.getDisplayName(link.itemHrid);
         const enhancement = link.itemEnhancementLevel > 0 ? ` +${link.itemEnhancementLevel}` : '';
         const count = link.itemCount > 1 ? ` ×${link.itemCount}` : '';
         return `[${itemName}${enhancement}${count}]`;
@@ -101,18 +101,19 @@ function resolveLink(link) {
     }
     if (link.linkType === '/chat_link_types/party') {
         const actionDetails = dataManager.getActionDetails(link.partyActionHrid);
-        const zoneName = actionDetails?.name || link.partyActionHrid.split('/').pop().replace(/_/g, ' ');
+        const zoneName =
+            (actionDetails && getZoneDisplayName(actionDetails)) ||
+            link.partyActionHrid.split('/').pop().replace(/_/g, ' ');
         const tier = ` T${link.partyDifficultyTier ?? 0}`;
         return `[Party: ${zoneName}${tier}]`;
     }
     if (link.linkType === '/chat_link_types/collection') {
-        const itemDetails = dataManager.getItemDetails(link.itemHrid);
-        const itemName = itemDetails?.name || link.itemHrid.split('/').pop().replace(/_/g, ' ');
+        const itemName = itemNameTranslator.getDisplayName(link.itemHrid);
         return `[Collection: ${itemName} ×${formatKMB(link.itemCount)}]`;
     }
     if (link.linkType === '/chat_link_types/bestiary') {
-        const monsterDetails = dataManager.getInitClientData()?.combatMonsterDetailMap?.[link.monsterHrid];
-        const monsterName = monsterDetails?.name || link.monsterHrid.split('/').pop().replace(/_/g, ' ');
+        const monsterName =
+            getMonsterDisplayName(link.monsterHrid) || link.monsterHrid.split('/').pop().replace(/_/g, ' ');
         return `[Bestiary: ${monsterName} ×${link.monsterCount}]`;
     }
     // Fallback: humanize the HRID

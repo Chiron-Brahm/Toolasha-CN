@@ -7,9 +7,9 @@
 import { t } from '../../core/i18n.js';
 import networthHistory, { GAP_THRESHOLD_MS } from './networth-history.js';
 import config from '../../core/config.js';
-import dataManager from '../../core/data-manager.js';
 import storage from '../../core/storage.js';
 import { networthFormatter } from '../../utils/formatters.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 const RANGE_MS = {
     '24h': 24 * 60 * 60 * 1000,
@@ -1092,7 +1092,6 @@ class NetworthHistoryChart {
 
         // Build current items map from live data
         const currentItems = {};
-        const gameData = dataManager.getInitClientData();
 
         // Gold
         currentItems['/items/coin:0'] = {
@@ -1108,7 +1107,7 @@ class NetworthHistoryChart {
             currentItems[key] = {
                 count: item.count || 0,
                 value: Math.round(item.value || 0),
-                name: item.name,
+                name: itemNameTranslator.getDisplayName(item.itemHrid) || item.name,
             };
         }
 
@@ -1119,7 +1118,7 @@ class NetworthHistoryChart {
             currentItems[key] = {
                 count: 1,
                 value: Math.round(item.value || 0),
-                name: item.name,
+                name: itemNameTranslator.getDisplayName(item.itemHrid) || item.name,
             };
         }
 
@@ -1128,7 +1127,7 @@ class NetworthHistoryChart {
             currentItems[`house:${room.hrid}`] = {
                 count: room.level,
                 value: Math.round(room.cost),
-                name: room.name,
+                name: itemNameTranslator.getDisplayName(room.hrid) || room.name,
             };
         }
 
@@ -1137,7 +1136,7 @@ class NetworthHistoryChart {
             currentItems[`ability:${ability.hrid}`] = {
                 count: 1,
                 value: Math.round(ability.cost),
-                name: ability.name,
+                name: itemNameTranslator.getDisplayName(ability.hrid) || ability.name,
             };
         }
 
@@ -1147,7 +1146,7 @@ class NetworthHistoryChart {
             currentItems[`abilitybook:${book.itemHrid}`] = {
                 count: book.count || 1,
                 value: Math.round(book.value || 0),
-                name: book.name,
+                name: itemNameTranslator.getDisplayName(book.itemHrid) || book.name,
             };
         }
 
@@ -1163,7 +1162,7 @@ class NetworthHistoryChart {
                 currentItems[key] = {
                     count: 1,
                     value: Math.round(listing.value),
-                    name: listing.name,
+                    name: itemNameTranslator.getDisplayName(listing.itemHrid) || listing.name,
                     isSell: listing.isSell,
                 };
             }
@@ -1209,8 +1208,7 @@ class NetworthHistoryChart {
                     const parts = key.split(':');
                     const itemHrid = parts[2];
                     const enhLevel = parts[3];
-                    const details = gameData?.itemDetailMap?.[itemHrid];
-                    const baseName = details?.name || itemHrid.replace('/items/', '');
+                    const baseName = itemNameTranslator.getDisplayName(itemHrid);
                     name = Number(enhLevel) > 0 ? `${baseName} +${enhLevel}` : baseName;
                 }
                 const prefix = key.startsWith('listing:sell:') ? t('Sell Listing') : t('Buy Listing');
@@ -1223,8 +1221,7 @@ class NetworthHistoryChart {
             let name = curr.name;
             if (!name) {
                 const [itemHrid, enhLevel] = key.split(':');
-                const details = gameData?.itemDetailMap?.[itemHrid];
-                const baseName = details?.name || itemHrid.replace('/items/', '');
+                const baseName = itemNameTranslator.getDisplayName(itemHrid);
                 name = Number(enhLevel) > 0 ? `${baseName} +${enhLevel}` : baseName;
             }
 

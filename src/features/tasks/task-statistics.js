@@ -13,6 +13,7 @@ import { calculateTaskProfit, calculateTaskTokenValue, calculateTaskRewardValue 
 import { calculateTaskCompletionSeconds } from './task-profit-display.js';
 import { timeReadableZh, formatKMB } from '../../utils/formatters.js';
 import { TOOLASHA } from '../../utils/selectors.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 class TaskStatistics {
     constructor() {
@@ -243,11 +244,9 @@ class TaskStatistics {
             // Get display name
             let taskName = '';
             if (isCombat && monsterHrid) {
-                const monsterDetails = dataManager.getInitClientData()?.combatMonsterDetailMap?.[monsterHrid];
-                taskName = monsterDetails?.name || monsterHrid.split('/').pop();
+                taskName = itemNameTranslator.getDisplayName(monsterHrid);
             } else if (actionHrid) {
-                const actionDetails = dataManager.getInitClientData()?.actionDetailMap?.[actionHrid];
-                taskName = actionDetails?.name || actionHrid.split('/').pop();
+                taskName = itemNameTranslator.getDisplayName(actionHrid);
             }
 
             // Calculate action profit for non-combat tasks

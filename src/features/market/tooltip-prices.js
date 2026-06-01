@@ -277,14 +277,13 @@ class TooltipPrices {
                 if (chestKeyHrid) {
                     const keyPricingSetting = config.getSettingValue('profitCalc_keyPricingMode') || 'ask';
                     const keyPrices = marketAPI.getPrice(chestKeyHrid);
-                    const keyDetails = dataManager.getItemDetails(chestKeyHrid);
                     keyPrice = keyPrices?.[keyPricingSetting] ?? keyPrices?.ask ?? 0;
                     this.injectExpectedValueDisplay(
                         tooltipElement,
                         evData,
                         isCollectionTooltip,
                         keyPrice,
-                        keyDetails?.name
+                        itemNameTranslator.getDisplayName(chestKeyHrid)
                     );
                 } else {
                     this.injectExpectedValueDisplay(tooltipElement, evData, isCollectionTooltip);
@@ -706,11 +705,22 @@ class TooltipPrices {
             const deeperBid = deeperRows.reduce((s, r) => s + r.bidPrice * r.amount, 0);
             askPrice = craftAsk - deeperAsk;
             bidPrice = (craftBid || craftAsk) - deeperBid;
-            return [{ itemName: `Craft ${upgradeDetails.name}`, amount: 1, askPrice, bidPrice, depth }, ...deeperRows];
+            return [
+                {
+                    itemName: `Craft ${itemNameTranslator.getDisplayName(upgradeHrid)}`,
+                    amount: 1,
+                    askPrice,
+                    bidPrice,
+                    depth,
+                },
+                ...deeperRows,
+            ];
         }
 
         if (craftBid > 0 && (bidPrice === 0 || craftBid < bidPrice)) bidPrice = craftBid;
-        return [{ itemName: `Buy ${upgradeDetails.name}`, amount: 1, askPrice, bidPrice, depth }];
+        return [
+            { itemName: `Buy ${itemNameTranslator.getDisplayName(upgradeHrid)}`, amount: 1, askPrice, bidPrice, depth },
+        ];
     }
 
     /**
@@ -980,7 +990,7 @@ class TooltipPrices {
             if (foundInDrop || isSolo) {
                 const actionData = {
                     actionHrid,
-                    actionName: action.name,
+                    actionName: itemNameTranslator.getDisplayName(actionHrid),
                     dropRate,
                 };
 
@@ -1249,7 +1259,7 @@ class TooltipPrices {
             // Not learned
             return {
                 learned: false,
-                abilityName: abilityDetails.name,
+                abilityName: itemNameTranslator.getDisplayName(abilityHrid),
             };
         }
 
@@ -1262,7 +1272,7 @@ class TooltipPrices {
             return {
                 learned: true,
                 level: currentLevel,
-                abilityName: abilityDetails.name,
+                abilityName: itemNameTranslator.getDisplayName(abilityHrid),
             };
         }
 
@@ -1273,7 +1283,7 @@ class TooltipPrices {
             return {
                 learned: true,
                 level: currentLevel,
-                abilityName: abilityDetails.name,
+                abilityName: itemNameTranslator.getDisplayName(abilityHrid),
                 maxLevel: true,
             };
         }

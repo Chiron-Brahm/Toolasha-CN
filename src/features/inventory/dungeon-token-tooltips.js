@@ -267,7 +267,6 @@ class DungeonTokenTooltips {
         return Object.values(gameData.shopItemDetailMap)
             .filter((shopItem) => shopItem.costs && shopItem.costs[0]?.itemHrid === tokenHrid)
             .map((shopItem) => {
-                const itemDetails = gameData.itemDetailMap[shopItem.itemHrid];
                 const tokenCost = shopItem.costs[0].count;
 
                 const prices = getItemPrices(shopItem.itemHrid, 0);
@@ -276,7 +275,7 @@ class DungeonTokenTooltips {
                 if (!askPrice || askPrice <= 0) return null;
 
                 return {
-                    name: itemDetails?.name || t('Unknown Item'),
+                    name: itemNameTranslator.getDisplayName(shopItem.itemHrid),
                     cost: tokenCost,
                     askPrice,
                     goldPerToken: askPrice / tokenCost,
@@ -325,7 +324,7 @@ class DungeonTokenTooltips {
                 if (itemValue <= 0) return null;
 
                 return {
-                    name: itemDetails?.name || t('Unknown Item'),
+                    name: itemNameTranslator.getDisplayName(shopItem.itemHrid),
                     cost: tokenCost,
                     askPrice: itemValue,
                     goldPerToken: itemValue / tokenCost,
@@ -348,7 +347,6 @@ class DungeonTokenTooltips {
 
         return Object.values(gameData.labyrinthShopItemDetailMap)
             .map((shopItem) => {
-                const itemDetails = gameData.itemDetailMap[shopItem.itemHrid];
                 const tokenCost = shopItem.cost?.count || 0;
                 const outputCount = shopItem.outputCount || 1;
                 if (tokenCost <= 0) return null;
@@ -362,7 +360,7 @@ class DungeonTokenTooltips {
                 const totalValue = askPrice * outputCount;
 
                 return {
-                    name: itemDetails?.name || t('Unknown Item'),
+                    name: itemNameTranslator.getDisplayName(shopItem.itemHrid),
                     cost: tokenCost,
                     askPrice: totalValue,
                     goldPerToken: totalValue / tokenCost,

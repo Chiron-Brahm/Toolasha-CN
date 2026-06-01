@@ -11,6 +11,7 @@ import { buildPlayerDTO, buildGameDataPayload, applyLoadoutSnapshotToDTO } from 
 import { runLabyrinthSimulation } from '../combat-sim/combat-sim-runner.js';
 import loadoutSnapshot from './loadout-snapshot.js';
 import { t } from '../../core/i18n.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 const ROOM_DURATION = 120;
 const BASE_SKILLING_TIME = 10;
@@ -637,8 +638,7 @@ class LabyrinthClearRate {
             const avgTime = totalTime / attempts;
 
             const gameDataLocal = dataManager.getInitClientData();
-            const monsterDetail = gameDataLocal?.combatMonsterDetailMap?.[monsterHrid];
-            const monsterName = monsterDetail?.name || monsterHrid.replace('/monsters/', '').replace(/_/g, ' ');
+            const monsterName = itemNameTranslator.getDisplayName(monsterHrid);
 
             const snapshot = loadoutSnapshot.snapshots[loadoutId];
             const loadoutName = snapshot?.name || `Loadout #${loadoutId}`;

@@ -11,6 +11,29 @@ import { formatLargeNumber } from '../../utils/formatters.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
 
+// Chinese locale support: translate Chinese skill names to English for HRID construction
+const SKILL_NAME_ZH_TO_EN = {
+    挤奶: 'milking',
+    采集: 'foraging',
+    伐木: 'woodcutting',
+    奶酪: 'cheesesmithing',
+    制作: 'crafting',
+    缝纫: 'tailoring',
+    编织: 'weaving',
+    烹饪: 'cooking',
+    酿造: 'brewing',
+    炼金: 'alchemy',
+    强化: 'enhancing',
+    耐力: 'stamina',
+    智力: 'intelligence',
+    攻击: 'attack',
+    近战: 'melee',
+    防御: 'defense',
+    远程: 'ranged',
+    魔法: 'magic',
+    总等级: 'total_level',
+};
+
 class RemainingXP {
     constructor() {
         this.initialized = false;
@@ -206,8 +229,9 @@ class RemainingXP {
      * @returns {number|null} Remaining XP or null if unavailable
      */
     calculateRemainingXPFromProgressBar(progressBar, skillName) {
-        // Convert skill name to HRID
-        const skillHrid = `/skills/${skillName.toLowerCase()}`;
+        // Convert skill name to HRID (handle Chinese locale)
+        const englishName = SKILL_NAME_ZH_TO_EN[skillName] || skillName;
+        const skillHrid = `/skills/${englishName.toLowerCase()}`;
 
         // Get character skills data for level info
         const characterData = dataManager.characterData;

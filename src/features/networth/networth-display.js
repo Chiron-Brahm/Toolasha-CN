@@ -7,7 +7,6 @@
 
 import { t } from '../../core/i18n.js';
 import config from '../../core/config.js';
-import dataManager from '../../core/data-manager.js';
 import domObserver from '../../core/dom-observer.js';
 import marketAPI from '../../api/marketplace.js';
 import { networthFormatter, formatKMB } from '../../utils/formatters.js';
@@ -16,6 +15,7 @@ import expectedValueCalculator from '../market/expected-value-calculator.js';
 import { DUNGEON_CHEST_CHEST_KEYS } from '../combat-stats/combat-stats-calculator.js';
 import networthExclusionPopup from './networth-exclusion-popup.js';
 import { removeExclusion } from './networth-exclusions.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 /**
  * Header Display Component
@@ -518,7 +518,7 @@ class NetworthInventoryDisplay {
                         .map(
                             (item) => `
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 3px; color: rgba(255,255,255,0.45);">
-                            <span style="text-decoration: line-through;">${item.name}: ${networthFormatter(Math.round(item.amount))}</span>
+                            <span style="text-decoration: line-through;">${itemNameTranslator.getDisplayName(item.value) || item.name}: ${networthFormatter(Math.round(item.amount))}</span>
                              <span class="mwi-excluded-remove" data-type="${item.type}" data-value="${item.value.replace(/"/g, '&quot;')}" style="cursor: pointer; color: rgba(255,100,100,0.7); margin-left: 8px; font-size: 0.75rem;" title="${t('Remove exclusion')}">✕</span>
                         </div>
                     `
@@ -572,7 +572,7 @@ class NetworthInventoryDisplay {
 
         return breakdown
             .map((house) => {
-                return `${house.name} ${house.level}: ${networthFormatter(Math.round(house.cost))}`;
+                return `${itemNameTranslator.getDisplayName(house.hrid) || house.name} ${house.level}: ${networthFormatter(Math.round(house.cost))}`;
             })
             .join('\n');
     }
@@ -589,7 +589,7 @@ class NetworthInventoryDisplay {
 
         return breakdown
             .map((ability) => {
-                return `${ability.name}: ${networthFormatter(Math.round(ability.cost))}`;
+                return `${itemNameTranslator.getDisplayName(ability.hrid) || ability.name}: ${networthFormatter(Math.round(ability.cost))}`;
             })
             .join('\n');
     }
@@ -606,7 +606,7 @@ class NetworthInventoryDisplay {
 
         return breakdown
             .map((book) => {
-                return `${book.name} (${formatKMB(book.count)}): ${networthFormatter(Math.round(book.value))}`;
+                return `${itemNameTranslator.getDisplayName(book.itemHrid) || book.name} (${formatKMB(book.count)}): ${networthFormatter(Math.round(book.value))}`;
             })
             .join('\n');
     }
@@ -623,7 +623,7 @@ class NetworthInventoryDisplay {
 
         return breakdown
             .map((item) => {
-                return `${item.name}: ${networthFormatter(Math.round(item.value))}`;
+                return `${itemNameTranslator.getDisplayName(item.itemHrid) || item.name}: ${networthFormatter(Math.round(item.value))}`;
             })
             .join('\n');
     }
@@ -641,7 +641,7 @@ class NetworthInventoryDisplay {
         return breakdown
             .map((listing) => {
                 const typeLabel = listing.isSell ? t('Sell') : t('Buy');
-                return `${listing.name} (${typeLabel}): ${networthFormatter(Math.round(listing.value))}`;
+                return `${itemNameTranslator.getDisplayName(listing.itemHrid) || listing.name} (${typeLabel}): ${networthFormatter(Math.round(listing.value))}`;
             })
             .join('\n');
     }
@@ -671,7 +671,7 @@ class NetworthInventoryDisplay {
                     if (item.isOpenable && item.itemHrid) {
                         return this.renderOpenableItemRow(item);
                     }
-                    return `<div>${item.name} x${formatKMB(item.count)}: ${networthFormatter(Math.round(item.value))}</div>`;
+                    return `<div>${itemNameTranslator.getDisplayName(item.itemHrid) || item.name} x${formatKMB(item.count)}: ${networthFormatter(Math.round(item.value))}</div>`;
                 })
                 .join('');
 
@@ -799,7 +799,7 @@ class NetworthInventoryDisplay {
                         this.setupToggle(
                             `mwi-chest-${slug}-toggle`,
                             `mwi-chest-${slug}-detail`,
-                            `${item.name} x${formatKMB(item.count)}: ${networthFormatter(Math.round(item.value))}`
+                            `${itemNameTranslator.getDisplayName(item.itemHrid) || item.name} x${formatKMB(item.count)}: ${networthFormatter(Math.round(item.value))}`
                         );
                     }
                 }
@@ -928,14 +928,14 @@ class NetworthInventoryDisplay {
                 const setting = config.getSettingValue('profitCalc_keyPricingMode') || 'ask';
                 const keyPrices = marketAPI.getPrice(chestKeyHrid);
                 keyPrice = keyPrices?.[setting] ?? keyPrices?.ask ?? 0;
-                keyName = dataManager.getItemDetails(chestKeyHrid)?.name;
+                keyName = itemNameTranslator.getDisplayName(chestKeyHrid);
             }
             detailsHTML = this.buildChestDropsHTML(evData, keyPrice, keyName);
         }
 
         return `
             <div id="${toggleId}" style="cursor: pointer; padding: 1px 0;">
-                + ${item.name} x${formatKMB(item.count)}: ${networthFormatter(Math.round(item.value))}
+                + ${itemNameTranslator.getDisplayName(item.itemHrid) || item.name} x${formatKMB(item.count)}: ${networthFormatter(Math.round(item.value))}
             </div>
             <div id="${detailId}" style="display: none; margin-left: 16px; color: #bbb; margin-bottom: 2px;">
                 ${detailsHTML}

@@ -1010,7 +1010,6 @@ class EnhancementUI {
             return '';
         }
 
-        const gameData = dataManager.getInitClientData();
         const detailsId = `cost-details-${session.id}`;
 
         let html = '<div style="margin-top: 12px; font-size: 13px;">';
@@ -1063,7 +1062,7 @@ class EnhancementUI {
         // Protection costs
         if (hasProtection) {
             const protectionItemName = session.protectionItemHrid
-                ? gameData?.itemDetailMap?.[session.protectionItemHrid]?.name || t('Protection')
+                ? itemNameTranslator.getDisplayName(session.protectionItemHrid) || t('Protection')
                 : t('Protection');
 
             html += `

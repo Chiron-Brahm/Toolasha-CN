@@ -33,6 +33,7 @@ import { formatPercentage, timeReadableZh, formatWithSeparator, formatKMB } from
 import { calculateHouseEfficiency } from '../../utils/house-efficiency.js';
 import { stackAdditive } from '../../utils/efficiency.js';
 import { calculateExperienceMultiplier } from '../../utils/experience-parser.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 import { setReactInputValue } from '../../utils/react-input.js';
 import { calculateExpPerHour, calculateMultiLevelProgress } from '../../utils/experience-calculator.js';
 import { createCollapsibleSection } from '../../utils/ui-components.js';
@@ -398,7 +399,9 @@ class QuickInputButtons {
                             item.drinkConcentration > 0
                                 ? ` (${item.baseSpeed.toFixed(2)}% × ${(1 + item.drinkConcentration / 100).toFixed(2)})`
                                 : '';
-                        speedLines.push(`  - ${item.name}: +${item.speed.toFixed(2)}%${detailText}`);
+                        speedLines.push(
+                            `  - ${itemNameTranslator.getDisplayName(item.hrid)}: +${item.speed.toFixed(2)}%${detailText}`
+                        );
                     }
 
                     // Personal buff (Scroll of Action Speed)
@@ -444,7 +447,7 @@ class QuickInputButtons {
                                     : '';
 
                             speedLines.push(
-                                `  - ${itemDetails.name}${enhText}: +${taskSpeedBonus.toFixed(2)}%${detailText}`
+                                `  - ${itemNameTranslator.getDisplayName(trinketSlot.itemHrid)}${enhText}: +${taskSpeedBonus.toFixed(2)}%${detailText}`
                             );
                         }
                     }
@@ -959,6 +962,7 @@ class QuickInputButtons {
             if (teaInfo) {
                 const scaledSpeed = teaInfo.baseSpeed * (1 + drinkConcentration);
                 consumables.push({
+                    hrid: drink.itemHrid,
                     name: teaInfo.name,
                     baseSpeed: teaInfo.baseSpeed * 100,
                     drinkConcentration: drinkConcentration * 100,
@@ -1275,7 +1279,9 @@ class QuickInputButtons {
                 if (xpData.charmBreakdown && xpData.charmBreakdown.length > 0) {
                     for (const item of xpData.charmBreakdown) {
                         const enhText = item.enhancementLevel > 0 ? ` +${item.enhancementLevel}` : '';
-                        lines.push(`    • ${item.name}${enhText}: +${item.value.toFixed(2)}%`);
+                        lines.push(
+                            `    • ${itemNameTranslator.getDisplayName(item.hrid)}${enhText}: +${item.value.toFixed(2)}%`
+                        );
                     }
                 }
 
@@ -1283,7 +1289,9 @@ class QuickInputButtons {
                 if (xpData.wisdomBreakdown && xpData.wisdomBreakdown.length > 0) {
                     for (const item of xpData.wisdomBreakdown) {
                         const enhText = item.enhancementLevel > 0 ? ` +${item.enhancementLevel}` : '';
-                        lines.push(`    • ${item.name}${enhText}: +${item.value.toFixed(2)}%`);
+                        lines.push(
+                            `    • ${itemNameTranslator.getDisplayName(item.hrid)}${enhText}: +${item.value.toFixed(2)}%`
+                        );
                     }
                 }
 

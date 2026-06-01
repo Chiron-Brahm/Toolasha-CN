@@ -25,6 +25,7 @@ import {
     applyLoadoutSnapshotToDTO,
     calculateSimRevenue,
 } from '../combat-sim/combat-sim-adapter.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 // Lazy accessor: in production multi-bundle builds, the UI bundle loads after Combat.
 // Resolve at runtime via window.Toolasha.Combat to share the initialized instance,
 // with a fallback to the static import for dev single-bundle builds.
@@ -139,7 +140,7 @@ function calcMaterialsAvailability(materials, remaining, invMap) {
         const need = mat.a * remaining;
         const canDo = Math.floor(have / mat.a);
         if (canDo < craftable) craftable = canDo;
-        details.push({ name: mat.n, have, need, enough: have >= need });
+        details.push({ name: mat.n, hrid: mat.h, have, need, enough: have >= need });
     }
     if (craftable === Infinity) craftable = 0;
     return { craftable, details };
@@ -216,7 +217,7 @@ function renderMaterialDetails(container, details) {
     for (const d of details) {
         const line = document.createElement('div');
         line.style.color = d.enough ? '#4ade80' : config.COLOR_WARNING;
-        line.textContent = `${d.name}: ${formatKMB(d.have)} / ${formatKMB(d.need)}`;
+        line.textContent = `${itemNameTranslator.getDisplayName(d.hrid)}: ${formatKMB(d.have)} / ${formatKMB(d.need)}`;
         container.appendChild(line);
     }
 }

@@ -24,6 +24,7 @@ function getLoadoutSnapshot() {
     return window.Toolasha?.Combat?.loadoutSnapshot || loadoutSnapshotLocal;
 }
 import { formatKMB } from '../../../utils/formatters.js';
+import { itemNameTranslator } from '../../../utils/item-name-translator.js';
 import {
     loadConfig,
     saveConfig,
@@ -2247,7 +2248,7 @@ export default class CustomTabsUI {
                     // Collapse header row
                     const headerRow = document.createElement('div');
                     headerRow.className = 'toolasha-ct-search-result toolasha-ct-search-group-header';
-                    headerRow.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(details.name)}</span><span class="toolasha-ct-expand-btn">▲</span>`;
+                    headerRow.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(itemNameTranslator.getDisplayName(hrid))}</span><span class="toolasha-ct-expand-btn">▲</span>`;
                     headerRow.addEventListener('click', () => {
                         this._expandedSearchHrids.delete(hrid);
                         this._renderSearchResults(container, query, tabId, categoryFilter);
@@ -2283,7 +2284,10 @@ export default class CustomTabsUI {
                         const owned = ownedLevels?.has(level);
                         const levelRow = document.createElement('div');
                         levelRow.className = 'toolasha-ct-search-result toolasha-ct-search-level-row';
-                        const displayName = level === 0 ? details.name : `${details.name} +${level}`;
+                        const displayName =
+                            level === 0
+                                ? itemNameTranslator.getDisplayName(hrid)
+                                : `${itemNameTranslator.getDisplayName(hrid)} +${level}`;
                         const ownedDot = owned
                             ? `<span style="color:#7dcea0;margin-left:4px;" title="${t('In inventory')}">●</span>`
                             : '';
@@ -2311,7 +2315,7 @@ export default class CustomTabsUI {
 
                     const row = document.createElement('div');
                     row.className = 'toolasha-ct-search-result toolasha-ct-search-group-header';
-                    row.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(details.name)}</span>${ownedBadges ? `<span class="toolasha-ct-level-badges">${this._escHtml(ownedBadges)}</span>` : ''}<span class="toolasha-ct-expand-btn">▶</span>`;
+                    row.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(itemNameTranslator.getDisplayName(hrid))}</span>${ownedBadges ? `<span class="toolasha-ct-level-badges">${this._escHtml(ownedBadges)}</span>` : ''}<span class="toolasha-ct-expand-btn">▶</span>`;
                     // Clicking the expand button expands the group
                     row.querySelector('.toolasha-ct-expand-btn').addEventListener('click', (e) => {
                         e.stopPropagation();
@@ -2336,7 +2340,7 @@ export default class CustomTabsUI {
                 // Flat row — no enhanced variants in inventory
                 const row = document.createElement('div');
                 row.className = 'toolasha-ct-search-result';
-                row.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(details.name)}</span>`;
+                row.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(itemNameTranslator.getDisplayName(hrid))}</span>`;
                 row.addEventListener('click', () => {
                     this._config = addItem(this._config, tabId, hrid);
                     this._save();
@@ -2387,8 +2391,7 @@ export default class CustomTabsUI {
                 const enhanceMatch = hrid.match(/\+(\d+)$/);
                 const baseHrid = enhanceMatch ? hrid.slice(0, hrid.length - enhanceMatch[0].length) : hrid;
                 const level = enhanceMatch ? parseInt(enhanceMatch[1], 10) : 0;
-                const details = dataManager.getItemDetails(baseHrid);
-                const baseName = details?.name || baseHrid;
+                const baseName = itemNameTranslator.getDisplayName(baseHrid);
                 const name = level > 0 ? `${baseName} +${level}` : baseName;
                 const iconId = baseHrid.replace('/items/', '');
                 const spriteUrl = getSpriteBaseUrl();

@@ -13,6 +13,7 @@ import dom from '../../utils/dom.js';
 import domObserver from '../../core/dom-observer.js';
 import { navigateToMarketplace } from '../../utils/marketplace-tabs.js';
 import { createAutofillManager } from '../../utils/marketplace-autofill.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 /**
  * AbilityBookCalculator class handles ability book calculations in Item Dictionary
@@ -116,13 +117,23 @@ class AbilityBookCalculator {
         const titleElement = panel.querySelector('h1.ItemDictionary_title__27cTd');
         if (!titleElement) return null;
 
-        // Get the item name from title
-        const itemName = titleElement.textContent.trim().toLowerCase().replaceAll(' ', '_').replaceAll("'", '');
-
-        // Look up ability HRID from name
         const gameData = dataManager.getInitClientData();
         if (!gameData) return null;
 
+        const rawName = titleElement.textContent.trim();
+
+        // Try to resolve item HRID from Chinese display name first
+        const itemHrid = itemNameTranslator.findHridFromDomName(rawName);
+        if (itemHrid) {
+            // Convert item HRID to ability HRID (e.g., /items/cheesemaking_book → /abilities/cheesemaking)
+            const abilityHrid = itemHrid.replace('/items/', '/abilities/').replace('_book', '');
+            if (gameData.abilityDetailMap[abilityHrid]) {
+                return abilityHrid;
+            }
+        }
+
+        // Fallback for English locale: match by lowercased title
+        const itemName = rawName.toLowerCase().replaceAll(' ', '_').replaceAll("'", '');
         for (const abilityHrid of Object.keys(gameData.abilityDetailMap)) {
             if (abilityHrid.includes('/' + itemName)) {
                 return abilityHrid;

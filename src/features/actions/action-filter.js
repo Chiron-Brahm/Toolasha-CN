@@ -13,6 +13,21 @@ import { createTimerRegistry } from '../../utils/timer-registry.js';
 import actionPanelSort from './action-panel-sort.js';
 import { displayGatheringProfit, displayProductionProfit } from './profit-display.js';
 
+// Chinese locale support: translate Chinese skill names to English
+const SKILL_ZH_TO_EN = {
+    挤奶: 'milking',
+    采集: 'foraging',
+    伐木: 'woodcutting',
+    奶酪锻造: 'cheesesmithing',
+    制作: 'crafting',
+    缝纫: 'tailoring',
+    编织: 'weaving',
+    烹饪: 'cooking',
+    酿造: 'brewing',
+    炼金: 'alchemy',
+    强化: 'enhancing',
+};
+
 class ActionFilter {
     constructor() {
         this.panels = new Map(); // actionPanel → {actionName, container}
@@ -480,6 +495,17 @@ class ActionFilter {
         }
 
         return text || null;
+    }
+
+    /**
+     * Get the current skill name translated to English for game data lookups.
+     * Handles Chinese locale by mapping Chinese skill names to English.
+     * @returns {string|null} English skill name (e.g., "foraging") or null
+     */
+    getCurrentSkillEnglishName() {
+        const displayName = this.getCurrentSkillName();
+        if (!displayName) return null;
+        return SKILL_ZH_TO_EN[displayName] || displayName;
     }
 
     /**

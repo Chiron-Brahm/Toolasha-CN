@@ -43,6 +43,31 @@ const SKILLS = [
 const SKILL_NAME_TO_ID = {};
 SKILLS.forEach((s) => (SKILL_NAME_TO_ID[s.name.toLowerCase()] = s.id));
 
+// Chinese locale support: add Chinese skill name keys
+const SKILL_NAMES_ZH = {
+    total_level: '总等级',
+    milking: '挤奶',
+    foraging: '采集',
+    woodcutting: '伐木',
+    cheesesmithing: '奶酪锻造',
+    crafting: '制作',
+    tailoring: '缝纫',
+    cooking: '烹饪',
+    brewing: '酿造',
+    alchemy: '炼金',
+    enhancing: '强化',
+    stamina: '耐力',
+    intelligence: '智力',
+    attack: '攻击',
+    melee: '近战',
+    defense: '防御',
+    ranged: '远程',
+    magic: '魔法',
+};
+Object.entries(SKILL_NAMES_ZH).forEach(([id, zhName]) => {
+    SKILL_NAME_TO_ID[zhName] = id;
+});
+
 // Also map hrid → skill for reverse lookups
 const SKILL_HRID_TO_ID = {};
 SKILLS.forEach((s) => (SKILL_HRID_TO_ID[s.hrid] = s.id));

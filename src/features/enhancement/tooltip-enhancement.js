@@ -852,10 +852,8 @@ export function buildEnhancementTooltipHTML(enhancementData) {
             .filter((item) => item.quantity > 0)
             .sort((a, b) => b.level - a.level);
 
-        const gameData = dataManager.getInitClientData();
         const consumedHrid = optimalStrategy.consumedItemHrid ?? itemHrid;
-        const baseItemDetails = gameData?.itemDetailMap[consumedHrid];
-        const baseItemName = baseItemDetails?.name || consumedHrid;
+        const baseItemName = itemNameTranslator.getDisplayName(consumedHrid);
 
         const consumedRows = sortedConsumed.map((item) => {
             const prices = getItemPrices(consumedHrid, item.level);
@@ -955,11 +953,7 @@ export function buildEnhancementTooltipHTML(enhancementData) {
 
             let protName = t('Protection');
             if (optimalStrategy.protectionItemHrid) {
-                const gameData = dataManager.getInitClientData();
-                const protDetails = gameData?.itemDetailMap[optimalStrategy.protectionItemHrid];
-                if (protDetails?.name) {
-                    protName = protDetails.name;
-                }
+                protName = itemNameTranslator.getDisplayName(optimalStrategy.protectionItemHrid);
             }
             rows.push({ name: protName, count, askPrice, bidPrice });
         }

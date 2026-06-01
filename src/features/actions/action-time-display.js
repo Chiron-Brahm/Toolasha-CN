@@ -752,13 +752,11 @@ class ActionTimeDisplay {
             return;
         }
 
-        // Parse action name from DOM
-        // Format can be: "Action Name (#123)", "Action Name (123)", "Action Name: Item (123)", etc.
-        // First, strip any stats we previously appended
-        const actionNameText = this.getCleanActionName(actionNameElement);
+        // Find the matching action in cache
+        const cachedActions = dataManager.getCurrentActions();
 
-        // Check if no action is running ("Doing nothing...")
-        if (actionNameText.includes('Doing nothing')) {
+        // Check if no action is running (idle)
+        if (!cachedActions || cachedActions.length === 0) {
             this.displayElement.innerHTML = '';
             this.clearAppendedStats(actionNameElement);
             // Reconnect observer
@@ -766,12 +764,14 @@ class ActionTimeDisplay {
             return;
         }
 
+        // Parse action name from DOM
+        // Format can be: "Action Name (#123)", "Action Name (123)", "Action Name: Item (123)", etc.
+        // First, strip any stats we previously appended
+        const actionNameText = this.getCleanActionName(actionNameElement);
+
         // Extract inventory count from parentheses (e.g., "Coinify: Item (4312)" -> 4312)
         const inventoryCountMatch = actionNameText.match(/\(([\d,]+)\)$/);
         const inventoryCount = inventoryCountMatch ? parseInt(inventoryCountMatch[1].replace(/,/g, ''), 10) : null;
-
-        // Find the matching action in cache
-        const cachedActions = dataManager.getCurrentActions();
         let action;
 
         // Match against the front action (lowest ordinal = most active).
@@ -1153,7 +1153,11 @@ class ActionTimeDisplay {
         let clockTime;
         if (isToday) {
             // Today: Just show time in 12-hour format
-            clockTime = completionTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            clockTime = completionTime.toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+            });
         } else {
             // Future date: Show date and time in 12-hour format
             clockTime = completionTime.toLocaleString('zh-CN', {
@@ -1440,7 +1444,11 @@ class ActionTimeDisplay {
 
             let clockTime;
             if (isToday) {
-                clockTime = completionTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                clockTime = completionTime.toLocaleTimeString('zh-CN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                });
             } else {
                 clockTime = completionTime.toLocaleString('zh-CN', {
                     month: 'numeric',

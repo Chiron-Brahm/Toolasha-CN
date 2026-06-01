@@ -139,8 +139,9 @@ class CombatSummary {
             const combatInfoElement = document.querySelector('[class*="BattlePanel_combatInfo"]');
 
             if (combatInfoElement) {
+                // Use locale-agnostic regex: matches duration (d/h/m/s), battles count, deaths count
                 const matches = combatInfoElement.innerHTML.match(
-                    /Combat Duration: (?:(\d+)d\s*)?(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s).*?Battles: (\d+).*?Deaths: (\d+)/
+                    /(?:(\d+)d\s*)?(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s).*?(\d+).*?(\d+)/
                 );
 
                 if (matches) {

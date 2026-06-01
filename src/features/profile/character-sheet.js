@@ -1,4 +1,5 @@
 import { t } from '../../core/i18n.js';
+import dataManager from '../../core/data-manager.js';
 
 /**
  * Utilities to parse the MWI character share modal into a urpt string
@@ -93,7 +94,9 @@ const _extractGeneral = (modal) => {
 
 const _extractSkills = (modal) => {
     const statRows = [...modal.querySelectorAll('.SharableProfile_statRow__2bT8_')];
-    const combat = getNum(statRows.find((r) => r.textContent?.toLowerCase().includes('combat level'))?.textContent);
+    // Combat level is always the first stat row, or use game data for current player
+    const combat =
+        getNum(dataManager.characterData?.character?.combatLevel?.toString()) || getNum(statRows[0]?.textContent);
     const skillMap = {};
     modal.querySelectorAll('.SharableProfile_skillGrid__3vIqO .Skill_skill__3MrMc').forEach((el) => {
         const id = getId(el.querySelector('use'));

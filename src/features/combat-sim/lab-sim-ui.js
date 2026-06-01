@@ -27,6 +27,7 @@ import { SimEditor } from './sim-editor.js';
 import labyrinthClearRate from '../combat/labyrinth-clear-rate.js';
 import loadoutSnapshot from '../combat/loadout-snapshot.js';
 import { t } from '../../core/i18n.js';
+import { getMonsterDisplayName } from '../../utils/game-locale.js';
 
 const PANEL_ID = 'mwi-lab-sim-panel';
 const ACCENT = '#4a9eff';
@@ -585,7 +586,7 @@ class LabSimUI {
         for (const monster of monsters) {
             const option = document.createElement('option');
             option.value = monster.hrid;
-            option.textContent = monster.name;
+            option.textContent = getMonsterDisplayName(monster.hrid);
             select.appendChild(option);
         }
     }
@@ -894,7 +895,7 @@ class LabSimUI {
         const simHours = (simResult.simulatedTime || 0) / (3600 * 1e9) || hours;
         const winRate = attempts > 0 ? ((encounters / attempts) * 100).toFixed(2) : '0.00';
 
-        const monsterName = monsterHrid.split('/').pop().replace(/_/g, ' ');
+        const monsterName = getMonsterDisplayName(monsterHrid);
 
         container.innerHTML = `
             <div style="margin-bottom:12px;">
@@ -920,7 +921,7 @@ class LabSimUI {
         if (!container) return;
 
         const totalElapsed = formatElapsed((Date.now() - simStartTime) / 1000);
-        const monsterName = monsterHrid.split('/').pop().replace(/_/g, ' ');
+        const monsterName = getMonsterDisplayName(monsterHrid);
 
         container.innerHTML = `
             <div style="margin-bottom:12px;">

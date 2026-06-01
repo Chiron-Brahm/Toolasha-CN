@@ -12,6 +12,7 @@ import loadoutSnapshot from '../combat/loadout-snapshot.js';
 import config from '../../core/config.js';
 import marketAPI from '../../api/marketplace.js';
 import expectedValueCalculator from '../market/expected-value-calculator.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 /**
  * Extract all required game data maps from initClientData for the sim engine.
@@ -1011,10 +1012,9 @@ export function calculateDungeonKeyCosts(dropMap, getBuyPrice) {
 
     for (const [keyHrid, count] of Object.entries(keyCounts)) {
         const unitCost = getBuyPrice(keyHrid);
-        const keyDetails = dataManager.getItemDetails(keyHrid);
         costs.push({
             itemHrid: keyHrid,
-            name: keyDetails?.name || keyHrid.split('/').pop(),
+            name: itemNameTranslator.getDisplayName(keyHrid) || keyHrid.split('/').pop(),
             count,
             unitCost,
             totalCost: count * unitCost,
@@ -1079,7 +1079,7 @@ export function calculateSimRevenue(simResult, gameData, playerHrid, hours) {
         const perHour = (total / hours) * unitValue;
         revenuePerHour += perHour;
         if (unitValue > 0) {
-            const itemName = dataManager.getItemDetails(itemHrid)?.name || itemHrid.split('/').pop();
+            const itemName = itemNameTranslator.getDisplayName(itemHrid);
             dropEntries.push({ name: itemName, countPerHour: total / hours, unitValue, totalValue: perHour });
         }
     }
@@ -1093,7 +1093,7 @@ export function calculateSimRevenue(simResult, gameData, playerHrid, hours) {
         const perHour = (count / hours) * unitCost;
         costPerHour += perHour;
         if (unitCost > 0) {
-            const itemName = dataManager.getItemDetails(itemHrid)?.name || itemHrid.split('/').pop();
+            const itemName = itemNameTranslator.getDisplayName(itemHrid);
             consumableEntries.push({ name: itemName, countPerHour: count / hours, unitCost, totalCost: perHour });
         }
     }

@@ -11,6 +11,7 @@ import dataManager from '../../core/data-manager.js';
 import domObserver from '../../core/dom-observer.js';
 import { navigateToItem } from '../../utils/item-navigation.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 /**
  * Get game object via React fiber tree traversal
@@ -165,8 +166,7 @@ class CollectionNavigation {
     showPopover(tile, itemHrid) {
         this.dismissPopover();
 
-        const itemDetails = dataManager.getItemDetails(itemHrid);
-        const itemName = itemDetails?.name || itemHrid.split('/').pop().replace(/_/g, ' ');
+        const itemName = itemNameTranslator.getDisplayName(itemHrid);
 
         const rect = tile.getBoundingClientRect();
 

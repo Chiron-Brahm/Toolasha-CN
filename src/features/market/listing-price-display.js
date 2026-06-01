@@ -497,10 +497,10 @@ class ListingPriceDisplay {
         let isSell = null;
         const typeCell = row.children[1];
         if (typeCell) {
-            const text = (typeCell.textContent || '').toLowerCase();
-            if (text.includes('sell')) {
+            // Detect sell/buy from CSS class on the type cell
+            if (typeCell.querySelector('[class*="sell"]') || typeCell.querySelector('[class*="Sell"]')) {
                 isSell = true;
-            } else if (text.includes('buy')) {
+            } else if (typeCell.querySelector('[class*="buy"]') || typeCell.querySelector('[class*="Buy"]')) {
                 isSell = false;
             }
         }

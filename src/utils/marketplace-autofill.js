@@ -41,12 +41,7 @@ function handleBuyModal(modal, activeQuantity, pendingCalculation) {
 
     // Check if this is a buy modal (has a buy/confirm button)
     // A sell modal would have a sell button instead
-    const isBuyModal =
-        modal.querySelector('[class*="Button_buy"]') ||
-        modal.textContent.includes('Buy Now') ||
-        modal.textContent.includes('Buy Listing') ||
-        modal.textContent.includes('立即购买') ||
-        modal.textContent.includes('买入挂单');
+    const isBuyModal = modal.querySelector('[class*="Button_buy"]');
     if (!isBuyModal) {
         return;
     }
