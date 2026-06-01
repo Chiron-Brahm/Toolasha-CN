@@ -25,7 +25,7 @@ import { runAllZonesSimulation, cancelAllZonesSimulation } from './all-zones-run
 import { runUpgradeAnalysis } from './upgrade-advisor.js';
 import { SimEditor } from './sim-editor.js';
 import { t } from '../../core/i18n.js';
-import { getZoneDisplayName } from '../../utils/game-locale.js';
+import { getZoneDisplayName, getMonsterDisplayName } from '../../utils/game-locale.js';
 
 const PANEL_ID = 'mwi-combat-sim-panel';
 const ACCENT = '#4a9eff';
@@ -619,7 +619,11 @@ class CombatSimUI {
         for (const zone of zones) {
             const option = document.createElement('option');
             option.value = zone.hrid;
-            option.textContent = zone.isDungeon ? `[D] ${getZoneDisplayName(zone)}` : getZoneDisplayName(zone);
+            option.textContent = zone.isDungeon
+                ? `[D] ${getMonsterDisplayName(zone.hrid)}`
+                : zone.hrid.includes('/actions/combat/')
+                    ? getMonsterDisplayName(zone.hrid)
+                    : getZoneDisplayName(zone);
             zoneSelect.appendChild(option);
         }
 

@@ -94,6 +94,74 @@ export function getGuildTableColumn(theadRow, columnIndex) {
     return theadRow.children[columnIndex] || null;
 }
 
+// Chinese monster name mapping (sprite name → Chinese)
+const CN_MONSTER_NAMES = {
+    fly: '苍蝇',
+    rat: '杰瑞',
+    skunk: '臭鼬',
+    porcupine: '豪猪',
+    slimy: '史莱姆',
+    smelly_planet: '臭臭星球',
+    frog: '青蛙',
+    snake: '蛇',
+    swampy: '沼泽虫',
+    alligator: '夏洛克',
+    swamp_planet: '沼泽星球',
+    sea_snail: '蜗牛',
+    crab: '螃蟹',
+    aquahorse: '水马',
+    nom_nom: '咬咬鱼',
+    turtle: '忍者龟',
+    aqua_planet: '海洋星球',
+    jungle_sprite: '丛林精灵',
+    myconid: '蘑菇人',
+    treant: '树人',
+    centaur_archer: '半人马弓箭手',
+    jungle_planet: '丛林星球',
+    gobo_stabby: '刺刺',
+    gobo_slashy: '砍砍',
+    gobo_smashy: '锤锤',
+    gobo_shooty: '咻咻',
+    gobo_boomy: '轰轰',
+    gobo_planet: '哥布林星球',
+    eye: '独眼',
+    eyes: '叠眼',
+    veyes: '复眼',
+    planet_of_the_eyes: '眼球星球',
+    novice_sorcerer: '新手巫师',
+    ice_sorcerer: '冰霜巫师',
+    flame_sorcerer: '火焰巫师',
+    elementalist: '元素法师',
+    sorcerers_tower: '巫师之塔',
+    gummy_bear: '软糖熊',
+    panda: '熊猫',
+    black_bear: '黑熊',
+    grizzly_bear: '棕熊',
+    polar_bear: '北极熊',
+    bear_with_it: '熊熊星球',
+    magnetic_golem: '磁力魔像',
+    stalactite_golem: '钟乳石魔像',
+    granite_golem: '花岗岩魔像',
+    golem_cave: '魔像洞穴',
+    zombie: '僵尸',
+    vampire: '吸血鬼',
+    werewolf: '狼人',
+    twilight_zone: '暮光之地',
+    abyssal_imp: '深渊小鬼',
+    soul_hunter: '灵魂猎手',
+    infernal_warlock: '地狱术士',
+    infernal_abyss: '地狱深渊',
+    chimerical_den: '奇幻洞穴',
+    sinister_circus: '阴森马戏团',
+    enchanted_fortress: '秘法要塞',
+    pirate_cove: '海盗基地',
+};
+
+export function getMonsterDisplayName(monsterHrid) {
+    const spriteName = monsterHrid.split('/').pop();
+    return CN_MONSTER_NAMES[spriteName] || spriteName;
+}
+
 // Chinese zone name mapping (from game's official Chinese translation)
 const CN_ZONE_NAMES = {
     // Non-dungeon zones
