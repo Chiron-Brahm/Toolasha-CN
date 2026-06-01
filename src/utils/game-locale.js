@@ -93,3 +93,46 @@ export function getEnhancingInputs(panel) {
 export function getGuildTableColumn(theadRow, columnIndex) {
     return theadRow.children[columnIndex] || null;
 }
+
+// Chinese zone name mapping (from game's official Chinese translation)
+const CN_ZONE_NAMES = {
+    // Non-dungeon zones
+    'Farmlands': '农田',
+    'Autumn Fields': '秋田',
+    'Quiet Valley': '幽谷',
+    'Misty Marsh': '雾沼',
+    'Sunset Forest': '落日森林',
+    'Frozen Tundra': '冰原',
+    'Volcanic Crater': '火山口',
+    'Stormy Highlands': '风暴高地',
+    'Abandoned Mines': '废弃矿洞',
+    'Ancient Ruins': '远古遗迹',
+    'Enchanted Meadow': '魔法草地',
+    'Cursed Swamp': '诅咒沼泽',
+    'Dark Cavern': '暗黑洞穴',
+    'Infernal Abyss': '地狱',
+    'Celestial Peak': '天界之巅',
+    'Ethereal Realm': '虚空领域',
+    // Dungeons (prefix [D])
+    'Abandoned Docks': '废弃码头',
+    'Abandoned Warehouse': '废弃仓库',
+    'Arachnid Lair': '蜘蛛巢穴',
+    'Bandits Hideout': '强盗藏身处',
+    'Crystal Cavern': '水晶洞穴',
+    'Dark Temple': '暗黑神殿',
+    'Desecrated Monastery': '亵渎修道院',
+    'Frozen Pass': '冰封山道',
+    'Goblin Fortress': '哥布林要塞',
+    'Haunted Castle': '幽灵城堡',
+    'Lava Palace': '熔岩宫殿',
+    'Shadow Tower': '暗影之塔',
+    'Sunken Temple': '沉没神殿',
+    'Thieves Guild': '盗贼公会',
+    'Undead Crypt': '亡灵地窖',
+    'Vampire Mansion': '吸血鬼庄园',
+    'Werewolf Den': '狼人洞穴',
+};
+
+export function getZoneDisplayName(zone) {
+    return CN_ZONE_NAMES[zone.name] || zone.name;
+}

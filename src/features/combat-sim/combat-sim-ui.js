@@ -25,6 +25,7 @@ import { runAllZonesSimulation, cancelAllZonesSimulation } from './all-zones-run
 import { runUpgradeAnalysis } from './upgrade-advisor.js';
 import { SimEditor } from './sim-editor.js';
 import { t } from '../../core/i18n.js';
+import { getZoneDisplayName } from '../../utils/game-locale.js';
 
 const PANEL_ID = 'mwi-combat-sim-panel';
 const ACCENT = '#4a9eff';
@@ -618,7 +619,7 @@ class CombatSimUI {
         for (const zone of zones) {
             const option = document.createElement('option');
             option.value = zone.hrid;
-            option.textContent = zone.isDungeon ? `[D] ${zone.name}` : zone.name;
+            option.textContent = zone.isDungeon ? `[D] ${getZoneDisplayName(zone)}` : getZoneDisplayName(zone);
             zoneSelect.appendChild(option);
         }
 
@@ -739,37 +740,16 @@ class CombatSimUI {
             const label = document.createElement('label');
             label.style.cssText =
                 'display:flex; align-items:center; gap:4px; color:#ccc; font-size:11px; padding:1px 0; cursor:pointer;';
-            label.innerHTML = `<input type="checkbox" class="mwi-csim-zone-cb" data-hrid="${zone.hrid}" checked style="margin:0; cursor:pointer;"> ${zone.name}`;
-            checklist.appendChild(label);
-        }
-
-        // Check All toggle
-        checklist.querySelector(`#${checkAllId}`).addEventListener('change', (e) => {
-            checklist.querySelectorAll('.mwi-csim-zone-cb').forEach((cb) => {
-                cb.checked = e.target.checked;
-            });
+            label.innerHTML = `<input type="checkbox" class="mwi-csim-zone-cb" data-hrid="${zone.hrid}" checked style="margin:0; cursor:pointer;"> ${getZoneDisplayName(zone)}`;
         });
     }
 
-    /**
-     * Get selected zones expanded into all difficulty tiers.
-     * @returns {Array<{zoneHrid: string, difficultyTier: number, name: string}>}
-     * @private
-     */
-    _getSelectedAllZones() {
-        const checklist = this.panel?.querySelector('#mwi-csim-zone-checklist');
-        if (!checklist) return [];
-
-        const allZones = getCombatZones();
+    startAllZonesSimulation() {
+        const hours = parseFloat(this.panel?.querySelector('#mwi-csim-hours')?.value) || 100;
         const selected = [];
-
-        checklist.querySelectorAll('.mwi-csim-zone-cb:checked').forEach((cb) => {
-            const hrid = cb.dataset.hrid;
-            const zone = allZones.find((z) => z.hrid === hrid);
-            if (!zone) return;
-
-            for (let t = 0; t <= zone.maxDifficulty; t++) {
-                selected.push({ zoneHrid: zone.hrid, difficultyTier: t, name: zone.name });
+        for (const zone of getCombatZones()) {
+            for (let t = 1; t <= zone.maxTier; t++) {
+                selected.push({ zoneHrid: zone.hrid, difficultyTier: t, name: getZoneDisplayName(zone) });
             }
         });
 
@@ -827,7 +807,7 @@ class CombatSimUI {
                 const encounters = (sim.encounters || 0) / simHours;
 
                 return {
-                    zone: r.zone.name,
+                    zone: getZoneDisplayName(r.zone),
                     tier: r.zone.difficultyTier,
                     encounters,
                     deaths: playerDeaths,
@@ -1262,9 +1242,9 @@ class CombatSimUI {
                         const cellStyle = 'padding:2px 4px; font-size:10px; white-space:nowrap;';
 
                         if (col.key === 'zone') {
-                            display = row.zone.name;
+                            display = row.zone;
                         } else if (col.key === 'tier') {
-                            display = String(row.zone.difficultyTier);
+                            display = String(row.tier);
                         } else if (col.key === 'itemsPerHour') {
                             display = row.itemsPerHour.toFixed(3);
                             highlight = row.itemsPerHour === bestItemsPerHour;
