@@ -155,6 +155,24 @@ const CN_MONSTER_NAMES = {
     sinister_circus: '阴森马戏团',
     enchanted_fortress: '秘法要塞',
     pirate_cove: '海盗基地',
+    // House rooms
+    'Archery Range': '射箭场',
+    Armory: '军械库',
+    Brewery: '冲泡坊',
+    'Dairy Barn': '奶牛棚',
+    'Dining Room': '餐厅',
+    Dojo: '道场',
+    Forge: '锻造间',
+    Garden: '花园',
+    Gym: '健身房',
+    Kitchen: '厨房',
+    Laboratory: '实验室',
+    Library: '图书馆',
+    'Log Shed': '木棚',
+    'Mystical Study': '神秘研究室',
+    Observatory: '天文台',
+    'Sewing Parlor': '缝纫室',
+    Workshop: '工作间',
 };
 
 export function getMonsterDisplayName(monsterHrid) {

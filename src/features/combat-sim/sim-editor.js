@@ -455,6 +455,7 @@ export class SimEditor {
 
             const detail = abilityDetailMap[ability.hrid];
             const name = detail?.name || ability.hrid.split('/').pop();
+            // Cant translate abilities (game data names only, no Chinese equivalent in DOM)
 
             html += `<div style="display:flex; align-items:center; gap:6px; padding:2px 0; font-size:12px;">`;
             html += `<span style="color:#888; width:50px; flex-shrink:0;">${slotLabel}</span>`;
@@ -1121,7 +1122,7 @@ export class SimEditor {
 
         for (const hrid of roomHrids) {
             const room = houseRoomDetailMap[hrid];
-            const name = room.name || hrid.split('/').pop();
+            const name = getZoneDisplayName(room);
             const level = dto.houseRooms[hrid] || 0;
             html += `<div style="display:flex; align-items:center; gap:6px; font-size:12px;">`;
             html += `<span style="color:#888; width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${name}">${name}</span>`;
