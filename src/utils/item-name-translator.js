@@ -6,6 +6,7 @@
 
 import dataManager from '../core/data-manager.js';
 import storage from '../core/storage.js';
+import itemNamesZh from './item-names-zh.js';
 
 const STORAGE_KEY = 'Toolasha_cnItemNames';
 const CACHE_VERSION = 2;
@@ -39,224 +40,30 @@ class ItemNameTranslator {
         if (this.isLoaded) return;
         try {
             const saved = await storage.get(STORAGE_KEY, 'settings');
-            // Invalidate old cache versions (v1 didn't have bulk import)
             if (saved && typeof saved === 'object' && saved._version === CACHE_VERSION && Object.keys(saved).length > 1) {
                 this.cnNames = saved;
             }
-        } catch (error) {
-            console.warn('[ItemNameTranslator] Failed to load names:', error);
-        }
+        } catch (_) { /* ignore */ }
         this.isLoaded = true;
 
-        // If cache is empty or outdated, try bulk import from game i18n data
+        // Bulk import from static Chinese name mapping (Edible Tools translations)
         if (Object.keys(this.cnNames).length <= 1) {
-            this._bulkImportFromGameI18n();
+            this._importStaticMapping();
         }
     }
 
-    _bulkImportFromGameI18n() {
-        // Try to fetch game's i18n translation JSON from server
-        const urls = [
-            '/locales/zh-CN/translation.json',
-            '/locales/zh/translation.json',
-            '/i18n/zh.json',
-        ];
-        const tryFetch = (index) => {
-            if (index >= urls.length) return;
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', urls[index]);
-            xhr.onload = () => {
-                if (xhr.status === 200) {
-                    try {
-                        const data = JSON.parse(xhr.responseText);
-                        if (data && typeof data === 'object') {
-                            const initData = dataManager.getInitClientData();
-                            if (initData?.itemDetailMap) {
-                                let count = 0;
-                                for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                                    const cnName = data[item.name] || data[item.name.toLowerCase()];
-                                    if (cnName && typeof cnName === 'string' && CJK_REGEX.test(cnName) && !this.cnNames[hrid]) {
-                                        this.cnNames[hrid] = cnName;
-                                        count++;
-                                    }
-                                }
-                                if (count > 0) this._scheduleSave();
-                            }
-                        }
-                    } catch (_) { tryFetch(index + 1); }
-                } else { tryFetch(index + 1); }
-            };
-            xhr.onerror = () => tryFetch(index + 1);
-            xhr.send();
-        };
-        tryFetch(0);
-    }
-
-    getDisplayName(itemHrid) {
-        // 1. Direct cache hit
-        const cnName = this.cnNames[itemHrid];
-        if (cnName) return cnName;
-
-        // 2. Active lookup: find this item's SVG in the DOM and capture its Chinese aria-label
-        const spriteId = itemHrid.split('/').pop();
-        const svg = document.querySelector(`svg use[href$="#${spriteId}"]`)?.closest('svg');
-        if (svg) {
-            const ariaLabel = svg.getAttribute('aria-label');
-            if (ariaLabel && CJK_REGEX.test(ariaLabel)) {
-                this.cnNames[itemHrid] = ariaLabel;
-                this._scheduleSave();
-                return ariaLabel;
-            }
-        }
-
-        // 3. One-time DOM scan
-        if (!this._didInitialScan) {
-            this._didInitialScan = true;
-            this._scanDomNow();
-            const fresh = this.cnNames[itemHrid];
-            if (fresh) return fresh;
-        }
-
-        // 4. Fallback to English
-        const enName = dataManager.getItemDetails(itemHrid)?.name;
-        if (enName) return enName;
-        return itemHrid.split('/').pop().replace(/_/g, ' ');
-    }
-
-    _tryCaptureFromElement(el) {
-        if (!el) return;
-        const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
-        if (!text || !CJK_REGEX.test(text)) return;
-        // Strip parenthetical quantities like "(10个)" or "(10)"
-        const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').replace(/\s*\(\d+个?\)\s*$/, '').trim();
-        if (!baseName) return;
-
-        // Already cached
-        for (const cnName of Object.values(this.cnNames)) {
-            if (cnName === baseName) return;
-        }
-
-        // Method 1: Extract HRID from SVG sprite href
-        const svg = el.closest('svg') || el.querySelector('svg');
-        if (svg) {
-            const use = svg.querySelector('use');
-            if (use) {
-                const href = use.getAttribute('href') || '';
-                const spriteName = href.split('#').pop();
-                if (spriteName) {
-                    const hrid = `/items/${spriteName}`;
-                    if (dataManager.getItemDetails(hrid)) {
-                        this.cnNames[hrid] = baseName;
-                        this._scheduleSave();
-                        return;
-                    }
-                }
-            }
-            // Method 2: Try aria-label → item name lookup in game data
-            const ariaLabel = svg.getAttribute('aria-label') || '';
-            if (ariaLabel) {
-                this._ensureHRIDMaps();
-                if (this._enToHrid) {
-                    for (const [enName, hrid] of this._enToHrid) {
-                        // Try fuzzy: CN text might match English name parts
-                        const enLower = enName.toLowerCase().replace(/\s+/g, ' ');
-                        const cnLower = baseName.toLowerCase();
-                        if (enLower === cnLower || enLower.includes(cnLower) || cnLower.includes(enLower)) {
-                            continue; // no match - different languages
-                        }
-                        // Try matching by word count heuristic
-                        const enWords = enLower.split(/\s+/);
-                        if (enWords.length >= 2 && cnLower.length >= 2) {
-                            // Skip - can't match with just heuristic
-                        }
-                    }
-                }
-            }
-        }
-
-        // Method 3: Try existing English name lookup
-        const hrid = this.findHridFromDomName(baseName);
-        if (hrid) {
-            this.cnNames[hrid] = baseName;
-            this._scheduleSave();
-            return;
-        }
-
-        // Method 4: Fuzzy match against all game data item names
-        // For items without SVG use elements (coins, teas, bags)
-        this._ensureHRIDMaps();
-        if (this._enToHrid && this._hridToEn) {
-            for (const [h, enName] of this._hridToEn) {
-                if (enName === baseName) { this.cnNames[h] = baseName; this._scheduleSave(); return; }
-            }
-            // No exact English match - this is expected for Chinese names with no sprite
-        }
-
-        const freshName = this.cnNames[itemHrid];
-        if (freshName) return freshName;
-
-        const itemDetails = dataManager.getItemDetails(itemHrid);
-        if (itemDetails?.name) return itemDetails.name;
-
-        return itemHrid.split('/').pop().replace(/_/g, ' ');
-    }
-
-    findHridFromDomName(domName) {
-        if (!domName) return null;
-        const baseName = domName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-        if (!this._ensureHRIDMaps() || !this._enToHrid) return null;
-
-        // 1. Direct English name match
-        let hrid = this._enToHrid.get(baseName);
-        if (hrid) return hrid;
-        // ★ / (R) variants
-        const starVariant = baseName.replace(/\s*\(R\)$/g, ' ★');
-        hrid = this._enToHrid.get(starVariant);
-        if (hrid) return hrid;
-        const rVariant = baseName.replace(/\s*★$/g, ' (R)').replace(/\s+/g, ' ').trim();
-        hrid = this._enToHrid.get(rVariant);
-        if (hrid) return hrid;
-
-        // 2. Check cached Chinese names
-        for (const [cachedHrid, cnName] of Object.entries(this.cnNames)) {
-            if (cnName === baseName) return cachedHrid;
-        }
-
-        return null;
-    }
-
-    _ensureHRIDMaps() {
+    _importStaticMapping() {
         const initData = dataManager.getInitClientData();
-        if (!initData?.itemDetailMap) {
-            this._enToHrid = null;
-            this._hridToEn = null;
-            return false;
+        if (!initData?.itemDetailMap) return;
+        let count = 0;
+        for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
+            const cnName = itemNamesZh[item.name];
+            if (cnName && !this.cnNames[hrid]) {
+                this.cnNames[hrid] = cnName;
+                count++;
+            }
         }
-        const source = initData.itemDetailMap;
-        if (this._hridToEnSource === source) return true;
-        this._enToHrid = new Map();
-        this._hridToEn = new Map();
-        for (const [hrid, item] of Object.entries(source)) {
-            this._enToHrid.set(item.name, hrid);
-            this._hridToEn.set(hrid, item.name);
-        }
-        this._hridToEnSource = source;
-        return true;
-    }
-
-    captureFromDOM(element, itemHrid) {
-        if (!element || !itemHrid) return;
-        const text = (element.textContent || element.getAttribute('aria-label') || '').trim();
-        if (!text) return;
-        const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-        if (!baseName) return;
-
-        if (!CJK_REGEX.test(baseName)) return;
-
-        if (this.cnNames[itemHrid] === baseName) return;
-
-        this.cnNames[itemHrid] = baseName;
-        this._scheduleSave();
+        if (count > 0) this._scheduleSave();
     }
 
     _scheduleSave() {
