@@ -52,6 +52,17 @@ class ItemNameTranslator {
         }
     }
 
+    captureFromDOM(element, itemHrid) {
+        if (!element || !itemHrid) return;
+        const text = (element.textContent || element.getAttribute('aria-label') || '').trim();
+        if (!text || !CJK_REGEX.test(text)) return;
+        const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+        if (!baseName) return;
+        if (this.cnNames[itemHrid] === baseName) return;
+        this.cnNames[itemHrid] = baseName;
+        this._scheduleSave();
+    }
+
     _importStaticMapping() {
         const initData = dataManager.getInitClientData();
         if (!initData?.itemDetailMap) return;
