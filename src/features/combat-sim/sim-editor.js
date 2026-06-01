@@ -13,6 +13,8 @@ import {
 import loadoutSnapshot from '../combat/loadout-snapshot.js';
 import { getLoadoutSortOrder } from '../combat/loadout-sort.js';
 import { t } from '../../core/i18n.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
+import { getZoneDisplayName } from '../../utils/game-locale.js';
 
 const ACCENT = '#4a9eff';
 const ACCENT_BG = 'rgba(74, 158, 255, 0.12)';
@@ -406,7 +408,7 @@ export class SimEditor {
             }
 
             const item = itemDetailMap[equip.hrid];
-            const name = item?.name || equip.hrid.split('/').pop();
+            const name = itemNameTranslator.getDisplayName(equip.hrid);
 
             html += `<div style="display:flex; align-items:center; gap:6px; padding:2px 0; font-size:12px;">`;
             html += `<span style="color:#888; width:70px; flex-shrink:0;">${label}</span>`;
@@ -499,7 +501,7 @@ export class SimEditor {
         html += '<div style="color:#888; font-size:11px; margin-bottom:3px;">' + t('Food') + '</div>';
         for (let i = 0; i < 3; i++) {
             const item = dto.food[i];
-            const name = item ? itemDetailMap[item.hrid]?.name || item.hrid.split('/').pop() : t('Empty');
+            const name = item ? itemNameTranslator.getDisplayName(item.hrid) : t('Empty');
             const nameColor = item ? '#e0e0e0' : '#555';
             html += '<div style="display:flex; align-items:center; gap:6px; padding:2px 0; font-size:12px;">';
             html += '<span style="color:#666; width:16px; flex-shrink:0;">' + (i + 1) + '</span>';
@@ -521,7 +523,7 @@ export class SimEditor {
         html += '<div style="color:#888; font-size:11px; margin-bottom:3px; margin-top:6px;">' + t('Drinks') + '</div>';
         for (let i = 0; i < 3; i++) {
             const item = dto.drinks[i];
-            const name = item ? itemDetailMap[item.hrid]?.name || item.hrid.split('/').pop() : t('Empty');
+            const name = item ? itemNameTranslator.getDisplayName(item.hrid) : t('Empty');
             const nameColor = item ? '#e0e0e0' : '#555';
             html += '<div style="display:flex; align-items:center; gap:6px; padding:2px 0; font-size:12px;">';
             html += '<span style="color:#666; width:16px; flex-shrink:0;">' + (i + 1) + '</span>';
