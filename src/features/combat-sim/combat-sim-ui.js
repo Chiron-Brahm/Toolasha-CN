@@ -741,7 +741,8 @@ class CombatSimUI {
             label.style.cssText =
                 'display:flex; align-items:center; gap:4px; color:#ccc; font-size:11px; padding:1px 0; cursor:pointer;';
             label.innerHTML = `<input type="checkbox" class="mwi-csim-zone-cb" data-hrid="${zone.hrid}" checked style="margin:0; cursor:pointer;"> ${getZoneDisplayName(zone)}`;
-        });
+            checklist.appendChild(label);
+        }
     }
 
     startAllZonesSimulation() {
@@ -751,7 +752,7 @@ class CombatSimUI {
             for (let t = 1; t <= zone.maxTier; t++) {
                 selected.push({ zoneHrid: zone.hrid, difficultyTier: t, name: getZoneDisplayName(zone) });
             }
-        });
+        }
 
         return selected;
     }
