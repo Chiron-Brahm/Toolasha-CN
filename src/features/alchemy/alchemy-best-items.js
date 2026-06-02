@@ -15,6 +15,7 @@ import assetManifest from '../../utils/asset-manifest.js';
 import { isAlchemyPanel, getAlchemyTab } from '../../utils/game-locale.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
 import { navigateToMarketplace } from '../../utils/marketplace-tabs.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 const ALCHEMY_TYPES = ['coinify', 'decompose', 'transmute'];
 

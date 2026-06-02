@@ -132,7 +132,7 @@ if (isCombatSimulatorPage()) {
 
     // Expose minimal user-facing API
     const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-
+    const toolashaRoot = targetWindow.Toolasha || {};
     targetWindow.Toolasha = toolashaRoot;
 
     toolashaRoot.version = '2.59.4';

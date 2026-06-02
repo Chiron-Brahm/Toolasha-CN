@@ -981,6 +981,7 @@ class SettingsUI {
             const titleEl = document.querySelector('[class*="SettingsPanel_title"]');
             if (titleEl) {
                 if (targetButton.id === 'toolasha-settings-tab') {
+                    const ver = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window).Toolasha?.version || '';
                     titleEl.textContent = `⚙️ Toolasha ${ver ? `v${ver} ` : ''}Settings (refresh to apply)`;
                 } else {
                     titleEl.textContent = t('Settings');
