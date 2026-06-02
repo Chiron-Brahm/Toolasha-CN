@@ -36,7 +36,7 @@ class CombatBattleCounter {
         this.newBattleHandler = (data) => this._onNewBattle(data);
         webSocketHook.on('new_battle', this.newBattleHandler);
 
-        this._onActionsUpdated = () => this._checkCombatEnded();
+        this._onActionsUpdated = (data) => this._checkCombatEnded(data);
         dataManager.on('actions_updated', this._onActionsUpdated);
 
         this.unregisterObserver = domObserver.onClass('CombatBattleCounter', 'Header_actionName', () =>
@@ -46,8 +46,20 @@ class CombatBattleCounter {
         this.initialized = true;
     }
 
-    _checkCombatEnded() {
-        if (!this._isInDungeon() && !this._isInCombat()) {
+    _checkCombatEnded(data) {
+        if (this.battleId === 0) return;
+
+        const combatEnded = data.endCharacterActions?.some(
+            (a) => a.isDone && a.actionHrid?.startsWith('/actions/combat/')
+        );
+        const hasCombatAction = data.endCharacterActions?.some(
+            (a) => !a.isDone && a.actionHrid?.startsWith('/actions/combat/')
+        );
+        const hasNewNonCombatAction = data.endCharacterActions?.some(
+            (a) => !a.isDone && !a.actionHrid?.startsWith('/actions/combat/') && a.currentCount === 0
+        );
+
+        if (combatEnded || (hasNewNonCombatAction && !hasCombatAction)) {
             this.battleId = 0;
             this.currentWave = 0;
             this.isDungeon = false;
@@ -55,22 +67,15 @@ class CombatBattleCounter {
         }
     }
 
-    _isInCombat() {
-        const actions = dataManager.getCurrentActions();
-        if (!actions || actions.length === 0) return false;
-        const active = actions[0];
-        return active.actionHrid?.startsWith('/actions/combat/') && !active.isDone;
-    }
-
-    _isInDungeon() {
-        if (!this._isInCombat()) return false;
-        const active = dataManager.getCurrentActions()[0];
-        return dataManager.getActionDetails(active.actionHrid)?.combatZoneInfo?.isDungeon === true;
-    }
-
     _onNewBattle(data) {
         this.battleId = data.battleId;
-        if (this._isInDungeon()) {
+        const actions = dataManager.getCurrentActions();
+        const combatAction = actions.find((a) => a.actionHrid?.startsWith('/actions/combat/') && !a.isDone);
+        const isDungeon = combatAction
+            ? dataManager.getActionDetails(combatAction.actionHrid)?.combatZoneInfo?.isDungeon === true
+            : false;
+
+        if (isDungeon) {
             this.isDungeon = true;
             this.currentWave = data.wave ?? 0;
         } else {
@@ -80,8 +85,7 @@ class CombatBattleCounter {
     }
 
     _injectOrUpdate() {
-        // Only show counter while in combat
-        if (!this._isInCombat()) {
+        if (this.battleId === 0) {
             document.getElementById(COUNTER_ID)?.remove();
             return;
         }
@@ -99,9 +103,7 @@ class CombatBattleCounter {
         }
 
         if (this.isDungeon) {
-            el.textContent = `· ${t('Wave ')}${this.currentWave} · ${t('Battle #')}${this.battleId}`;
-        } else if (this.battleId > 0) {
-            el.textContent = `· ${t('Battle #')}${this.battleId}`;
+            el.textContent = `· Wave ${this.currentWave} · Battle #${this.battleId}`;
         }
     }
 

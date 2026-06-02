@@ -133,22 +133,20 @@ if (isCombatSimulatorPage()) {
     // Expose minimal user-facing API
     const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
-    targetWindow.Toolasha = {
-        version: '2.58.6',
+    targetWindow.Toolasha = toolashaRoot;
 
-        // Feature toggle API (for users to manage settings via console)
-        features: {
-            list: () => config.getFeaturesByCategory(),
-            enable: (key) => config.setFeatureEnabled(key, true),
-            disable: (key) => config.setFeatureEnabled(key, false),
-            toggle: (key) => config.toggleFeature(key),
-            status: (key) => config.isFeatureEnabled(key),
-            info: (key) => config.getFeatureInfo(key),
-        },
+    toolashaRoot.version = '2.59.4';
 
-        // Guild XP data management
-        guild: {
-            resetMemberXP: () => guildXPTrackerFeature.resetMemberData(),
-        },
+    toolashaRoot.features = {
+        list: () => config.getFeaturesByCategory(),
+        enable: (key) => config.setFeatureEnabled(key, true),
+        disable: (key) => config.setFeatureEnabled(key, false),
+        toggle: (key) => config.toggleFeature(key),
+        status: (key) => config.isFeatureEnabled(key),
+        info: (key) => config.getFeatureInfo(key),
+    };
+
+    toolashaRoot.guild = {
+        resetMemberXP: () => guildXPTrackerFeature.resetMemberData(),
     };
 }

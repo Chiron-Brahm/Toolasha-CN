@@ -31,6 +31,7 @@ class AlchemyProfitDisplay {
         this.equipmentChangeHandler = null;
         this.sectionExpanded = new Map(); // Persistent expand/collapse state across rebuilds
         this.cachedInputField = null; // Cache input field since it gets removed when action starts
+        this._alchemyTargetLevel = null;
     }
 
     /**
@@ -277,52 +278,29 @@ class AlchemyProfitDisplay {
             const drops = await alchemyProfit.extractDrops(actionHrid);
             const requirements = await alchemyProfit.extractRequirements();
 
-            // Determine action type from actionHrid (most reliable) or DOM tab state
+            // Determine action type from DOM tab state (primary) or actionHrid (fallback).
+            // Tab detection is preferred because getCurrentActionHrid() returns ANY running
+            // alchemy action across all slots, which may differ from the tab being viewed.
             let isCoinify = false;
             let isTransmute = false;
             let isDecompose = false;
 
-            if (actionHrid) {
-                // Player is actively performing an alchemy action - use actionHrid
+            const tabContainer = document.querySelector('[class*="AlchemyPanel_tabsComponentContainer"]');
+            const selectedTab = tabContainer?.querySelector('[role="tab"][aria-selected="true"]');
+            const tabText = selectedTab?.textContent?.trim()?.toLowerCase() || '';
+
+            if (tabText.includes('coinify')) {
+                isCoinify = true;
+            } else if (tabText.includes('transmute')) {
+                isTransmute = true;
+            } else if (tabText.includes('decompose')) {
+                isDecompose = true;
+            } else if (actionHrid) {
                 isCoinify = actionHrid === '/actions/alchemy/coinify';
                 isTransmute = actionHrid === '/actions/alchemy/transmute';
                 isDecompose = actionHrid === '/actions/alchemy/decompose';
             } else {
-                // Not actively performing - check which tab is selected in the DOM
-                // Use [role="tab"] selector which reliably matches MUI tab elements
-                const tabContainer = document.querySelector('[class*="AlchemyPanel_tabsComponentContainer"]');
-                const tablist = tabContainer?.querySelector('[role="tablist"]');
-                if (tablist) {
-                    const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
-                    const selectedIdx = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
-                    // Alchemy tabs order: [Coinify=0, Transmute=1, Decompose=2]
-                    if (selectedIdx === 0) {
-                        isCoinify = true;
-                    } else if (selectedIdx === 1) {
-                        isTransmute = true;
-                    } else if (selectedIdx === 2) {
-                        isDecompose = true;
-                    }
-                }
-
-                if (!isCoinify && !isTransmute && !isDecompose) {
-                    // Final fallback: use drop/item data heuristics
-                    isCoinify = drops.length > 0 && drops[0].itemHrid === '/items/coin';
-                    if (!isCoinify && requirements && requirements.length > 0) {
-                        const reqItemHrid = requirements[0].itemHrid;
-                        const reqItemDetails = dataManager.getItemDetails(reqItemHrid);
-                        const hasDecompose =
-                            Array.isArray(reqItemDetails?.alchemyDetail?.decomposeItems) &&
-                            reqItemDetails.alchemyDetail.decomposeItems.length > 0;
-                        const hasTransmute = !!reqItemDetails?.alchemyDetail?.transmuteDropTable;
-                        // If both exist, default to transmute; if only one, use that one
-                        if (hasDecompose && !hasTransmute) {
-                            isDecompose = true;
-                        } else if (hasTransmute) {
-                            isTransmute = true;
-                        } else if (hasDecompose) {
-                            isDecompose = true;
-                        }
+                // Final fallback: use drop/item data heuristics
                     }
                 }
             }
@@ -1009,9 +987,9 @@ class AlchemyProfitDisplay {
         if (!gameData || !itemHrid) return 0;
 
         const itemDetails = gameData.itemDetailMap?.[itemHrid];
-        if (!itemDetails || !itemDetails.itemLevel) return 0;
+        if (!itemDetails) return 0;
 
-        const baseXP = this.getAlchemyBaseXP(actionType, itemDetails.itemLevel);
+        const baseXP = this.getAlchemyBaseXP(actionType, itemDetails.itemLevel || 0);
         if (baseXP === 0) return 0;
 
         // Calculate wisdom multiplier
@@ -1318,6 +1296,8 @@ class AlchemyProfitDisplay {
             lines.push('');
 
             // Target level calculator
+            const savedTarget = this._alchemyTargetLevel;
+            const initialTargetLevel = savedTarget && savedTarget > currentLevel ? savedTarget : nextLevel;
             lines.push(
                 `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">Target Level Calculator:</span>`
             );
@@ -1326,7 +1306,7 @@ class AlchemyProfitDisplay {
                 <input
                     type="number"
                     id="mwi-alchemy-target-level-input"
-                    value="${nextLevel}"
+                    value="${initialTargetLevel}"
                     min="${nextLevel}"
                     max="200"
                     style="
@@ -1359,6 +1339,7 @@ class AlchemyProfitDisplay {
 
             const updateTargetLevel = () => {
                 const targetLevelValue = parseInt(targetLevelInput.value);
+                this._alchemyTargetLevel = targetLevelValue;
                 if (targetLevelValue > currentLevel && targetLevelValue <= 200) {
                     const result = calculateMultiLevelProgress(
                         currentLevel,
@@ -1379,6 +1360,10 @@ class AlchemyProfitDisplay {
 
             targetLevelInput.addEventListener('input', updateTargetLevel);
             targetLevelInput.addEventListener('change', updateTargetLevel);
+
+            if (initialTargetLevel !== nextLevel) {
+                updateTargetLevel();
+            }
 
             // Create summary for collapsed view
             const summary = `${timeReadableZh(timeNeeded)} to Level ${nextLevel}`;
