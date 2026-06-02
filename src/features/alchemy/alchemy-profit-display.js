@@ -301,6 +301,20 @@ class AlchemyProfitDisplay {
                 isDecompose = actionHrid === '/actions/alchemy/decompose';
             } else {
                 // Final fallback: use drop/item data heuristics
+                isCoinify = drops.length > 0 && drops[0].itemHrid === '/items/coin';
+                if (!isCoinify && requirements && requirements.length > 0) {
+                    const reqItemHrid = requirements[0].itemHrid;
+                    const reqItemDetails = dataManager.getItemDetails(reqItemHrid);
+                    const hasDecompose =
+                        Array.isArray(reqItemDetails?.alchemyDetail?.decomposeItems) &&
+                        reqItemDetails.alchemyDetail.decomposeItems.length > 0;
+                    const hasTransmute = !!reqItemDetails?.alchemyDetail?.transmuteDropTable;
+                    if (hasDecompose && !hasTransmute) {
+                        isDecompose = true;
+                    } else if (hasTransmute) {
+                        isTransmute = true;
+                    } else if (hasDecompose) {
+                        isDecompose = true;
                     }
                 }
             }
