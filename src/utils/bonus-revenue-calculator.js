@@ -1,0 +1,176 @@
+/**
+ * Bonus Revenue Calculator Utility
+ * Calculates revenue from essence and rare find drops
+ * Shared by both gathering and production profit calculators
+ */
+
+import marketAPI from '../api/marketplace.js';
+import expectedValueCalculator from '../features/market/expected-value-calculator.js';
+import dataManager from '../core/data-manager.js';
+import { parseEssenceFindBonus, parseRareFindBonus, parseRareFindBreakdown } from './equipment-parser.js';
+import { itemNameTranslator } from './item-name-translator.js';
+import { calculateHouseRareFind } from './house-efficiency.js';
+
+/**
+ * Calculate bonus revenue from essence and rare find drops
+ * @param {Object} actionDetails - Action details from game data
+ * @param {number} actionsPerHour - Base actions per hour (efficiency not applied)
+ * @param {Map} characterEquipment - Equipment map
+ * @param {Object} itemDetailMap - Item details map
+ * @returns {Object} Bonus revenue data with essence and rare find drops
+ */
+export function calculateBonusRevenue(actionDetails, actionsPerHour, characterEquipment, itemDetailMap) {
+    // Get Essence Find bonus from equipment
+    const essenceFindBonus = parseEssenceFindBonus(characterEquipment, itemDetailMap);
+
+    // Get Rare Find bonus from BOTH equipment and house rooms
+    const equipmentRareFindBonus = parseRareFindBonus(characterEquipment, actionDetails.type, itemDetailMap);
+    const houseRareFindBonus = calculateHouseRareFind();
+    const achievementRareFindBonus =
+        dataManager.getAchievementBuffFlatBoost(actionDetails.type, '/buff_types/rare_find') * 100;
+    const personalRareFindBonus =
+        dataManager.getPersonalBuffFlatBoost(actionDetails.type, '/buff_types/rare_find') * 100;
+    const rareFindBonus =
+        equipmentRareFindBonus + houseRareFindBonus + achievementRareFindBonus + personalRareFindBonus;
+    const equipmentRareFindItems = parseRareFindBreakdown(characterEquipment, actionDetails.type, itemDetailMap);
+    const rareFindBreakdown = {
+        equipment: equipmentRareFindBonus,
+        equipmentItems: equipmentRareFindItems,
+        house: houseRareFindBonus,
+        achievement: achievementRareFindBonus,
+        personal: personalRareFindBonus,
+    };
+
+    const bonusDrops = [];
+    let totalBonusRevenue = 0;
+    let hasMissingPrices = false;
+
+    // Process essence drops
+    if (actionDetails.essenceDropTable && actionDetails.essenceDropTable.length > 0) {
+        for (const drop of actionDetails.essenceDropTable) {
+            const itemDetails = itemDetailMap[drop.itemHrid];
+            if (!itemDetails) continue;
+
+            // Calculate average drop count
+            const avgCount = (drop.minCount + drop.maxCount) / 2;
+
+            // Apply Essence Find multiplier to drop rate
+            const finalDropRate = drop.dropRate * (1 + essenceFindBonus / 100);
+
+            // Expected drops per hour
+            const dropsPerHour = actionsPerHour * finalDropRate * avgCount;
+
+            // Get price: Check if openable container (use EV), otherwise market price
+            let itemPrice = 0;
+            let isMissingPrice = false;
+            if (itemDetails.isOpenable) {
+                // Use expected value for openable containers (with on-demand fallback)
+                itemPrice =
+                    expectedValueCalculator.getCachedValue(drop.itemHrid) ||
+                    expectedValueCalculator.calculateSingleContainer(drop.itemHrid) ||
+                    0;
+                if (itemPrice === 0) {
+                    console.warn(`[BonusRevenue] EV lookup returned 0 for openable container: ${drop.itemHrid}`);
+                    isMissingPrice = true;
+                }
+            } else {
+                // Use market price for regular items
+                const price = marketAPI.getPrice(drop.itemHrid, 0);
+                itemPrice = price?.bid ?? 0; // Use bid price (instant sell)
+                isMissingPrice = price?.bid === null || price?.bid === undefined;
+            }
+
+            // Revenue per hour from this drop
+            const revenuePerHour = dropsPerHour * itemPrice;
+            const dropsPerAction = actionsPerHour > 0 ? dropsPerHour / actionsPerHour : 0;
+            const revenuePerAction = actionsPerHour > 0 ? revenuePerHour / actionsPerHour : 0;
+
+            bonusDrops.push({
+                itemHrid: drop.itemHrid,
+                itemName: itemNameTranslator.getDisplayName(drop.itemHrid),
+                dropRate: finalDropRate,
+                dropsPerHour,
+                dropsPerAction,
+                priceEach: itemPrice,
+                revenuePerHour,
+                revenuePerAction,
+                type: 'essence',
+                missingPrice: isMissingPrice,
+            });
+
+            totalBonusRevenue += revenuePerHour;
+            if (isMissingPrice) {
+                hasMissingPrices = true;
+            }
+        }
+    }
+
+    // Process rare find drops
+    if (actionDetails.rareDropTable && actionDetails.rareDropTable.length > 0) {
+        for (const drop of actionDetails.rareDropTable) {
+            const itemDetails = itemDetailMap[drop.itemHrid];
+            if (!itemDetails) continue;
+
+            // Calculate average drop count
+            const avgCount = (drop.minCount + drop.maxCount) / 2;
+
+            // Apply Rare Find multiplier to drop rate
+            const finalDropRate = drop.dropRate * (1 + rareFindBonus / 100);
+
+            // Expected drops per hour
+            const dropsPerHour = actionsPerHour * finalDropRate * avgCount;
+
+            // Get price: Check if openable container (use EV), otherwise market price
+            let itemPrice = 0;
+            let isMissingPrice = false;
+            if (itemDetails.isOpenable) {
+                // Use expected value for openable containers (with on-demand fallback)
+                itemPrice =
+                    expectedValueCalculator.getCachedValue(drop.itemHrid) ||
+                    expectedValueCalculator.calculateSingleContainer(drop.itemHrid) ||
+                    0;
+                if (itemPrice === 0) {
+                    console.warn(`[BonusRevenue] EV lookup returned 0 for openable container: ${drop.itemHrid}`);
+                    isMissingPrice = true;
+                }
+            } else {
+                // Use market price for regular items
+                const price = marketAPI.getPrice(drop.itemHrid, 0);
+                itemPrice = price?.bid ?? 0; // Use bid price (instant sell)
+                isMissingPrice = price?.bid === null || price?.bid === undefined;
+            }
+
+            // Revenue per hour from this drop
+            const revenuePerHour = dropsPerHour * itemPrice;
+            const dropsPerAction = actionsPerHour > 0 ? dropsPerHour / actionsPerHour : 0;
+            const revenuePerAction = actionsPerHour > 0 ? revenuePerHour / actionsPerHour : 0;
+
+            bonusDrops.push({
+                itemHrid: drop.itemHrid,
+                itemName: itemNameTranslator.getDisplayName(drop.itemHrid),
+                dropRate: finalDropRate,
+                dropsPerHour,
+                dropsPerAction,
+                priceEach: itemPrice,
+                revenuePerHour,
+                revenuePerAction,
+                type: 'rare_find',
+                missingPrice: isMissingPrice,
+            });
+
+            totalBonusRevenue += revenuePerHour;
+            if (isMissingPrice) {
+                hasMissingPrices = true;
+            }
+        }
+    }
+
+    return {
+        essenceFindBonus, // Essence Find % from equipment
+        rareFindBonus, // Rare Find % from equipment + house rooms + achievements (combined)
+        rareFindBreakdown,
+        bonusDrops, // Array of all bonus drops with details
+        totalBonusRevenue, // Total revenue/hour from all bonus drops
+        hasMissingPrices,
+    };
+}

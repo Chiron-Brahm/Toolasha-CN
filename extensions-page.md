@@ -1,0 +1,38 @@
+- generic [active] [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - heading "扩展程序" [level=1] [ref=e9]
+      - generic [ref=e12]:
+        - button [ref=e13] [cursor=pointer]
+        - generic [ref=e14]:
+          - generic [ref=e15]: 搜索扩展程序
+          - searchbox "搜索扩展程序" [ref=e16]
+      - generic [ref=e19]:
+        - generic [ref=e20]: 开发者模式
+        - button "开发者模式" [ref=e21] [cursor=pointer]
+  - generic [ref=e24]:
+    - navigation [ref=e26]:
+      - menu [ref=e27]:
+        - generic:
+          - menuitem "我的扩展程序" [ref=e28] [cursor=pointer]:
+            - generic:
+              - img
+            - text: 我的扩展程序
+          - menuitem "键盘快捷键" [ref=e29] [cursor=pointer]:
+            - generic:
+              - img
+            - text: 键盘快捷键
+      - generic [ref=e31]:
+        - generic:
+          - img
+        - generic [ref=e32]:
+          - text: 在
+          - link "Chrome 应用商店" [ref=e33] [cursor=pointer]:
+            - /url: https://chromewebstore.google.com/category/extensions?utm_source=ext_sidebar&hl=zh-CN
+          - text: 中发现更多扩展程序和主题
+    - main [ref=e34]:
+      - generic [ref=e39]:
+        - text: 在
+        - link "Chrome 应用商店" [ref=e40] [cursor=pointer]:
+          - /url: https://chrome.google.com/webstore/category/extensions
+        - text: 中查找扩展程序和主题背景

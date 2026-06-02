@@ -1,0 +1,328 @@
+/**
+ * View Action Button Module
+ * Adds a "View Action" button to Item Dictionary modal for actionable items
+ */
+
+import { t } from '../../core/i18n.js';
+import domObserver from '../../core/dom-observer.js';
+import { navigateToItem, findActionForItem } from '../../utils/item-navigation.js';
+import { setReactInputValue } from '../../utils/react-input.js';
+import { createTimerRegistry } from '../../utils/timer-registry.js';
+import { calculateMaterialRequirements } from '../../utils/material-calculator.js';
+import { getActionHridFromName, getItemHridFromName } from '../../utils/game-lookups.js';
+
+/**
+ * ViewActionButton class manages action button in Item Dictionary
+ */
+class ViewActionButton {
+    constructor() {
+        this.unregisterHandlers = [];
+        this.isInitialized = false;
+        this.injectTimeout = null;
+        this.timerRegistry = createTimerRegistry();
+        this.pendingActionCount = null; // Pre-fill count for next action panel navigation
+    }
+
+    /**
+     * Initialize view action button feature
+     */
+    initialize() {
+        if (this.isInitialized) {
+            return;
+        }
+
+        this.isInitialized = true;
+
+        // Watch for Item Dictionary modal title to appear
+        const unregister = domObserver.onClass('ViewActionButton', 'ItemDictionary_title', (titleElem) => {
+            // Debounce to avoid injecting multiple times
+            clearTimeout(this.injectTimeout);
+            this.injectTimeout = setTimeout(() => {
+                this.injectButton(titleElem);
+            }, 50);
+            this.timerRegistry.registerTimeout(this.injectTimeout);
+        });
+        this.unregisterHandlers.push(unregister);
+
+        // Check if dictionary is already open
+        const existingTitle = document.querySelector('[class*="ItemDictionary_title"]');
+        if (existingTitle) {
+            this.injectButton(existingTitle);
+        }
+
+        // Watch for item action menu popups (e.g. clicking an item within an action)
+        const unregisterPopup = domObserver.onClass('ViewActionButton_popup', 'Item_actionMenu', (actionMenu) => {
+            this.injectPopupButton(actionMenu);
+        });
+        this.unregisterHandlers.push(unregisterPopup);
+    }
+
+    /**
+     * Inject "View Action" button into the item action menu popup
+     * @param {HTMLElement} actionMenu - The Item_actionMenu element
+     */
+    injectPopupButton(actionMenu) {
+        if (actionMenu.querySelector('.mwi-view-action-popup-button')) return;
+
+        const nameEl = actionMenu.querySelector('[class*="Item_name"]');
+        if (!nameEl) return;
+
+        const itemName = nameEl.textContent.trim();
+        const itemHrid = getItemHridFromName(itemName);
+        if (!itemHrid) return;
+
+        const actionInfo = findActionForItem(itemHrid);
+        if (!actionInfo) return;
+
+        const btn = document.createElement('button');
+        btn.textContent = t('View Action');
+
+        // Copy class from existing popup button for visual consistency
+        const existingBtn = actionMenu.querySelector('button');
+        if (existingBtn) {
+            btn.className = existingBtn.className;
+        }
+        btn.classList.add('mwi-view-action-popup-button');
+
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.pendingActionCount = this._extractRequiredCount(actionMenu, itemHrid, itemName);
+            navigateToItem(itemHrid);
+            this._fillActionCountAfterNavigation();
+        });
+
+        actionMenu.appendChild(btn);
+    }
+
+    /**
+     * Inject "View Action" button into the dictionary
+     * @param {HTMLElement} titleElem - The modal title element
+     */
+    injectButton(titleElem) {
+        // Remove any existing button first
+        const existingButton = document.querySelector('.mwi-view-action-button');
+        if (existingButton) {
+            existingButton.remove();
+        }
+
+        // Get item name from title
+        const itemName = titleElem.textContent.trim();
+
+        // Look up item HRID from display name (handles ★ ↔ (R) refined variants)
+        const itemHrid = getItemHridFromName(itemName);
+        if (!itemHrid) return;
+
+        // Check if this item has an associated action
+        const actionInfo = findActionForItem(itemHrid);
+
+        // If no action found, don't show button
+        if (!actionInfo) {
+            return;
+        }
+
+        // Create the action button
+        const actionButton = document.createElement('button');
+        actionButton.className = 'mwi-view-action-button';
+        actionButton.textContent = t('View Action');
+        actionButton.style.cssText = `
+            background: #2a2a2a;
+            color: #ffffff;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: 12px;
+            transition: all 0.2s;
+        `;
+
+        // Add hover effect
+        actionButton.addEventListener('mouseenter', () => {
+            actionButton.style.background = '#3a3a3a';
+            actionButton.style.borderColor = '#666';
+        });
+        actionButton.addEventListener('mouseleave', () => {
+            actionButton.style.background = '#2a2a2a';
+            actionButton.style.borderColor = '#555';
+        });
+
+        // Add click handler
+        actionButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            // Find the Item Dictionary modal specifically before navigating
+            const dictionaryTitle = document.querySelector('[class*="ItemDictionary_title"]');
+            let dictionaryCloseButton = null;
+
+            if (dictionaryTitle) {
+                // Navigate up to find the Modal_modal container
+                const modal = dictionaryTitle.closest('[class*="Modal_modal"]');
+                if (modal) {
+                    dictionaryCloseButton = modal.querySelector('[class*="Modal_closeButton"]');
+                }
+            }
+
+            // Navigate to the action first
+            navigateToItem(itemHrid);
+
+            // Close the dictionary modal after a short delay
+            setTimeout(() => {
+                if (dictionaryCloseButton) {
+                    dictionaryCloseButton.click();
+                } else {
+                    // Fallback: try Escape key
+                    const escEvent = new KeyboardEvent('keydown', {
+                        key: 'Escape',
+                        code: 'Escape',
+                        keyCode: 27,
+                        which: 27,
+                        bubbles: true,
+                        cancelable: true,
+                    });
+                    document.dispatchEvent(escEvent);
+                }
+            }, 150);
+        });
+
+        // Insert button after the title
+        titleElem.parentNode.insertBefore(actionButton, titleElem.nextSibling);
+
+        // Adjust title parent to be flexbox
+        const parent = titleElem.parentNode;
+        if (parent && !parent.style.display) {
+            parent.style.cssText = `
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 8px;
+            `;
+        }
+    }
+
+    /**
+     * Extract the required craft count by finding the item in the main page DOM
+     * (not the tooltip portal) and reading the "X / Y" sibling quantity text.
+     * @param {string} itemName - Display name of the item (e.g. "Reptile Leather")
+     * @returns {number|null}
+     */
+    _extractRequiredCount(actionMenu, itemHrid, itemName) {
+        // Primary: calculate from game data using the same logic as Missing Mats button
+        const count = this._calcMissingFromGameData(itemHrid);
+        if (count !== null) return count;
+
+        // Fallback: read the split "X" / "/ Y" sibling elements in the action requirements row
+        const svgs = document.querySelectorAll(`svg[aria-label="${itemName}"]`);
+        for (const svg of svgs) {
+            const itemContainer = svg.closest('[class*="Item_itemContainer"]');
+            if (!itemContainer) continue;
+            const parent = itemContainer.parentElement;
+            if (!parent) continue;
+
+            const children = [...parent.children].filter((c) => c !== itemContainer && !c.contains(itemContainer));
+            for (let i = 0; i < children.length; i++) {
+                const haveText = children[i].textContent.trim();
+                const needText = children[i + 1]?.textContent.trim();
+                if (!needText) continue;
+                const haveMatch = haveText.match(/^[\d,]+(?:\.\d+)?$/);
+                const needMatch = needText.match(/^\/\s*([\d,]+(?:\.\d+)?)$/);
+                if (haveMatch && needMatch) {
+                    const have = parseFloat(haveText.replace(/,/g, ''));
+                    const need = parseFloat(needMatch[1].replace(/,/g, ''));
+                    if (!isNaN(have) && !isNaN(need) && need > 0) {
+                        const missing = Math.ceil(need - have);
+                        return missing > 0 ? missing : null;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Calculate the missing count for an item using the same game data
+     * calculation as the Missing Mats button.
+     * @param {string} itemHrid
+     * @returns {number|null}
+     */
+    _calcMissingFromGameData(itemHrid) {
+        // Find current action name from the panel
+        const nameEl = document.querySelector('[class*="SkillActionDetail_name"]');
+        if (!nameEl) return null;
+        const actionName = Array.from(nameEl.childNodes)
+            .filter((n) => n.nodeType === Node.TEXT_NODE)
+            .map((n) => n.textContent)
+            .join('')
+            .trim();
+
+        // Resolve action HRID from name
+        const actionHrid = getActionHridFromName(actionName);
+        if (!actionHrid) return null;
+
+        // Read current numActions from the count input
+        const input = document.querySelector('[class*="maxActionCountInput"] input');
+        const numActions = parseInt(input?.value) || 0;
+        if (numActions <= 0) return null;
+
+        // Use the same calculation as the Missing Mats button
+        const materials = calculateMaterialRequirements(actionHrid, numActions, true);
+        const mat = materials.find((m) => m.itemHrid === itemHrid);
+        if (mat && mat.missing > 0) return Math.ceil(mat.missing);
+
+        return null;
+    }
+
+    /**
+     * Poll for the action count input after navigation, fill it with pendingActionCount if set,
+     * and always focus it.
+     */
+    _fillActionCountAfterNavigation() {
+        let retries = 0;
+        const tryFill = () => {
+            const container = document.querySelector('[class*="maxActionCountInput"]');
+            const input = container?.querySelector('input');
+            if (input) {
+                if (this.pendingActionCount !== null) {
+                    setReactInputValue(input, this.pendingActionCount, { focus: false });
+                    this.pendingActionCount = null;
+                }
+                input.focus();
+                return;
+            }
+            if (++retries < 15) {
+                const t = setTimeout(tryFill, 100);
+                this.timerRegistry.registerTimeout(t);
+            } else {
+                this.pendingActionCount = null;
+            }
+        };
+        const t = setTimeout(tryFill, 100);
+        this.timerRegistry.registerTimeout(t);
+    }
+
+    /**
+     * Disable the feature and clean up
+     */
+    disable() {
+        clearTimeout(this.injectTimeout);
+        this.timerRegistry.clearAll();
+
+        this.unregisterHandlers.forEach((unregister) => unregister());
+        this.unregisterHandlers = [];
+
+        // Remove all injected buttons
+        document.querySelectorAll('.mwi-view-action-button').forEach((elem) => elem.remove());
+        document.querySelectorAll('.mwi-view-action-popup-button').forEach((elem) => elem.remove());
+
+        this.isInitialized = false;
+    }
+}
+
+const viewActionButton = new ViewActionButton();
+
+// Auto-initialize (always enabled feature)
+viewActionButton.initialize();
+
+export default viewActionButton;

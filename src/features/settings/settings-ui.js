@@ -1,0 +1,2621 @@
+/**
+ * Settings UI Module
+ * Injects Toolasha settings tab into the game's settings panel
+ * Based on MWITools Extended approach
+ */
+
+import config from '../../core/config.js';
+import dataManager from '../../core/data-manager.js';
+import { settingsGroups } from '../../core/settings-schema.js';
+import settingsStorage from '../../core/settings-storage.js';
+import storage from '../../core/storage.js';
+import settingsCSS from './settings-styles.css?raw';
+import marketAPI from '../../api/marketplace.js';
+import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
+import { createTimerRegistry } from '../../utils/timer-registry.js';
+import scrollSimulatorUI from '../combat/scroll-simulator-ui.js';
+import ironCowMode, { IRON_COW_SETTINGS } from './iron-cow-mode.js';
+import { getDetectedGearSettings, getEnhancingParams } from '../../utils/enhancement-config.js';
+import pformancePanel from '../dev/pformance-panel.js';
+import {
+    getCustomPriceOverrides,
+    getCustomPriceOverridesAsync,
+    setCustomPriceOverride,
+    removeCustomPriceOverride,
+    initCustomPriceOverrides,
+} from './custom-price-overrides.js';
+import { t } from '../../core/i18n.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
+
+const COLLAPSED_GROUPS_KEY = 'toolasha_collapsedGroups';
+
+class SettingsUI {
+    constructor() {
+        this.config = config;
+        this.settingsPanel = null;
+        this.settingsObserver = null;
+        this.settingsObserverCleanup = null;
+        this.currentSettings = {};
+        this.isInjecting = false; // Guard against concurrent injection
+        this.characterSwitchHandler = null; // Store listener reference to prevent duplicates
+        this.settingsPanelCallbacks = []; // Callbacks to run when settings panel appears
+        this.timerRegistry = createTimerRegistry();
+        this.collapsedGroups = new Set();
+    }
+
+    /**
+     * Initialize the settings UI
+     */
+    async initialize() {
+        // Inject CSS styles (check if already injected)
+        if (!document.getElementById('toolasha-settings-styles')) {
+            this.injectStyles();
+        }
+
+        // Load custom price overrides cache
+        await initCustomPriceOverrides();
+
+        // Load current settings
+        this.currentSettings = await settingsStorage.loadSettings();
+
+        // Load collapsed groups state
+        const savedCollapsed = await storage.get(COLLAPSED_GROUPS_KEY, 'settings', []);
+        this.collapsedGroups = new Set(Array.isArray(savedCollapsed) ? savedCollapsed : []);
+
+        // Set up handler for character switching (ONLY if not already registered)
+        if (!this.characterSwitchHandler) {
+            this.characterSwitchHandler = () => {
+                this.handleCharacterSwitch();
+            };
+            dataManager.on('character_initialized', this.characterSwitchHandler);
+        }
+
+        // Wait for game's settings panel to load
+        this.observeSettingsPanel();
+    }
+
+    /**
+     * Register a callback to be called when settings panel appears
+     * @param {Function} callback - Function to call when settings panel is detected
+     */
+    onSettingsPanelAppear(callback) {
+        if (typeof callback === 'function') {
+            this.settingsPanelCallbacks.push(callback);
+        }
+    }
+
+    /**
+     * Handle character switch
+     * Clean up old observers and re-initialize for new character's settings panel
+     */
+    handleCharacterSwitch() {
+        // Clean up old DOM references and observers (but keep listener registered)
+        this.cleanupDOM();
+
+        // Wait for settings panel to stabilize before re-observing
+        const reobserveTimeout = setTimeout(() => {
+            this.observeSettingsPanel();
+        }, 500);
+        this.timerRegistry.registerTimeout(reobserveTimeout);
+    }
+
+    /**
+     * Cleanup DOM elements and observers only (internal cleanup during character switch)
+     */
+    cleanupDOM() {
+        this.timerRegistry.clearAll();
+
+        // Stop observer
+        if (this.settingsObserver) {
+            this.settingsObserver.disconnect();
+            this.settingsObserver = null;
+        }
+
+        if (this.settingsObserverCleanup) {
+            this.settingsObserverCleanup();
+            this.settingsObserverCleanup = null;
+        }
+
+        // Remove settings tab
+        const tab = document.querySelector('#toolasha-settings-tab');
+        if (tab) {
+            tab.remove();
+        }
+
+        // Remove settings panel
+        const panel = document.querySelector('#toolasha-settings');
+        if (panel) {
+            panel.remove();
+        }
+
+        // Clear state
+        this.settingsPanel = null;
+        this.currentSettings = {};
+        this.isInjecting = false;
+
+        // Clear config cache
+        this.config.clearSettingsCache();
+    }
+
+    /**
+     * Inject CSS styles into page
+     */
+    injectStyles() {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'toolasha-settings-styles';
+        styleEl.textContent = settingsCSS;
+        document.head.appendChild(styleEl);
+    }
+
+    /**
+     * Observe for game's settings panel
+     * Uses MutationObserver to detect when settings panel appears
+     */
+    observeSettingsPanel() {
+        // Wait for DOM to be ready before observing
+        const startObserver = () => {
+            if (!document.body) {
+                const observerDelay = setTimeout(startObserver, 10);
+                this.timerRegistry.registerTimeout(observerDelay);
+                return;
+            }
+
+            const onMutation = (_mutations) => {
+                // Look for the settings tabs container
+                const tabsContainer = document.querySelector('div[class*="SettingsPanel_tabsComponentContainer"]');
+
+                if (tabsContainer) {
+                    // Check if our tab already exists before injecting
+                    if (!tabsContainer.querySelector('#toolasha-settings-tab')) {
+                        this.injectSettingsTab();
+                    }
+
+                    // Call registered callbacks for other features
+                    this.settingsPanelCallbacks.forEach((callback) => {
+                        try {
+                            callback();
+                        } catch (error) {
+                            console.error('[Toolasha Settings] Callback error:', error);
+                        }
+                    });
+
+                    // Keep observer running - panel might be removed/re-added if user navigates away and back
+                }
+            };
+
+            // Observe the main game panel for changes
+            const gamePanel = document.querySelector('div[class*="GamePage_gamePanel"]');
+            if (gamePanel) {
+                this.settingsObserverCleanup = createMutationWatcher(gamePanel, onMutation, {
+                    childList: true,
+                    subtree: true,
+                });
+            } else {
+                // Fallback: observe entire body if game panel not found (Firefox timing issue)
+                console.warn('[Toolasha Settings] Could not find game panel, observing body instead');
+                this.settingsObserverCleanup = createMutationWatcher(document.body, onMutation, {
+                    childList: true,
+                    subtree: true,
+                });
+            }
+
+            // Store observer reference (for compatibility with existing cleanup path)
+            this.settingsObserver = null;
+
+            // Also check immediately in case settings is already open
+            const existingTabsContainer = document.querySelector('div[class*="SettingsPanel_tabsComponentContainer"]');
+            if (existingTabsContainer && !existingTabsContainer.querySelector('#toolasha-settings-tab')) {
+                this.injectSettingsTab();
+
+                // Call registered callbacks for other features
+                this.settingsPanelCallbacks.forEach((callback) => {
+                    try {
+                        callback();
+                    } catch (error) {
+                        console.error('[Toolasha Settings] Callback error:', error);
+                    }
+                });
+            }
+        };
+
+        startObserver();
+    }
+
+    /**
+     * Inject Toolasha settings tab into game's settings panel
+     */
+    async injectSettingsTab() {
+        // Guard against concurrent injection
+        if (this.isInjecting) {
+            return;
+        }
+        this.isInjecting = true;
+
+        try {
+            // Find tabs container (MWIt-E approach)
+            const tabsComponentContainer = document.querySelector('div[class*="SettingsPanel_tabsComponentContainer"]');
+
+            if (!tabsComponentContainer) {
+                console.warn('[Toolasha Settings] Could not find tabsComponentContainer');
+                return;
+            }
+
+            // Find the MUI tabs flexContainer
+            const tabsContainer = tabsComponentContainer.querySelector('[class*="MuiTabs-flexContainer"]');
+            const tabPanelsContainer = tabsComponentContainer.querySelector(
+                '[class*="TabsComponent_tabPanelsContainer"]'
+            );
+
+            if (!tabsContainer || !tabPanelsContainer) {
+                console.warn('[Toolasha Settings] Could not find tabs or panels container');
+                return;
+            }
+
+            // Check if already injected
+            if (tabsContainer.querySelector('#toolasha-settings-tab')) {
+                return;
+            }
+
+            // Reload current settings from storage to ensure latest values
+            this.currentSettings = await settingsStorage.loadSettings();
+
+            // Get existing tabs for reference
+            const existingTabs = Array.from(tabsContainer.querySelectorAll('button[role="tab"]'));
+
+            // Create new tab button
+            const tabButton = this.createTabButton();
+
+            // Create tab panel
+            const tabPanel = this.createTabPanel();
+
+            // Setup tab switching
+            this.setupTabSwitching(tabButton, tabPanel, existingTabs, tabPanelsContainer);
+
+            // Append to DOM
+            tabsContainer.appendChild(tabButton);
+            tabPanelsContainer.appendChild(tabPanel);
+
+            // Apply disabled state now that elements are in the document
+            this.applyDisabledByState();
+
+            // Populate auto-detected values if auto-detect is already on
+            if (config.getSettingValue('enhanceSim_autoDetect', false)) {
+                this.populateEnhanceSimFromDetection();
+            }
+
+            // Store reference
+            this.settingsPanel = tabPanel;
+        } catch (error) {
+            console.error('[Toolasha Settings] Error during tab injection:', error);
+        } finally {
+            // Always reset the guard flag
+            this.isInjecting = false;
+        }
+    }
+
+    /**
+     * Create tab button
+     * @returns {HTMLElement} Tab button element
+     */
+    createTabButton() {
+        const button = document.createElement('button');
+        button.id = 'toolasha-settings-tab';
+        button.setAttribute('role', 'tab');
+        button.setAttribute('aria-selected', 'false');
+        button.setAttribute('tabindex', '-1');
+        button.className = 'MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary';
+        button.style.minWidth = '90px';
+
+        const span = document.createElement('span');
+        span.className = 'MuiTab-wrapper';
+        span.textContent = t('Toolasha');
+
+        button.appendChild(span);
+
+        return button;
+    }
+
+    /**
+     * Create tab panel with all settings
+     * @returns {HTMLElement} Tab panel element
+     */
+    createTabPanel() {
+        const panel = document.createElement('div');
+        panel.id = 'toolasha-settings';
+        panel.className = 'TabPanel_tabPanel__tXMJF TabPanel_hidden__26UM3';
+        panel.setAttribute('role', 'tabpanel');
+        panel.style.display = 'none';
+
+        // Create settings card
+        const card = document.createElement('div');
+        card.className = 'toolasha-settings-card';
+        card.id = 'toolasha-settings-content';
+
+        // Add search box at the top
+        this.addSearchBox(card);
+
+        // Add Iron Cow mode toggle banner
+        this.addIronCowToggle(card);
+
+        // Generate settings from config
+        this.generateSettings(card);
+
+        // Add utility buttons
+        this.addUtilityButtons(card);
+
+        // Add refresh notice
+        this.addRefreshNotice(card);
+
+        panel.appendChild(card);
+
+        // Add change listener
+        card.addEventListener('change', (e) => this.handleSettingChange(e));
+
+        // Add click listener for template edit buttons
+        card.addEventListener('click', (e) => {
+            if (e.target.classList.contains('toolasha-template-edit-btn')) {
+                const settingId = e.target.dataset.settingId;
+                this.openTemplateEditor(settingId);
+            }
+            if (e.target.classList.contains('toolasha-custom-price-edit-btn')) {
+                this.openCustomPriceOverridesEditor();
+            }
+            if (e.target.classList.contains('toolasha-scroll-defaults-btn')) {
+                scrollSimulatorUI.openDefaultsPopup();
+            }
+        });
+
+        return panel;
+    }
+
+    /**
+     * Generate all settings UI from config
+     * @param {HTMLElement} container - Container element
+     */
+    generateSettings(container) {
+        for (const [groupKey, group] of Object.entries(settingsGroups)) {
+            // Create collapsible group container
+            const groupContainer = document.createElement('div');
+            groupContainer.className = 'toolasha-settings-group';
+            groupContainer.dataset.group = groupKey;
+
+            // Add section header with collapse toggle
+            const header = document.createElement('h3');
+            header.className = 'toolasha-settings-group-header';
+            header.innerHTML = `
+                <span class="collapse-icon">▼</span>
+                <span class="icon">${group.icon}</span>
+                ${group.title}
+            `;
+            // Bind toggleGroup method to this instance
+            header.addEventListener('click', this.toggleGroup.bind(this, groupContainer));
+
+            // Create content container for this group
+            const content = document.createElement('div');
+            content.className = 'toolasha-settings-group-content';
+
+            // Add computed stats summary for enhancement simulator group
+            if (groupKey === 'enhancementSimulator') {
+                const summary = document.createElement('div');
+                summary.id = 'enhanceSim-stats-summary';
+                summary.style.cssText =
+                    'padding:8px 12px; margin-bottom:8px; background:#1a1a2e; border:1px solid #333; border-radius:4px; font-size:12px; color:#aaa; line-height:1.6;';
+                summary.innerHTML = this.buildEnhanceSimSummaryHTML();
+                content.appendChild(summary);
+            }
+
+            // Add settings in this group
+            for (const [settingId, settingDef] of Object.entries(group.settings)) {
+                if (settingDef.hidden) continue;
+                const settingEl = this.createSettingElement(settingId, settingDef);
+                content.appendChild(settingEl);
+            }
+
+            // Skip groups with no visible settings (all hidden or group is empty)
+            if (content.children.length === 0) continue;
+
+            groupContainer.appendChild(header);
+            groupContainer.appendChild(content);
+
+            if (this.collapsedGroups.has(groupKey)) {
+                groupContainer.classList.add('collapsed');
+            }
+
+            container.appendChild(groupContainer);
+        }
+    }
+
+    /**
+     * Apply disabled/greyed-out state for settings controlled by a parent checkbox
+     * Reads disabledBy from schema and applies opacity + pointer-events
+     */
+    applyDisabledByState() {
+        for (const group of Object.values(settingsGroups)) {
+            for (const [settingId, settingDef] of Object.entries(group.settings)) {
+                if (!settingDef.disabledBy) continue;
+
+                const parentSetting = this.currentSettings[settingDef.disabledBy];
+                const parentValue = parentSetting?.isTrue ?? false;
+                const settingEl = document.querySelector(`.toolasha-setting[data-setting-id="${settingId}"]`);
+                if (!settingEl) continue;
+
+                if (parentValue) {
+                    settingEl.style.opacity = '0.4';
+                    settingEl.style.pointerEvents = 'none';
+                } else {
+                    settingEl.style.opacity = '';
+                    settingEl.style.pointerEvents = '';
+                }
+            }
+        }
+
+        // Iron Cow locking pass
+        const ironCowActive = ironCowMode.isEnabled();
+        for (const id of IRON_COW_SETTINGS) {
+            const el = document.querySelector(`.toolasha-setting[data-setting-id="${id}"]`);
+            if (!el) continue;
+            if (ironCowActive) {
+                el.style.opacity = '0.35';
+                el.style.pointerEvents = 'none';
+                el.dataset.ironCowLocked = 'true';
+            } else if (el.dataset.ironCowLocked) {
+                delete el.dataset.ironCowLocked;
+                el.style.opacity = '';
+                el.style.pointerEvents = '';
+            }
+        }
+    }
+
+    /**
+     * Setup collapse icons for parent settings (settings that have dependents)
+     * @param {HTMLElement} container - Settings container
+     */
+    /**
+     * Toggle group collapse/expand
+     * @param {HTMLElement} groupContainer - Group container element
+     */
+    toggleGroup(groupContainer) {
+        groupContainer.classList.toggle('collapsed');
+        const groupKey = groupContainer.dataset.group;
+        if (groupContainer.classList.contains('collapsed')) {
+            this.collapsedGroups.add(groupKey);
+        } else {
+            this.collapsedGroups.delete(groupKey);
+        }
+        storage.set(COLLAPSED_GROUPS_KEY, [...this.collapsedGroups], 'settings');
+    }
+
+    /**
+     * Create a single setting UI element
+     * @param {string} settingId - Setting ID
+     * @param {Object} settingDef - Setting definition
+     * @returns {HTMLElement} Setting element
+     */
+    createSettingElement(settingId, settingDef) {
+        const div = document.createElement('div');
+        div.className = 'toolasha-setting';
+        div.dataset.settingId = settingId;
+        div.dataset.type = settingDef.type || 'checkbox';
+
+        // Add not-implemented class for red text
+        if (settingDef.notImplemented) {
+            div.classList.add('not-implemented');
+        }
+
+        // Create label container
+        const labelContainer = document.createElement('div');
+        labelContainer.className = 'toolasha-setting-label-container';
+        labelContainer.style.display = 'flex';
+        labelContainer.style.alignItems = 'center';
+        labelContainer.style.flex = '1';
+        labelContainer.style.gap = '6px';
+
+        // Create label
+        const label = document.createElement('span');
+        label.className = 'toolasha-setting-label';
+        label.textContent = settingDef.label;
+
+        // Add help text if present
+        if (settingDef.help) {
+            const help = document.createElement('span');
+            help.className = 'toolasha-setting-help';
+            help.textContent = settingDef.help;
+            label.appendChild(help);
+        }
+
+        labelContainer.appendChild(label);
+
+        // Create input
+        const inputHTML = this.generateSettingInput(settingId, settingDef);
+        const inputContainer = document.createElement('div');
+        inputContainer.className = 'toolasha-setting-input';
+        inputContainer.innerHTML = inputHTML;
+
+        div.appendChild(labelContainer);
+        div.appendChild(inputContainer);
+
+        return div;
+    }
+
+    /**
+     * Generate input HTML for a setting
+     * @param {string} settingId - Setting ID
+     * @param {Object} settingDef - Setting definition
+     * @returns {string} Input HTML
+     */
+    generateSettingInput(settingId, settingDef) {
+        const currentSetting = this.currentSettings[settingId];
+        const type = settingDef.type || 'checkbox';
+
+        switch (type) {
+            case 'checkbox': {
+                const checked = currentSetting?.isTrue ?? settingDef.default ?? false;
+                return `
+                    <input type="checkbox" id="${settingId}" ${checked ? 'checked' : ''} style="width:16px; height:16px; cursor:pointer; accent-color:#6b9fff;">
+                `;
+            }
+
+            case 'text': {
+                const value = currentSetting?.value ?? settingDef.default ?? '';
+                return `
+                    <input type="text"
+                        id="${settingId}"
+                        class="toolasha-text-input"
+                        value="${value}"
+                        placeholder="${settingDef.placeholder || ''}">
+                `;
+            }
+
+            case 'template': {
+                const value = currentSetting?.value ?? settingDef.default ?? [];
+                // Store as JSON string
+                const jsonValue = JSON.stringify(value);
+                const escapedValue = jsonValue.replace(/"/g, '&quot;');
+
+                return `
+                    <input type="hidden"
+                        id="${settingId}"
+                        value="${escapedValue}">
+                    <button type="button"
+                        class="toolasha-template-edit-btn"
+                        data-setting-id="${settingId}"
+                        style="
+                            background: #4a7c59;
+                            border: 1px solid #5a8c69;
+                            border-radius: 4px;
+                            padding: 6px 12px;
+                            color: #e0e0e0;
+                            cursor: pointer;
+                            font-size: 13px;
+                            white-space: nowrap;
+                            transition: all 0.2s;
+                        ">
+                        ${t('Edit Template')}
+                    </button>
+                `;
+            }
+
+            case 'number': {
+                const value = currentSetting?.value ?? settingDef.default ?? 0;
+                return `
+                    <input type="number"
+                        id="${settingId}"
+                        class="toolasha-number-input"
+                        value="${value}"
+                        min="${settingDef.min ?? ''}"
+                        max="${settingDef.max ?? ''}"
+                        step="${settingDef.step ?? '1'}">
+                `;
+            }
+
+            case 'select': {
+                const value = currentSetting?.value ?? settingDef.default ?? '';
+                const options = settingDef.options || [];
+                const optionsHTML = options
+                    .map((option) => {
+                        const optValue = typeof option === 'object' ? option.value : option;
+                        const optLabel = typeof option === 'object' ? option.label : option;
+                        const selected = optValue === value ? 'selected' : '';
+                        return `<option value="${optValue}" ${selected}>${optLabel}</option>`;
+                    })
+                    .join('');
+
+                return `
+                    <select id="${settingId}" class="toolasha-select-input">
+                        ${optionsHTML}
+                    </select>
+                `;
+            }
+
+            case 'color': {
+                const value = currentSetting?.value ?? settingDef.value ?? settingDef.default ?? '#000000';
+                return `
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="color"
+                            id="${settingId}"
+                            class="toolasha-color-input"
+                            value="${value}">
+                        <input type="text"
+                            id="${settingId}_text"
+                            class="toolasha-color-text-input"
+                            value="${value}"
+                            style="width: 80px; padding: 4px; background: #2a2a2a; color: white; border: 1px solid #555; border-radius: 3px;"
+                            readonly>
+                    </div>
+                `;
+            }
+
+            case 'enhanceGear': {
+                const val = currentSetting?.value ?? settingDef.default ?? { enabled: true, level: 0 };
+                const enabled = val.enabled ?? true;
+                const tier = val.tier || '';
+                const level = val.level ?? 0;
+                const hasTiers = settingDef.tiers && settingDef.tiers.length > 0;
+                const checkedMeansAuto = settingDef.checkedMeansAuto || false;
+
+                // Inputs disabled when: gear unchecked (not equipped) OR checkedMeansAuto and checked
+                const inputsDisabled = checkedMeansAuto ? enabled : !enabled;
+                const disabledStyle = inputsDisabled ? 'opacity:0.4; pointer-events:none;' : '';
+
+                let tierHTML = '';
+                if (hasTiers) {
+                    const options = settingDef.tiers
+                        .map(
+                            (t) =>
+                                `<option value="${t.value}" ${t.value === tier ? 'selected' : ''}>${t.label}</option>`
+                        )
+                        .join('');
+                    tierHTML = `<select id="${settingId}_tier" class="toolasha-select-input" style="width:100px; font-size:12px; padding:2px 4px; ${disabledStyle}">${options}</select>`;
+                }
+
+                return `
+                    <div style="display:flex; align-items:center; gap:6px;" data-checked-means-auto="${checkedMeansAuto}">
+                        <input type="checkbox" id="${settingId}_enabled" ${enabled ? 'checked' : ''} style="width:16px; height:16px; cursor:pointer;">
+                        ${tierHTML}
+                        <input type="number" id="${settingId}_level" value="${level}" min="0" max="20" style="width:48px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444; border-radius:3px; padding:2px 4px; font-size:12px; text-align:center; ${disabledStyle}">
+                    </div>
+                `;
+            }
+
+            case 'slider': {
+                const value = currentSetting?.value ?? settingDef.default ?? 0;
+                return `
+                    <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                        <input type="range"
+                            id="${settingId}"
+                            class="toolasha-slider-input"
+                            value="${value}"
+                            min="${settingDef.min ?? 0}"
+                            max="${settingDef.max ?? 1}"
+                            step="${settingDef.step ?? 0.01}"
+                            style="flex: 1;">
+                        <span id="${settingId}_value" class="toolasha-slider-value" style="min-width: 50px; color: #aaa; font-size: 0.9em;">${value}</span>
+                    </div>
+                `;
+            }
+
+            case 'customPriceOverrides': {
+                const overrides = getCustomPriceOverrides();
+                const count = Object.keys(overrides).length;
+                return `
+                    <input type="hidden"
+                        id="${settingId}"
+                        value="">
+                    <button type="button"
+                        class="toolasha-custom-price-edit-btn"
+                        data-setting-id="${settingId}"
+                        style="
+                            background: #4a7c59;
+                            border: 1px solid #5a8c69;
+                            border-radius: 4px;
+                            padding: 6px 12px;
+                            color: #e0e0e0;
+                            cursor: pointer;
+                            font-size: 13px;
+                            white-space: nowrap;
+                            transition: all 0.2s;
+                        ">
+                        ${t('Manage Overrides')}${count > 0 ? ` (${count})` : ''}
+                    </button>
+                `;
+            }
+
+            case 'checkboxWithButton': {
+                const checkedCwb = currentSetting?.isTrue ?? settingDef.default ?? false;
+                const btnLabel = settingDef.buttonLabel ?? t('Configure...');
+                return `
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <button type="button"
+                            class="toolasha-scroll-defaults-btn"
+                            data-setting-id="${settingId}"
+                            style="
+                                background: #4a7c59;
+                                border: 1px solid #5a8c69;
+                                border-radius: 4px;
+                                padding: 4px 10px;
+                                color: #e0e0e0;
+                                cursor: pointer;
+                                font-size: 12px;
+                                white-space: nowrap;
+                            ">
+                            ${btnLabel}
+                        </button>
+                        <input type="checkbox"
+                            id="${settingId}"
+                            ${checkedCwb ? 'checked' : ''}
+                            style="width:18px; height:18px; cursor:pointer;">
+                    </div>
+                `;
+            }
+
+            default:
+                return `<span style="color: red;">Unknown type: ${type}</span>`;
+        }
+    }
+
+    /**
+     * Add search box to filter settings
+     * @param {HTMLElement} container - Container element
+     */
+    addSearchBox(container) {
+        const searchContainer = document.createElement('div');
+        searchContainer.className = 'toolasha-search-container';
+        searchContainer.style.cssText = `
+            margin-bottom: 20px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        `;
+
+        // Search input
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'toolasha-search-input';
+        searchInput.placeholder = t('Search settings...');
+        searchInput.style.cssText = `
+            flex: 1;
+            padding: 8px 12px;
+            background: #2a2a2a;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-size: 14px;
+        `;
+
+        // Clear button
+        const clearButton = document.createElement('button');
+        clearButton.textContent = t('Clear');
+        clearButton.className = 'toolasha-search-clear';
+        clearButton.style.cssText = `
+            padding: 8px 16px;
+            background: #444;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        `;
+        clearButton.style.display = 'none'; // Hidden by default
+
+        // Filter function
+        const filterSettings = (query) => {
+            const lowerQuery = query.toLowerCase().trim();
+
+            // If query is empty, show everything
+            if (!lowerQuery) {
+                // Show all settings
+                document.querySelectorAll('.toolasha-setting').forEach((setting) => {
+                    setting.style.display = 'flex';
+                });
+                // Show all groups
+                document.querySelectorAll('.toolasha-settings-group').forEach((group) => {
+                    group.style.display = 'block';
+                });
+                clearButton.style.display = 'none';
+                return;
+            }
+
+            clearButton.style.display = 'block';
+
+            // Filter settings
+            document.querySelectorAll('.toolasha-settings-group').forEach((group) => {
+                let visibleCount = 0;
+
+                group.querySelectorAll('.toolasha-setting').forEach((setting) => {
+                    const label = setting.querySelector('.toolasha-setting-label')?.textContent || '';
+                    const help = setting.querySelector('.toolasha-setting-help')?.textContent || '';
+                    const searchText = (label + ' ' + help).toLowerCase();
+
+                    if (searchText.includes(lowerQuery)) {
+                        setting.style.display = 'flex';
+                        visibleCount++;
+                    } else {
+                        setting.style.display = 'none';
+                    }
+                });
+
+                // Hide group if no visible settings
+                if (visibleCount === 0) {
+                    group.style.display = 'none';
+                } else {
+                    group.style.display = 'block';
+                }
+            });
+        };
+
+        // Input event listener
+        searchInput.addEventListener('input', (e) => {
+            filterSettings(e.target.value);
+        });
+
+        // Clear button event listener
+        clearButton.addEventListener('click', () => {
+            searchInput.value = '';
+            filterSettings('');
+            searchInput.focus();
+        });
+
+        searchContainer.appendChild(searchInput);
+        searchContainer.appendChild(clearButton);
+        container.appendChild(searchContainer);
+    }
+
+    /**
+     * Add utility buttons (Reset, Export, Import, Fetch Prices)
+     * @param {HTMLElement} container - Container element
+     */
+    addUtilityButtons(container) {
+        const buttonsDiv = document.createElement('div');
+        buttonsDiv.className = 'toolasha-utility-buttons';
+
+        // Sync button (at top - most important)
+        const syncBtn = document.createElement('button');
+        syncBtn.textContent = t('Copy Settings to All Characters');
+        syncBtn.className = 'toolasha-utility-button toolasha-sync-button';
+        syncBtn.addEventListener('click', () => this.handleSync());
+
+        // Fetch Latest Prices button
+        const fetchPricesBtn = document.createElement('button');
+        fetchPricesBtn.textContent = t('🔄 Fetch Latest Prices');
+        fetchPricesBtn.className = 'toolasha-utility-button toolasha-fetch-prices-button';
+        fetchPricesBtn.addEventListener('click', () => this.handleFetchPrices(fetchPricesBtn));
+
+        // Reset button
+        const resetBtn = document.createElement('button');
+        resetBtn.textContent = t('Reset to Defaults');
+        resetBtn.className = 'toolasha-utility-button';
+        resetBtn.addEventListener('click', () => this.handleReset());
+
+        // Export button
+        const exportBtn = document.createElement('button');
+        exportBtn.textContent = t('Export Settings');
+        exportBtn.className = 'toolasha-utility-button';
+        exportBtn.addEventListener('click', () => this.handleExport());
+
+        // Import button
+        const importBtn = document.createElement('button');
+        importBtn.textContent = t('Import Settings');
+        importBtn.className = 'toolasha-utility-button';
+        importBtn.addEventListener('click', () => this.handleImport());
+
+        // All Off button
+        const allOffBtn = document.createElement('button');
+        allOffBtn.textContent = t('All Off');
+        allOffBtn.className = 'toolasha-utility-button';
+        allOffBtn.addEventListener('click', () => this.handleAllOff(restoreBtn));
+
+        // Restore button (only shown when an All Off snapshot exists)
+        const restoreBtn = document.createElement('button');
+        restoreBtn.textContent = t('Restore');
+        restoreBtn.className = 'toolasha-utility-button';
+        restoreBtn.style.display = 'none';
+        restoreBtn.addEventListener('click', () => this.handleRestore(restoreBtn));
+
+        // Show restore immediately if a snapshot already exists from a prior All Off
+        this._getAllOffSnapshotKey().then((key) =>
+            storage.getJSON(key, 'settings', null).then((snap) => {
+                if (snap) restoreBtn.style.display = '';
+            })
+        );
+
+        buttonsDiv.appendChild(syncBtn);
+        buttonsDiv.appendChild(fetchPricesBtn);
+        buttonsDiv.appendChild(allOffBtn);
+        buttonsDiv.appendChild(restoreBtn);
+        buttonsDiv.appendChild(resetBtn);
+        buttonsDiv.appendChild(exportBtn);
+        buttonsDiv.appendChild(importBtn);
+
+        const pformanceBtn = document.createElement('button');
+        pformanceBtn.textContent = t('PFormance');
+        pformanceBtn.className = 'toolasha-utility-button';
+        pformanceBtn.addEventListener('click', () => pformancePanel.show());
+        buttonsDiv.appendChild(pformanceBtn);
+
+        container.appendChild(buttonsDiv);
+    }
+
+    /**
+     * Add refresh notice
+     * @param {HTMLElement} container - Container element
+     */
+    addRefreshNotice(container) {
+        const notice = document.createElement('div');
+        notice.className = 'toolasha-refresh-notice';
+        notice.textContent = t('Some settings require a page refresh to take effect');
+        container.appendChild(notice);
+    }
+
+    /**
+     * Setup tab switching functionality
+     * @param {HTMLElement} tabButton - Toolasha tab button
+     * @param {HTMLElement} tabPanel - Toolasha tab panel
+     * @param {HTMLElement[]} existingTabs - Existing tab buttons
+     * @param {HTMLElement} tabPanelsContainer - Tab panels container
+     */
+    setupTabSwitching(tabButton, tabPanel, existingTabs, tabPanelsContainer) {
+        const switchToTab = (targetButton, targetPanel) => {
+            // Hide all panels
+            const allPanels = tabPanelsContainer.querySelectorAll('[class*="TabPanel_tabPanel"]');
+            allPanels.forEach((panel) => {
+                panel.style.display = 'none';
+                panel.classList.add('TabPanel_hidden__26UM3');
+            });
+
+            // Deactivate all buttons
+            const allButtons = document.querySelectorAll('button[role="tab"]');
+            allButtons.forEach((btn) => {
+                btn.setAttribute('aria-selected', 'false');
+                btn.setAttribute('tabindex', '-1');
+                btn.classList.remove('Mui-selected');
+            });
+
+            // Activate target
+            targetButton.setAttribute('aria-selected', 'true');
+            targetButton.setAttribute('tabindex', '0');
+            targetButton.classList.add('Mui-selected');
+            targetPanel.style.display = 'block';
+            targetPanel.classList.remove('TabPanel_hidden__26UM3');
+
+            // Update title
+            const titleEl = document.querySelector('[class*="SettingsPanel_title"]');
+            if (titleEl) {
+                if (targetButton.id === 'toolasha-settings-tab') {
+                    titleEl.textContent = `⚙️ Toolasha ${ver ? `v${ver} ` : ''}Settings (refresh to apply)`;
+                } else {
+                    titleEl.textContent = t('Settings');
+                }
+            }
+        };
+
+        // Click handler for Toolasha tab
+        tabButton.addEventListener('click', () => {
+            switchToTab(tabButton, tabPanel);
+        });
+
+        // Click handlers for existing tabs
+        existingTabs.forEach((existingTab, index) => {
+            existingTab.addEventListener('click', () => {
+                const correspondingPanel = tabPanelsContainer.children[index];
+                if (correspondingPanel) {
+                    switchToTab(existingTab, correspondingPanel);
+                }
+            });
+        });
+    }
+
+    /**
+     * Handle setting change
+     * @param {Event} event - Change event
+     */
+    async handleSettingChange(event) {
+        const input = event.target;
+        if (!input.id) return;
+
+        let settingId = input.id;
+
+        // Block changes to locked settings while Iron Cow mode is active
+        if (ironCowMode.isEnabled() && IRON_COW_SETTINGS.has(settingId)) return;
+        const settingEl = input.closest('.toolasha-setting');
+        const type = settingEl?.dataset.type || 'checkbox';
+        const isCheckboxType = type === 'checkbox' || type === 'checkboxWithButton';
+
+        // Handle enhanceGear compound inputs
+        if (type === 'enhanceGear') {
+            // The real setting ID is on the container element
+            settingId = settingEl?.dataset.settingId;
+            if (!settingId) return;
+
+            const enabledEl = document.getElementById(`${settingId}_enabled`);
+            const tierEl = document.getElementById(`${settingId}_tier`);
+            const levelEl = document.getElementById(`${settingId}_level`);
+
+            const value = {
+                enabled: enabledEl?.checked ?? true,
+                tier: tierEl?.value || '',
+                level: parseInt(levelEl?.value, 10) || 0,
+            };
+
+            // Update disabled state on sub-inputs
+            const container = enabledEl?.parentElement;
+            const checkedMeansAuto = container?.dataset.checkedMeansAuto === 'true';
+            const inputsDisabled = checkedMeansAuto ? value.enabled : !value.enabled;
+            const style = inputsDisabled ? 'opacity:0.4; pointer-events:none;' : '';
+            if (tierEl)
+                tierEl.style.cssText =
+                    tierEl.style.cssText.replace(/opacity:[^;]*;?\s*pointer-events:[^;]*;?/g, '') + style;
+            if (levelEl)
+                levelEl.style.cssText =
+                    levelEl.style.cssText.replace(/opacity:[^;]*;?\s*pointer-events:[^;]*;?/g, '') + style;
+
+            await settingsStorage.setSetting(settingId, value);
+            if (!this.currentSettings[settingId]) this.currentSettings[settingId] = {};
+            this.currentSettings[settingId].value = value;
+            this.config.setSettingValue(settingId, value);
+            this.updateEnhanceSimSummary();
+            return;
+        }
+
+        let value;
+
+        // Get value based on type
+        if (isCheckboxType) {
+            value = input.checked;
+        } else if (type === 'number' || type === 'slider') {
+            value = parseFloat(input.value) || 0;
+            // Update the slider value display if it's a slider
+            if (type === 'slider') {
+                const valueDisplay = document.getElementById(`${settingId}_value`);
+                if (valueDisplay) {
+                    valueDisplay.textContent = value;
+                }
+            }
+        } else if (type === 'color') {
+            value = input.value;
+            // Update the text display
+            const textInput = document.getElementById(`${settingId}_text`);
+            if (textInput) {
+                textInput.value = value;
+            }
+        } else {
+            value = input.value;
+        }
+
+        // Save to storage
+        await settingsStorage.setSetting(settingId, value);
+
+        // Update local cache immediately
+        if (!this.currentSettings[settingId]) {
+            this.currentSettings[settingId] = {};
+        }
+        if (isCheckboxType) {
+            this.currentSettings[settingId].isTrue = value;
+        } else {
+            this.currentSettings[settingId].value = value;
+        }
+
+        // Update config module (for backward compatibility)
+        if (isCheckboxType) {
+            this.config.setSetting(settingId, value);
+        } else {
+            this.config.setSettingValue(settingId, value);
+        }
+
+        // Apply color settings immediately if this is a color setting
+        if (type === 'color') {
+            this.config.applyColorSettings();
+        }
+
+        // Update disabled state for dependent settings
+        if (isCheckboxType) {
+            this.applyDisabledByState();
+
+            // When enhanceSim_autoDetect is toggled, manage gear input display
+            if (settingId === 'enhanceSim_autoDetect') {
+                if (value) {
+                    this.populateEnhanceSimFromDetection();
+                } else {
+                    this.restoreEnhanceSimSavedValues();
+                }
+                this.updateEnhanceSimSummary();
+            }
+        }
+
+        // Update enhancement sim summary if any enhance setting changed
+        if (settingId.startsWith('enhanceSim_')) {
+            this.updateEnhanceSimSummary();
+        }
+    }
+
+    /**
+     * Populate enhancement sim gear inputs with auto-detected values from character data.
+     * Saves current values first so they can be restored when toggling off.
+     */
+    populateEnhanceSimFromDetection() {
+        const detected = getDetectedGearSettings();
+        if (!detected) return;
+
+        // Save current input values before overwriting
+        this._enhanceSimSavedValues = {};
+
+        for (const [settingId, value] of Object.entries(detected)) {
+            if (value && typeof value === 'object' && 'enabled' in value) {
+                // Compound gear setting
+                const enabledEl = document.getElementById(`${settingId}_enabled`);
+                const tierEl = document.getElementById(`${settingId}_tier`);
+                const levelEl = document.getElementById(`${settingId}_level`);
+
+                // Save current state
+                this._enhanceSimSavedValues[settingId] = {
+                    enabled: enabledEl?.checked ?? true,
+                    tier: tierEl?.value || '',
+                    level: levelEl?.value || '0',
+                };
+
+                // Apply detected values
+                if (enabledEl) enabledEl.checked = value.enabled;
+                if (tierEl && value.tier) tierEl.value = value.tier;
+                if (levelEl) levelEl.value = value.level;
+            } else {
+                // Simple setting (checkbox or value)
+                const el = document.getElementById(settingId);
+                if (!el) continue;
+
+                if (typeof value === 'boolean') {
+                    this._enhanceSimSavedValues[settingId] = el.checked;
+                    el.checked = value;
+                } else {
+                    this._enhanceSimSavedValues[settingId] = el.value;
+                    el.value = value;
+                }
+            }
+        }
+    }
+
+    /**
+     * Restore previously saved enhancement sim values when auto-detect is toggled off.
+     */
+    restoreEnhanceSimSavedValues() {
+        if (!this._enhanceSimSavedValues) return;
+
+        for (const [settingId, saved] of Object.entries(this._enhanceSimSavedValues)) {
+            if (saved && typeof saved === 'object' && 'enabled' in saved) {
+                // Compound gear setting
+                const enabledEl = document.getElementById(`${settingId}_enabled`);
+                const tierEl = document.getElementById(`${settingId}_tier`);
+                const levelEl = document.getElementById(`${settingId}_level`);
+
+                if (enabledEl) enabledEl.checked = saved.enabled;
+                if (tierEl) tierEl.value = saved.tier;
+                if (levelEl) levelEl.value = saved.level;
+            } else if (typeof saved === 'boolean') {
+                const el = document.getElementById(settingId);
+                if (el) el.checked = saved;
+            } else {
+                const el = document.getElementById(settingId);
+                if (el) el.value = saved;
+            }
+        }
+
+        this._enhanceSimSavedValues = null;
+    }
+
+    /**
+     * Build HTML for the enhancement sim computed stats summary.
+     * @returns {string} HTML string
+     */
+    buildEnhanceSimSummaryHTML() {
+        try {
+            const params = getEnhancingParams();
+            const fmt = (v) => (typeof v === 'number' ? v.toFixed(2).replace(/\.?0+$/, '') : v);
+            return `
+                <span style="color:#6b9fff; font-weight:bold;">${t('Computed Stats')}</span><br>
+                ${t('Effective Level:')} <span style="color:#e0e0e0;">${fmt(params.enhancingLevel)}</span> &nbsp;|&nbsp;
+                ${t('Tool Success:')} <span style="color:#e0e0e0;">${fmt(params.toolBonus)}%</span> &nbsp;|&nbsp;
+                ${t('Speed:')} <span style="color:#e0e0e0;">${fmt(params.speedBonus)}%</span><br>
+                ${t('Drink Conc:')} <span style="color:#e0e0e0;">${fmt((params.guzzlingBonus - 1) * 100)}%</span> &nbsp;|&nbsp;
+                ${t('Rare Find:')} <span style="color:#e0e0e0;">${fmt(params.rareFindBonus)}%</span> &nbsp;|&nbsp;
+                ${t('Experience:')} <span style="color:#e0e0e0;">${fmt(params.experienceBonus)}%</span>
+            `;
+        } catch {
+            return `<span style="color:#666;">${t('Stats unavailable (game data not loaded)')}</span>`;
+        }
+    }
+
+    /**
+     * Update the enhancement sim stats summary in place.
+     */
+    updateEnhanceSimSummary() {
+        const el = document.getElementById('enhanceSim-stats-summary');
+        if (el) {
+            el.innerHTML = this.buildEnhanceSimSummaryHTML();
+        }
+    }
+
+    /**
+     * Handle sync settings to all characters
+     */
+    async handleSync() {
+        // Get character count to show in confirmation
+        const characterCount = await this.config.getKnownCharacterCount();
+
+        // If only 1 character (current), no need to sync
+        if (characterCount <= 1) {
+            alert(t('You only have one character. Settings are already saved for this character.'));
+            return;
+        }
+
+        // Confirm action
+        const otherCharacters = characterCount - 1;
+        const message = t(
+            'This will copy your current settings to {0} other character{1}. Their existing settings will be overwritten.\n\nContinue?',
+            otherCharacters,
+            otherCharacters > 1 ? 's' : ''
+        );
+
+        if (!confirm(message)) {
+            return;
+        }
+
+        // Perform sync
+        const result = await this.config.syncSettingsToAllCharacters();
+
+        // Show result
+        if (result.success) {
+            alert(t('Settings successfully copied to {0} character{1}!', result.count, result.count > 1 ? 's' : ''));
+        } else {
+            alert(t('Failed to sync settings: {0}', result.error || t('Unknown error')));
+        }
+    }
+
+    /**
+     * Handle fetch latest prices
+     * @param {HTMLElement} button - Button element for state updates
+     */
+    async handleFetchPrices(button) {
+        // Disable button and show loading state
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = t('⏳ Fetching...');
+
+        try {
+            // Clear cache and fetch fresh data
+            const result = await marketAPI.clearCacheAndRefetch();
+
+            if (result) {
+                // Success - clear listing price display cache to force re-render
+                document.querySelectorAll('.mwi-listing-prices-set').forEach((table) => {
+                    table.classList.remove('mwi-listing-prices-set');
+                });
+
+                // Show success state
+                button.textContent = t('✅ Updated!');
+                button.style.backgroundColor = '#00ff00';
+                button.style.color = '#000';
+
+                // Reset button after 2 seconds
+                const resetSuccessTimeout = setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.backgroundColor = '';
+                    button.style.color = '';
+                    button.disabled = false;
+                }, 2000);
+                this.timerRegistry.registerTimeout(resetSuccessTimeout);
+            } else {
+                // Failed - show error state
+                button.textContent = t('❌ Failed');
+                button.style.backgroundColor = '#ff0000';
+
+                // Reset button after 3 seconds
+                const resetFailureTimeout = setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.backgroundColor = '';
+                    button.disabled = false;
+                }, 3000);
+                this.timerRegistry.registerTimeout(resetFailureTimeout);
+            }
+        } catch (error) {
+            console.error('[SettingsUI] Fetch prices failed:', error);
+
+            // Show error state
+            button.textContent = t('❌ Error');
+            button.style.backgroundColor = '#ff0000';
+
+            // Reset button after 3 seconds
+            const resetErrorTimeout = setTimeout(() => {
+                button.textContent = originalText;
+                button.style.backgroundColor = '';
+                button.disabled = false;
+            }, 3000);
+            this.timerRegistry.registerTimeout(resetErrorTimeout);
+        }
+    }
+
+    /**
+     * Handle reset to defaults
+     */
+    async handleReset() {
+        if (!confirm(t('Reset all settings to defaults? This cannot be undone.'))) {
+            return;
+        }
+
+        await settingsStorage.resetToDefaults();
+        await this.config.resetToDefaults();
+
+        alert(t('Settings reset to defaults. Please refresh the page.'));
+        window.location.reload();
+    }
+
+    /**
+     * Handle export settings
+     */
+    async handleExport() {
+        const json = await settingsStorage.exportSettings();
+
+        // Create download
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `toolasha-settings-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    /**
+     * Handle import settings
+     */
+    async handleImport() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+
+        input.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                const text = await file.text();
+                const result = await settingsStorage.importSettings(text);
+
+                if (result) {
+                    const msg =
+                        result.skipped > 0
+                            ? t(
+                                  'Settings imported successfully ({0} keys imported, {1} skipped from other characters). Please refresh the page.',
+                                  result.imported,
+                                  result.skipped
+                              )
+                            : t(
+                                  'Settings imported successfully ({0} keys imported). Please refresh the page.',
+                                  result.imported
+                              );
+                    alert(msg);
+                    window.location.reload();
+                } else {
+                    alert(t('Failed to import settings. Please check the file format.'));
+                }
+            } catch (error) {
+                console.error('[Toolasha Settings] Import error:', error);
+                alert(t('Failed to import settings.'));
+            }
+        });
+
+        input.click();
+    }
+
+    /**
+     * Returns the per-character storage key for the All Off snapshot.
+     * @returns {Promise<string>}
+     */
+    async _getAllOffSnapshotKey() {
+        const cid = dataManager.getCurrentCharacterId?.();
+        return cid ? `toolasha_allOffSnapshot_${cid}` : 'toolasha_allOffSnapshot';
+    }
+
+    /**
+     * Handle All Off — snapshots all checkbox values then sets them all to false.
+     * @param {HTMLElement} restoreBtn
+     */
+    async handleAllOff(restoreBtn) {
+        const snapshot = {};
+        for (const group of Object.values(settingsGroups)) {
+            for (const [id, def] of Object.entries(group.settings)) {
+                if ((def.type || 'checkbox') !== 'checkbox') continue;
+                if (id === 'ironCow_enabled') continue;
+                const entry = this.config.settingsMap[id];
+                if (!entry) continue;
+                snapshot[id] = entry.isTrue ?? false;
+            }
+        }
+        const key = await this._getAllOffSnapshotKey();
+        await storage.setJSON(key, snapshot, 'settings', true);
+
+        for (const id of Object.keys(snapshot)) {
+            this.config.setSetting(id, false);
+        }
+
+        this._syncAllCheckboxInputs();
+        this.applyDisabledByState();
+        restoreBtn.style.display = '';
+    }
+
+    /**
+     * Handle Restore — restores checkbox values from the All Off snapshot.
+     * @param {HTMLElement} restoreBtn
+     */
+    async handleRestore(restoreBtn) {
+        const key = await this._getAllOffSnapshotKey();
+        const snapshot = await storage.getJSON(key, 'settings', null);
+        if (!snapshot) return;
+
+        for (const [id, value] of Object.entries(snapshot)) {
+            const entry = this.config.settingsMap[id];
+            if (!entry) continue;
+            this.config.setSetting(id, value);
+        }
+        await storage.delete(key, 'settings');
+
+        this._syncAllCheckboxInputs();
+        this.applyDisabledByState();
+        restoreBtn.style.display = 'none';
+    }
+
+    /**
+     * Syncs all checkbox DOM inputs to match their current config values.
+     * Used after bulk changes (All Off / Restore).
+     */
+    _syncAllCheckboxInputs() {
+        for (const group of Object.values(settingsGroups)) {
+            for (const [id, def] of Object.entries(group.settings)) {
+                if ((def.type || 'checkbox') !== 'checkbox') continue;
+                const entry = this.config.settingsMap[id];
+                if (!entry) continue;
+                const input = document.querySelector(
+                    `.toolasha-setting[data-setting-id="${id}"] input[type="checkbox"]`
+                );
+                if (input) input.checked = entry.isTrue ?? false;
+            }
+        }
+    }
+
+    /**
+     * Open template editor modal
+     * @param {string} settingId - Setting ID
+     */
+    openTemplateEditor(settingId) {
+        const setting = this.findSettingDef(settingId);
+        if (!setting || !setting.templateVariables) {
+            return;
+        }
+
+        const input = document.getElementById(settingId);
+        let currentValue = setting.default;
+
+        // Try to parse stored value
+        if (input && input.value) {
+            try {
+                const parsed = JSON.parse(input.value);
+                if (Array.isArray(parsed)) {
+                    currentValue = parsed;
+                }
+            } catch (e) {
+                console.error('[Settings] Failed to parse template value:', e);
+            }
+        }
+
+        // Ensure currentValue is an array
+        if (!Array.isArray(currentValue)) {
+            currentValue = setting.default || [];
+        }
+
+        // Deep clone to avoid mutating original
+        const templateItems = JSON.parse(JSON.stringify(currentValue));
+
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'toolasha-template-editor-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 100000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'toolasha-template-editor-modal';
+        modal.style.cssText = `
+            background: #1a1a1a;
+            border: 2px solid #3a3a3a;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            color: #e0e0e0;
+        `;
+
+        // Header
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #3a3a3a;
+            padding-bottom: 10px;
+        `;
+        header.innerHTML = `
+            <h3 style="margin: 0; color: #e0e0e0;">Edit Template</h3>
+            <button class="toolasha-template-close-btn" style="
+                background: none;
+                border: none;
+                color: #e0e0e0;
+                font-size: 32px;
+                cursor: pointer;
+                padding: 0;
+                line-height: 1;
+            ">×</button>
+        `;
+
+        // Template list section
+        const listSection = document.createElement('div');
+        listSection.style.cssText = 'margin-bottom: 20px;';
+        listSection.innerHTML =
+            '<h4 style="margin: 0 0 10px 0; color: #e0e0e0;">Template Items (drag to reorder):</h4>';
+
+        const listContainer = document.createElement('div');
+        listContainer.className = 'toolasha-template-list';
+        listContainer.style.cssText = `
+            background: #2a2a2a;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+            padding: 10px;
+            min-height: 200px;
+            max-height: 300px;
+            overflow-y: auto;
+        `;
+
+        const renderList = () => {
+            listContainer.innerHTML = '';
+            templateItems.forEach((item, index) => {
+                const itemEl = this.createTemplateListItem(item, index, templateItems, renderList);
+                listContainer.appendChild(itemEl);
+            });
+        };
+
+        renderList();
+        listSection.appendChild(listContainer);
+
+        // Available variables section
+        const variablesSection = document.createElement('div');
+        variablesSection.style.cssText = 'margin-bottom: 20px;';
+        variablesSection.innerHTML = '<h4 style="margin: 0 0 10px 0; color: #e0e0e0;">Add Variable:</h4>';
+
+        const variablesContainer = document.createElement('div');
+        variablesContainer.style.cssText = `
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        `;
+
+        for (const variable of setting.templateVariables) {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.textContent = '+  ' + variable.label;
+            chip.title = variable.description;
+            chip.style.cssText = `
+                background: #2a2a2a;
+                border: 1px solid #4a4a4a;
+                border-radius: 4px;
+                padding: 6px 12px;
+                color: #e0e0e0;
+                cursor: pointer;
+                font-size: 13px;
+                transition: all 0.2s;
+            `;
+            chip.onmouseover = () => {
+                chip.style.background = '#3a3a3a';
+                chip.style.borderColor = '#5a5a5a';
+            };
+            chip.onmouseout = () => {
+                chip.style.background = '#2a2a2a';
+                chip.style.borderColor = '#4a4a4a';
+            };
+            chip.onclick = () => {
+                templateItems.push({
+                    type: 'variable',
+                    key: variable.key,
+                    label: variable.label,
+                });
+                renderList();
+            };
+            variablesContainer.appendChild(chip);
+        }
+
+        // Add text button
+        const addTextBtn = document.createElement('button');
+        addTextBtn.type = 'button';
+        addTextBtn.textContent = t('+ Add Text');
+        addTextBtn.style.cssText = `
+            background: #2a2a2a;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+            padding: 6px 12px;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        `;
+        addTextBtn.onmouseover = () => {
+            addTextBtn.style.background = '#3a3a3a';
+            addTextBtn.style.borderColor = '#5a5a5a';
+        };
+        addTextBtn.onmouseout = () => {
+            addTextBtn.style.background = '#2a2a2a';
+            addTextBtn.style.borderColor = '#4a4a4a';
+        };
+        addTextBtn.onclick = () => {
+            const text = prompt(t('Enter text:'));
+            if (text !== null && text !== '') {
+                templateItems.push({
+                    type: 'text',
+                    value: text,
+                });
+                renderList();
+            }
+        };
+
+        variablesContainer.appendChild(addTextBtn);
+        variablesSection.appendChild(variablesContainer);
+
+        // Buttons
+        const buttonsSection = document.createElement('div');
+        buttonsSection.style.cssText = `
+            display: flex;
+            gap: 10px;
+            justify-content: space-between;
+            margin-top: 20px;
+        `;
+
+        // Restore to Default button (left side)
+        const restoreBtn = document.createElement('button');
+        restoreBtn.type = 'button';
+        restoreBtn.textContent = t('Restore to Default');
+        restoreBtn.style.cssText = `
+            background: #6b5b3a;
+            border: 1px solid #8b7b5a;
+            border-radius: 4px;
+            padding: 8px 16px;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 14px;
+        `;
+        restoreBtn.onclick = () => {
+            if (confirm(t('Reset template to default? This will discard your current template.'))) {
+                // Reset to default
+                templateItems.length = 0;
+                const defaultTemplate = setting.default || [];
+                templateItems.push(...JSON.parse(JSON.stringify(defaultTemplate)));
+                renderList();
+            }
+        };
+
+        // Right side buttons container
+        const rightButtons = document.createElement('div');
+        rightButtons.style.cssText = 'display: flex; gap: 10px;';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.textContent = t('Cancel');
+        cancelBtn.style.cssText = `
+            background: #2a2a2a;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+            padding: 8px 16px;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 14px;
+        `;
+        cancelBtn.onclick = () => overlay.remove();
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.textContent = t('Save');
+        saveBtn.style.cssText = `
+            background: #4a7c59;
+            border: 1px solid #5a8c69;
+            border-radius: 4px;
+            padding: 8px 16px;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 14px;
+        `;
+        saveBtn.onclick = () => {
+            const input = document.getElementById(settingId);
+            if (input) {
+                input.value = JSON.stringify(templateItems);
+                // Trigger change event
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            overlay.remove();
+        };
+
+        rightButtons.appendChild(cancelBtn);
+        rightButtons.appendChild(saveBtn);
+
+        buttonsSection.appendChild(restoreBtn);
+        buttonsSection.appendChild(rightButtons);
+
+        // Assemble modal
+        modal.appendChild(header);
+        modal.appendChild(listSection);
+        modal.appendChild(variablesSection);
+        modal.appendChild(buttonsSection);
+        overlay.appendChild(modal);
+
+        // Close button handler
+        header.querySelector('.toolasha-template-close-btn').onclick = () => overlay.remove();
+
+        // Close on overlay click
+        overlay.onclick = (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+            }
+        };
+
+        // Add to page
+        document.body.appendChild(overlay);
+    }
+
+    /**
+     * Open custom price overrides editor modal
+     */
+    async openCustomPriceOverridesEditor() {
+        const overrides = await getCustomPriceOverridesAsync();
+        const gameData = dataManager.getInitClientData();
+        const itemDetailMap = gameData?.itemDetailMap || {};
+
+        // Build item list for search
+        const allItems = Object.entries(itemDetailMap).map(([hrid, _detail]) => ({
+            hrid,
+            name: itemNameTranslator.getDisplayName(hrid),
+        }));
+
+        // Get sprite URL for item icons
+        const spriteEl = document.querySelector('use[href*="items_sprite"]');
+        const itemsSpriteUrl = spriteEl ? spriteEl.getAttribute('href').split('#')[0] : null;
+
+        const createItemIcon = (itemHrid, size = 20) => {
+            if (!itemsSpriteUrl) return null;
+            const iconName = itemHrid.split('/').pop();
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', String(size));
+            svg.setAttribute('height', String(size));
+            svg.style.flexShrink = '0';
+            const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+            use.setAttribute('href', `${itemsSpriteUrl}#${iconName}`);
+            svg.appendChild(use);
+            return svg;
+        };
+
+        // Working copy of overrides
+        const workingOverrides = JSON.parse(JSON.stringify(overrides));
+
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 100000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+
+        // Create modal
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background: #1a1a1a;
+            border: 2px solid #3a3a3a;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            color: #e0e0e0;
+        `;
+
+        // Header
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #3a3a3a;
+            padding-bottom: 10px;
+        `;
+        header.innerHTML = `
+            <h3 style="margin: 0; color: #e0e0e0;">${t('Custom Price Overrides')}</h3>
+            <button class="toolasha-cpo-close-btn" style="
+                background: none;
+                border: none;
+                color: #e0e0e0;
+                font-size: 32px;
+                cursor: pointer;
+                padding: 0;
+                line-height: 1;
+            ">&times;</button>
+        `;
+
+        // Help text
+        const helpText = document.createElement('div');
+        helpText.style.cssText = `
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 16px;
+            line-height: 1.4;
+        `;
+        helpText.textContent = t(
+            'Set custom buy/sell prices for items. Leave a field blank to use the marketplace price. Overridden prices show * in profit displays.'
+        );
+
+        // Search section
+        const searchSection = document.createElement('div');
+        searchSection.style.cssText = `
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            align-items: flex-end;
+            position: relative;
+        `;
+
+        // Search input wrapper (for dropdown positioning)
+        const searchWrapper = document.createElement('div');
+        searchWrapper.style.cssText = 'flex: 1; position: relative;';
+
+        const searchLabel = document.createElement('div');
+        searchLabel.style.cssText = 'font-size: 11px; color: #888; margin-bottom: 4px;';
+        searchLabel.textContent = t('Item');
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = t('Search items...');
+        searchInput.style.cssText = `
+            width: 100%;
+            padding: 6px 10px;
+            background: #2a2a2a;
+            color: #e0e0e0;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+            font-size: 13px;
+            box-sizing: border-box;
+        `;
+
+        const dropdown = document.createElement('div');
+        dropdown.style.cssText = `
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #2a2a2a;
+            border: 1px solid #4a4a4a;
+            border-radius: 0 0 4px 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 10;
+            display: none;
+        `;
+
+        searchWrapper.appendChild(searchLabel);
+        searchWrapper.appendChild(searchInput);
+        searchWrapper.appendChild(dropdown);
+
+        // Enhancement level input
+        const enhWrapper = document.createElement('div');
+        const enhLabel = document.createElement('div');
+        enhLabel.style.cssText = 'font-size: 11px; color: #888; margin-bottom: 4px;';
+        enhLabel.textContent = t('Enh');
+
+        const enhInput = document.createElement('input');
+        enhInput.type = 'number';
+        enhInput.min = '0';
+        enhInput.max = '20';
+        enhInput.value = '0';
+        enhInput.style.cssText = `
+            width: 50px;
+            padding: 6px 6px;
+            background: #2a2a2a;
+            color: #e0e0e0;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+            font-size: 13px;
+            text-align: center;
+        `;
+
+        enhWrapper.appendChild(enhLabel);
+        enhWrapper.appendChild(enhInput);
+
+        // Add button
+        const addBtnWrapper = document.createElement('div');
+        addBtnWrapper.style.cssText = 'padding-top: 15px;';
+
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.textContent = '+';
+        addBtn.style.cssText = `
+            background: #4a7c59;
+            border: 1px solid #5a8c69;
+            border-radius: 4px;
+            padding: 6px 12px;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        `;
+
+        addBtnWrapper.appendChild(addBtn);
+
+        searchSection.appendChild(searchWrapper);
+        searchSection.appendChild(enhWrapper);
+        searchSection.appendChild(addBtnWrapper);
+
+        // Selected item tracker (object to avoid no-loop-func lint warning)
+        const selection = { itemHrid: null };
+
+        // Search functionality
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.toLowerCase().trim();
+            if (query.length < 2) {
+                dropdown.style.display = 'none';
+                return;
+            }
+
+            const matches = allItems.filter((item) => item.name.toLowerCase().includes(query)).slice(0, 15);
+
+            if (matches.length === 0) {
+                dropdown.style.display = 'none';
+                return;
+            }
+
+            dropdown.innerHTML = '';
+            dropdown.style.display = 'block';
+
+            for (const match of matches) {
+                const option = document.createElement('div');
+                option.style.cssText = `
+                    padding: 6px 10px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    border-bottom: 1px solid #333;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                `;
+                const optIcon = createItemIcon(match.hrid, 16);
+                if (optIcon) option.appendChild(optIcon);
+                const optName = document.createElement('span');
+                optName.textContent = match.name;
+                option.appendChild(optName);
+                option.dataset.hrid = match.hrid;
+                option.addEventListener('mouseover', () => {
+                    option.style.background = '#3a3a3a';
+                });
+                option.addEventListener('mouseout', () => {
+                    option.style.background = 'transparent';
+                });
+                option.addEventListener('click', (e) => {
+                    const clickedOption = e.currentTarget;
+                    searchInput.value = clickedOption.querySelector('span').textContent;
+                    selection.itemHrid = clickedOption.dataset.hrid;
+                    dropdown.style.display = 'none';
+                });
+                dropdown.appendChild(option);
+            }
+        });
+
+        // Hide dropdown when clicking outside
+        modal.addEventListener('click', (e) => {
+            if (!searchWrapper.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        // Override table
+        const tableContainer = document.createElement('div');
+        tableContainer.style.cssText = `
+            background: #2a2a2a;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+            min-height: 60px;
+            max-height: 350px;
+            overflow-y: auto;
+        `;
+
+        const renderTable = () => {
+            tableContainer.innerHTML = '';
+
+            const entries = Object.entries(workingOverrides);
+            if (entries.length === 0) {
+                const empty = document.createElement('div');
+                empty.style.cssText = 'padding: 20px; text-align: center; color: #666; font-size: 13px;';
+                empty.textContent = t('No custom price overrides. Use the search bar above to add items.');
+                tableContainer.appendChild(empty);
+                return;
+            }
+
+            // Table header
+            const headerRow = document.createElement('div');
+            headerRow.style.cssText = `
+                display: flex;
+                align-items: center;
+                padding: 8px 10px;
+                border-bottom: 1px solid #4a4a4a;
+                font-size: 11px;
+                color: #888;
+                font-weight: 600;
+                gap: 8px;
+            `;
+            headerRow.innerHTML = `
+                <div style="flex: 1;">${t('Item')}</div>
+                <div style="width: 80px; text-align: center;">${t('Buy Price')}</div>
+                <div style="width: 80px; text-align: center;">${t('Sell Price')}</div>
+                <div style="width: 28px;"></div>
+            `;
+            tableContainer.appendChild(headerRow);
+
+            for (const [key, override] of entries) {
+                const [itemHrid, enhLevel] = key.split(':');
+                const enhNum = parseInt(enhLevel) || 0;
+                const itemName = itemNameTranslator.getDisplayName(itemHrid);
+                const enhSuffix = enhNum > 0 ? ` +${enhNum}` : '';
+
+                const row = document.createElement('div');
+                row.style.cssText = `
+                    display: flex;
+                    align-items: center;
+                    padding: 6px 10px;
+                    border-bottom: 1px solid #333;
+                    font-size: 13px;
+                    gap: 8px;
+                `;
+
+                // Item name with icon
+                const nameDiv = document.createElement('div');
+                nameDiv.style.cssText =
+                    'flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px;';
+                const icon = createItemIcon(itemHrid);
+                if (icon) nameDiv.appendChild(icon);
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = itemName + enhSuffix;
+                nameDiv.appendChild(nameSpan);
+
+                // Buy price input
+                const buyInput = document.createElement('input');
+                buyInput.type = 'number';
+                buyInput.min = '0';
+                buyInput.placeholder = '--';
+                buyInput.value = override.buy ?? '';
+                buyInput.style.cssText = `
+                    width: 80px;
+                    padding: 4px 6px;
+                    background: #1a1a1a;
+                    color: #e0e0e0;
+                    border: 1px solid #4a4a4a;
+                    border-radius: 3px;
+                    font-size: 13px;
+                    text-align: right;
+                `;
+                buyInput.addEventListener('change', () => {
+                    const val = buyInput.value.trim();
+                    if (val === '') {
+                        delete workingOverrides[key].buy;
+                    } else {
+                        workingOverrides[key].buy = Number(val);
+                    }
+                    // If both empty, remove the entry
+                    if (!workingOverrides[key].buy && !workingOverrides[key].sell) {
+                        delete workingOverrides[key];
+                        renderTable();
+                    }
+                });
+
+                // Sell price input
+                const sellInput = document.createElement('input');
+                sellInput.type = 'number';
+                sellInput.min = '0';
+                sellInput.placeholder = '--';
+                sellInput.value = override.sell ?? '';
+                sellInput.style.cssText = `
+                    width: 80px;
+                    padding: 4px 6px;
+                    background: #1a1a1a;
+                    color: #e0e0e0;
+                    border: 1px solid #4a4a4a;
+                    border-radius: 3px;
+                    font-size: 13px;
+                    text-align: right;
+                `;
+                sellInput.addEventListener('change', () => {
+                    const val = sellInput.value.trim();
+                    if (val === '') {
+                        delete workingOverrides[key].sell;
+                    } else {
+                        workingOverrides[key].sell = Number(val);
+                    }
+                    if (!workingOverrides[key].buy && !workingOverrides[key].sell) {
+                        delete workingOverrides[key];
+                        renderTable();
+                    }
+                });
+
+                // Remove button
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.textContent = '\u00d7';
+                removeBtn.style.cssText = `
+                    background: none;
+                    border: none;
+                    color: #888;
+                    font-size: 18px;
+                    cursor: pointer;
+                    padding: 0 4px;
+                    line-height: 1;
+                `;
+                removeBtn.addEventListener('mouseover', () => {
+                    removeBtn.style.color = '#ff6b6b';
+                });
+                removeBtn.addEventListener('mouseout', () => {
+                    removeBtn.style.color = '#888';
+                });
+                removeBtn.addEventListener('click', () => {
+                    delete workingOverrides[key];
+                    renderTable();
+                });
+
+                row.appendChild(nameDiv);
+                row.appendChild(buyInput);
+                row.appendChild(sellInput);
+                row.appendChild(removeBtn);
+                tableContainer.appendChild(row);
+            }
+        };
+
+        renderTable();
+
+        // Add button handler
+        addBtn.addEventListener('click', () => {
+            if (!selection.itemHrid) {
+                // Try exact match from search text
+                const searchText = searchInput.value.toLowerCase().trim();
+                const exactMatch = allItems.find((item) => item.name.toLowerCase() === searchText);
+                if (exactMatch) {
+                    selection.itemHrid = exactMatch.hrid;
+                } else {
+                    return;
+                }
+            }
+
+            const enhLevel = parseInt(enhInput.value) || 0;
+            const key = `${selection.itemHrid}:${enhLevel}`;
+
+            if (!workingOverrides[key]) {
+                workingOverrides[key] = {};
+            }
+
+            // Reset search
+            searchInput.value = '';
+            enhInput.value = '0';
+            selection.itemHrid = null;
+            dropdown.style.display = 'none';
+
+            renderTable();
+        });
+
+        // Buttons section
+        const buttonsSection = document.createElement('div');
+        buttonsSection.style.cssText = `
+            display: flex;
+            gap: 10px;
+            justify-content: space-between;
+            margin-top: 20px;
+        `;
+
+        const clearAllBtn = document.createElement('button');
+        clearAllBtn.type = 'button';
+        clearAllBtn.textContent = t('Clear All');
+        clearAllBtn.style.cssText = `
+            background: #6b3a3a;
+            border: 1px solid #8b5a5a;
+            border-radius: 4px;
+            padding: 8px 16px;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 14px;
+        `;
+        clearAllBtn.addEventListener('click', () => {
+            if (Object.keys(workingOverrides).length === 0) return;
+            if (!confirm(t('Remove all custom price overrides?'))) return;
+            for (const key of Object.keys(workingOverrides)) {
+                delete workingOverrides[key];
+            }
+            renderTable();
+        });
+
+        const rightButtons = document.createElement('div');
+        rightButtons.style.cssText = 'display: flex; gap: 10px;';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.textContent = t('Cancel');
+        cancelBtn.style.cssText = `
+            background: #2a2a2a;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+            padding: 8px 16px;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 14px;
+        `;
+        cancelBtn.addEventListener('click', () => overlay.remove());
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.textContent = t('Save');
+        saveBtn.style.cssText = `
+            background: #4a7c59;
+            border: 1px solid #5a8c69;
+            border-radius: 4px;
+            padding: 8px 16px;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 14px;
+        `;
+        saveBtn.addEventListener('click', async () => {
+            // Determine what to add, update, and remove
+            const currentOverrides = getCustomPriceOverrides();
+
+            // Remove overrides that are no longer in working copy
+            for (const key of Object.keys(currentOverrides)) {
+                if (!workingOverrides[key]) {
+                    const [itemHrid, enhLevel] = key.split(':');
+                    await removeCustomPriceOverride(itemHrid, parseInt(enhLevel) || 0);
+                }
+            }
+
+            // Add/update overrides
+            for (const [key, override] of Object.entries(workingOverrides)) {
+                const [itemHrid, enhLevel] = key.split(':');
+                await setCustomPriceOverride(
+                    itemHrid,
+                    parseInt(enhLevel) || 0,
+                    override.buy ?? null,
+                    override.sell ?? null
+                );
+            }
+
+            // Update the button text
+            const btn = document.querySelector('.toolasha-custom-price-edit-btn');
+            if (btn) {
+                const count = Object.keys(workingOverrides).length;
+                btn.textContent = `${t('Manage Overrides')}${count > 0 ? ` (${count})` : ''}`;
+            }
+
+            overlay.remove();
+        });
+
+        rightButtons.appendChild(cancelBtn);
+        rightButtons.appendChild(saveBtn);
+
+        buttonsSection.appendChild(clearAllBtn);
+        buttonsSection.appendChild(rightButtons);
+
+        // Assemble modal
+        modal.appendChild(header);
+        modal.appendChild(helpText);
+        modal.appendChild(searchSection);
+        modal.appendChild(tableContainer);
+        modal.appendChild(buttonsSection);
+        overlay.appendChild(modal);
+
+        // Close handlers
+        header.querySelector('.toolasha-cpo-close-btn').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+            }
+        });
+
+        document.body.appendChild(overlay);
+    }
+
+    /**
+     * @param {Object} item - Template item
+     * @param {number} index - Item index
+     * @param {Array} items - All items
+     * @param {Function} renderList - Callback to re-render list
+     * @returns {HTMLElement} List item element
+     */
+    createTemplateListItem(item, index, items, renderList) {
+        const itemEl = document.createElement('div');
+        itemEl.draggable = true;
+        itemEl.dataset.index = index;
+        itemEl.style.cssText = `
+            background: #1a1a1a;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: move;
+            transition: all 0.2s;
+        `;
+
+        // Drag handle
+        const dragHandle = document.createElement('span');
+        dragHandle.textContent = '⋮⋮';
+        dragHandle.style.cssText = `
+            color: #666;
+            font-size: 16px;
+            cursor: move;
+        `;
+
+        // Content
+        const content = document.createElement('div');
+        content.style.cssText = 'flex: 1; color: #e0e0e0; font-size: 13px;';
+
+        if (item.type === 'variable') {
+            content.innerHTML = `<strong style="color: #4a9eff;">${item.label}</strong> <span style="color: #666; font-family: monospace;">${item.key}</span>`;
+        } else {
+            // Editable text
+            const textInput = document.createElement('input');
+            textInput.type = 'text';
+            textInput.value = item.value;
+            textInput.style.cssText = `
+                background: #2a2a2a;
+                border: 1px solid #4a4a4a;
+                border-radius: 3px;
+                padding: 4px 8px;
+                color: #e0e0e0;
+                font-size: 13px;
+                width: 100%;
+            `;
+            textInput.onchange = () => {
+                items[index].value = textInput.value;
+            };
+            content.appendChild(textInput);
+        }
+
+        // Delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = '×';
+        deleteBtn.title = t('Remove');
+        deleteBtn.style.cssText = `
+            background: #8b0000;
+            border: 1px solid #a00000;
+            border-radius: 3px;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 4px 8px;
+            transition: all 0.2s;
+        `;
+        deleteBtn.onmouseover = () => {
+            deleteBtn.style.background = '#a00000';
+        };
+        deleteBtn.onmouseout = () => {
+            deleteBtn.style.background = '#8b0000';
+        };
+        deleteBtn.onclick = () => {
+            items.splice(index, 1);
+            renderList();
+        };
+
+        // Drag events
+        itemEl.ondragstart = (e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', index);
+            itemEl.style.opacity = '0.5';
+        };
+
+        itemEl.ondragend = () => {
+            itemEl.style.opacity = '1';
+        };
+
+        itemEl.ondragover = (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            itemEl.style.borderColor = '#4a9eff';
+        };
+
+        itemEl.ondragleave = () => {
+            itemEl.style.borderColor = '#4a4a4a';
+        };
+
+        itemEl.ondrop = (e) => {
+            e.preventDefault();
+            itemEl.style.borderColor = '#4a4a4a';
+
+            const dragIndex = parseInt(e.dataTransfer.getData('text/plain'));
+            const dropIndex = index;
+
+            if (dragIndex !== dropIndex) {
+                // Remove from old position
+                const [movedItem] = items.splice(dragIndex, 1);
+                // Insert at new position
+                items.splice(dropIndex, 0, movedItem);
+                renderList();
+            }
+        };
+
+        itemEl.appendChild(dragHandle);
+        itemEl.appendChild(content);
+        itemEl.appendChild(deleteBtn);
+
+        return itemEl;
+    }
+
+    /**
+     * Add Iron Cow mode toggle banner above settings groups.
+     * @param {HTMLElement} container - The card/panel container
+     */
+    addIronCowToggle(container) {
+        const enabled = ironCowMode.isEnabled();
+
+        const wrapper = document.createElement('div');
+        wrapper.id = 'toolasha-iron-cow-toggle';
+        wrapper.style.cssText = `
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin: 0 0 12px 0;
+            padding: 10px 14px;
+            border-radius: 6px;
+            border: 1px solid ${enabled ? '#7c5c20' : '#3a3a3a'};
+            background: ${enabled ? '#2a1e0a' : '#1e1e1e'};
+            cursor: default;
+        `;
+
+        const emoji = document.createElement('span');
+        emoji.textContent = '🐄';
+        emoji.style.cssText = 'font-size: 22px; line-height: 1; flex-shrink: 0; margin-top: 2px;';
+
+        const textBlock = document.createElement('div');
+        textBlock.style.cssText = 'flex: 1; min-width: 0;';
+
+        const title = document.createElement('div');
+        title.style.cssText = `font-weight: 700; font-size: 14px; color: ${enabled ? '#d4900a' : '#c0c0c0'};`;
+        title.textContent = t('Iron Cow Mode');
+
+        const desc = document.createElement('div');
+        desc.style.cssText = 'font-size: 12px; color: #888; margin-top: 2px;';
+        desc.innerHTML = enabled
+            ? t('Disable all market &amp; profit features. ACTIVE — market features locked.')
+            : t('Disable all market &amp; profit features for a no-marketplace playthrough.');
+
+        textBlock.appendChild(title);
+        textBlock.appendChild(desc);
+
+        // Toggle switch
+        const label = document.createElement('label');
+        label.style.cssText =
+            'display: flex; align-items: center; gap: 0; cursor: pointer; flex-shrink: 0; margin-top: 2px;';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = enabled;
+        checkbox.style.cssText = 'width: 36px; height: 20px; cursor: pointer;';
+
+        checkbox.addEventListener('change', async (e) => {
+            e.stopPropagation();
+            const enabling = e.target.checked;
+            config.setSetting('ironCow_enabled', enabling);
+            if (enabling) {
+                await ironCowMode.enable();
+            } else {
+                await ironCowMode.disable();
+            }
+            this._refreshIronCowToggleAppearance(wrapper, enabling);
+            this._syncIronCowSettingInputs();
+            this.applyDisabledByState();
+        });
+
+        label.appendChild(checkbox);
+
+        wrapper.appendChild(emoji);
+        wrapper.appendChild(textBlock);
+        wrapper.appendChild(label);
+
+        container.appendChild(wrapper);
+    }
+
+    /**
+     * Update the Iron Cow toggle banner appearance without re-creating it.
+     * @param {HTMLElement} wrapper - The banner wrapper element
+     * @param {boolean} enabled - Whether Iron Cow is now active
+     */
+    _refreshIronCowToggleAppearance(wrapper, enabled) {
+        wrapper.style.border = `1px solid ${enabled ? '#7c5c20' : '#3a3a3a'}`;
+        wrapper.style.background = enabled ? '#2a1e0a' : '#1e1e1e';
+
+        const title = wrapper.querySelector('div > div:first-child');
+        if (title) title.style.color = enabled ? '#d4900a' : '#c0c0c0';
+
+        const desc = wrapper.querySelector('div > div:last-child');
+        if (desc) {
+            desc.innerHTML = enabled
+                ? t('Disable all market &amp; profit features. ACTIVE — market features locked.')
+                : t('Disable all market &amp; profit features for a no-marketplace playthrough.');
+        }
+    }
+
+    /**
+     * Sync all Iron Cow-locked setting DOM inputs to match their current config values.
+     * Called after enabling or disabling Iron Cow so the UI reflects forced values.
+     */
+    _syncIronCowSettingInputs() {
+        for (const id of IRON_COW_SETTINGS) {
+            const entry = config.settingsMap[id];
+            if (!entry) continue;
+            const input = document.getElementById(id);
+            if (!input) continue;
+            if (entry.type === 'checkbox') {
+                input.checked = entry.isTrue ?? false;
+            } else {
+                input.value = entry.value ?? '';
+            }
+        }
+    }
+
+    /**
+     * Find setting definition by ID
+     * @param {string} settingId - Setting ID
+     * @returns {Object|null} Setting definition
+     */
+    findSettingDef(settingId) {
+        for (const group of Object.values(settingsGroups)) {
+            if (group.settings[settingId]) {
+                return group.settings[settingId];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Cleanup for full shutdown (not character switching)
+     * Unregisters event listeners and removes all DOM elements
+     */
+    cleanup() {
+        // Clean up DOM elements first
+        this.cleanupDOM();
+
+        if (this.characterSwitchHandler) {
+            dataManager.off('character_initialized', this.characterSwitchHandler);
+            this.characterSwitchHandler = null;
+        }
+
+        this.timerRegistry.clearAll();
+    }
+}
+
+const settingsUI = new SettingsUI();
+
+export default settingsUI;

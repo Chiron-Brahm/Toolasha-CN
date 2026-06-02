@@ -1,0 +1,56 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+jobs:
+    lint-and-build:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v6
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v6
+              with:
+                  node-version: '20'
+                  cache: 'npm'
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Run ESLint
+              run: npm run lint
+
+            - name: Check Prettier formatting
+              run: npm run format:check
+
+            - name: Run tests
+              run: npm test
+
+            - name: Build (dev standalone)
+              run: npm run build:dev
+
+            - name: Build (production libraries)
+              run: npm run build
+
+            - name: Verify bundle sizes
+              run: |
+                  limit=2097152
+                  entrypoint_size=$(wc -c < "dist/Toolasha.user.js")
+                  if [ "$entrypoint_size" -gt "$limit" ]; then
+                    echo "❌ dist/Toolasha.user.js is over 2MB limit ($entrypoint_size bytes)"
+                    exit 1
+                  fi
+                  echo "✅ dist/Toolasha.user.js is under 2MB ($entrypoint_size bytes)"
+                  for file in dist/libraries/*.js; do
+                    size=$(wc -c < "$file")
+                    if [ "$size" -gt "$limit" ]; then
+                      echo "❌ $file is over 2MB limit ($size bytes)"
+                      exit 1
+                    fi
+                    echo "✅ $file is under 2MB ($size bytes)"
+                  done

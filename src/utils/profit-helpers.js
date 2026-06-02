@@ -1,0 +1,474 @@
+/**
+ * Profit Calculation Helpers
+ * Pure functions for profit/rate calculations used across features
+ *
+ * These functions consolidate duplicated calculations from:
+ * - profit-calculator.js
+ * - gathering-profit.js
+ * - task-profit-calculator.js
+ * - action-time-display.js
+ * - tooltip-prices.js
+ */
+
+import {
+    SECONDS_PER_HOUR,
+    HOURS_PER_DAY,
+    DRINKS_PER_HOUR_BASE,
+    MARKET_TAX,
+    MIN_ACTION_TIME_SECONDS,
+} from './profit-constants.js';
+import { getItemPrice } from './market-data.js';
+import { getCustomPrice } from '../features/settings/custom-price-overrides.js';
+import { getShopCoinCost } from './game-lookups.js';
+import { getProductionCost } from '../features/enhancement/tooltip-enhancement.js';
+import { itemNameTranslator } from './item-name-translator.js';
+
+/**
+ * Calculate actions per hour from action time
+ * @param {number} actionTimeSeconds - Time per action in seconds
+ * @returns {number} Actions per hour (0 if invalid input)
+ *
+ * @example
+ * calculateActionsPerHour(6) // Returns 600 (3600 / 6)
+ * calculateActionsPerHour(0) // Returns 0 (invalid)
+ */
+export function calculateActionsPerHour(actionTimeSeconds) {
+    if (!actionTimeSeconds || actionTimeSeconds <= 0) {
+        return 0;
+    }
+    return SECONDS_PER_HOUR / Math.max(MIN_ACTION_TIME_SECONDS, actionTimeSeconds);
+}
+
+/**
+ * Calculate effective actions per hour after efficiency
+ * @param {number} actionsPerHour - Base actions per hour (without efficiency)
+ * @param {number} [efficiencyMultiplier=1] - Efficiency multiplier (1 + efficiencyPercent/100)
+ * @returns {number} Effective actions per hour (0 if invalid input)
+ *
+ * @example
+ * calculateEffectiveActionsPerHour(600, 1.2) // Returns 720
+ */
+export function calculateEffectiveActionsPerHour(actionsPerHour, efficiencyMultiplier = 1) {
+    if (!actionsPerHour || actionsPerHour <= 0) {
+        return 0;
+    }
+    if (!efficiencyMultiplier || efficiencyMultiplier <= 0) {
+        return 0;
+    }
+    return actionsPerHour * efficiencyMultiplier;
+}
+
+/**
+ * Calculate hours needed for a number of actions
+ * @param {number} actionCount - Number of queued actions
+ * @param {number} actionsPerHour - Actions per hour rate
+ * @returns {number} Hours needed (0 if invalid input)
+ *
+ * @example
+ * calculateHoursForActions(600, 600) // Returns 1
+ * calculateHoursForActions(1200, 600) // Returns 2
+ */
+export function calculateHoursForActions(actionCount, actionsPerHour) {
+    if (!actionsPerHour || actionsPerHour <= 0) {
+        return 0;
+    }
+    return actionCount / actionsPerHour;
+}
+
+/**
+ * Calculate seconds needed for a number of actions
+ * @param {number} actionCount - Number of queued actions
+ * @param {number} actionsPerHour - Actions per hour rate
+ * @returns {number} Seconds needed (0 if invalid input)
+ *
+ * @example
+ * calculateSecondsForActions(100, 600) // Returns 600 (100/600 * 3600)
+ */
+export function calculateSecondsForActions(actionCount, actionsPerHour) {
+    return calculateHoursForActions(actionCount, actionsPerHour) * SECONDS_PER_HOUR;
+}
+
+/**
+ * Calculate profit per action from hourly profit data
+ *
+ * IMPORTANT: This assumes profitPerHour already includes efficiency.
+ * The formula works because:
+ * - profitPerHour = actionsPerHour × efficiencyMultiplier × profitPerItem
+ * - profitPerHour / actionsPerHour = efficiencyMultiplier × profitPerItem
+ * - This gives profit per ATTEMPT (what the queue shows)
+ *
+ * @param {number} profitPerHour - Profit per hour (includes efficiency)
+ * @param {number} actionsPerHour - Base actions per hour (without efficiency)
+ * @returns {number} Profit per action (0 if invalid input)
+ *
+ * @example
+ * // With 150% efficiency (2.5x), 600 actions/hr, 50 profit/item:
+ * // profitPerHour = 600 × 2.5 × 50 = 75,000
+ * calculateProfitPerAction(75000, 600) // Returns 125 (profit per action)
+ */
+export function calculateProfitPerAction(profitPerHour, actionsPerHour) {
+    if (!actionsPerHour || actionsPerHour <= 0) {
+        return 0;
+    }
+    return profitPerHour / actionsPerHour;
+}
+
+/**
+ * Calculate total profit for a number of actions
+ *
+ * @param {number} profitPerHour - Profit per hour (includes efficiency)
+ * @param {number} actionsPerHour - Base actions per hour (without efficiency)
+ * @param {number} actionCount - Number of queued actions
+ * @returns {number} Total profit (0 if invalid input)
+ *
+ * @example
+ * // Queue shows "Produce 100 times" with 75,000 profit/hr and 600 actions/hr
+ * calculateTotalProfitForActions(75000, 600, 100) // Returns 12,500
+ */
+export function calculateTotalProfitForActions(profitPerHour, actionsPerHour, actionCount) {
+    const profitPerAction = calculateProfitPerAction(profitPerHour, actionsPerHour);
+    return profitPerAction * actionCount;
+}
+
+/**
+ * Calculate profit per day from hourly profit
+ * @param {number} profitPerHour - Profit per hour
+ * @returns {number} Profit per day
+ *
+ * @example
+ * calculateProfitPerDay(10000) // Returns 240,000
+ */
+export function calculateProfitPerDay(profitPerHour) {
+    return profitPerHour * HOURS_PER_DAY;
+}
+
+/**
+ * Calculate drink consumption rate with Drink Concentration
+ * @param {number} drinkConcentration - Drink Concentration stat as decimal (e.g., 0.15 for 15%)
+ * @returns {number} Drinks consumed per hour
+ *
+ * @example
+ * calculateDrinksPerHour(0)    // Returns 12 (base rate)
+ * calculateDrinksPerHour(0.15) // Returns 13.8 (12 × 1.15)
+ */
+export function calculateDrinksPerHour(drinkConcentration = 0) {
+    return DRINKS_PER_HOUR_BASE * (1 + drinkConcentration);
+}
+
+/**
+ * Calculate tea consumption costs per hour
+ * @param {Object} params - Tea cost inputs
+ * @param {Array} params.drinkSlots - Equipped drink slots
+ * @param {number} params.drinkConcentration - Drink Concentration stat as decimal
+ * @param {Object} params.itemDetailMap - Item detail map for names
+ * @param {Function} params.getItemPrice - Price resolver function
+ * @returns {Object} Tea costs breakdown
+ */
+export function calculateTeaCostsPerHour({
+    drinkSlots = [],
+    drinkConcentration = 0,
+    itemDetailMap = {},
+    getItemPrice,
+}) {
+    if (!Array.isArray(drinkSlots) || drinkSlots.length === 0) {
+        return {
+            costs: [],
+            totalCostPerHour: 0,
+            hasMissingPrices: false,
+            drinksPerHour: calculateDrinksPerHour(drinkConcentration),
+        };
+    }
+
+    const drinksPerHour = calculateDrinksPerHour(drinkConcentration);
+
+    const costs = drinkSlots.reduce((entries, drink) => {
+        if (!drink || !drink.itemHrid) {
+            return entries;
+        }
+
+        const itemName = itemNameTranslator.getDisplayName(drink.itemHrid);
+        const price =
+            typeof getItemPrice === 'function'
+                ? getItemPrice(drink.itemHrid, { context: 'profit', side: 'buy' })
+                : null;
+        const isPriceMissing = price === null;
+        const resolvedPrice = isPriceMissing ? 0 : price;
+        const totalCost = resolvedPrice * drinksPerHour;
+
+        entries.push({
+            itemHrid: drink.itemHrid,
+            itemName,
+            pricePerDrink: resolvedPrice,
+            drinksPerHour,
+            totalCost,
+            missingPrice: isPriceMissing,
+        });
+
+        return entries;
+    }, []);
+
+    const totalCostPerHour = costs.reduce((sum, entry) => sum + entry.totalCost, 0);
+    const hasMissingPrices = costs.some((entry) => entry.missingPrice);
+
+    return {
+        costs,
+        totalCostPerHour,
+        hasMissingPrices,
+        drinksPerHour,
+    };
+}
+
+/**
+ * Calculate price after marketplace tax
+ * @param {number} price - Price before tax
+ * @param {number} [taxRate=MARKET_TAX] - Tax rate (e.g., 0.02 for 2%)
+ * @returns {number} Price after tax deduction
+ *
+ * @example
+ * calculatePriceAfterTax(100) // Returns 98
+ */
+export function calculatePriceAfterTax(price, taxRate = MARKET_TAX) {
+    return price * (1 - taxRate);
+}
+
+/**
+ * Create a memoized price lookup closure backed by a fresh Map per calculation.
+ * Caches results keyed on itemHrid + side + enhancementLevel to avoid redundant
+ * market API calls within a single profit calculation pass.
+ *
+ * @param {Function} getItemPriceFn - Price resolver function (itemHrid, options) => number|null
+ * @returns {Function} getCachedPrice(itemHrid, options) closure
+ *
+ * @example
+ * const getCachedPrice = createPriceCache(getItemPrice);
+ * const price = getCachedPrice('/items/cotton', { context: 'profit', side: 'sell' });
+ */
+export function createPriceCache(getItemPriceFn) {
+    const priceCache = new Map();
+
+    return function getCachedPrice(itemHrid, options) {
+        const side = options?.side || '';
+        const enhancementLevel = options?.enhancementLevel ?? '';
+        const cacheKey = `${itemHrid}|${side}|${enhancementLevel}`;
+
+        if (priceCache.has(cacheKey)) {
+            return priceCache.get(cacheKey);
+        }
+
+        const price = getItemPriceFn(itemHrid, options);
+        priceCache.set(cacheKey, price);
+        return price;
+    };
+}
+
+/**
+ * Calculate action-based totals for production actions
+ * Uses per-action base inputs (efficiency only affects time)
+ *
+ * @param {Object} params - Calculation parameters
+ * @param {number} params.actionsCount - Number of queued actions
+ * @param {number} params.actionsPerHour - Base actions per hour
+ * @param {number} params.outputAmount - Items produced per action
+ * @param {number} params.outputPrice - Output price per item (pre-tax)
+ * @param {number} params.gourmetBonus - Gourmet bonus as decimal (e.g., 0.1 for 10%)
+ * @param {Array} [params.bonusDrops] - Bonus drop entries with revenuePerAction
+ * @param {Array} [params.materialCosts] - Material cost entries per action
+ * @param {number} params.totalTeaCostPerHour - Tea cost per hour
+ * @param {number} [params.efficiencyMultiplier=1] - Efficiency multiplier for time scaling
+ * @returns {Object} Totals and time values
+ */
+export function calculateProductionActionTotalsFromBase({
+    actionsCount,
+    actionsPerHour,
+    outputAmount,
+    outputPrice,
+    gourmetBonus,
+    bonusDrops = [],
+    materialCosts = [],
+    totalTeaCostPerHour,
+    efficiencyMultiplier = 1,
+}) {
+    const effectiveActionsPerHour = calculateEffectiveActionsPerHour(actionsPerHour, efficiencyMultiplier);
+    if (!effectiveActionsPerHour || effectiveActionsPerHour <= 0) {
+        return {
+            totalBaseItems: 0,
+            totalGourmetItems: 0,
+            totalBaseRevenue: 0,
+            totalGourmetRevenue: 0,
+            totalBonusRevenue: 0,
+            totalRevenue: 0,
+            totalMarketTax: 0,
+            totalMaterialCost: 0,
+            totalTeaCost: 0,
+            totalCosts: 0,
+            totalProfit: 0,
+            hoursNeeded: 0,
+        };
+    }
+    // actionsCount represents completed actions (including efficiency repeats), so no
+    // additional efficiencyMultiplier scaling is needed — it's already baked into the count.
+    const totalBaseItems = outputAmount * actionsCount;
+    const totalGourmetItems = outputAmount * gourmetBonus * actionsCount;
+    const totalBaseRevenue = totalBaseItems * outputPrice;
+    const totalGourmetRevenue = totalGourmetItems * outputPrice;
+    const totalBonusRevenue = bonusDrops.reduce((sum, drop) => sum + (drop.revenuePerAction || 0) * actionsCount, 0);
+    const totalRevenue = totalBaseRevenue + totalGourmetRevenue + totalBonusRevenue;
+    const totalMarketTax = totalRevenue * MARKET_TAX;
+    const totalMaterialCost = materialCosts.reduce((sum, material) => sum + material.totalCost * actionsCount, 0);
+    const hoursNeeded = calculateHoursForActions(actionsCount, effectiveActionsPerHour);
+    const totalTeaCost = totalTeaCostPerHour * hoursNeeded;
+    const totalCosts = totalMaterialCost + totalTeaCost + totalMarketTax;
+    const totalProfit = totalRevenue - totalCosts;
+
+    return {
+        totalBaseItems,
+        totalGourmetItems,
+        totalBaseRevenue,
+        totalGourmetRevenue,
+        totalBonusRevenue,
+        totalRevenue,
+        totalMarketTax,
+        totalMaterialCost,
+        totalTeaCost,
+        totalCosts,
+        totalProfit,
+        hoursNeeded,
+    };
+}
+
+/**
+ * Calculate action-based totals for gathering actions
+ * Uses per-action base inputs (efficiency only affects time)
+ *
+ * @param {Object} params - Calculation parameters
+ * @param {number} params.actionsCount - Number of queued actions
+ * @param {number} params.actionsPerHour - Base actions per hour
+ * @param {Array} [params.baseOutputs] - Base outputs with revenuePerAction
+ * @param {Array} [params.bonusDrops] - Bonus drop entries with revenuePerAction
+ * @param {number} params.processingRevenueBonusPerAction - Processing bonus per action
+ * @param {number} params.gourmetRevenueBonusPerAction - Gourmet bonus revenue per action
+ * @param {number} params.drinkCostPerHour - Drink costs per hour
+ * @param {number} [params.efficiencyMultiplier=1] - Efficiency multiplier for time scaling
+ * @returns {Object} Totals and time values
+ */
+export function calculateGatheringActionTotalsFromBase({
+    actionsCount,
+    actionsPerHour,
+    baseOutputs = [],
+    bonusDrops = [],
+    processingRevenueBonusPerAction,
+    gourmetRevenueBonusPerAction,
+    drinkCostPerHour,
+    efficiencyMultiplier = 1,
+}) {
+    const effectiveActionsPerHour = calculateEffectiveActionsPerHour(actionsPerHour, efficiencyMultiplier);
+    if (!effectiveActionsPerHour || effectiveActionsPerHour <= 0) {
+        return {
+            totalBaseRevenue: 0,
+            totalBonusRevenue: 0,
+            totalProcessingRevenue: 0,
+            totalGourmetRevenue: 0,
+            totalRevenue: 0,
+            totalMarketTax: 0,
+            totalDrinkCost: 0,
+            totalCosts: 0,
+            totalProfit: 0,
+            hoursNeeded: 0,
+        };
+    }
+    const totalBaseRevenue = baseOutputs.reduce(
+        (sum, output) => sum + (output.revenuePerAction || 0) * actionsCount,
+        0
+    );
+    const totalBonusRevenue = bonusDrops.reduce((sum, drop) => sum + (drop.revenuePerAction || 0) * actionsCount, 0);
+    const totalProcessingRevenue = (processingRevenueBonusPerAction || 0) * actionsCount;
+    const totalGourmetRevenue = (gourmetRevenueBonusPerAction || 0) * actionsCount;
+    const totalRevenue = totalBaseRevenue + totalGourmetRevenue + totalBonusRevenue + totalProcessingRevenue;
+    const totalMarketTax = totalRevenue * MARKET_TAX;
+    const hoursNeeded = calculateHoursForActions(actionsCount, effectiveActionsPerHour);
+    const totalDrinkCost = drinkCostPerHour * hoursNeeded;
+    const totalCosts = totalDrinkCost + totalMarketTax;
+    const totalProfit = totalRevenue - totalCosts;
+
+    return {
+        totalBaseRevenue,
+        totalBonusRevenue,
+        totalProcessingRevenue,
+        totalGourmetRevenue,
+        totalRevenue,
+        totalMarketTax,
+        totalDrinkCost,
+        totalCosts,
+        totalProfit,
+        hoursNeeded,
+    };
+}
+
+/**
+ * Resolve the best available price for an item through the full resolution chain:
+ * custom override → shop floor → market price → production cost fallback
+ *
+ * @param {string} itemHrid - Item HRID
+ * @param {Object} options - Configuration options
+ * @param {number} [options.enhancementLevel=0] - Enhancement level
+ * @param {string} [options.mode] - Pricing mode ('ask'|'bid'|'average')
+ * @param {string} [options.context] - Context for pricing mode ('profit'|'networth')
+ * @param {string} [options.side='sell'] - Transaction side ('buy'|'sell')
+ * @returns {{ price: number, custom: boolean, missing: boolean }}
+ */
+export function resolveItemPrice(itemHrid, options = {}) {
+    const { enhancementLevel = 0, mode, context, side = 'sell' } = options;
+
+    // 1. Custom override — absolute priority
+    const customPrice = getCustomPrice(itemHrid, enhancementLevel, side);
+    if (customPrice !== null) {
+        return { price: customPrice, custom: true, missing: false };
+    }
+
+    // 2. Market price (via getItemPrice which handles pricing mode)
+    const marketPrice = getItemPrice(itemHrid, { enhancementLevel, mode, context, side });
+
+    // 3. Shop price floor (buy-side only)
+    if (side === 'buy') {
+        const shopCost = getShopCoinCost(itemHrid);
+        if (shopCost > 0 && (marketPrice === null || shopCost < marketPrice)) {
+            return { price: shopCost, custom: false, missing: false };
+        }
+    }
+
+    if (marketPrice !== null) {
+        return { price: marketPrice, custom: false, missing: false };
+    }
+
+    // 4. Production cost fallback
+    const prodCost = getProductionCost(itemHrid, mode || 'ask');
+    if (prodCost > 0) {
+        return { price: prodCost, custom: false, missing: false };
+    }
+
+    // 5. No price found
+    return { price: 0, custom: false, missing: true };
+}
+
+export default {
+    // Rate conversions
+    calculateActionsPerHour,
+    calculateEffectiveActionsPerHour,
+    calculateHoursForActions,
+    calculateSecondsForActions,
+
+    // Profit
+    calculateProfitPerAction,
+    calculateTotalProfitForActions,
+    calculateProfitPerDay,
+
+    // Costs
+    calculateDrinksPerHour,
+    calculateTeaCostsPerHour,
+    calculatePriceAfterTax,
+    createPriceCache,
+    resolveItemPrice,
+
+    calculateProductionActionTotalsFromBase,
+    calculateGatheringActionTotalsFromBase,
+};

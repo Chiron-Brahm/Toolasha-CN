@@ -1,0 +1,393 @@
+/**
+ * Output Totals Display Module
+ *
+ * Shows total expected outputs below per-action outputs when user enters
+ * a quantity in the action input box.
+ *
+ * Example:
+ * - Game shows: "Outputs: 1.3 - 3.9 Flax"
+ * - User enters: 100 actions
+ * - Module shows: "130.0 - 390.0" below the per-action output
+ */
+
+import domObserver from '../../core/dom-observer.js';
+import config from '../../core/config.js';
+import dataManager from '../../core/data-manager.js';
+import { findActionInput, attachInputListeners, performInitialUpdate } from '../../utils/action-panel-helper.js';
+import { calculateExperienceMultiplier } from '../../utils/experience-parser.js';
+import { getActionHridFromName } from '../../utils/game-lookups.js';
+
+class OutputTotals {
+    constructor() {
+        this.observedInputs = new Map(); // input element → cleanup function
+        this.unregisterObserver = null;
+        this.isInitialized = false;
+    }
+
+    /**
+     * Initialize the output totals display
+     */
+    initialize() {
+        if (this.isInitialized) {
+            return;
+        }
+
+        if (!config.getSetting('actionPanel_outputTotals')) {
+            return;
+        }
+
+        this.isInitialized = true;
+        this.setupObserver();
+    }
+
+    /**
+     * Setup DOM observer to watch for action detail panels
+     */
+    setupObserver() {
+        // Watch for action detail panels appearing
+        // The game shows action details when you click an action
+        this.unregisterObserver = domObserver.onClass(
+            'OutputTotals',
+            'SkillActionDetail_skillActionDetail',
+            (detailPanel) => {
+                this.attachToActionPanel(detailPanel);
+            }
+        );
+    }
+
+    /**
+     * Attach input listener to an action panel
+     * @param {HTMLElement} detailPanel - The action detail panel element
+     */
+    attachToActionPanel(detailPanel) {
+        // Find the input box using utility
+        const inputBox = findActionInput(detailPanel);
+        if (!inputBox) {
+            return;
+        }
+
+        // Avoid duplicate observers
+        if (this.observedInputs.has(inputBox)) {
+            return;
+        }
+
+        // Attach input listeners using utility
+        const cleanup = attachInputListeners(detailPanel, inputBox, (_value) => {
+            this.updateOutputTotals(detailPanel, inputBox);
+        });
+
+        // Store cleanup function
+        this.observedInputs.set(inputBox, cleanup);
+
+        // Initial update if there's already a value
+        performInitialUpdate(inputBox, () => {
+            this.updateOutputTotals(detailPanel, inputBox);
+        });
+    }
+
+    /**
+     * Extract alchemy success rate from the detail panel DOM.
+     * @param {HTMLElement} detailPanel - The action detail panel
+     * @returns {number} Success rate as decimal (0-1), or 1 if not an alchemy action
+     */
+    getSuccessRate(detailPanel) {
+        const el = detailPanel.querySelector(
+            '[class*="SkillActionDetail_successRate"] [class*="SkillActionDetail_value"]'
+        );
+        if (!el) return 1;
+        const match = el.textContent.trim().match(/([\d,.]+)%/);
+        if (!match) return 1;
+        return parseFloat(match[1].replace(',', '.')) / 100;
+    }
+
+    /**
+     * Update output totals based on input value
+     * @param {HTMLElement} detailPanel - The action detail panel
+     * @param {HTMLInputElement} inputBox - The action count input
+     */
+    updateOutputTotals(detailPanel, inputBox) {
+        const amount = parseFloat(inputBox.value);
+
+        // Remove existing totals (cloned outputs and XP)
+        detailPanel.querySelectorAll('.mwi-output-total').forEach((el) => el.remove());
+
+        // Determine display state: real number, ∞, or 0
+        const isIndeterminate = isNaN(amount) || amount <= 0;
+        // '∞' parses to NaN; explicit '0' parses to 0 — show matching placeholder
+        const placeholderLabel = isNaN(amount) ? '∞' : '0.0';
+
+        // Get alchemy success rate (1.0 for non-alchemy actions)
+        const successRate = this.getSuccessRate(detailPanel);
+
+        // Find main drop container
+        let dropTable = detailPanel.querySelector('[class*="SkillActionDetail_dropTable"]');
+        if (!dropTable) return;
+
+        const outputItems = detailPanel.querySelector('[class*="SkillActionDetail_outputItems"]');
+        if (outputItems) dropTable = outputItems;
+
+        // Track processed containers to avoid duplicates
+        const processedContainers = new Set();
+
+        // Process main outputs (affected by success rate)
+        this.processDropContainer(dropTable, amount, isIndeterminate, placeholderLabel, successRate);
+        processedContainers.add(dropTable);
+
+        // Process Essences and Rares - find all dropTable containers
+        // Note: essences and rares are NOT affected by success rate (drop on every action)
+        const allDropTables = detailPanel.querySelectorAll('[class*="SkillActionDetail_dropTable"]');
+
+        allDropTables.forEach((container) => {
+            if (processedContainers.has(container)) {
+                return;
+            }
+
+            // Check for essences using CSS class (locale-safe)
+            if (container.querySelector('[class*="essence"]')) {
+                this.processDropContainer(container, amount, isIndeterminate, placeholderLabel);
+                processedContainers.add(container);
+                return;
+            }
+
+            // Check for rares (< 5% drop rate, not essences)
+            if (container.innerText.includes('%')) {
+                const percentageMatch = container.innerText.match(/([\d.]+)%/);
+                if (percentageMatch && parseFloat(percentageMatch[1]) < 5) {
+                    this.processDropContainer(container, amount, isIndeterminate, placeholderLabel);
+                    processedContainers.add(container);
+                }
+            }
+        });
+
+        // Process XP element
+        this.processXpElement(detailPanel, amount, isIndeterminate, placeholderLabel);
+    }
+
+    /**
+     * Process drop container (matches MWIT-E implementation)
+     * @param {HTMLElement} container - The drop table container
+     * @param {number} amount - Number of actions
+     * @param {boolean} isIndeterminate - Whether the amount is indeterminate
+     * @param {string} placeholderLabel - Placeholder text for indeterminate
+     * @param {number} [successRate=1] - Success rate multiplier for main outputs
+     */
+    processDropContainer(container, amount, isIndeterminate, placeholderLabel, successRate = 1) {
+        if (!container) return;
+
+        const children = Array.from(container.children);
+
+        children.forEach((child) => {
+            // Skip if this child already has a total next to it
+            if (child.nextSibling?.classList?.contains('mwi-output-total')) {
+                return;
+            }
+
+            // Check if this child has multiple drop elements
+            const hasDropElements =
+                child.children.length > 1 && child.querySelector('[class*="SkillActionDetail_drop"]');
+
+            if (hasDropElements) {
+                // Process multiple drop elements (typical for outputs/essences/rares)
+                const dropElements = child.querySelectorAll('[class*="SkillActionDetail_drop"]');
+                dropElements.forEach((dropEl) => {
+                    // Skip if this drop element already has a total
+                    if (dropEl.nextSibling?.classList?.contains('mwi-output-total')) {
+                        return;
+                    }
+                    const clone = this.processChildElement(
+                        dropEl,
+                        amount,
+                        isIndeterminate,
+                        placeholderLabel,
+                        successRate
+                    );
+                    if (clone) {
+                        dropEl.after(clone);
+                    }
+                });
+            } else {
+                // Process single element
+                const clone = this.processChildElement(child, amount, isIndeterminate, placeholderLabel, successRate);
+                if (clone) {
+                    child.parentNode.insertBefore(clone, child.nextSibling);
+                }
+            }
+        });
+    }
+
+    /**
+     * Process a single child element and return clone with calculated total
+     * @param {HTMLElement} child - The child element to process
+     * @param {number} amount - Number of actions
+     * @param {boolean} isIndeterminate - Whether the amount is indeterminate
+     * @param {string} placeholderLabel - Placeholder text for indeterminate
+     * @param {number} [successRate=1] - Success rate multiplier
+     * @returns {HTMLElement|null} Clone element or null
+     */
+    processChildElement(child, amount, isIndeterminate, placeholderLabel, successRate = 1) {
+        // Look for output element (first child with numbers or ranges)
+        const hasRange = child.children[0]?.innerText?.includes('-');
+        const hasNumbers = child.children[0]?.innerText?.match(/[\d.]+/);
+
+        const outputElement = hasRange || hasNumbers ? child.children[0] : null;
+
+        if (!outputElement) return null;
+
+        // Extract drop rate from the child's text
+        const dropRateText = child.innerText;
+        const rateMatch = dropRateText.match(/~?([\d.]+)%/);
+        const dropRate = rateMatch ? parseFloat(rateMatch[1]) / 100 : 1; // Default to 100%
+
+        // Create styled clone (same as MWIT-E)
+        const clone = outputElement.cloneNode(true);
+        clone.classList.add('mwi-output-total');
+
+        const color = config.COLOR_TEXT_SECONDARY;
+
+        clone.style.cssText = `
+            color: ${color};
+            font-weight: 600;
+            margin-top: 2px;
+        `;
+
+        if (isIndeterminate) {
+            clone.innerText = placeholderLabel;
+            return clone;
+        }
+
+        // Parse output values
+        const output = outputElement.innerText.split('-');
+
+        // Calculate and set the expected output
+        if (output.length > 1) {
+            // Range output (e.g., "1.3 - 4")
+            const minOutput = parseFloat(output[0].trim());
+            const maxOutput = parseFloat(output[1].trim());
+            const expectedMin = (minOutput * amount * dropRate * successRate).toLocaleString('en-US', {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+            });
+            const expectedMax = (maxOutput * amount * dropRate * successRate).toLocaleString('en-US', {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+            });
+            const expectedAvg = (((minOutput + maxOutput) / 2) * amount * dropRate * successRate).toLocaleString(
+                'en-US',
+                {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1,
+                }
+            );
+            clone.innerText = `${expectedMin} - ${expectedMax} (${expectedAvg})`;
+        } else {
+            // Single value output
+            const value = parseFloat(output[0].trim());
+            const expectedValue = (value * amount * dropRate * successRate).toLocaleString('en-US', {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+            });
+            clone.innerText = `${expectedValue}`;
+        }
+
+        return clone;
+    }
+
+    /**
+     * Extract action HRID from detail panel
+     * @param {HTMLElement} detailPanel - The action detail panel element
+     * @returns {string|null} Action HRID or null
+     */
+    getActionHridFromPanel(detailPanel) {
+        // Find action name element
+        const nameElement = detailPanel.querySelector('[class*="SkillActionDetail_name"]');
+
+        if (!nameElement) {
+            return null;
+        }
+
+        const actionName = nameElement.textContent.trim();
+
+        return getActionHridFromName(actionName);
+    }
+
+    /**
+     * Process XP element and display total XP
+     * @param {HTMLElement} detailPanel - The action detail panel
+     * @param {number} amount - Number of actions
+     */
+    processXpElement(detailPanel, amount, isIndeterminate, placeholderLabel) {
+        // Find XP element
+        const xpElement = detailPanel.querySelector('[class*="SkillActionDetail_expGain"]');
+        if (!xpElement) {
+            return;
+        }
+
+        // Get action HRID
+        const actionHrid = this.getActionHridFromPanel(detailPanel);
+        if (!actionHrid) {
+            return;
+        }
+
+        const actionDetails = dataManager.getActionDetails(actionHrid);
+        if (!actionDetails || !actionDetails.experienceGain) {
+            return;
+        }
+
+        // Create clone for total display
+        const clone = xpElement.cloneNode(true);
+        clone.classList.add('mwi-output-total');
+
+        // Apply secondary color for XP
+        clone.style.cssText = `
+            color: ${config.COLOR_TEXT_SECONDARY};
+            font-weight: 600;
+            margin-top: 2px;
+        `;
+
+        if (isIndeterminate) {
+            clone.childNodes[0].textContent = placeholderLabel;
+        } else {
+            // Calculate experience multiplier (Wisdom + Charm Experience)
+            const skillHrid = actionDetails.experienceGain.skillHrid;
+            const xpData = calculateExperienceMultiplier(skillHrid, actionDetails.type);
+
+            const baseXP = actionDetails.experienceGain.value;
+            const modifiedXP = baseXP * xpData.totalMultiplier;
+            const totalXP = modifiedXP * amount;
+
+            // Set total XP text (formatted with 1 decimal place and thousand separators)
+            clone.childNodes[0].textContent = totalXP.toLocaleString('en-US', {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+            });
+        }
+
+        // Insert after original XP element
+        xpElement.parentNode.insertBefore(clone, xpElement.nextSibling);
+    }
+
+    /**
+     * Disable the output totals display
+     */
+    disable() {
+        // Clean up all input observers
+        for (const cleanup of this.observedInputs.values()) {
+            cleanup();
+        }
+        this.observedInputs.clear();
+
+        if (this.unregisterObserver) {
+            this.unregisterObserver();
+            this.unregisterObserver = null;
+        }
+
+        // Remove all injected elements
+        document.querySelectorAll('.mwi-output-total').forEach((el) => el.remove());
+
+        this.isInitialized = false;
+    }
+}
+
+const outputTotals = new OutputTotals();
+
+export default outputTotals;

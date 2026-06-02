@@ -1,0 +1,2930 @@
+/**
+ * Market History Viewer Module
+ *
+ * Displays a comprehensive table of all market listings with:
+ * - Sortable columns
+ * - Search/filter functionality
+ * - Pagination with user-configurable rows per page
+ * - CSV export
+ * - Summary statistics
+ */
+
+import storage from '../../core/storage.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
+import config from '../../core/config.js';
+import dataManager from '../../core/data-manager.js';
+import { formatWithSeparator, formatKMB } from '../../utils/formatters.js';
+import { createTimerRegistry } from '../../utils/timer-registry.js';
+import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
+import { isMarketplacePanel, getMyListingsTab } from '../../utils/game-locale.js';
+import estimatedListingAge from './estimated-listing-age.js';
+import { t } from '../../core/i18n.js';
+
+class MarketHistoryViewer {
+    constructor() {
+        this.isInitialized = false;
+        this.modal = null;
+        this.listings = [];
+        this.filteredListings = [];
+        this.currentPage = 1;
+        this.rowsPerPage = 50;
+        this.showAll = false;
+        this.sortColumn = 'createdTimestamp';
+        this.sortDirection = 'desc'; // Most recent first
+        this.searchTerm = '';
+        this.typeFilter = 'all'; // 'all', 'buy', 'sell'
+        this.statusFilter = 'all'; // 'all', 'active', 'filled', 'filled_active', 'canceled', 'expired', 'unknown'
+        this.useKMBFormat = false; // K/M/B formatting toggle
+        this.storageKey = 'marketListingTimestamps';
+        this.timerRegistry = createTimerRegistry();
+
+        // Column filters
+        this.filters = {
+            dateFrom: null, // Date object or null
+            dateTo: null, // Date object or null
+            selectedItems: [], // Array of itemHrids
+            selectedEnhLevels: [], // Array of enhancement levels (numbers)
+            selectedTypes: [], // Array of 'buy' and/or 'sell'
+        };
+        this.activeFilterPopup = null; // Track currently open filter popup
+        this.popupCloseHandler = null; // Track the close handler to clean it up properly
+
+        // Marketplace tab tracking
+        this.marketplaceTab = null;
+        this.tabCleanupObserver = null;
+
+        // Performance optimization: cache item names to avoid repeated lookups
+        this.itemNameCache = new Map();
+    }
+
+    /**
+     * Get the current items sprite URL from the DOM
+     * @returns {string|null} Items sprite URL or null if not found
+     */
+    getItemsSpriteUrl() {
+        const itemIcon = document.querySelector('use[href*="items_sprite"]');
+        if (!itemIcon) {
+            return null;
+        }
+        const href = itemIcon.getAttribute('href');
+        return href ? href.split('#')[0] : null;
+    }
+
+    /**
+     * Initialize the feature
+     */
+    async initialize() {
+        if (this.isInitialized) {
+            return;
+        }
+
+        if (!config.getSetting('market_showHistoryViewer')) {
+            return;
+        }
+
+        this.isInitialized = true;
+
+        // Load K/M/B format preference
+        this.useKMBFormat = await storage.get('marketHistoryKMBFormat', 'settings', false);
+
+        // Load saved filters
+        await this.loadFilters();
+
+        // Add marketplace tab
+        this.addMarketplaceTab();
+    }
+
+    /**
+     * Load saved filters from storage
+     */
+    async loadFilters() {
+        try {
+            const savedFilters = await storage.getJSON('marketHistoryFilters', 'settings', null);
+            if (savedFilters) {
+                // Convert date strings back to Date objects
+                this.filters.dateFrom = savedFilters.dateFrom ? new Date(savedFilters.dateFrom) : null;
+                this.filters.dateTo = savedFilters.dateTo ? new Date(savedFilters.dateTo) : null;
+                this.filters.selectedItems = savedFilters.selectedItems || [];
+                this.filters.selectedEnhLevels = savedFilters.selectedEnhLevels || [];
+                this.filters.selectedTypes = savedFilters.selectedTypes || [];
+            }
+        } catch (error) {
+            console.error('[MarketHistoryViewer] Failed to load filters:', error);
+        }
+    }
+
+    /**
+     * Save filters to storage
+     */
+    async saveFilters() {
+        try {
+            // Convert Date objects to strings for storage
+            const filtersToSave = {
+                dateFrom: this.filters.dateFrom ? this.filters.dateFrom.toISOString() : null,
+                dateTo: this.filters.dateTo ? this.filters.dateTo.toISOString() : null,
+                selectedItems: this.filters.selectedItems,
+                selectedEnhLevels: this.filters.selectedEnhLevels,
+                selectedTypes: this.filters.selectedTypes,
+            };
+            await storage.setJSON('marketHistoryFilters', filtersToSave, 'settings', true);
+        } catch (error) {
+            console.error('[MarketHistoryViewer] Failed to save filters:', error);
+        }
+    }
+
+    /**
+     * Add "Market History" tab to marketplace tabs
+     */
+    addMarketplaceTab() {
+        const ensureTabExists = () => {
+            // Get tabs container
+            const tabsContainer = document.querySelector('.MuiTabs-flexContainer[role="tablist"]');
+            if (!tabsContainer) return;
+
+            // Verify this is the marketplace tabs
+            if (!isMarketplacePanel(tabsContainer)) return;
+
+            // Check if tab already exists
+            if (tabsContainer.querySelector('[data-mwi-market-history-tab="true"]')) {
+                return;
+            }
+
+            // Get reference tab (My Listings) to clone structure
+            const referenceTab = getMyListingsTab(tabsContainer);
+            if (!referenceTab) return;
+
+            // Clone reference tab
+            const tab = referenceTab.cloneNode(true);
+
+            // Mark as market history tab
+            tab.setAttribute('data-mwi-market-history-tab', 'true');
+
+            // Update badge content
+            const badgeSpan = tab.querySelector('.TabsComponent_badge__1Du26');
+            if (badgeSpan) {
+                badgeSpan.innerHTML = `
+                    <div style="text-align: center;">
+                        <div>${t('Market History')}</div>
+                    </div>
+                `;
+            }
+
+            // Remove selected state
+            tab.classList.remove('Mui-selected');
+            tab.setAttribute('aria-selected', 'false');
+            tab.setAttribute('tabindex', '-1');
+
+            // Add click handler
+            tab.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.openModal();
+            });
+
+            // Insert before any missing materials custom tabs (data-mwi-custom-tab="true")
+            const firstCustomTab = Array.from(tabsContainer.children).find(
+                (btn) => btn.getAttribute('data-mwi-custom-tab') === 'true'
+            );
+
+            if (firstCustomTab) {
+                firstCustomTab.before(tab);
+            } else {
+                // No custom tabs, append to end
+                tabsContainer.appendChild(tab);
+            }
+
+            this.marketplaceTab = tab;
+        };
+
+        // Watch for marketplace tabs container to appear
+        if (!this.tabCleanupObserver) {
+            this.tabCleanupObserver = createMutationWatcher(
+                document.body,
+                () => {
+                    // Check if marketplace is still active
+                    const tabsContainer = document.querySelector('.MuiTabs-flexContainer[role="tablist"]');
+                    if (!tabsContainer) {
+                        // Marketplace closed, clean up tab
+                        if (this.marketplaceTab && !document.body.contains(this.marketplaceTab)) {
+                            this.marketplaceTab = null;
+                        }
+                        return;
+                    }
+
+                    // Check if this is still the marketplace
+                    const hasMarketListingsTab = isMarketplacePanel(tabsContainer);
+
+                    if (!hasMarketListingsTab) {
+                        // No longer on marketplace, clean up
+                        if (this.marketplaceTab && document.body.contains(this.marketplaceTab)) {
+                            this.marketplaceTab.remove();
+                            this.marketplaceTab = null;
+                        }
+                        return;
+                    }
+
+                    // Try to ensure tab exists
+                    ensureTabExists();
+                },
+                { childList: true, subtree: true }
+            );
+        }
+
+        // Initial attempt
+        ensureTabExists();
+    }
+
+    /**
+     * Load listings from storage
+     */
+    async loadListings() {
+        try {
+            const stored = await storage.getJSON(this.storageKey, 'marketListings', []);
+            // Filter out listings without itemHrid (e.g., seed listings from estimated-listing-age)
+            this.listings = stored.filter((listing) => listing && listing.itemHrid);
+
+            // Migrate old listings without status field
+            for (const listing of this.listings) {
+                if (!listing.status) {
+                    listing.status = 'unknown';
+                }
+            }
+
+            // Update statuses (active and expired detection)
+            await this.updateListingStatuses();
+
+            this.cachedDateRange = null; // Clear cache when loading new data
+            this.applyFilters();
+        } catch (error) {
+            console.error('[MarketHistoryViewer] Failed to load listings:', error);
+            this.listings = [];
+            this.filteredListings = [];
+        }
+    }
+
+    /**
+     * Update listing statuses by checking active listings
+     */
+    async updateListingStatuses() {
+        // Get current active listings from dataManager
+        const activeListings = dataManager.getMarketListings() || [];
+        const activeListingIds = new Set(activeListings.map((l) => l.id));
+
+        // Update active status (but don't overwrite expired/canceled/filled statuses)
+        for (const listing of this.listings) {
+            if (activeListingIds.has(listing.id)) {
+                // Only mark as active if status is currently unknown or was previously active
+                if (listing.status === 'unknown' || listing.status === 'active') {
+                    listing.status = 'active';
+                }
+                // If it's already expired/canceled/filled, keep that status
+            }
+        }
+
+        // Save updated statuses
+        await storage.setJSON(this.storageKey, this.listings, 'marketListings', true);
+    }
+
+    /**
+     * Detect expired listings by scraping the My Listings DOM table
+     */
+    async detectExpiredListings() {
+        // Find the My Listings table
+        const myListingsTable = document.querySelector('.MarketplacePanel_myListingsTableContainer__2s6pm table tbody');
+
+        if (!myListingsTable) {
+            return;
+        }
+
+        // Scrape each row
+        const rows = myListingsTable.querySelectorAll('tr');
+
+        for (const row of rows) {
+            try {
+                // Get status cell (first td)
+                const statusCell = row.querySelector('td:nth-child(1)');
+                if (!statusCell) continue;
+
+                // Check for expired/canceled status using CSS class instead of text
+                const isExpired = statusCell.querySelector('[class*="Status_cancel"], [class*="Cancel_"]');
+                if (!isExpired) continue;
+
+                // This row is expired - now match it to our stored listings
+                // Extract identifying information from the row
+                const allCells = row.querySelectorAll('td');
+
+                const typeCell = allCells[1]; // Buy/Sell
+                const progressCell = allCells[2]; // Progress
+                const priceCell = allCells[3]; // Price
+
+                if (!typeCell || !priceCell || !progressCell) {
+                    continue;
+                }
+
+                // Determine buy/sell from CSS class instead of text content
+                const isSell = typeCell.querySelector('[class*="sell"], [class*="Sell"]') !== null;
+                const priceText = priceCell.textContent.trim();
+                const price = this.parsePrice(priceText);
+                const progressText = progressCell.textContent.trim();
+                const progressMatch = progressText.match(/(\d+)\s*\/\s*(\d+)/);
+
+                if (!progressMatch || price === null) {
+                    continue;
+                }
+
+                const filledQuantity = parseInt(progressMatch[1], 10);
+                const orderQuantity = parseInt(progressMatch[2], 10);
+
+                // Find matching listing in our stored data
+                const matchingListing = this.listings.find(
+                    (listing) =>
+                        listing.isSell === isSell &&
+                        listing.price === price &&
+                        listing.orderQuantity === orderQuantity &&
+                        listing.filledQuantity === filledQuantity &&
+                        (listing.status === 'active' || listing.status === 'unknown')
+                );
+
+                if (matchingListing) {
+                    matchingListing.status = 'expired';
+                }
+            } catch {
+                // Silent failure for individual rows
+            }
+        }
+    }
+
+    /**
+     * Parse price string to number (handles K/M/B suffixes)
+     * @param {string} priceText - Price text (e.g., "12M", "1.5K", "100")
+     * @returns {number|null} Parsed price or null if invalid
+     */
+    parsePrice(priceText) {
+        if (!priceText) return null;
+
+        const normalized = priceText.trim().toUpperCase();
+        const match = normalized.match(/^([\d.]+)([KMB])?$/);
+
+        if (!match) return null;
+
+        const value = parseFloat(match[1]);
+        const suffix = match[2];
+
+        if (isNaN(value)) return null;
+
+        switch (suffix) {
+            case 'K':
+                return Math.round(value * 1000);
+            case 'M':
+                return Math.round(value * 1000000);
+            case 'B':
+                return Math.round(value * 1000000000);
+            default:
+                return Math.round(value);
+        }
+    }
+
+    /**
+     * Apply filters and search to listings (optimized single-pass version)
+     */
+    applyFilters() {
+        // Clear cached date range when filters change
+        this.cachedDateRange = null;
+
+        // Pre-compute filter conditions to avoid repeated checks
+        const hasTypeFilter = this.typeFilter !== 'all';
+        const typeIsBuy = this.typeFilter === 'buy';
+        const typeIsSell = this.typeFilter === 'sell';
+
+        const hasStatusFilter = this.statusFilter && this.statusFilter !== 'all';
+
+        const hasSearchTerm = !!this.searchTerm;
+        const searchTerm = hasSearchTerm ? this.searchTerm.toLowerCase() : '';
+
+        const hasDateFilter = !!(this.filters.dateFrom || this.filters.dateTo);
+        let dateToEndOfDay = null;
+        if (hasDateFilter && this.filters.dateTo) {
+            dateToEndOfDay = new Date(this.filters.dateTo);
+            dateToEndOfDay.setHours(23, 59, 59, 999);
+        }
+
+        const hasItemFilter = this.filters.selectedItems.length > 0;
+        const itemFilterSet = hasItemFilter ? new Set(this.filters.selectedItems) : null;
+
+        const hasEnhLevelFilter = this.filters.selectedEnhLevels.length > 0;
+        const enhLevelFilterSet = hasEnhLevelFilter ? new Set(this.filters.selectedEnhLevels) : null;
+
+        const hasColumnTypeFilter = this.filters.selectedTypes.length > 0 && this.filters.selectedTypes.length < 2;
+        const showBuy = hasColumnTypeFilter && this.filters.selectedTypes.includes('buy');
+        const showSell = hasColumnTypeFilter && this.filters.selectedTypes.includes('sell');
+
+        // Single-pass filter: combines all filters into one iteration
+        const filtered = this.listings.filter((listing) => {
+            // Type filter (legacy)
+            if (hasTypeFilter) {
+                if (typeIsBuy && listing.isSell) return false;
+                if (typeIsSell && !listing.isSell) return false;
+            }
+
+            // Status filter
+            if (hasStatusFilter) {
+                if (this.statusFilter === 'filled_active') {
+                    if (listing.status !== 'filled' && listing.status !== 'active') return false;
+                } else if (listing.status !== this.statusFilter) {
+                    return false;
+                }
+            }
+
+            // Search term filter (with cached item names)
+            if (hasSearchTerm) {
+                const itemName = this.getItemName(listing.itemHrid);
+                if (!itemName.toLowerCase().includes(searchTerm)) {
+                    return false;
+                }
+            }
+
+            // Date range filter
+            if (hasDateFilter) {
+                const listingDate = new Date(listing.createdTimestamp || listing.timestamp);
+
+                if (this.filters.dateFrom && listingDate < this.filters.dateFrom) {
+                    return false;
+                }
+
+                if (dateToEndOfDay && listingDate > dateToEndOfDay) {
+                    return false;
+                }
+            }
+
+            // Item filter (using Set for O(1) lookup)
+            if (hasItemFilter && !itemFilterSet.has(listing.itemHrid)) {
+                return false;
+            }
+
+            // Enhancement level filter (using Set for O(1) lookup)
+            if (hasEnhLevelFilter && !enhLevelFilterSet.has(listing.enhancementLevel)) {
+                return false;
+            }
+
+            // Type filter (column filter)
+            if (hasColumnTypeFilter) {
+                if (showBuy && listing.isSell) return false;
+                if (showSell && !listing.isSell) return false;
+            }
+
+            return true;
+        });
+
+        // Optimize sorting: cache computed values to avoid recalculating in comparator
+        if (this.sortColumn === 'itemHrid') {
+            // Pre-compute item names for sorting
+            const itemNamesMap = new Map();
+            for (const listing of filtered) {
+                if (!itemNamesMap.has(listing.itemHrid)) {
+                    itemNamesMap.set(listing.itemHrid, this.getItemName(listing.itemHrid));
+                }
+            }
+
+            filtered.sort((a, b) => {
+                const aVal = itemNamesMap.get(a.itemHrid);
+                const bVal = itemNamesMap.get(b.itemHrid);
+                return this.sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            });
+        } else if (this.sortColumn === 'total') {
+            // Pre-compute totals
+            filtered.sort((a, b) => {
+                const aVal = a.price * a.filledQuantity;
+                const bVal = b.price * b.filledQuantity;
+                return this.sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            });
+        } else if (this.sortColumn === 'createdTimestamp') {
+            // Use numeric timestamp for fast sorting
+            filtered.sort((a, b) => {
+                const aVal = a.timestamp;
+                const bVal = b.timestamp;
+                return this.sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+            });
+        } else {
+            // Generic sorting for other columns
+            filtered.sort((a, b) => {
+                const aVal = a[this.sortColumn];
+                const bVal = b[this.sortColumn];
+
+                if (typeof aVal === 'string') {
+                    return this.sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                } else {
+                    return this.sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+            });
+        }
+
+        this.filteredListings = filtered;
+        this.currentPage = 1; // Reset to first page when filters change
+
+        // Auto-cleanup invalid filter selections (only on first pass to prevent infinite recursion)
+        if (!this._cleanupInProgress) {
+            this._cleanupInProgress = true;
+            const cleaned = this.cleanupInvalidSelections();
+
+            if (cleaned) {
+                // Selections were cleaned - re-apply filters with the cleaned selections
+                this.applyFilters();
+            }
+
+            this._cleanupInProgress = false;
+
+            // Re-render table if modal is open and cleanup happened (only on outermost call)
+            if (cleaned && this.modal && this.modal.style.display !== 'none') {
+                this.renderTable();
+            }
+        }
+    }
+
+    /**
+     * Remove filter selections that yield no results with current filters
+     * @returns {boolean} True if any selections were cleaned up
+     */
+    cleanupInvalidSelections() {
+        let changed = false;
+
+        // Check item selections
+        if (this.filters.selectedItems.length > 0) {
+            const validItems = new Set(this.filteredListings.map((l) => l.itemHrid));
+            const originalLength = this.filters.selectedItems.length;
+            this.filters.selectedItems = this.filters.selectedItems.filter((hrid) => validItems.has(hrid));
+
+            if (this.filters.selectedItems.length !== originalLength) {
+                changed = true;
+            }
+        }
+
+        // Check enhancement level selections
+        if (this.filters.selectedEnhLevels.length > 0) {
+            const validLevels = new Set(this.filteredListings.map((l) => l.enhancementLevel));
+            const originalLength = this.filters.selectedEnhLevels.length;
+            this.filters.selectedEnhLevels = this.filters.selectedEnhLevels.filter((level) => validLevels.has(level));
+
+            if (this.filters.selectedEnhLevels.length !== originalLength) {
+                changed = true;
+            }
+        }
+
+        // Check type selections
+        if (this.filters.selectedTypes.length > 0) {
+            const hasBuy = this.filteredListings.some((l) => !l.isSell);
+            const hasSell = this.filteredListings.some((l) => l.isSell);
+            const originalLength = this.filters.selectedTypes.length;
+
+            this.filters.selectedTypes = this.filters.selectedTypes.filter((type) => {
+                if (type === 'buy') return hasBuy;
+                if (type === 'sell') return hasSell;
+                return false;
+            });
+
+            if (this.filters.selectedTypes.length !== originalLength) {
+                changed = true;
+            }
+        }
+
+        // Save changes to storage
+        if (changed) {
+            this.saveFilters();
+        }
+
+        return changed;
+    }
+
+    /**
+     * Get item name from HRID (with caching for performance)
+     */
+    getItemName(itemHrid) {
+        if (this.itemNameCache.has(itemHrid)) {
+            return this.itemNameCache.get(itemHrid);
+        }
+
+        const name = itemNameTranslator.getDisplayName(itemHrid);
+        this.itemNameCache.set(itemHrid, name);
+        return name;
+    }
+
+    /**
+     * Format number based on K/M/B toggle
+     * @param {number} num - Number to format
+     * @returns {string} Formatted number
+     */
+    formatNumber(num) {
+        return this.useKMBFormat ? formatKMB(num, 1) : formatWithSeparator(num);
+    }
+
+    /**
+     * Get paginated listings for current page
+     */
+    getPaginatedListings() {
+        if (this.showAll) {
+            return this.filteredListings;
+        }
+
+        const start = (this.currentPage - 1) * this.rowsPerPage;
+        const end = start + this.rowsPerPage;
+        return this.filteredListings.slice(start, end);
+    }
+
+    /**
+     * Get total pages
+     */
+    getTotalPages() {
+        if (this.showAll) {
+            return 1;
+        }
+        return Math.ceil(this.filteredListings.length / this.rowsPerPage);
+    }
+
+    /**
+     * Open the market history modal
+     */
+    async openModal() {
+        // Load listings
+        await this.loadListings();
+
+        // Create modal if it doesn't exist
+        if (!this.modal) {
+            this.createModal();
+        }
+
+        // Show modal
+        this.modal.style.display = 'flex';
+
+        // Render table
+        this.renderTable();
+    }
+
+    /**
+     * Close the modal
+     */
+    closeModal() {
+        if (this.modal) {
+            this.modal.style.display = 'none';
+        }
+    }
+
+    /**
+     * Create modal structure
+     */
+    createModal() {
+        // Modal overlay
+        this.modal = document.createElement('div');
+        this.modal.className = 'mwi-market-history-modal';
+        this.modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        `;
+
+        // Modal content
+        const content = document.createElement('div');
+        content.className = 'mwi-market-history-content';
+        content.style.cssText = `
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 95%;
+            max-height: 90%;
+            overflow: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        `;
+
+        // Header
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        `;
+
+        const title = document.createElement('h2');
+        title.textContent = t('Market History');
+        title.style.cssText = `
+            margin: 0;
+            color: #fff;
+        `;
+
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '✕';
+        closeBtn.style.cssText = `
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+        `;
+        closeBtn.addEventListener('click', () => this.closeModal());
+
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+
+        // Controls container
+        const controls = document.createElement('div');
+        controls.className = 'mwi-market-history-controls';
+        controls.style.cssText = `
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+        `;
+
+        content.appendChild(header);
+        content.appendChild(controls);
+
+        // Table container
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'mwi-market-history-table-container';
+        content.appendChild(tableContainer);
+
+        // Pagination container
+        const pagination = document.createElement('div');
+        pagination.className = 'mwi-market-history-pagination';
+        pagination.style.cssText = `
+            margin-top: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        `;
+        content.appendChild(pagination);
+
+        this.modal.appendChild(content);
+        document.body.appendChild(this.modal);
+
+        // Close on background click
+        this.modal.addEventListener('click', (e) => {
+            if (e.target === this.modal) {
+                this.closeModal();
+            }
+        });
+    }
+
+    /**
+     * Render controls (search, filters, export)
+     */
+    renderControls() {
+        const controls = this.modal.querySelector('.mwi-market-history-controls');
+
+        // Only render if controls are empty (prevents re-rendering on every keystroke)
+        if (controls.children.length > 0) {
+            // Just update the stats text
+            this.updateStats();
+            return;
+        }
+
+        // Left group: Search and filters
+        const leftGroup = document.createElement('div');
+        leftGroup.style.cssText = `
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        `;
+
+        // Search box
+        const searchBox = document.createElement('input');
+        searchBox.type = 'text';
+        searchBox.placeholder = t('Search items...');
+        searchBox.value = this.searchTerm;
+        searchBox.className = 'mwi-search-box';
+        searchBox.style.cssText = `
+            padding: 6px 12px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #1a1a1a;
+            color: #fff;
+            min-width: 200px;
+        `;
+        searchBox.addEventListener('input', (e) => {
+            this.searchTerm = e.target.value;
+            this.applyFilters();
+            this.renderTable();
+        });
+
+        // Type filter
+        const typeFilter = document.createElement('select');
+        typeFilter.style.cssText = `
+            padding: 6px 12px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #1a1a1a;
+            color: #fff;
+        `;
+        const typeOptions = [
+            { value: 'all', label: t('All Types') },
+            { value: 'buy', label: t('Buy Orders') },
+            { value: 'sell', label: t('Sell Orders') },
+        ];
+        typeOptions.forEach((opt) => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.label;
+            if (opt.value === this.typeFilter) {
+                option.selected = true;
+            }
+            typeFilter.appendChild(option);
+        });
+        typeFilter.addEventListener('change', (e) => {
+            this.typeFilter = e.target.value;
+            this.applyFilters();
+            this.renderTable();
+        });
+
+        // Status filter
+        const statusFilter = document.createElement('select');
+        statusFilter.style.cssText = `
+            padding: 6px 12px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #1a1a1a;
+            color: #fff;
+        `;
+        const statusOptions = [
+            { value: 'all', label: t('All Statuses') },
+            { value: 'active', label: t('Active Only') },
+            { value: 'filled', label: t('Filled Only') },
+            { value: 'filled_active', label: t('Filled or Active') },
+            { value: 'canceled', label: t('Canceled Only') },
+            { value: 'expired', label: t('Expired Only') },
+            { value: 'unknown', label: t('Unknown Only') },
+        ];
+        statusOptions.forEach((opt) => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.label;
+            if (opt.value === this.statusFilter) {
+                option.selected = true;
+            }
+            statusFilter.appendChild(option);
+        });
+        statusFilter.addEventListener('change', (e) => {
+            this.statusFilter = e.target.value;
+            this.applyFilters();
+            this.renderTable();
+        });
+
+        leftGroup.appendChild(searchBox);
+        leftGroup.appendChild(typeFilter);
+        leftGroup.appendChild(statusFilter);
+
+        // Middle group: Active filter badges
+        const middleGroup = document.createElement('div');
+        middleGroup.className = 'mwi-active-filters';
+        middleGroup.style.cssText = `
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            flex: 1;
+            min-height: 32px;
+        `;
+
+        // Action buttons group
+        const actionGroup = document.createElement('div');
+        actionGroup.style.cssText = `
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        `;
+
+        // Export button
+        const exportBtn = document.createElement('button');
+        exportBtn.textContent = t('Export CSV');
+        exportBtn.style.cssText = `
+            padding: 6px 12px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        `;
+        exportBtn.addEventListener('click', () => this.exportCSV());
+
+        // Import button
+        const importBtn = document.createElement('button');
+        importBtn.textContent = t('Import Market Data');
+        importBtn.style.cssText = `
+            padding: 6px 12px;
+            background: #9b59b6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        `;
+        importBtn.addEventListener('click', () => this.showImportDialog());
+
+        // Clear History button (destructive action - red)
+        const clearBtn = document.createElement('button');
+        clearBtn.textContent = t('Clear History');
+        clearBtn.style.cssText = `
+            padding: 6px 12px;
+            background: #dc2626;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        `;
+        clearBtn.addEventListener('mouseenter', () => {
+            clearBtn.style.background = '#b91c1c';
+        });
+        clearBtn.addEventListener('mouseleave', () => {
+            clearBtn.style.background = '#dc2626';
+        });
+        clearBtn.addEventListener('click', () => this.clearHistory());
+
+        actionGroup.appendChild(exportBtn);
+        actionGroup.appendChild(importBtn);
+        actionGroup.appendChild(clearBtn);
+
+        // Right group: Options and stats
+        const rightGroup = document.createElement('div');
+        rightGroup.style.cssText = `
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-left: auto;
+        `;
+
+        // K/M/B Format checkbox
+        const kmbCheckbox = document.createElement('input');
+        kmbCheckbox.type = 'checkbox';
+        kmbCheckbox.checked = this.useKMBFormat;
+        kmbCheckbox.id = 'mwi-kmb-format';
+        kmbCheckbox.style.cssText = `
+            cursor: pointer;
+        `;
+        kmbCheckbox.addEventListener('change', (e) => {
+            this.useKMBFormat = e.target.checked;
+            // Save preference to storage
+            storage.set('marketHistoryKMBFormat', this.useKMBFormat, 'settings');
+            this.renderTable(); // Re-render to apply formatting
+        });
+
+        const kmbLabel = document.createElement('label');
+        kmbLabel.htmlFor = 'mwi-kmb-format';
+        kmbLabel.textContent = t('K/M/B Format');
+        kmbLabel.style.cssText = `
+            cursor: pointer;
+            color: #aaa;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        `;
+        kmbLabel.prepend(kmbCheckbox);
+
+        // Summary stats
+        const stats = document.createElement('div');
+        stats.className = 'mwi-market-history-stats';
+        stats.style.cssText = `
+            color: #aaa;
+            font-size: 14px;
+            white-space: nowrap;
+        `;
+        stats.textContent = t('Total: {0} listings', this.filteredListings.length);
+
+        rightGroup.appendChild(kmbLabel);
+        rightGroup.appendChild(stats);
+
+        controls.appendChild(leftGroup);
+        controls.appendChild(middleGroup);
+        controls.appendChild(actionGroup);
+        controls.appendChild(rightGroup);
+
+        // Add Clear All Filters button if needed (handled dynamically)
+        this.updateClearFiltersButton();
+
+        // Render active filter badges
+        this.renderActiveFilters();
+    }
+
+    /**
+     * Update just the stats text (without re-rendering controls)
+     */
+    updateStats() {
+        const stats = this.modal.querySelector('.mwi-market-history-stats');
+        if (stats) {
+            stats.textContent = t('Total: {0} listings', this.filteredListings.length);
+        }
+
+        // Update Clear All Filters button visibility
+        this.updateClearFiltersButton();
+
+        // Update active filter badges
+        this.renderActiveFilters();
+    }
+
+    /**
+     * Render active filter badges in the middle section
+     */
+    renderActiveFilters() {
+        const container = this.modal.querySelector('.mwi-active-filters');
+        if (!container) return;
+
+        // Explicitly remove all children to ensure SVG elements are garbage collected
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+
+        const badges = [];
+
+        // Date filter
+        if (this.filters.dateFrom || this.filters.dateTo) {
+            const dateText = [];
+            if (this.filters.dateFrom) {
+                dateText.push(this.filters.dateFrom.toLocaleDateString());
+            }
+            if (this.filters.dateTo) {
+                dateText.push(this.filters.dateTo.toLocaleDateString());
+            }
+            badges.push({
+                label: t('Date: {0}', dateText.join(' - ')),
+                onRemove: () => {
+                    this.filters.dateFrom = null;
+                    this.filters.dateTo = null;
+                    this.saveFilters();
+                    this.applyFilters();
+                    this.renderTable();
+                },
+            });
+        }
+
+        // Item filters
+        if (this.filters.selectedItems.length > 0) {
+            if (this.filters.selectedItems.length === 1) {
+                badges.push({
+                    label: this.getItemName(this.filters.selectedItems[0]),
+                    icon: this.filters.selectedItems[0],
+                    onRemove: () => {
+                        this.filters.selectedItems = [];
+                        this.saveFilters();
+                        this.applyFilters();
+                        this.renderTable();
+                    },
+                });
+            } else {
+                badges.push({
+                    label: t('{0} items selected', this.filters.selectedItems.length),
+                    icon: this.filters.selectedItems[0], // Show first item's icon
+                    onRemove: () => {
+                        this.filters.selectedItems = [];
+                        this.saveFilters();
+                        this.applyFilters();
+                        this.renderTable();
+                    },
+                });
+            }
+        }
+
+        // Enhancement level filters
+        if (this.filters.selectedEnhLevels.length > 0) {
+            const levels = this.filters.selectedEnhLevels.sort((a, b) => a - b);
+            if (levels.length === 1) {
+                const levelText = levels[0] > 0 ? `+${levels[0]}` : 'No Enhancement';
+                badges.push({
+                    label: t('Enh Lvl: {0}', levelText),
+                    onRemove: () => {
+                        this.filters.selectedEnhLevels = [];
+                        this.saveFilters();
+                        this.applyFilters();
+                        this.renderTable();
+                    },
+                });
+            } else {
+                badges.push({
+                    label: t('Enh Lvl: {0} selected', levels.length),
+                    onRemove: () => {
+                        this.filters.selectedEnhLevels = [];
+                        this.saveFilters();
+                        this.applyFilters();
+                        this.renderTable();
+                    },
+                });
+            }
+        }
+
+        // Type filters
+        if (this.filters.selectedTypes.length > 0 && this.filters.selectedTypes.length < 2) {
+            badges.push({
+                label: t('Type: {0}', this.filters.selectedTypes.includes('buy') ? t('Buy') : t('Sell')),
+                onRemove: () => {
+                    this.filters.selectedTypes = [];
+                    this.saveFilters();
+                    this.applyFilters();
+                    this.renderTable();
+                },
+            });
+        }
+
+        // Render badges
+        badges.forEach((badge) => {
+            const badgeEl = document.createElement('div');
+            badgeEl.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 4px 8px;
+                background: #3a3a3a;
+                border: 1px solid #555;
+                border-radius: 4px;
+                color: #aaa;
+                font-size: 13px;
+            `;
+
+            // Add icon if provided
+            if (badge.icon) {
+                const itemsSpriteUrl = this.getItemsSpriteUrl();
+                if (itemsSpriteUrl) {
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.setAttribute('width', '16');
+                    svg.setAttribute('height', '16');
+                    svg.style.flexShrink = '0';
+
+                    // Extract icon name and create use element with external sprite reference
+                    const iconName = badge.icon.split('/').pop();
+                    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+                    use.setAttribute('href', `${itemsSpriteUrl}#${iconName}`);
+                    svg.appendChild(use);
+                    badgeEl.appendChild(svg);
+                }
+            }
+
+            const label = document.createElement('span');
+            label.textContent = badge.label;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = '✕';
+            removeBtn.style.cssText = `
+                background: none;
+                border: none;
+                color: #aaa;
+                cursor: pointer;
+                padding: 0;
+                font-size: 14px;
+                line-height: 1;
+            `;
+            removeBtn.addEventListener('mouseenter', () => {
+                removeBtn.style.color = '#fff';
+            });
+            removeBtn.addEventListener('mouseleave', () => {
+                removeBtn.style.color = '#aaa';
+            });
+            removeBtn.addEventListener('click', badge.onRemove);
+
+            badgeEl.appendChild(label);
+            badgeEl.appendChild(removeBtn);
+            container.appendChild(badgeEl);
+        });
+    }
+
+    /**
+     * Update Clear All Filters button visibility based on filter state
+     */
+    updateClearFiltersButton() {
+        const controls = this.modal.querySelector('.mwi-market-history-controls');
+        if (!controls) return;
+
+        const hasActiveFilters =
+            this.filters.dateFrom !== null ||
+            this.filters.dateTo !== null ||
+            this.filters.selectedItems.length > 0 ||
+            this.filters.selectedEnhLevels.length > 0 ||
+            (this.filters.selectedTypes.length > 0 && this.filters.selectedTypes.length < 2);
+
+        const existingBtn = controls.querySelector('.mwi-clear-filters-button');
+
+        if (hasActiveFilters && !existingBtn) {
+            // Create button
+            const clearFiltersBtn = document.createElement('button');
+            clearFiltersBtn.className = 'mwi-clear-filters-button';
+            clearFiltersBtn.textContent = t('Clear All Filters');
+            clearFiltersBtn.style.cssText = `
+                padding: 6px 12px;
+                background: #e67e22;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                white-space: nowrap;
+            `;
+            clearFiltersBtn.addEventListener('mouseenter', () => {
+                clearFiltersBtn.style.background = '#d35400';
+            });
+            clearFiltersBtn.addEventListener('mouseleave', () => {
+                clearFiltersBtn.style.background = '#e67e22';
+            });
+            clearFiltersBtn.addEventListener('click', () => this.clearAllFilters());
+
+            // Insert into right group (before K/M/B checkbox)
+            const rightGroup = controls.children[3]; // Fourth child is rightGroup
+            if (rightGroup) {
+                rightGroup.insertBefore(clearFiltersBtn, rightGroup.firstChild);
+            }
+        } else if (!hasActiveFilters && existingBtn) {
+            // Remove button
+            existingBtn.remove();
+        }
+    }
+
+    /**
+     * Render table with listings
+     */
+    renderTable() {
+        this.renderControls();
+
+        const tableContainer = this.modal.querySelector('.mwi-market-history-table-container');
+
+        // Explicitly remove all children to ensure SVG elements are garbage collected
+        while (tableContainer.firstChild) {
+            tableContainer.removeChild(tableContainer.firstChild);
+        }
+
+        const table = document.createElement('table');
+        table.style.cssText = `
+            width: 100%;
+            border-collapse: collapse;
+            color: #fff;
+        `;
+
+        // Header
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        headerRow.style.cssText = `
+            background: #1a1a1a;
+        `;
+
+        const columns = [
+            { key: 'createdTimestamp', label: t('Date') },
+            { key: 'itemHrid', label: t('Item') },
+            { key: 'enhancementLevel', label: t('Enh Lvl') },
+            { key: 'isSell', label: t('Type') },
+            { key: 'status', label: t('Status') },
+            { key: 'price', label: t('Price') },
+            { key: 'orderQuantity', label: t('Quantity') },
+            { key: 'filledQuantity', label: t('Filled') },
+            { key: 'total', label: t('Total') },
+            { key: '_delete', label: '' },
+        ];
+
+        columns.forEach((col) => {
+            const th = document.createElement('th');
+            th.style.cssText = `
+                padding: 10px;
+                text-align: left;
+                border-bottom: 2px solid #555;
+                user-select: none;
+                position: relative;
+            `;
+
+            // Create header content container
+            const headerContent = document.createElement('div');
+            headerContent.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            `;
+
+            // Label and sort indicator
+            const labelSpan = document.createElement('span');
+            labelSpan.textContent = col.label;
+
+            if (col.key === '_delete') {
+                th.style.width = '30px';
+            } else {
+                labelSpan.style.cursor = 'pointer';
+
+                // Sort indicator
+                if (this.sortColumn === col.key) {
+                    labelSpan.textContent += this.sortDirection === 'asc' ? ' ▲' : ' ▼';
+                }
+
+                // Sort click handler
+                labelSpan.addEventListener('click', () => {
+                    if (this.sortColumn === col.key) {
+                        this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        this.sortColumn = col.key;
+                        this.sortDirection = 'desc';
+                    }
+                    this.applyFilters();
+                    this.renderTable();
+                });
+            }
+
+            headerContent.appendChild(labelSpan);
+
+            // Add filter button for filterable columns
+            const filterableColumns = ['createdTimestamp', 'itemHrid', 'enhancementLevel', 'isSell'];
+            if (filterableColumns.includes(col.key)) {
+                const filterBtn = document.createElement('button');
+                filterBtn.textContent = '⋮';
+                filterBtn.style.cssText = `
+                    background: none;
+                    border: none;
+                    color: #aaa;
+                    cursor: pointer;
+                    font-size: 16px;
+                    padding: 2px 4px;
+                    font-weight: bold;
+                `;
+
+                // Check if filter is active
+                const hasActiveFilter = this.hasActiveFilter(col.key);
+                if (hasActiveFilter) {
+                    filterBtn.style.color = '#4a90e2';
+                    filterBtn.textContent = '⋮';
+                }
+
+                filterBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.showFilterPopup(col.key, filterBtn);
+                });
+
+                headerContent.appendChild(filterBtn);
+            }
+
+            th.appendChild(headerContent);
+            headerRow.appendChild(th);
+        });
+
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Body
+        const tbody = document.createElement('tbody');
+        const paginatedListings = this.getPaginatedListings();
+
+        if (paginatedListings.length === 0) {
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = columns.length;
+            cell.textContent = t('No listings found');
+            cell.style.cssText = `
+                padding: 20px;
+                text-align: center;
+                color: #888;
+            `;
+            row.appendChild(cell);
+            tbody.appendChild(row);
+        } else {
+            paginatedListings.forEach((listing, index) => {
+                const row = document.createElement('tr');
+                row.style.cssText = `
+                    border-bottom: 1px solid #333;
+                    background: ${index % 2 === 0 ? '#2a2a2a' : '#252525'};
+                `;
+
+                // Date
+                const dateCell = document.createElement('td');
+                // Use createdTimestamp if available, otherwise fall back to numeric timestamp
+                const dateValue = listing.createdTimestamp || listing.timestamp;
+                dateCell.textContent = new Date(dateValue).toLocaleString();
+                dateCell.style.padding = '4px 10px';
+                row.appendChild(dateCell);
+
+                // Item (with icon)
+                const itemCell = document.createElement('td');
+                itemCell.style.cssText = `
+                    padding: 4px 10px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                `;
+
+                // Create SVG icon
+                const itemsSpriteUrl = this.getItemsSpriteUrl();
+                if (itemsSpriteUrl) {
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.setAttribute('width', '20');
+                    svg.setAttribute('height', '20');
+
+                    // Extract icon name and create use element with external sprite reference
+                    const iconName = listing.itemHrid.split('/').pop();
+                    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+                    use.setAttribute('href', `${itemsSpriteUrl}#${iconName}`);
+                    svg.appendChild(use);
+
+                    // Add icon
+                    itemCell.appendChild(svg);
+                }
+
+                // Add text
+                const textSpan = document.createElement('span');
+                textSpan.textContent = this.getItemName(listing.itemHrid);
+                itemCell.appendChild(textSpan);
+
+                row.appendChild(itemCell);
+
+                // Enhancement
+                const enhCell = document.createElement('td');
+                enhCell.textContent = listing.enhancementLevel > 0 ? `+${listing.enhancementLevel}` : '-';
+                enhCell.style.padding = '4px 10px';
+                row.appendChild(enhCell);
+
+                // Type
+                const typeCell = document.createElement('td');
+                typeCell.textContent = listing.isSell ? t('Sell') : t('Buy');
+                typeCell.style.cssText = `
+                    padding: 4px 10px;
+                    color: ${listing.isSell ? '#4ade80' : '#60a5fa'};
+                `;
+                row.appendChild(typeCell);
+
+                // Status
+                const statusCell = document.createElement('td');
+                const status = listing.status || 'unknown';
+                const statusKey = status.charAt(0).toUpperCase() + status.slice(1);
+                statusCell.textContent = t(statusKey);
+                const statusColors = {
+                    active: '#60a5fa',
+                    filled: '#4ade80',
+                    canceled: '#fbbf24',
+                    expired: '#f87171',
+                    unknown: '#9ca3af',
+                };
+                statusCell.style.cssText = `
+                    padding: 4px 10px;
+                    color: ${statusColors[status] || '#9ca3af'};
+                    font-weight: 500;
+                `;
+                row.appendChild(statusCell);
+
+                // Price
+                const priceCell = document.createElement('td');
+                priceCell.textContent = this.formatNumber(listing.price);
+                priceCell.style.padding = '4px 10px';
+                row.appendChild(priceCell);
+
+                // Quantity
+                const qtyCell = document.createElement('td');
+                qtyCell.textContent = this.formatNumber(listing.orderQuantity);
+                qtyCell.style.padding = '4px 10px';
+                row.appendChild(qtyCell);
+
+                // Filled
+                const filledCell = document.createElement('td');
+                filledCell.textContent = this.formatNumber(listing.filledQuantity);
+                filledCell.style.padding = '4px 10px';
+                row.appendChild(filledCell);
+
+                // Total (Price × Filled)
+                const totalCell = document.createElement('td');
+                const totalValue = listing.price * listing.filledQuantity;
+                totalCell.textContent = this.formatNumber(totalValue);
+                totalCell.style.padding = '4px 10px';
+                row.appendChild(totalCell);
+
+                // Delete button
+                const deleteCell = document.createElement('td');
+                deleteCell.style.cssText = 'padding: 4px 6px; text-align: center;';
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = '✕';
+                deleteBtn.title = t('Delete this listing');
+                deleteBtn.style.cssText = `
+                    background: none;
+                    border: none;
+                    color: #666;
+                    cursor: pointer;
+                    font-size: 13px;
+                    padding: 2px 5px;
+                    border-radius: 3px;
+                    line-height: 1;
+                `;
+                deleteBtn.addEventListener('mouseenter', () => {
+                    deleteBtn.style.color = '#f87171';
+                    deleteBtn.style.background = 'rgba(248,113,113,0.15)';
+                });
+                deleteBtn.addEventListener('mouseleave', () => {
+                    deleteBtn.style.color = '#666';
+                    deleteBtn.style.background = 'none';
+                });
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.deleteListing(listing.id);
+                });
+                deleteCell.appendChild(deleteBtn);
+                row.appendChild(deleteCell);
+
+                tbody.appendChild(row);
+            });
+        }
+
+        table.appendChild(tbody);
+        tableContainer.appendChild(table);
+
+        // Render pagination
+        this.renderPagination();
+    }
+
+    /**
+     * Render pagination controls
+     */
+    renderPagination() {
+        const pagination = this.modal.querySelector('.mwi-market-history-pagination');
+
+        // Explicitly remove all children to ensure proper cleanup
+        while (pagination.firstChild) {
+            pagination.removeChild(pagination.firstChild);
+        }
+
+        // Left side: Rows per page
+        const leftSide = document.createElement('div');
+        leftSide.style.cssText = `
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            color: #aaa;
+        `;
+
+        const label = document.createElement('span');
+        label.textContent = t('Rows per page:');
+
+        const rowsInput = document.createElement('input');
+        rowsInput.type = 'number';
+        rowsInput.value = this.rowsPerPage;
+        rowsInput.min = '1';
+        rowsInput.disabled = this.showAll;
+        rowsInput.style.cssText = `
+            width: 60px;
+            padding: 4px 8px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: ${this.showAll ? '#333' : '#1a1a1a'};
+            color: ${this.showAll ? '#666' : '#fff'};
+        `;
+        rowsInput.addEventListener('change', (e) => {
+            this.rowsPerPage = Math.max(1, parseInt(e.target.value) || 50);
+            this.currentPage = 1;
+            this.renderTable();
+        });
+
+        const showAllCheckbox = document.createElement('input');
+        showAllCheckbox.type = 'checkbox';
+        showAllCheckbox.checked = this.showAll;
+        showAllCheckbox.style.cssText = `
+            cursor: pointer;
+        `;
+        showAllCheckbox.addEventListener('change', (e) => {
+            this.showAll = e.target.checked;
+            rowsInput.disabled = this.showAll;
+            rowsInput.style.background = this.showAll ? '#333' : '#1a1a1a';
+            rowsInput.style.color = this.showAll ? '#666' : '#fff';
+            this.currentPage = 1;
+            this.renderTable();
+        });
+
+        const showAllLabel = document.createElement('label');
+        showAllLabel.textContent = t('Show All');
+        showAllLabel.style.cssText = `
+            cursor: pointer;
+            color: #aaa;
+        `;
+        showAllLabel.prepend(showAllCheckbox);
+
+        leftSide.appendChild(label);
+        leftSide.appendChild(rowsInput);
+        leftSide.appendChild(showAllLabel);
+
+        // Right side: Page navigation
+        const rightSide = document.createElement('div');
+        rightSide.style.cssText = `
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            color: #aaa;
+        `;
+
+        if (!this.showAll) {
+            const totalPages = this.getTotalPages();
+
+            const prevBtn = document.createElement('button');
+            prevBtn.textContent = '◀';
+            prevBtn.disabled = this.currentPage === 1;
+            prevBtn.style.cssText = `
+                padding: 4px 12px;
+                background: ${this.currentPage === 1 ? '#333' : '#4a90e2'};
+                color: ${this.currentPage === 1 ? '#666' : 'white'};
+                border: none;
+                border-radius: 4px;
+                cursor: ${this.currentPage === 1 ? 'default' : 'pointer'};
+            `;
+            prevBtn.addEventListener('click', () => {
+                if (this.currentPage > 1) {
+                    this.currentPage--;
+                    this.renderTable();
+                }
+            });
+
+            const pageInfo = document.createElement('span');
+            pageInfo.textContent = t('Page {0} of {1}', this.currentPage, totalPages);
+
+            const nextBtn = document.createElement('button');
+            nextBtn.textContent = '▶';
+            nextBtn.disabled = this.currentPage === totalPages;
+            nextBtn.style.cssText = `
+                padding: 4px 12px;
+                background: ${this.currentPage === totalPages ? '#333' : '#4a90e2'};
+                color: ${this.currentPage === totalPages ? '#666' : 'white'};
+                border: none;
+                border-radius: 4px;
+                cursor: ${this.currentPage === totalPages ? 'default' : 'pointer'};
+            `;
+            nextBtn.addEventListener('click', () => {
+                if (this.currentPage < totalPages) {
+                    this.currentPage++;
+                    this.renderTable();
+                }
+            });
+
+            rightSide.appendChild(prevBtn);
+            rightSide.appendChild(pageInfo);
+            rightSide.appendChild(nextBtn);
+        } else {
+            const showingInfo = document.createElement('span');
+            showingInfo.textContent = t('Showing all {0} listings', this.filteredListings.length);
+            rightSide.appendChild(showingInfo);
+        }
+
+        pagination.appendChild(leftSide);
+        pagination.appendChild(rightSide);
+    }
+
+    /**
+     * Export listings to CSV
+     */
+    exportCSV() {
+        const headers = [
+            t('Date'),
+            t('Item'),
+            t('Enhancement'),
+            t('Type'),
+            t('Status'),
+            t('Price'),
+            t('Quantity'),
+            t('Filled'),
+            t('Total'),
+            'ID',
+        ];
+        const rows = this.filteredListings.map((listing) => [
+            new Date(listing.createdTimestamp || listing.timestamp).toISOString(),
+            this.getItemName(listing.itemHrid),
+            listing.enhancementLevel || 0,
+            listing.isSell ? t('Sell') : t('Buy'),
+            listing.status || 'unknown',
+            listing.price,
+            listing.orderQuantity,
+            listing.filledQuantity,
+            listing.price * listing.filledQuantity, // Total
+            listing.id,
+        ]);
+
+        const csv = [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n');
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `market-history-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    /**
+     * Import listings from CSV
+     */
+    async importCSV(csvText) {
+        try {
+            // Parse CSV
+            const lines = csvText.trim().split('\n');
+            if (lines.length < 2) {
+                throw new Error(t('CSV file is empty or invalid'));
+            }
+
+            // Parse header
+            const _headerLine = lines[0];
+            const _expectedHeaders = [
+                'Date',
+                'Item',
+                'Enhancement',
+                'Type',
+                'Price',
+                'Quantity',
+                'Filled',
+                'Total',
+                'ID',
+            ];
+
+            // Show progress message
+            const progressMsg = document.createElement('div');
+            progressMsg.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: #2a2a2a;
+                padding: 20px;
+                border-radius: 8px;
+                color: #fff;
+                z-index: 10001;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            `;
+            progressMsg.textContent = t('Importing {0} listings from CSV...', lines.length - 1);
+            document.body.appendChild(progressMsg);
+
+            // Load existing listings
+            const existingListings = await storage.getJSON(this.storageKey, 'marketListings', []);
+            const existingIds = new Set(existingListings.map((l) => l.id));
+
+            let imported = 0;
+            let skipped = 0;
+
+            // Build item name to HRID map
+            const itemNameToHrid = {};
+            const gameData = dataManager.getInitClientData();
+            if (gameData?.itemDetailMap) {
+                for (const [hrid, details] of Object.entries(gameData.itemDetailMap)) {
+                    if (details.name) {
+                        itemNameToHrid[details.name] = hrid;
+                    }
+                }
+            }
+
+            // Process each line
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+
+                // Parse CSV row (handle quoted fields)
+                const fields = [];
+                let currentField = '';
+                let inQuotes = false;
+
+                for (let j = 0; j < line.length; j++) {
+                    const char = line[j];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        fields.push(currentField);
+                        currentField = '';
+                    } else {
+                        currentField += char;
+                    }
+                }
+                fields.push(currentField); // Add last field
+
+                if (fields.length < 9) {
+                    console.warn(`[MarketHistoryViewer] Skipping invalid CSV row ${i}: ${line}`);
+                    continue;
+                }
+
+                const [dateStr, itemName, enhStr, typeStr, priceStr, qtyStr, filledStr, _totalStr, idStr] = fields;
+
+                // Parse ID
+                const id = parseInt(idStr);
+                if (isNaN(id)) {
+                    console.warn(`[MarketHistoryViewer] Skipping row with invalid ID: ${idStr}`);
+                    continue;
+                }
+
+                // Skip duplicates
+                if (existingIds.has(id)) {
+                    skipped++;
+                    continue;
+                }
+
+                // Find item HRID from name
+                const itemHrid = itemNameToHrid[itemName];
+                if (!itemHrid) {
+                    console.warn(`[MarketHistoryViewer] Could not find HRID for item: ${itemName}`);
+                    skipped++;
+                    continue;
+                }
+
+                // Create listing object
+                const listing = {
+                    id: id,
+                    timestamp: new Date(dateStr).getTime(),
+                    createdTimestamp: dateStr,
+                    itemHrid: itemHrid,
+                    enhancementLevel: parseInt(enhStr) || 0,
+                    price: parseFloat(priceStr),
+                    orderQuantity: parseFloat(qtyStr),
+                    filledQuantity: parseFloat(filledStr),
+                    isSell: typeStr.toLowerCase() === 'sell',
+                };
+
+                existingListings.push(listing);
+                imported++;
+            }
+
+            // Save to storage
+            await storage.setJSON(this.storageKey, existingListings, 'marketListings', true);
+
+            // Remove progress message
+            document.body.removeChild(progressMsg);
+
+            // Show success message
+            alert(
+                t(
+                    'Import complete!\n\nImported: {0} new listings\nSkipped: {1} duplicates or invalid rows\nTotal: {2} listings',
+                    imported,
+                    skipped,
+                    existingListings.length
+                )
+            );
+
+            // Reload and render table
+            await this.loadListings();
+            this.renderTable();
+        } catch (error) {
+            console.error('[MarketHistoryViewer] CSV import error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Show import dialog
+     */
+    showImportDialog() {
+        // Create file input
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.txt,.json,.csv';
+        fileInput.style.display = 'none';
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                const text = await file.text();
+
+                // Detect file type and use appropriate import method
+                if (file.name.endsWith('.csv')) {
+                    await this.importCSV(text);
+                } else {
+                    await this.importEdibleToolsData(text);
+                }
+            } catch (error) {
+                console.error('[MarketHistoryViewer] Import failed:', error);
+                alert(t('Import failed: {0}', error.message));
+            }
+        });
+
+        document.body.appendChild(fileInput);
+        fileInput.click();
+        document.body.removeChild(fileInput);
+    }
+
+    /**
+     * Import market listing data (supports multiple JSON formats)
+     * Accepts:
+     * - Edible Tools format: {"market_list": "[...]"} (double-encoded JSON string)
+     * - Edible Tools modern: {"market_list": [...]} (proper JSON array)
+     * - Direct array: [{listing1}, {listing2}, ...]
+     */
+    async importEdibleToolsData(jsonText) {
+        try {
+            // Check for truncated file (only if it looks like an object)
+            const trimmed = jsonText.trim();
+            if (trimmed.startsWith('{') && !trimmed.endsWith('}')) {
+                throw new Error(
+                    t('File appears to be truncated or incomplete. The JSON does not end properly. ') +
+                        t(
+                            'Try exporting from Edible Tools again, or export to CSV from the Market History Viewer and import that instead.'
+                        )
+                );
+            }
+
+            // Parse the file
+            const data = JSON.parse(jsonText);
+
+            let marketList;
+
+            // Format 1: Direct array [{}, {}, ...]
+            if (Array.isArray(data)) {
+                marketList = data;
+            }
+            // Format 2 & 3: Object with market_list key
+            else if (data && typeof data === 'object' && data.market_list) {
+                // Format 2a: market_list is a JSON string (Edible Tools legacy format)
+                if (typeof data.market_list === 'string') {
+                    marketList = JSON.parse(data.market_list);
+                }
+                // Format 2b: market_list is already an array (Edible Tools modern format)
+                else if (Array.isArray(data.market_list)) {
+                    marketList = data.market_list;
+                } else {
+                    throw new Error('market_list must be an array or JSON string containing an array');
+                }
+            }
+            // Unrecognized format
+            else {
+                throw new Error(
+                    t('Unrecognized format. Expected:') +
+                        '\n' +
+                        t('- Direct array: [{listing1}, {listing2}, ...]') +
+                        '\n' +
+                        t('- Object format: {"market_list": [...]}') +
+                        '\n' +
+                        t('- Edible Tools format: {"market_list": "[...]"}')
+                );
+            }
+
+            if (!Array.isArray(marketList) || marketList.length === 0) {
+                throw new Error(t('No listings found in file or array is empty'));
+            }
+
+            // Show progress message
+            const progressMsg = document.createElement('div');
+            progressMsg.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: #2a2a2a;
+                padding: 20px;
+                border-radius: 8px;
+                color: #fff;
+                z-index: 10001;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            `;
+            progressMsg.textContent = t('Importing {0} listings...', marketList.length);
+            document.body.appendChild(progressMsg);
+
+            // Convert imported format to Toolasha format
+            const existingListings = await storage.getJSON(this.storageKey, 'marketListings', []);
+            const existingIds = new Set(existingListings.map((l) => l.id));
+
+            let imported = 0;
+            let skipped = 0;
+
+            for (const etListing of marketList) {
+                // Skip if we already have this listing
+                if (existingIds.has(etListing.id)) {
+                    skipped++;
+                    continue;
+                }
+
+                // Convert to Toolasha format
+                const toolashaListing = {
+                    id: etListing.id,
+                    timestamp: new Date(etListing.createdTimestamp).getTime(),
+                    createdTimestamp: etListing.createdTimestamp,
+                    itemHrid: etListing.itemHrid,
+                    enhancementLevel: etListing.enhancementLevel || 0,
+                    price: etListing.price,
+                    orderQuantity: etListing.orderQuantity,
+                    filledQuantity: etListing.filledQuantity,
+                    isSell: etListing.isSell,
+                };
+
+                existingListings.push(toolashaListing);
+                imported++;
+            }
+
+            // Save to storage
+            await storage.setJSON(this.storageKey, existingListings, 'marketListings', true);
+
+            // Remove progress message
+            document.body.removeChild(progressMsg);
+
+            // Show success message
+            alert(
+                t(
+                    'Import complete!\n\nImported: {0} new listings\nSkipped: {1} duplicates\nTotal: {2} listings',
+                    imported,
+                    skipped,
+                    existingListings.length
+                )
+            );
+
+            // Reload and render table
+            await this.loadListings();
+            this.renderTable();
+        } catch (error) {
+            console.error('[MarketHistoryViewer] Import error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete a single listing by its ID
+     * @param {number} listingId
+     */
+    async deleteListing(listingId) {
+        this.listings = this.listings.filter((l) => l.id !== listingId);
+        await storage.setJSON(this.storageKey, this.listings, 'marketListings', true);
+        this.applyFilters();
+        this.renderTable();
+    }
+
+    /**
+     * Clear all market history data
+     */
+    async clearHistory() {
+        // Strong confirmation dialog
+        const confirmed = confirm(
+            t('⚠️ WARNING: This will permanently delete ALL market history data!\n') +
+                t('You are about to delete {0} listings.\n', this.listings.length) +
+                t('RECOMMENDATION: Export to CSV first using the "Export CSV" button.\n') +
+                t('This action CANNOT be undone!\n') +
+                t('Are you absolutely sure you want to continue?')
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            // Clear from storage
+            await storage.setJSON(this.storageKey, [], 'marketListings', true);
+
+            // Clear local data
+            this.listings = [];
+            this.filteredListings = [];
+
+            // Reset EstimatedListingAge so it doesn't re-save old entries on next WebSocket event
+            await estimatedListingAge.loadHistoricalData();
+
+            // Show success message
+            alert(t('Market history cleared successfully.'));
+
+            // Reload and render table (will show empty state)
+            await this.loadListings();
+            this.renderTable();
+        } catch (error) {
+            console.error('[MarketHistoryViewer] Failed to clear history:', error);
+            alert(t('Failed to clear history: {0}', error.message));
+        }
+    }
+
+    /**
+     * Get filtered listings excluding a specific filter type
+     * Used for dynamic filter options - shows what's available given OTHER active filters
+     * @param {string} excludeFilterType - Filter to exclude: 'date', 'item', 'enhancementLevel', 'type'
+     * @returns {Array} Filtered listings
+     */
+    getFilteredListingsExcluding(excludeFilterType) {
+        let filtered = [...this.listings];
+
+        // Apply legacy type filter if set
+        if (this.typeFilter === 'buy') {
+            filtered = filtered.filter((listing) => !listing.isSell);
+        } else if (this.typeFilter === 'sell') {
+            filtered = filtered.filter((listing) => listing.isSell);
+        }
+
+        // Apply search term
+        if (this.searchTerm) {
+            const term = this.searchTerm.toLowerCase();
+            filtered = filtered.filter((listing) => {
+                const itemName = this.getItemName(listing.itemHrid).toLowerCase();
+                return itemName.includes(term);
+            });
+        }
+
+        // Apply date range filter (unless excluded)
+        if (excludeFilterType !== 'date' && (this.filters.dateFrom || this.filters.dateTo)) {
+            filtered = filtered.filter((listing) => {
+                const listingDate = new Date(listing.createdTimestamp || listing.timestamp);
+
+                if (this.filters.dateFrom && listingDate < this.filters.dateFrom) {
+                    return false;
+                }
+
+                if (this.filters.dateTo) {
+                    const endOfDay = new Date(this.filters.dateTo);
+                    endOfDay.setHours(23, 59, 59, 999);
+                    if (listingDate > endOfDay) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+        }
+
+        // Apply item filter (unless excluded)
+        if (excludeFilterType !== 'item' && this.filters.selectedItems.length > 0) {
+            filtered = filtered.filter((listing) => this.filters.selectedItems.includes(listing.itemHrid));
+        }
+
+        // Apply enhancement level filter (unless excluded)
+        if (excludeFilterType !== 'enhancementLevel' && this.filters.selectedEnhLevels.length > 0) {
+            filtered = filtered.filter((listing) => this.filters.selectedEnhLevels.includes(listing.enhancementLevel));
+        }
+
+        // Apply type filter (unless excluded)
+        if (
+            excludeFilterType !== 'type' &&
+            this.filters.selectedTypes.length > 0 &&
+            this.filters.selectedTypes.length < 2
+        ) {
+            const showBuy = this.filters.selectedTypes.includes('buy');
+            const showSell = this.filters.selectedTypes.includes('sell');
+
+            filtered = filtered.filter((listing) => {
+                if (showBuy && !listing.isSell) return true;
+                if (showSell && listing.isSell) return true;
+                return false;
+            });
+        }
+
+        return filtered;
+    }
+
+    /**
+     * Check if a column has an active filter
+     * @param {string} columnKey - Column key to check
+     * @returns {boolean} True if filter is active
+     */
+    hasActiveFilter(columnKey) {
+        switch (columnKey) {
+            case 'createdTimestamp':
+                return this.filters.dateFrom !== null || this.filters.dateTo !== null;
+            case 'itemHrid':
+                return this.filters.selectedItems.length > 0;
+            case 'enhancementLevel':
+                return this.filters.selectedEnhLevels.length > 0;
+            case 'isSell':
+                return this.filters.selectedTypes.length > 0 && this.filters.selectedTypes.length < 2;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Show filter popup for a column
+     * @param {string} columnKey - Column key
+     * @param {HTMLElement} buttonElement - Button that triggered popup
+     */
+    showFilterPopup(columnKey, buttonElement) {
+        // If clicking the same button that opened the current popup, close it (toggle behavior)
+        if (this.activeFilterPopup && this.activeFilterButton === buttonElement) {
+            this.activeFilterPopup.remove();
+            this.activeFilterPopup = null;
+            this.activeFilterButton = null;
+            if (this.popupCloseHandler) {
+                document.removeEventListener('click', this.popupCloseHandler);
+                this.popupCloseHandler = null;
+            }
+            return;
+        }
+
+        // Close any existing popup and remove its event listener
+        if (this.activeFilterPopup) {
+            this.activeFilterPopup.remove();
+            this.activeFilterPopup = null;
+        }
+        if (this.popupCloseHandler) {
+            document.removeEventListener('click', this.popupCloseHandler);
+            this.popupCloseHandler = null;
+        }
+
+        // Create popup based on column type
+        let popup;
+        switch (columnKey) {
+            case 'createdTimestamp':
+                popup = this.createDateFilterPopup();
+                break;
+            case 'itemHrid':
+                popup = this.createItemFilterPopup();
+                break;
+            case 'enhancementLevel':
+                popup = this.createEnhancementFilterPopup();
+                break;
+            case 'isSell':
+                popup = this.createTypeFilterPopup();
+                break;
+            default:
+                return;
+        }
+
+        // Position popup below button
+        const buttonRect = buttonElement.getBoundingClientRect();
+        popup.style.position = 'fixed';
+        popup.style.top = `${buttonRect.bottom + 5}px`;
+        popup.style.left = `${buttonRect.left}px`;
+        popup.style.zIndex = '10002';
+
+        document.body.appendChild(popup);
+        this.activeFilterPopup = popup;
+        this.activeFilterButton = buttonElement; // Track which button opened this popup
+
+        // Close popup when clicking outside
+        this.popupCloseHandler = (e) => {
+            // Don't close if clicking on date inputs or their calendar pickers
+            if (e.target.type === 'date' || e.target.closest('input[type="date"]')) {
+                return;
+            }
+
+            if (!popup.contains(e.target) && e.target !== buttonElement) {
+                popup.remove();
+                this.activeFilterPopup = null;
+                this.activeFilterButton = null;
+                document.removeEventListener('click', this.popupCloseHandler);
+                this.popupCloseHandler = null;
+            }
+        };
+        const popupTimeout = setTimeout(() => document.addEventListener('click', this.popupCloseHandler), 10);
+        this.timerRegistry.registerTimeout(popupTimeout);
+    }
+
+    /**
+     * Create date filter popup
+     * @returns {HTMLElement} Popup element
+     */
+    createDateFilterPopup() {
+        const popup = document.createElement('div');
+        popup.style.cssText = `
+            background: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 12px;
+            min-width: 250px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        `;
+
+        // Title
+        const title = document.createElement('div');
+        title.textContent = t('Filter by Date');
+        title.style.cssText = `
+            color: #fff;
+            font-weight: bold;
+            margin-bottom: 10px;
+        `;
+        popup.appendChild(title);
+
+        // Get date range from filtered listings (excluding date filter itself)
+        // Cache the result to avoid recalculating on every popup open
+        if (!this.cachedDateRange) {
+            const filteredListings = this.getFilteredListingsExcluding('date');
+
+            if (filteredListings.length > 0) {
+                // Use timestamps directly to avoid creating Date objects unnecessarily
+                const timestamps = filteredListings.map((l) => l.timestamp || new Date(l.createdTimestamp).getTime());
+                this.cachedDateRange = {
+                    minDate: new Date(Math.min(...timestamps)),
+                    maxDate: new Date(Math.max(...timestamps)),
+                };
+            } else {
+                this.cachedDateRange = { minDate: null, maxDate: null };
+            }
+        }
+
+        const { minDate, maxDate } = this.cachedDateRange;
+
+        if (minDate && maxDate) {
+            // Show available date range
+            const rangeInfo = document.createElement('div');
+            rangeInfo.style.cssText = `
+                color: #aaa;
+                font-size: 11px;
+                margin-bottom: 10px;
+                padding: 6px;
+                background: #1a1a1a;
+                border-radius: 3px;
+            `;
+            rangeInfo.textContent = t(
+                'Available: {0} - {1}',
+                minDate.toLocaleDateString(),
+                maxDate.toLocaleDateString()
+            );
+            popup.appendChild(rangeInfo);
+        }
+
+        // From date
+        const fromLabel = document.createElement('label');
+        fromLabel.textContent = t('From:');
+        fromLabel.style.cssText = `
+            display: block;
+            color: #aaa;
+            margin-bottom: 4px;
+            font-size: 12px;
+        `;
+
+        const fromInput = document.createElement('input');
+        fromInput.type = 'date';
+        fromInput.value = this.filters.dateFrom ? this.filters.dateFrom.toISOString().split('T')[0] : '';
+        if (minDate) fromInput.min = minDate.toISOString().split('T')[0];
+        if (maxDate) fromInput.max = maxDate.toISOString().split('T')[0];
+        fromInput.style.cssText = `
+            width: 100%;
+            padding: 6px;
+            background: #1a1a1a;
+            border: 1px solid #555;
+            border-radius: 3px;
+            color: #fff;
+            margin-bottom: 10px;
+        `;
+
+        // To date
+        const toLabel = document.createElement('label');
+        toLabel.textContent = t('To:');
+        toLabel.style.cssText = `
+            display: block;
+            color: #aaa;
+            margin-bottom: 4px;
+            font-size: 12px;
+        `;
+
+        const toInput = document.createElement('input');
+        toInput.type = 'date';
+        toInput.value = this.filters.dateTo ? this.filters.dateTo.toISOString().split('T')[0] : '';
+        if (minDate) toInput.min = minDate.toISOString().split('T')[0];
+        if (maxDate) toInput.max = maxDate.toISOString().split('T')[0];
+        toInput.style.cssText = `
+            width: 100%;
+            padding: 6px;
+            background: #1a1a1a;
+            border: 1px solid #555;
+            border-radius: 3px;
+            color: #fff;
+            margin-bottom: 10px;
+        `;
+
+        // Buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = `
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        `;
+
+        const applyBtn = document.createElement('button');
+        applyBtn.textContent = t('Apply');
+        applyBtn.style.cssText = `
+            flex: 1;
+            padding: 6px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        `;
+        applyBtn.addEventListener('click', () => {
+            this.filters.dateFrom = fromInput.value ? new Date(fromInput.value) : null;
+            this.filters.dateTo = toInput.value ? new Date(toInput.value) : null;
+            this.saveFilters();
+            this.applyFilters();
+            this.renderTable();
+            popup.remove();
+            this.activeFilterPopup = null;
+            this.activeFilterButton = null;
+        });
+
+        const clearBtn = document.createElement('button');
+        clearBtn.textContent = t('Clear');
+        clearBtn.style.cssText = `
+            flex: 1;
+            padding: 6px;
+            background: #666;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        `;
+        clearBtn.addEventListener('click', () => {
+            this.filters.dateFrom = null;
+            this.filters.dateTo = null;
+            this.saveFilters();
+            this.applyFilters();
+            this.renderTable();
+            popup.remove();
+            this.activeFilterPopup = null;
+            this.activeFilterButton = null;
+        });
+
+        buttonContainer.appendChild(applyBtn);
+        buttonContainer.appendChild(clearBtn);
+
+        popup.appendChild(fromLabel);
+        popup.appendChild(fromInput);
+        popup.appendChild(toLabel);
+        popup.appendChild(toInput);
+        popup.appendChild(buttonContainer);
+
+        return popup;
+    }
+
+    /**
+     * Create item filter popup
+     * @returns {HTMLElement} Popup element
+     */
+    createItemFilterPopup() {
+        const popup = document.createElement('div');
+        popup.style.cssText = `
+            background: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 12px;
+            min-width: 300px;
+            max-height: 400px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        `;
+
+        // Title
+        const title = document.createElement('div');
+        title.textContent = t('Filter by Item');
+        title.style.cssText = `
+            color: #fff;
+            font-weight: bold;
+            margin-bottom: 10px;
+        `;
+        popup.appendChild(title);
+
+        // Search box
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = t('Search items...');
+        searchInput.style.cssText = `
+            width: 100%;
+            padding: 6px;
+            background: #1a1a1a;
+            border: 1px solid #555;
+            border-radius: 3px;
+            color: #fff;
+            margin-bottom: 8px;
+        `;
+
+        popup.appendChild(searchInput);
+
+        // Get unique items from filtered listings (excluding item filter itself)
+        const filteredListings = this.getFilteredListingsExcluding('item');
+        const itemHrids = [...new Set(filteredListings.map((l) => l.itemHrid))];
+        const itemsWithNames = itemHrids.map((hrid) => ({
+            hrid,
+            name: this.getItemName(hrid),
+        }));
+        itemsWithNames.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Checkboxes container
+        const checkboxContainer = document.createElement('div');
+        checkboxContainer.style.cssText = `
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            max-height: 250px;
+        `;
+
+        const renderCheckboxes = (filterText = '') => {
+            // Explicitly remove all children to ensure proper cleanup
+            while (checkboxContainer.firstChild) {
+                checkboxContainer.removeChild(checkboxContainer.firstChild);
+            }
+
+            const filtered = filterText
+                ? itemsWithNames.filter((item) => item.name.toLowerCase().includes(filterText.toLowerCase()))
+                : itemsWithNames;
+
+            filtered.forEach((item) => {
+                const label = document.createElement('label');
+                label.style.cssText = `
+                    display: block;
+                    color: #fff;
+                    padding: 4px;
+                    cursor: pointer;
+                `;
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = this.filters.selectedItems.includes(item.hrid);
+                checkbox.style.marginRight = '6px';
+
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(item.name));
+                checkboxContainer.appendChild(label);
+
+                checkbox.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        if (!this.filters.selectedItems.includes(item.hrid)) {
+                            this.filters.selectedItems.push(item.hrid);
+                        }
+                    } else {
+                        const index = this.filters.selectedItems.indexOf(item.hrid);
+                        if (index > -1) {
+                            this.filters.selectedItems.splice(index, 1);
+                        }
+                    }
+                });
+            });
+        };
+
+        renderCheckboxes();
+        searchInput.addEventListener('input', (e) => renderCheckboxes(e.target.value));
+
+        popup.appendChild(checkboxContainer);
+
+        // Buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = `
+            display: flex;
+            gap: 8px;
+        `;
+
+        const applyBtn = document.createElement('button');
+        applyBtn.textContent = t('Apply');
+        applyBtn.style.cssText = `
+            flex: 1;
+            padding: 6px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        `;
+        applyBtn.addEventListener('click', () => {
+            this.saveFilters();
+            this.applyFilters();
+            this.renderTable();
+            popup.remove();
+            this.activeFilterPopup = null;
+            this.activeFilterButton = null;
+        });
+
+        const clearBtn = document.createElement('button');
+        clearBtn.textContent = t('Clear');
+        clearBtn.style.cssText = `
+            flex: 1;
+            padding: 6px;
+            background: #666;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        `;
+        clearBtn.addEventListener('click', () => {
+            this.filters.selectedItems = [];
+            this.saveFilters();
+            this.applyFilters();
+            this.renderTable();
+            popup.remove();
+            this.activeFilterPopup = null;
+            this.activeFilterButton = null;
+        });
+
+        buttonContainer.appendChild(applyBtn);
+        buttonContainer.appendChild(clearBtn);
+        popup.appendChild(buttonContainer);
+
+        return popup;
+    }
+
+    /**
+     * Create enhancement level filter popup
+     * @returns {HTMLElement} Popup element
+     */
+    createEnhancementFilterPopup() {
+        const popup = document.createElement('div');
+        popup.style.cssText = `
+            background: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 12px;
+            min-width: 200px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        `;
+
+        // Title
+        const title = document.createElement('div');
+        title.textContent = t('Filter by Enhancement Level');
+        title.style.cssText = `
+            color: #fff;
+            font-weight: bold;
+            margin-bottom: 10px;
+        `;
+        popup.appendChild(title);
+
+        // Get unique enhancement levels from filtered listings (excluding enhancement filter itself)
+        const filteredListings = this.getFilteredListingsExcluding('enhancementLevel');
+        const enhLevels = [...new Set(filteredListings.map((l) => l.enhancementLevel))];
+        enhLevels.sort((a, b) => a - b);
+
+        // Checkboxes
+        const checkboxContainer = document.createElement('div');
+        checkboxContainer.style.cssText = `
+            max-height: 250px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        `;
+
+        enhLevels.forEach((level) => {
+            const label = document.createElement('label');
+            label.style.cssText = `
+                display: block;
+                color: #fff;
+                padding: 4px;
+                cursor: pointer;
+            `;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = this.filters.selectedEnhLevels.includes(level);
+            checkbox.style.marginRight = '6px';
+
+            const levelText = level > 0 ? `+${level}` : t('No Enhancement');
+
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(levelText));
+            checkboxContainer.appendChild(label);
+
+            checkbox.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    if (!this.filters.selectedEnhLevels.includes(level)) {
+                        this.filters.selectedEnhLevels.push(level);
+                    }
+                } else {
+                    const index = this.filters.selectedEnhLevels.indexOf(level);
+                    if (index > -1) {
+                        this.filters.selectedEnhLevels.splice(index, 1);
+                    }
+                }
+            });
+        });
+
+        popup.appendChild(checkboxContainer);
+
+        // Buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = `
+            display: flex;
+            gap: 8px;
+        `;
+
+        const applyBtn = document.createElement('button');
+        applyBtn.textContent = t('Apply');
+        applyBtn.style.cssText = `
+            flex: 1;
+            padding: 6px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        `;
+        applyBtn.addEventListener('click', () => {
+            this.saveFilters();
+            this.applyFilters();
+            this.renderTable();
+            popup.remove();
+            this.activeFilterPopup = null;
+            this.activeFilterButton = null;
+        });
+
+        const clearBtn = document.createElement('button');
+        clearBtn.textContent = t('Clear');
+        clearBtn.style.cssText = `
+            flex: 1;
+            padding: 6px;
+            background: #666;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        `;
+        clearBtn.addEventListener('click', () => {
+            this.filters.selectedEnhLevels = [];
+            this.saveFilters();
+            this.applyFilters();
+            this.renderTable();
+            popup.remove();
+            this.activeFilterPopup = null;
+            this.activeFilterButton = null;
+        });
+
+        buttonContainer.appendChild(applyBtn);
+        buttonContainer.appendChild(clearBtn);
+        popup.appendChild(buttonContainer);
+
+        return popup;
+    }
+
+    /**
+     * Create type filter popup (Buy/Sell)
+     * @returns {HTMLElement} Popup element
+     */
+    createTypeFilterPopup() {
+        const popup = document.createElement('div');
+        popup.style.cssText = `
+            background: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 12px;
+            min-width: 150px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        `;
+
+        // Title
+        const title = document.createElement('div');
+        title.textContent = t('Filter by Type');
+        title.style.cssText = `
+            color: #fff;
+            font-weight: bold;
+            margin-bottom: 10px;
+        `;
+        popup.appendChild(title);
+
+        // Check which types exist in filtered listings (excluding type filter itself)
+        const filteredListings = this.getFilteredListingsExcluding('type');
+        const hasBuyOrders = filteredListings.some((l) => !l.isSell);
+        const hasSellOrders = filteredListings.some((l) => l.isSell);
+
+        // Buy checkbox
+        if (hasBuyOrders) {
+            const buyLabel = document.createElement('label');
+            buyLabel.style.cssText = `
+                display: block;
+                color: #fff;
+                padding: 4px;
+                cursor: pointer;
+                margin-bottom: 6px;
+            `;
+
+            const buyCheckbox = document.createElement('input');
+            buyCheckbox.type = 'checkbox';
+            buyCheckbox.checked = this.filters.selectedTypes.includes('buy');
+            buyCheckbox.style.marginRight = '6px';
+
+            buyLabel.appendChild(buyCheckbox);
+            buyLabel.appendChild(document.createTextNode(t('Buy Orders')));
+            popup.appendChild(buyLabel);
+
+            buyCheckbox.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    if (!this.filters.selectedTypes.includes('buy')) {
+                        this.filters.selectedTypes.push('buy');
+                    }
+                } else {
+                    const index = this.filters.selectedTypes.indexOf('buy');
+                    if (index > -1) {
+                        this.filters.selectedTypes.splice(index, 1);
+                    }
+                }
+            });
+        }
+
+        // Sell checkbox
+        if (hasSellOrders) {
+            const sellLabel = document.createElement('label');
+            sellLabel.style.cssText = `
+                display: block;
+                color: #fff;
+                padding: 4px;
+                cursor: pointer;
+            `;
+
+            const sellCheckbox = document.createElement('input');
+            sellCheckbox.type = 'checkbox';
+            sellCheckbox.checked = this.filters.selectedTypes.includes('sell');
+            sellCheckbox.style.marginRight = '6px';
+
+            sellLabel.appendChild(sellCheckbox);
+            sellLabel.appendChild(document.createTextNode(t('Sell Orders')));
+            popup.appendChild(sellLabel);
+
+            sellCheckbox.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    if (!this.filters.selectedTypes.includes('sell')) {
+                        this.filters.selectedTypes.push('sell');
+                    }
+                } else {
+                    const index = this.filters.selectedTypes.indexOf('sell');
+                    if (index > -1) {
+                        this.filters.selectedTypes.splice(index, 1);
+                    }
+                }
+            });
+        }
+
+        // Buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = `
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        `;
+
+        const applyBtn = document.createElement('button');
+        applyBtn.textContent = t('Apply');
+        applyBtn.style.cssText = `
+            flex: 1;
+            padding: 6px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        `;
+        applyBtn.addEventListener('click', () => {
+            this.saveFilters();
+            this.applyFilters();
+            this.renderTable();
+            popup.remove();
+            this.activeFilterPopup = null;
+            this.activeFilterButton = null;
+        });
+
+        const clearBtn = document.createElement('button');
+        clearBtn.textContent = t('Clear');
+        clearBtn.style.cssText = `
+            flex: 1;
+            padding: 6px;
+            background: #666;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        `;
+        clearBtn.addEventListener('click', () => {
+            this.filters.selectedTypes = [];
+            this.saveFilters();
+            this.applyFilters();
+            this.renderTable();
+            popup.remove();
+            this.activeFilterPopup = null;
+            this.activeFilterButton = null;
+        });
+
+        buttonContainer.appendChild(applyBtn);
+        buttonContainer.appendChild(clearBtn);
+        popup.appendChild(buttonContainer);
+
+        return popup;
+    }
+
+    /**
+     * Clear all active filters
+     */
+    async clearAllFilters() {
+        this.filters.dateFrom = null;
+        this.filters.dateTo = null;
+        this.filters.selectedItems = [];
+        this.filters.selectedEnhLevels = [];
+        this.filters.selectedTypes = [];
+
+        await this.saveFilters();
+        this.applyFilters();
+        this.renderTable();
+    }
+
+    /**
+     * Disable the feature
+     */
+    disable() {
+        // Note: We don't need to disconnect observer since we're using the shared settings UI observer
+
+        // Clean up any active filter popup and its event listener
+        if (this.activeFilterPopup) {
+            this.activeFilterPopup.remove();
+            this.activeFilterPopup = null;
+            this.activeFilterButton = null;
+        }
+        if (this.popupCloseHandler) {
+            document.removeEventListener('click', this.popupCloseHandler);
+            this.popupCloseHandler = null;
+        }
+
+        this.timerRegistry.clearAll();
+
+        // Remove modal and all its event listeners
+        if (this.modal) {
+            this.modal.remove();
+            this.modal = null;
+        }
+
+        // Remove settings button
+        const button = document.querySelector('.mwi-market-history-button');
+        if (button) {
+            button.remove();
+        }
+
+        // Clear data references
+        this.listings = [];
+        this.filteredListings = [];
+        this.cachedDateRange = null;
+
+        this.isInitialized = false;
+    }
+}
+
+const marketHistoryViewer = new MarketHistoryViewer();
+
+export default marketHistoryViewer;

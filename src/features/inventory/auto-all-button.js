@@ -1,0 +1,163 @@
+/**
+ * Auto All Button Feature
+ * Automatically clicks the "All" button when opening loot boxes/containers
+ */
+
+import config from '../../core/config.js';
+import dataManager from '../../core/data-manager.js';
+import tooltipObserver from '../../core/tooltip-observer.js';
+
+class AutoAllButton {
+    constructor() {
+        this.processedContainers = new WeakSet();
+        this.itemNameToHridCache = null;
+    }
+
+    /**
+     * Initialize the feature
+     */
+    initialize() {
+        if (!config.getSetting('autoAllButton')) {
+            return;
+        }
+
+        // Subscribe to tooltip appearances
+        tooltipObserver.subscribe('auto-all-button', (element, eventType) => {
+            // Only process when tooltip opens
+            if (eventType === 'opened') {
+                this.handleContainer(element);
+            }
+        });
+    }
+
+    /**
+     * Handle container appearance (tooltip/popper)
+     * @param {Element} container - Container element
+     */
+    handleContainer(container) {
+        // Skip if already processed
+        if (this.processedContainers.has(container)) {
+            return;
+        }
+
+        // Mark as processed immediately
+        this.processedContainers.add(container);
+
+        // Small delay to let content fully render
+        setTimeout(() => {
+            try {
+                this.processContainer(container);
+            } catch (error) {
+                console.error('[AutoAllButton] Error processing container:', error);
+            }
+        }, 50);
+    }
+
+    /**
+     * Process the container - check if it's for a loot box and click All button
+     * @param {Element} container - Container element
+     */
+    processContainer(container) {
+        // Find item name
+        let itemName = null;
+
+        // Method 1: Look for span with Item_name class
+        const nameSpan = container.querySelector('[class*="Item_name"]');
+        if (nameSpan) {
+            itemName = nameSpan.textContent.trim();
+        }
+
+        // Method 2: Try SVG aria-label (fallback for other UI types)
+        if (!itemName) {
+            const svg = container.querySelector('svg[aria-label]');
+            if (svg) {
+                itemName = svg.getAttribute('aria-label');
+            }
+        }
+
+        if (!itemName) {
+            return;
+        }
+
+        // Get game data
+        const gameData = dataManager.getInitClientData();
+        if (!gameData || !gameData.itemDetailMap) {
+            return;
+        }
+
+        // Find item HRID from name
+        const itemHrid = this.findItemHrid(itemName, gameData);
+        if (!itemHrid) {
+            return;
+        }
+
+        // Check if item is openable or an ability book - exit early if neither
+        const itemDetails = gameData.itemDetailMap[itemHrid];
+        const isOpenable = itemDetails?.isOpenable;
+        const isAbilityBook = itemDetails?.categoryHrid === '/item_categories/ability_book';
+        if (!itemDetails || (!isOpenable && !isAbilityBook)) {
+            return;
+        }
+
+        // Skip seals if the exclude setting is on
+        if (config.getSetting('autoAllButton_excludeSeals') && itemHrid.startsWith('/items/seal_of_')) {
+            return;
+        }
+
+        // Item IS openable - find and click the "All" button
+        this.clickAllButton(container);
+    }
+
+    /**
+     * Find and click the "All" button in the container
+     * @param {Element} container - Container element
+     */
+    clickAllButton(container) {
+        const buttons = container.querySelectorAll('button');
+
+        for (const button of buttons) {
+            // Locale-safe: "All" button identified by CSS class (not text content)
+            if (button.matches('[class*="Button_all"]') && !button.disabled) {
+                button.click();
+                break;
+            }
+        }
+    }
+
+    /**
+     * Find item HRID by name
+     * @param {string} itemName - Item name
+     * @param {Object} gameData - Game data
+     * @returns {string|null} Item HRID or null if not found
+     */
+    findItemHrid(itemName, gameData) {
+        // Build cache on first use
+        if (!this.itemNameToHridCache) {
+            this.itemNameToHridCache = new Map();
+            for (const [hrid, item] of Object.entries(gameData.itemDetailMap)) {
+                if (item.name) {
+                    this.itemNameToHridCache.set(item.name, hrid);
+                }
+            }
+        }
+
+        return this.itemNameToHridCache.get(itemName) || null;
+    }
+
+    /**
+     * Disable the feature
+     */
+    disable() {
+        tooltipObserver.unsubscribe('auto-all-button');
+        this.processedContainers = new WeakSet();
+        this.itemNameToHridCache = null;
+    }
+}
+
+const autoAllButton = new AutoAllButton();
+
+export default {
+    name: 'Auto All Button',
+    initialize: () => autoAllButton.initialize(),
+    cleanup: () => autoAllButton.disable(),
+};

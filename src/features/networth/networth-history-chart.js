@@ -1,0 +1,1644 @@
+/**
+ * Networth History Chart
+ * Pop-out modal with Chart.js line chart showing networth over time.
+ * Supports time range selection, gap handling, and tooltip breakdown.
+ */
+
+import { t } from '../../core/i18n.js';
+import networthHistory, { GAP_THRESHOLD_MS } from './networth-history.js';
+import config from '../../core/config.js';
+import storage from '../../core/storage.js';
+import { networthFormatter } from '../../utils/formatters.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
+
+const RANGE_MS = {
+    '24h': 24 * 60 * 60 * 1000,
+    '7d': 7 * 24 * 60 * 60 * 1000,
+    '30d': 30 * 24 * 60 * 60 * 1000,
+    all: Infinity,
+};
+
+const CATEGORIES = [
+    { key: 'gold', label: t('Gold'), color: '#eab308' },
+    { key: 'inventory', label: t('Inventory'), color: '#3b82f6' },
+    { key: 'equipment', label: t('Equipment'), color: '#ef4444' },
+    { key: 'listings', label: t('Listings'), color: '#8b5cf6' },
+    { key: 'house', label: t('House'), color: '#f97316' },
+    { key: 'abilities', label: t('Abilities'), color: '#06b6d4' },
+];
+
+class NetworthHistoryChart {
+    constructor() {
+        this.chartInstance = null;
+        this.escHandler = null;
+        this.networthFeature = null;
+        this.activeRange = '7d'; // Track current active range
+        this.connectGaps = false; // Toggle for connecting gaps in chart
+        this.showBars = false; // Toggle for bar overlay on chart
+        this.movingAvgWindow = 0; // Moving average window in data points (0 = off)
+        this.categoryVisibility = {
+            showTotal: true,
+            showNonExcluded: true,
+            gold: false,
+            inventory: false,
+            equipment: false,
+            listings: false,
+            house: false,
+            abilities: false,
+        };
+        this.currentRange = '7d';
+        this.currentCustomFrom = null;
+        this.currentCustomTo = null;
+        this._deletePopup = null;
+        this._deletePopupOutsideHandler = null;
+    }
+
+    /**
+     * Load persisted chart toggle preferences
+     */
+    async _loadChartPrefs() {
+        const prefs = await storage.get('networthChartPrefs', 'networthHistory', {});
+        if (prefs.connectGaps !== undefined) this.connectGaps = prefs.connectGaps;
+        if (prefs.showBars !== undefined) this.showBars = prefs.showBars;
+        if (prefs.movingAvgWindow !== undefined) this.movingAvgWindow = prefs.movingAvgWindow;
+        if (prefs.categoryVisibility !== undefined)
+            this.categoryVisibility = { ...this.categoryVisibility, ...prefs.categoryVisibility };
+        if (prefs.activeRange !== undefined) this.activeRange = prefs.activeRange;
+    }
+
+    /**
+     * Returns true if at least one line (Total or any category) is visible
+     */
+    _hasAnyVisible() {
+        if (this.categoryVisibility.showTotal) return true;
+        if (this.categoryVisibility.showNonExcluded) return true;
+        return CATEGORIES.some((c) => this.categoryVisibility[c.key]);
+    }
+
+    /**
+     * Save chart toggle preferences
+     */
+    _saveChartPrefs() {
+        storage.set(
+            'networthChartPrefs',
+            {
+                connectGaps: this.connectGaps,
+                showBars: this.showBars,
+                movingAvgWindow: this.movingAvgWindow,
+                categoryVisibility: this.categoryVisibility,
+                activeRange: this.activeRange,
+            },
+            'networthHistory'
+        );
+    }
+
+    /**
+     * Set reference to networth feature for live data access
+     * @param {Object} feature - NetworthFeature instance
+     */
+    setNetworthFeature(feature) {
+        this.networthFeature = feature;
+    }
+
+    /**
+     * Open the chart modal
+     */
+    async openModal() {
+        // Ensure preferences are loaded before building UI
+        await this._loadChartPrefs();
+
+        // Remove existing modal if any
+        const existing = document.getElementById('mwi-nw-chart-modal');
+        if (existing) {
+            existing.remove();
+        }
+
+        // Create modal container
+        const modal = document.createElement('div');
+        modal.id = 'mwi-nw-chart-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 1200px;
+            height: 80%;
+            max-height: 750px;
+            background: #1a1a1a;
+            border: 2px solid #555;
+            border-radius: 8px;
+            padding: 20px;
+            z-index: 100000;
+            display: flex;
+            flex-direction: column;
+        `;
+
+        // Header
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        `;
+
+        const title = document.createElement('h3');
+        title.textContent = t('Net Worth History');
+        title.style.cssText = 'color: #ccc; margin: 0; font-size: 18px;';
+
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '\u2715';
+        closeBtn.style.cssText = `
+            background: #a33;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+        `;
+        closeBtn.addEventListener('click', () => this.closeModal());
+
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+
+        // Time range row (buttons + date inputs)
+        const rangeRow = document.createElement('div');
+        rangeRow.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        `;
+
+        const ranges = ['24h', '7d', '30d', 'all'];
+        for (const range of ranges) {
+            const btn = document.createElement('button');
+            btn.textContent = range === 'all' ? t('All') : range.toUpperCase();
+            btn.dataset.range = range;
+            btn.className = 'mwi-nw-range-btn';
+            btn.style.cssText = `
+                background: ${range === this.activeRange ? '#444' : '#2a2a2a'};
+                color: ${range === this.activeRange ? '#fff' : '#999'};
+                border: 1px solid #555;
+                cursor: pointer;
+                padding: 4px 14px;
+                border-radius: 4px;
+                font-size: 13px;
+            `;
+            btn.addEventListener('click', () => {
+                this._selectPresetRange(btn, rangeRow, range);
+            });
+            rangeRow.appendChild(btn);
+        }
+
+        // Connect Gaps toggle
+        const gapToggle = document.createElement('button');
+        gapToggle.textContent = t('Connect Gaps');
+        gapToggle.className = 'mwi-nw-gap-toggle';
+        const updateGapToggleStyle = () => {
+            gapToggle.style.cssText = `
+                background: ${this.connectGaps ? '#444' : '#2a2a2a'};
+                color: ${this.connectGaps ? '#fff' : '#999'};
+                border: 1px solid #555;
+                cursor: pointer;
+                padding: 4px 14px;
+                border-radius: 4px;
+                font-size: 13px;
+                margin-left: 4px;
+            `;
+        };
+        updateGapToggleStyle();
+        gapToggle.addEventListener('click', () => {
+            this.connectGaps = !this.connectGaps;
+            updateGapToggleStyle();
+            this._saveChartPrefs();
+            this.renderChart(this.currentRange, this.currentCustomFrom, this.currentCustomTo);
+        });
+        rangeRow.appendChild(gapToggle);
+
+        // Show Bars toggle
+        const barToggle = document.createElement('button');
+        barToggle.textContent = t('Show Bars');
+        barToggle.className = 'mwi-nw-bar-toggle';
+        const updateBarToggleStyle = () => {
+            barToggle.style.cssText = `
+                background: ${this.showBars ? '#444' : '#2a2a2a'};
+                color: ${this.showBars ? '#fff' : '#999'};
+                border: 1px solid #555;
+                cursor: pointer;
+                padding: 4px 14px;
+                border-radius: 4px;
+                font-size: 13px;
+                margin-left: 4px;
+            `;
+        };
+        updateBarToggleStyle();
+        barToggle.addEventListener('click', () => {
+            this.showBars = !this.showBars;
+            updateBarToggleStyle();
+            this._saveChartPrefs();
+            this.renderChart(this.currentRange, this.currentCustomFrom, this.currentCustomTo);
+        });
+        rangeRow.appendChild(barToggle);
+
+        // Moving Average dropdown
+        const maLabel = document.createElement('span');
+        maLabel.textContent = t('Avg:');
+        maLabel.style.cssText = 'color: #999; font-size: 12px; margin-left: 8px;';
+        rangeRow.appendChild(maLabel);
+
+        const maSelect = document.createElement('select');
+        maSelect.className = 'mwi-nw-ma-select';
+        maSelect.style.cssText = `
+            background: #2a2a2a;
+            color: #ccc;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 3px 6px;
+            font-size: 13px;
+            cursor: pointer;
+            color-scheme: dark;
+        `;
+        const maOptions = [
+            { value: 0, label: t('Off') },
+            { value: 3, label: '3h' },
+            { value: 6, label: '6h' },
+            { value: 12, label: '12h' },
+            { value: 24, label: '24h' },
+            { value: 48, label: '48h' },
+            { value: 168, label: '7d' },
+        ];
+        // Check if current value is a custom one not in presets
+        const isCustomValue = this.movingAvgWindow > 0 && !maOptions.some((o) => o.value === this.movingAvgWindow);
+        if (isCustomValue) {
+            maOptions.push({ value: this.movingAvgWindow, label: `${this.movingAvgWindow}h` });
+        }
+        maOptions.push({ value: -1, label: t('Custom…') });
+        for (const opt of maOptions) {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.label;
+            if (opt.value === this.movingAvgWindow) option.selected = true;
+            maSelect.appendChild(option);
+        }
+        maSelect.addEventListener('change', () => {
+            const val = parseInt(maSelect.value, 10);
+            if (val === -1) {
+                const input = prompt(t('Enter moving average window in hours:'));
+                const parsed = parseInt(input, 10);
+                if (parsed > 0) {
+                    this.movingAvgWindow = parsed;
+                    // Add custom option if not already present
+                    const existing = maSelect.querySelector(`option[value="${parsed}"]`);
+                    if (!existing) {
+                        const customOpt = document.createElement('option');
+                        customOpt.value = parsed;
+                        customOpt.textContent = `${parsed}h`;
+                        maSelect.insertBefore(customOpt, maSelect.querySelector('option[value="-1"]'));
+                    }
+                    maSelect.value = parsed;
+                } else {
+                    maSelect.value = this.movingAvgWindow;
+                    return;
+                }
+            } else {
+                this.movingAvgWindow = val;
+            }
+            this._saveChartPrefs();
+            this.renderChart(this.currentRange, this.currentCustomFrom, this.currentCustomTo);
+        });
+        rangeRow.appendChild(maSelect);
+
+        // Spacer
+        const spacer = document.createElement('div');
+        spacer.style.flex = '1';
+        rangeRow.appendChild(spacer);
+
+        // Date input styles (shared)
+        const dateInputStyle = `
+            background: #2a2a2a;
+            color: #ccc;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-size: 12px;
+            color-scheme: dark;
+            cursor: pointer;
+        `;
+
+        // From label + input
+        const fromLabel = document.createElement('span');
+        fromLabel.textContent = t('From:');
+        fromLabel.style.cssText = 'color: #999; font-size: 12px;';
+        rangeRow.appendChild(fromLabel);
+
+        const fromInput = document.createElement('input');
+        fromInput.type = 'date';
+        fromInput.id = 'mwi-nw-date-from';
+        fromInput.style.cssText = dateInputStyle;
+        fromInput.addEventListener('change', () => {
+            this._onDateInputChange(rangeRow);
+        });
+        rangeRow.appendChild(fromInput);
+
+        // To label + input
+        const toLabel = document.createElement('span');
+        toLabel.textContent = t('To:');
+        toLabel.style.cssText = 'color: #999; font-size: 12px;';
+        rangeRow.appendChild(toLabel);
+
+        const toInput = document.createElement('input');
+        toInput.type = 'date';
+        toInput.id = 'mwi-nw-date-to';
+        toInput.style.cssText = dateInputStyle;
+        toInput.addEventListener('change', () => {
+            this._onDateInputChange(rangeRow);
+        });
+        rangeRow.appendChild(toInput);
+
+        // Category toggle row
+        const categoryRow = document.createElement('div');
+        categoryRow.style.cssText = `
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 10px;
+        `;
+
+        const categoryButtons = {};
+
+        // Total toggle chip (controls the main networth line)
+        const totalColor = config.COLOR_ACCENT || '#22c55e';
+        const totalBtn = document.createElement('button');
+        const updateTotalBtnStyle = () => {
+            const active = this.categoryVisibility.showTotal;
+            totalBtn.style.cssText = `
+                background: ${active ? totalColor + '33' : '#2a2a2a'};
+                color: ${active ? '#fff' : '#999'};
+                border: 1px solid ${active ? totalColor : '#555'};
+                cursor: pointer;
+                padding: 3px 8px;
+                border-radius: 4px;
+                font-size: 0.8em;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            `;
+        };
+        const totalDot = document.createElement('span');
+        totalDot.style.cssText = `
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            background: ${totalColor};
+            flex-shrink: 0;
+        `;
+        totalBtn.appendChild(totalDot);
+        totalBtn.appendChild(document.createTextNode(t('Total')));
+        updateTotalBtnStyle();
+        totalBtn.addEventListener('click', () => {
+            this.categoryVisibility.showTotal = !this.categoryVisibility.showTotal;
+            if (!this._hasAnyVisible()) {
+                this.categoryVisibility.showTotal = true;
+            }
+            updateTotalBtnStyle();
+            this._saveChartPrefs();
+            this.renderChart(this.currentRange, this.currentCustomFrom, this.currentCustomTo);
+        });
+        categoryRow.appendChild(totalBtn);
+
+        // Non-Excluded toggle chip (only shown when exclusions exist)
+        const nonExclColor = '#a78bfa';
+        const nonExclBtn = document.createElement('button');
+        nonExclBtn.id = 'mwi-nw-nonexcl-chip';
+        const updateNonExclBtnStyle = () => {
+            const active = this.categoryVisibility.showNonExcluded;
+            nonExclBtn.style.cssText = `
+                background: ${active ? nonExclColor + '33' : '#2a2a2a'};
+                color: ${active ? '#fff' : '#999'};
+                border: 1px solid ${active ? nonExclColor : '#555'};
+                cursor: pointer;
+                padding: 3px 8px;
+                border-radius: 4px;
+                font-size: 0.8em;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            `;
+        };
+        const nonExclDot = document.createElement('span');
+        nonExclDot.style.cssText = `
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            background: ${nonExclColor};
+            flex-shrink: 0;
+        `;
+        nonExclBtn.appendChild(nonExclDot);
+        nonExclBtn.appendChild(document.createTextNode(t('Non-Excluded')));
+        updateNonExclBtnStyle();
+        nonExclBtn.addEventListener('click', () => {
+            this.categoryVisibility.showNonExcluded = !this.categoryVisibility.showNonExcluded;
+            if (!this._hasAnyVisible()) {
+                this.categoryVisibility.showNonExcluded = true;
+            }
+            updateNonExclBtnStyle();
+            this._saveChartPrefs();
+            this.renderChart(this.currentRange, this.currentCustomFrom, this.currentCustomTo);
+        });
+        categoryRow.appendChild(nonExclBtn);
+
+        for (const cat of CATEGORIES) {
+            const btn = document.createElement('button');
+            categoryButtons[cat.key] = btn;
+            const updateCatBtnStyle = () => {
+                const active = this.categoryVisibility[cat.key];
+                btn.style.cssText = `
+                    background: ${active ? cat.color + '33' : '#2a2a2a'};
+                    color: ${active ? '#fff' : '#999'};
+                    border: 1px solid ${active ? cat.color : '#555'};
+                    cursor: pointer;
+                    padding: 3px 8px;
+                    border-radius: 4px;
+                    font-size: 0.8em;
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                `;
+            };
+            const dot = document.createElement('span');
+            dot.style.cssText = `
+                display: inline-block;
+                width: 8px;
+                height: 8px;
+                border-radius: 2px;
+                background: ${cat.color};
+                flex-shrink: 0;
+            `;
+            btn.appendChild(dot);
+            btn.appendChild(document.createTextNode(t(cat.label)));
+            updateCatBtnStyle();
+            btn.addEventListener('click', () => {
+                this.categoryVisibility[cat.key] = !this.categoryVisibility[cat.key];
+                if (!this._hasAnyVisible()) {
+                    this.categoryVisibility.showTotal = true;
+                    updateTotalBtnStyle();
+                }
+                updateCatBtnStyle();
+                this._saveChartPrefs();
+                this.renderChart(this.currentRange, this.currentCustomFrom, this.currentCustomTo);
+            });
+            categoryRow.appendChild(btn);
+        }
+
+        // Summary stats row
+        const statsRow = document.createElement('div');
+        statsRow.id = 'mwi-nw-chart-stats';
+        statsRow.style.cssText = `
+            display: flex;
+            gap: 24px;
+            margin-bottom: 12px;
+            font-size: 13px;
+            color: #ccc;
+        `;
+
+        // Canvas container
+        const canvasContainer = document.createElement('div');
+        canvasContainer.style.cssText = `
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        `;
+
+        const canvas = document.createElement('canvas');
+        canvas.id = 'mwi-nw-chart-canvas';
+        canvasContainer.appendChild(canvas);
+
+        // Assemble modal
+        modal.appendChild(header);
+        modal.appendChild(rangeRow);
+        modal.appendChild(categoryRow);
+        modal.appendChild(statsRow);
+        modal.appendChild(canvasContainer);
+        document.body.appendChild(modal);
+
+        // ESC to close
+        this.escHandler = (e) => {
+            if (e.key === 'Escape') {
+                this.closeModal();
+            }
+        };
+        document.addEventListener('keydown', this.escHandler);
+
+        // Click outside to close (but not if clicking in the delete popup)
+        this.outsideClickHandler = (e) => {
+            const breakdownPopout = document.getElementById('mwi-nw-24h-breakdown');
+            if (
+                !modal.contains(e.target) &&
+                !this._deletePopup?.contains(e.target) &&
+                !breakdownPopout?.contains(e.target)
+            ) {
+                this.closeModal();
+            }
+        };
+        setTimeout(() => document.addEventListener('mousedown', this.outsideClickHandler), 0);
+
+        // Render default view
+        this.renderChart(this.activeRange);
+    }
+
+    /**
+     * Select a preset range button, clear date inputs, and render
+     * @param {HTMLElement} btn - Clicked button
+     * @param {HTMLElement} rangeRow - Row container for deselecting siblings
+     * @param {string} range - '24h', '7d', '30d', or 'all'
+     */
+    _selectPresetRange(btn, rangeRow, range) {
+        // Highlight selected button, deselect others
+        for (const sibling of rangeRow.querySelectorAll('.mwi-nw-range-btn')) {
+            sibling.style.background = '#2a2a2a';
+            sibling.style.color = '#999';
+        }
+        btn.style.background = '#444';
+        btn.style.color = '#fff';
+
+        // Clear date inputs
+        const fromInput = document.getElementById('mwi-nw-date-from');
+        const toInput = document.getElementById('mwi-nw-date-to');
+        if (fromInput) fromInput.value = '';
+        if (toInput) toInput.value = '';
+
+        this.activeRange = range;
+        this._saveChartPrefs();
+        this.renderChart(range);
+    }
+
+    /**
+     * Handle date input change — deselect preset buttons and render custom range
+     * @param {HTMLElement} rangeRow - Row container
+     */
+    _onDateInputChange(rangeRow) {
+        const fromInput = document.getElementById('mwi-nw-date-from');
+        const toInput = document.getElementById('mwi-nw-date-to');
+        if (!fromInput || !toInput) return;
+
+        // Only render if at least one date is set
+        if (!fromInput.value && !toInput.value) return;
+
+        // Deselect all preset buttons
+        for (const btn of rangeRow.querySelectorAll('.mwi-nw-range-btn')) {
+            btn.style.background = '#2a2a2a';
+            btn.style.color = '#999';
+        }
+
+        // Parse dates (from = start of day, to = end of day)
+        const fromMs = fromInput.value ? new Date(fromInput.value + 'T00:00:00').getTime() : 0;
+        const toMs = toInput.value ? new Date(toInput.value + 'T23:59:59').getTime() : Date.now();
+
+        this.activeRange = 'custom';
+        this.renderChart('custom', fromMs, toMs);
+    }
+
+    /**
+     * Render the chart for a given time range
+     * @param {string} range - '24h', '7d', '30d', 'all', or 'custom'
+     * @param {number} [customFrom] - Custom start timestamp (for 'custom' range)
+     * @param {number} [customTo] - Custom end timestamp (for 'custom' range)
+     */
+    renderChart(range, customFrom, customTo) {
+        // Store params for re-render on toggle
+        this.currentRange = range;
+        this.currentCustomFrom = customFrom;
+        this.currentCustomTo = customTo;
+
+        const canvas = document.getElementById('mwi-nw-chart-canvas');
+        if (!canvas) return;
+
+        // Destroy existing chart
+        if (this.chartInstance) {
+            this.chartInstance.destroy();
+            this.chartInstance = null;
+        }
+
+        // Remove stale tooltip
+        const staleTooltip = document.getElementById('mwi-nw-chart-tooltip');
+        if (staleTooltip) staleTooltip.remove();
+
+        const history = networthHistory.getHistory();
+        if (history.length === 0) {
+            this.updateSummaryStats([]);
+            return;
+        }
+
+        // Filter by time range
+        const now = Date.now();
+        let filtered;
+        if (range === 'custom') {
+            const from = customFrom || 0;
+            const to = customTo || now;
+            filtered = history.filter((p) => p.t >= from && p.t <= to);
+        } else {
+            const cutoff = range === 'all' ? 0 : now - RANGE_MS[range];
+            filtered = history.filter((p) => p.t >= cutoff);
+        }
+
+        if (filtered.length === 0) {
+            this.updateSummaryStats([]);
+            return;
+        }
+
+        // Update summary stats
+        this.updateSummaryStats(filtered);
+
+        // Build chart data — connect gaps or split into segments
+        let chartData;
+        if (this.connectGaps) {
+            chartData = filtered.map((p) => ({ x: p.t, y: p.total, _raw: p }));
+        } else {
+            // Split into gap-separated segments
+            const segments = [];
+            let currentSegment = [filtered[0]];
+
+            for (let i = 1; i < filtered.length; i++) {
+                if (filtered[i].t - filtered[i - 1].t > GAP_THRESHOLD_MS) {
+                    segments.push(currentSegment);
+                    currentSegment = [filtered[i]];
+                } else {
+                    currentSegment.push(filtered[i]);
+                }
+            }
+            segments.push(currentSegment);
+
+            // Build chart data with NaN gaps between segments
+            chartData = [];
+            for (let i = 0; i < segments.length; i++) {
+                for (const point of segments[i]) {
+                    chartData.push({ x: point.t, y: point.total, _raw: point });
+                }
+                // Insert NaN gap between segments (not after last)
+                if (i < segments.length - 1) {
+                    const gapTime = segments[i][segments[i].length - 1].t + 1;
+                    chartData.push({ x: gapTime, y: NaN });
+                }
+            }
+        }
+
+        // Determine if short range (use time-only x-axis labels)
+        const rangeSpanMs = filtered[filtered.length - 1].t - filtered[0].t;
+        const isShortRange = range === '24h' || (range === 'custom' && rangeSpanMs <= 48 * 60 * 60 * 1000);
+
+        // Create chart
+        const ctx = canvas.getContext('2d');
+
+        // Build datasets array
+        const datasets = [];
+
+        // Check if non-excluded data diverges from total (i.e., exclusions were active)
+        const hasNonExcludedData = filtered.some((p) => p.nonExcluded != null && p.nonExcluded !== p.total);
+
+        // Bar overlay dataset (rendered first = behind line)
+        if (this.showBars) {
+            const barData = chartData.filter((p) => !isNaN(p.y));
+            datasets.push({
+                type: 'bar',
+                label: 'Net Worth (bars)',
+                data: barData,
+                backgroundColor: 'rgba(34, 197, 94, 0.3)',
+                borderColor: 'transparent',
+                borderWidth: 0,
+                barThickness: 6,
+                minBarLength: 2,
+                order: 2,
+            });
+        }
+
+        // Line dataset (rendered on top)
+        if (this.categoryVisibility.showTotal) {
+            datasets.push({
+                type: 'line',
+                label: 'Total Net Worth',
+                data: chartData,
+                borderColor: config.COLOR_ACCENT || '#22c55e',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                borderWidth: 2,
+                pointRadius: filtered.length > 200 ? 0 : 2,
+                pointHoverRadius: 5,
+                tension: 0.1,
+                fill: true,
+                spanGaps: this.connectGaps,
+                order: 1,
+            });
+        }
+
+        // Non-Excluded line dataset (only when exclusion data diverges from total)
+        if (this.categoryVisibility.showNonExcluded && hasNonExcludedData) {
+            const neData = chartData.map((p) => ({
+                x: p.x,
+                y: p._raw?.nonExcluded != null ? p._raw.nonExcluded : NaN,
+            }));
+            datasets.push({
+                type: 'line',
+                label: 'Non-Excluded',
+                data: neData,
+                borderColor: '#a78bfa',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                pointRadius: filtered.length > 200 ? 0 : 2,
+                pointHoverRadius: 5,
+                tension: 0.1,
+                fill: false,
+                spanGaps: this.connectGaps,
+                order: 1,
+            });
+        }
+
+        // Category line datasets (one per visible category)
+        for (const cat of CATEGORIES) {
+            if (!this.categoryVisibility[cat.key]) continue;
+
+            const catData = chartData.map((p) => {
+                if (!p._raw) return { x: p.x, y: NaN };
+                let val = p._raw[cat.key];
+                if (cat.key === 'inventory') val = (val || 0) - (p._raw.gold || 0);
+                return { x: p.x, y: val };
+            });
+            datasets.push({
+                type: 'line',
+                label: cat.label,
+                data: catData,
+                borderColor: cat.color,
+                backgroundColor: 'transparent',
+                borderWidth: 1.5,
+                pointRadius: 0,
+                pointHoverRadius: 0,
+                tension: 0.1,
+                fill: false,
+                spanGaps: this.connectGaps,
+                parsing: false,
+            });
+        }
+
+        // Moving average line dataset
+        if (this.movingAvgWindow > 0) {
+            const realPoints = chartData.filter((p) => !isNaN(p.y));
+            const maData = [];
+            const half = Math.floor(this.movingAvgWindow / 2);
+            for (let i = 0; i < realPoints.length; i++) {
+                const reach = Math.min(half, i, realPoints.length - 1 - i);
+                let sum = 0;
+                let count = 0;
+                for (let j = i - reach; j <= i + reach; j++) {
+                    sum += realPoints[j].y;
+                    count++;
+                }
+                maData.push({ x: realPoints[i].x, y: sum / count });
+            }
+            datasets.push({
+                type: 'line',
+                label: `${this.movingAvgWindow >= 24 && this.movingAvgWindow % 24 === 0 ? `${this.movingAvgWindow / 24}d` : `${this.movingAvgWindow}h`} Moving Avg`,
+                data: maData,
+                borderColor: '#f59e0b',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderDash: [6, 3],
+                pointRadius: 0,
+                pointHoverRadius: 4,
+                tension: 0.2,
+                fill: false,
+                spanGaps: true,
+                order: 0,
+            });
+        }
+
+        const visibleCategories = CATEGORIES.filter((c) => this.categoryVisibility[c.key]);
+        const yAxisTitle =
+            !this.categoryVisibility.showTotal && visibleCategories.length > 0 ? t('Category Value') : t('Net Worth');
+
+        this.chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets,
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                parsing: false,
+                onClick: (event, elements) => {
+                    this._onChartClick(event, elements);
+                },
+                interaction: {
+                    mode: 'nearest',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: { display: false },
+                    datalabels: { display: false },
+                    tooltip: {
+                        enabled: false,
+                        external: (context) => this._renderCustomTooltip(context),
+                        filter: (tooltipItem) => {
+                            if (tooltipItem.dataset.type === 'bar') return false;
+                            if (isNaN(tooltipItem.raw?.y)) return false;
+                            if (tooltipItem.dataset.label === 'Total Net Worth') return true;
+                            if (tooltipItem.dataset.label === 'Non-Excluded') return true;
+                            const cat = CATEGORIES.find((c) => c.label === tooltipItem.dataset.label);
+                            return cat ? this.categoryVisibility[cat.key] : false;
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        offset: false,
+                        min: filtered[0].t,
+                        max: filtered[filtered.length - 1].t,
+                        ticks: {
+                            color: '#999',
+                            maxTicksLimit: 10,
+                            callback: (value) => {
+                                const d = new Date(value);
+                                if (isShortRange) {
+                                    return d.toLocaleTimeString([], {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                    });
+                                }
+                                return d.toLocaleDateString([], {
+                                    month: 'short',
+                                    day: 'numeric',
+                                });
+                            },
+                        },
+                        grid: { color: '#333' },
+                    },
+                    y: {
+                        beginAtZero: false,
+                        title: {
+                            display: true,
+                            text: yAxisTitle,
+                            color: '#ccc',
+                        },
+                        ticks: {
+                            color: '#999',
+                            callback: (value) => networthFormatter(value),
+                        },
+                        grid: { color: '#333' },
+                    },
+                },
+            },
+        });
+    }
+
+    /**
+     * Update the summary stats row
+     * @param {Array} filtered - Filtered history data for the current range
+     */
+    updateSummaryStats(filtered) {
+        const statsRow = document.getElementById('mwi-nw-chart-stats');
+        if (!statsRow) return;
+
+        if (filtered.length === 0) {
+            statsRow.innerHTML = `<span style="color: #666;">${t('No data available for this range')}</span>`;
+            return;
+        }
+
+        const parts = [];
+        const first = filtered[0];
+        const last = filtered[filtered.length - 1];
+        const hoursElapsed = (last.t - first.t) / 3_600_000;
+
+        // Range label for the change stat
+        const rangeLabelMap = { '24h': '24H', '7d': '7D', '30d': '30D', all: 'All', custom: 'Range' };
+        const rangeLabel = rangeLabelMap[this.currentRange] || '24H';
+        const is24hRange = this.currentRange === '24h';
+
+        // Total stats — Current, range change, Rate
+        if (this.categoryVisibility.showTotal) {
+            const liveData = this.networthFeature?.currentData;
+            const currentTotal = liveData
+                ? Math.round(liveData.totalNetworth + (liveData.excluded?.total ?? 0))
+                : last.total;
+
+            const rangeChange = currentTotal - first.total;
+            const rangePercent = first.total > 0 ? (rangeChange / first.total) * 100 : 0;
+
+            const ratePerHour = hoursElapsed > 0 ? (last.total - first.total) / hoursElapsed : 0;
+
+            parts.push(
+                `<span>${t('Current:')} <strong style="color: ${config.COLOR_ACCENT};">${networthFormatter(Math.round(currentTotal))}</strong></span>`
+            );
+
+            if (filtered.length >= 2) {
+                const color = rangeChange >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
+                const sign = rangeChange >= 0 ? '+' : '';
+                const breakdownAttr = is24hRange
+                    ? ` id="mwi-nw-24h-toggle" style="cursor: pointer;" title="${t('Click for item breakdown')}"`
+                    : '';
+                const breakdownArrow = is24hRange ? ' <span style="font-size: 10px; color: #666;">▼</span>' : '';
+                parts.push(
+                    `<span${breakdownAttr}>${t('Last {0}:', rangeLabel)} <strong style="color: ${color};">${sign}${networthFormatter(Math.round(rangeChange))} (${sign}${rangePercent.toFixed(1)}%)</strong>${breakdownArrow}</span>`
+                );
+            }
+
+            if (hoursElapsed >= 1) {
+                const color = ratePerHour >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
+                const sign = ratePerHour >= 0 ? '+' : '';
+                parts.push(
+                    `<span>${t('Rate:')} <strong style="color: ${color};">${sign}${networthFormatter(Math.round(ratePerHour))}/hr</strong></span>`
+                );
+            }
+        }
+
+        // Non-Excluded stats (when visible and data exists)
+        const hasNonExclStats = filtered.some((p) => p.nonExcluded != null && p.nonExcluded !== p.total);
+        if (this.categoryVisibility.showNonExcluded && hasNonExclStats) {
+            const currentNE = this.networthFeature?.currentData?.totalNetworth ?? last.nonExcluded ?? last.total;
+            const firstNE = first.nonExcluded ?? first.total;
+            const lastNE = last.nonExcluded ?? last.total;
+            const neRate = hoursElapsed > 0 ? (lastNE - firstNE) / hoursElapsed : 0;
+
+            let neStatHtml = `<span style="color: #a78bfa;">${t('Non-Excl')}</span>: <strong style="color: #a78bfa;">${networthFormatter(Math.round(currentNE))}</strong>`;
+
+            if (filtered.length >= 2) {
+                const neChange = currentNE - firstNE;
+                const neChangeColor = neChange >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
+                const neChangeSign = neChange >= 0 ? '+' : '';
+                neStatHtml += ` <span style="font-size: 11px; color: #aaa;">(${neChangeSign}<span style="color: ${neChangeColor};">${networthFormatter(Math.round(neChange))}</span> ${rangeLabel})</span>`;
+            }
+
+            if (hoursElapsed >= 1) {
+                const neRateColor = neRate >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
+                const neRateSign = neRate >= 0 ? '+' : '';
+                neStatHtml += ` <span style="font-size: 11px; color: #aaa;">${neRateSign}<span style="color: ${neRateColor};">${networthFormatter(Math.round(neRate))}/hr</span></span>`;
+            }
+
+            parts.push(`<span>${neStatHtml}</span>`);
+        }
+
+        // Per-category rate stats for each visible category line
+        for (const cat of CATEGORIES) {
+            if (!this.categoryVisibility[cat.key]) continue;
+            let firstVal = first[cat.key] ?? 0;
+            let lastVal = last[cat.key] ?? 0;
+            if (cat.key === 'inventory') {
+                firstVal -= first.gold ?? 0;
+                lastVal -= last.gold ?? 0;
+            }
+            const catChange = lastVal - firstVal;
+            const rate = hoursElapsed > 0 ? catChange / hoursElapsed : 0;
+            const rateColor = rate >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
+            const rateSign = rate >= 0 ? '+' : '';
+            const catChangeColor = catChange >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
+            const catChangeSign = catChange >= 0 ? '+' : '';
+
+            let statHtml = `${t(cat.label)}: <strong style="color: ${catChangeColor};">${t('Last {0}:', rangeLabel)} ${catChangeSign}${networthFormatter(Math.round(catChange))}</strong>`;
+
+            if (hoursElapsed >= 1) {
+                statHtml += ` <span style="font-size: 11px; color: #aaa;">${rateSign}<span style="color: ${rateColor};">${networthFormatter(Math.round(rate))}/hr</span></span>`;
+            }
+
+            parts.push(`<span>${statHtml}</span>`);
+        }
+
+        if (parts.length === 0) {
+            statsRow.innerHTML = `<span style="color: #666;">${t('No data available for this range')}</span>`;
+            return;
+        }
+
+        statsRow.innerHTML = parts.join('<span style="color: #555; margin: 0 2px;">·</span>');
+
+        // Wire up 24h click handler for item breakdown toggle
+        const toggle24h = document.getElementById('mwi-nw-24h-toggle');
+        if (toggle24h) {
+            toggle24h.addEventListener('click', () => this.toggle24hBreakdown());
+        }
+    }
+
+    /**
+     * Toggle the 24h item-level breakdown popout
+     */
+    toggle24hBreakdown() {
+        // Close if already open
+        const existing = document.getElementById('mwi-nw-24h-breakdown');
+        if (existing) {
+            existing.remove();
+            return;
+        }
+
+        const toggle = document.getElementById('mwi-nw-24h-toggle');
+        if (!toggle) return;
+
+        // Create popout positioned below the 24h stat
+        const container = document.createElement('div');
+        container.id = 'mwi-nw-24h-breakdown';
+        container.style.cssText = `
+            position: absolute;
+            background: #222;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 10px 14px;
+            max-height: 300px;
+            width: 360px;
+            overflow-y: auto;
+            font-size: 12px;
+            color: #ccc;
+            z-index: 100001;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        `;
+
+        // Position below the toggle element
+        const rect = toggle.getBoundingClientRect();
+        container.style.top = `${rect.bottom + 4}px`;
+        container.style.left = `${rect.left}px`;
+
+        this.render24hBreakdown(container);
+        document.body.appendChild(container);
+
+        // Close popout when clicking outside
+        const closeHandler = (e) => {
+            if (!container.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
+                container.remove();
+                document.removeEventListener('mousedown', closeHandler);
+            }
+        };
+        // Delay so the current click doesn't immediately close it
+        setTimeout(() => document.addEventListener('mousedown', closeHandler), 0);
+    }
+
+    /**
+     * Render the 24h item-level breakdown into the given container.
+     * Decomposes each item's change into activity impact (quantity changes)
+     * and market movement (price changes on existing holdings).
+     * @param {HTMLElement} container - Breakdown container element
+     */
+    render24hBreakdown(container) {
+        const currentData = this.networthFeature?.currentData;
+        if (!currentData) {
+            container.innerHTML = `<span style="color: #666;">${t('No live data available')}</span>`;
+            return;
+        }
+
+        const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+        const oldSnapshot = networthHistory.getDetailSnapshot(oneDayAgo);
+        if (!oldSnapshot) {
+            container.innerHTML = `<span style="color: #666;">${t('No detail snapshot available yet (data collected hourly)')}</span>`;
+            return;
+        }
+
+        // Build current items map from live data
+        const currentItems = {};
+
+        // Gold
+        currentItems['/items/coin:0'] = {
+            count: Math.round(currentData.coins),
+            value: Math.round(currentData.coins),
+            name: t('Gold'),
+        };
+
+        // Inventory items
+        for (const item of currentData.currentAssets.inventory.breakdown) {
+            if (!item.itemHrid) continue;
+            const key = `${item.itemHrid}:${item.enhancementLevel || 0}`;
+            currentItems[key] = {
+                count: item.count || 0,
+                value: Math.round(item.value || 0),
+                name: itemNameTranslator.getDisplayName(item.itemHrid) || item.name,
+            };
+        }
+
+        // Equipped items
+        for (const item of currentData.currentAssets.equipped.breakdown) {
+            if (!item.itemHrid) continue;
+            const key = `${item.itemHrid}:${item.enhancementLevel || 0}`;
+            currentItems[key] = {
+                count: 1,
+                value: Math.round(item.value || 0),
+                name: itemNameTranslator.getDisplayName(item.itemHrid) || item.name,
+            };
+        }
+
+        // Houses (fixed assets)
+        for (const room of currentData.fixedAssets.houses.breakdown) {
+            currentItems[`house:${room.hrid}`] = {
+                count: room.level,
+                value: Math.round(room.cost),
+                name: itemNameTranslator.getDisplayName(room.hrid) || room.name,
+            };
+        }
+
+        // Abilities (fixed assets)
+        for (const ability of currentData.fixedAssets.abilities.breakdown) {
+            currentItems[`ability:${ability.hrid}`] = {
+                count: 1,
+                value: Math.round(ability.cost),
+                name: itemNameTranslator.getDisplayName(ability.hrid) || ability.name,
+            };
+        }
+
+        // Ability books (fixed assets)
+        for (const book of currentData.fixedAssets.abilityBooks.breakdown) {
+            if (!book.itemHrid) continue;
+            currentItems[`abilitybook:${book.itemHrid}`] = {
+                count: book.count || 1,
+                value: Math.round(book.value || 0),
+                name: itemNameTranslator.getDisplayName(book.itemHrid) || book.name,
+            };
+        }
+
+        // Market listings
+        for (const listing of currentData.currentAssets.listings.breakdown) {
+            if (!listing.itemHrid) continue;
+            const dir = listing.isSell ? 'sell' : 'buy';
+            const key = `listing:${dir}:${listing.itemHrid}:${listing.enhancementLevel || 0}`;
+            if (currentItems[key]) {
+                currentItems[key].value += Math.round(listing.value);
+                currentItems[key].count += 1;
+            } else {
+                currentItems[key] = {
+                    count: 1,
+                    value: Math.round(listing.value),
+                    name: itemNameTranslator.getDisplayName(listing.itemHrid) || listing.name,
+                    isSell: listing.isSell,
+                };
+            }
+        }
+
+        // Decompose each item into activity, market, or other impact
+        const activityItems = [];
+        const marketItems = [];
+        const otherItems = [];
+        let activityTotal = 0;
+        let marketTotal = 0;
+        let otherTotal = 0;
+
+        const allKeys = new Set([...Object.keys(currentItems), ...Object.keys(oldSnapshot.items)]);
+
+        // Detect which namespaced categories the old snapshot tracks
+        // If it has no keys for a prefix, that category was added after the snapshot was taken — skip it
+        const oldKeys = Object.keys(oldSnapshot.items);
+        const oldHasHouse = oldKeys.some((k) => k.startsWith('house:'));
+        const oldHasAbility = oldKeys.some((k) => k.startsWith('ability:'));
+        const oldHasAbilityBook = oldKeys.some((k) => k.startsWith('abilitybook:'));
+        const oldHasListing = oldKeys.some((k) => k.startsWith('listing:'));
+
+        for (const key of allKeys) {
+            // Skip categories the old snapshot doesn't track (pre-transition data)
+            if (key.startsWith('listing:') && !oldHasListing) continue;
+            if (key.startsWith('house:') && !oldHasHouse) continue;
+            if (key.startsWith('ability:') && !oldHasAbility) continue;
+            if (key.startsWith('abilitybook:') && !oldHasAbilityBook) continue;
+
+            const curr = currentItems[key] || { count: 0, value: 0 };
+            const old = oldSnapshot.items[key] || { count: 0, value: 0 };
+
+            const countDiff = curr.count - old.count;
+            const totalDiff = curr.value - old.value;
+
+            if (totalDiff === 0 && countDiff === 0) continue;
+
+            // Listings → Other section (straight value diff, no activity/market split)
+            if (key.startsWith('listing:')) {
+                let name = curr.name;
+                if (!name) {
+                    const parts = key.split(':');
+                    const itemHrid = parts[2];
+                    const enhLevel = parts[3];
+                    const baseName = itemNameTranslator.getDisplayName(itemHrid);
+                    name = Number(enhLevel) > 0 ? `${baseName} +${enhLevel}` : baseName;
+                }
+                const prefix = key.startsWith('listing:sell:') ? t('Sell Listing') : t('Buy Listing');
+                otherTotal += totalDiff;
+                otherItems.push({ name: `${prefix}: ${name}`, key, value: totalDiff });
+                continue;
+            }
+
+            // Resolve display name
+            let name = curr.name;
+            if (!name) {
+                const [itemHrid, enhLevel] = key.split(':');
+                const baseName = itemNameTranslator.getDisplayName(itemHrid);
+                name = Number(enhLevel) > 0 ? `${baseName} +${enhLevel}` : baseName;
+            }
+
+            // Fixed assets (house, ability, abilitybook) → Activity only (no market movement)
+            if (key.startsWith('house:') || key.startsWith('ability:') || key.startsWith('abilitybook:')) {
+                if (totalDiff !== 0) {
+                    activityTotal += totalDiff;
+                    activityItems.push({ name, key, countDiff, value: totalDiff });
+                }
+                continue;
+            }
+
+            // Per-unit prices
+            const oldPrice = old.count > 0 ? old.value / old.count : 0;
+            const currPrice = curr.count > 0 ? curr.value / curr.count : 0;
+
+            // Activity = countDiff × oldPrice (new/removed items use current price)
+            // Market = oldCount × (currPrice - oldPrice)
+            let activity = 0;
+            let market = 0;
+
+            if (old.count === 0) {
+                // Entirely new item — pure activity
+                activity = curr.value;
+            } else if (curr.count === 0) {
+                // Entirely removed item — pure activity (negative)
+                activity = -old.value;
+            } else {
+                activity = countDiff * oldPrice;
+                market = old.count * (currPrice - oldPrice);
+            }
+
+            activity = Math.round(activity);
+            market = Math.round(market);
+
+            if (activity !== 0) {
+                activityTotal += activity;
+                activityItems.push({ name, key, countDiff, value: activity });
+            }
+            if (market !== 0) {
+                marketTotal += market;
+                marketItems.push({ name, key, count: old.count, value: market });
+            }
+        }
+
+        if (activityItems.length === 0 && marketItems.length === 0 && otherItems.length === 0) {
+            container.innerHTML = `<span style="color: #666;">${t('No item-level changes in the last 24h')}</span>`;
+            return;
+        }
+
+        // Sort all lists by absolute value descending
+        activityItems.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+        marketItems.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+        otherItems.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+
+        let html = '';
+
+        // Activity section
+        if (activityItems.length > 0) {
+            const actColor = activityTotal >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
+            const actSign = activityTotal >= 0 ? '+' : '';
+            html += `<div style="font-weight: bold; margin-bottom: 4px; display: flex; justify-content: space-between;">`;
+            html += `<span>${t('Activity')}</span>`;
+            html += `<span style="color: ${actColor};">${actSign}${networthFormatter(activityTotal)}</span>`;
+            html += `</div>`;
+
+            for (const item of activityItems) {
+                const isPos = item.value >= 0;
+                const color = isPos ? config.COLOR_PROFIT : config.COLOR_LOSS;
+                const sign = isPos ? '+' : '';
+
+                let countText = '';
+                if (item.countDiff !== 0 && item.key !== '/items/coin:0') {
+                    const countSign = item.countDiff > 0 ? '+' : '';
+                    countText = ` <span style="color: #888; font-size: 11px;">${countSign}${item.countDiff}</span>`;
+                }
+
+                html += `<div style="display: flex; justify-content: space-between; padding: 1px 0 1px 12px;">`;
+                html += `<span>${item.name}${countText}</span>`;
+                html += `<span style="color: ${color}; white-space: nowrap; margin-left: 12px;">${sign}${networthFormatter(item.value)}</span>`;
+                html += `</div>`;
+            }
+        }
+
+        // Market movement section
+        if (marketItems.length > 0) {
+            const mktColor = marketTotal >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
+            const mktSign = marketTotal >= 0 ? '+' : '';
+            html += `<div style="font-weight: bold; margin-top: 8px; margin-bottom: 4px; display: flex; justify-content: space-between;${activityItems.length > 0 ? ' padding-top: 6px; border-top: 1px solid #333;' : ''}">`;
+            html += `<span>${t('Market Movement')}</span>`;
+            html += `<span style="color: ${mktColor};">${mktSign}${networthFormatter(marketTotal)}</span>`;
+            html += `</div>`;
+
+            for (const item of marketItems) {
+                const isPos = item.value >= 0;
+                const color = isPos ? config.COLOR_PROFIT : config.COLOR_LOSS;
+                const sign = isPos ? '+' : '';
+
+                html += `<div style="display: flex; justify-content: space-between; padding: 1px 0 1px 12px;">`;
+                html += `<span>${item.name} <span style="color: #888; font-size: 11px;">\u00d7${item.count}</span></span>`;
+                html += `<span style="color: ${color}; white-space: nowrap; margin-left: 12px;">${sign}${networthFormatter(item.value)}</span>`;
+                html += `</div>`;
+            }
+        }
+
+        // Other section (listings)
+        // Compute rounding residual from hourly snapshot total
+        const history = networthHistory.getHistory();
+        if (history.length >= 2) {
+            let oldHourly = history[0];
+            for (const snap of history) {
+                if (Math.abs(snap.t - oneDayAgo) < Math.abs(oldHourly.t - oneDayAgo)) {
+                    oldHourly = snap;
+                }
+            }
+            const currentTotal = Math.round(currentData.totalNetworth + (currentData.excluded?.total ?? 0));
+            const last24hChange = currentTotal - oldHourly.total;
+            const residual = last24hChange - activityTotal - marketTotal - otherTotal;
+            if (Math.abs(residual) > 0) {
+                otherTotal += residual;
+                otherItems.push({ name: t('Rounding'), key: '_rounding', value: residual });
+            }
+        }
+
+        const hasPrevSections = activityItems.length > 0 || marketItems.length > 0;
+        if (otherItems.length > 0) {
+            const otherColor = otherTotal >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
+            const otherSign = otherTotal >= 0 ? '+' : '';
+            html += `<div style="font-weight: bold; margin-top: 8px; margin-bottom: 4px; display: flex; justify-content: space-between;${hasPrevSections ? ' padding-top: 6px; border-top: 1px solid #333;' : ''}">`;
+            html += `<span>${t('Other')}</span>`;
+            html += `<span style="color: ${otherColor};">${otherSign}${networthFormatter(otherTotal)}</span>`;
+            html += `</div>`;
+
+            for (const item of otherItems) {
+                const isPos = item.value >= 0;
+                const color = isPos ? config.COLOR_PROFIT : config.COLOR_LOSS;
+                const sign = isPos ? '+' : '';
+
+                html += `<div style="display: flex; justify-content: space-between; padding: 1px 0 1px 12px;">`;
+                html += `<span>${item.name}</span>`;
+                html += `<span style="color: ${color}; white-space: nowrap; margin-left: 12px;">${sign}${networthFormatter(item.value)}</span>`;
+                html += `</div>`;
+            }
+        }
+
+        // Snapshot age note
+        const ageHours = Math.round((Date.now() - oldSnapshot.t) / 3_600_000);
+        html += `<div style="color: #555; font-size: 10px; margin-top: 6px; text-align: right;">${t('Compared to snapshot from {0}h ago', ageHours)}</div>`;
+
+        container.innerHTML = html;
+    }
+
+    /**
+     * Find previous valid _raw data by searching backward from currentIndex
+     */
+    _getPreviousRaw(dataset, currentIndex) {
+        for (let i = currentIndex - 1; i >= 0; i--) {
+            const point = dataset[i];
+            if (!isNaN(point.y) && point._raw) return point._raw;
+        }
+        return null;
+    }
+
+    /**
+     * Format a delta value with color
+     */
+    _formatDelta(current, previous) {
+        if (previous == null || current == null) return '';
+        const diff = current - previous;
+        if (diff === 0) return '';
+        const color = diff > 0 ? '#4ade80' : '#f87171';
+        const sign = diff > 0 ? '+' : '';
+        return `<span style="color:${color}; margin-left:6px;">${sign}${networthFormatter(diff)}</span>`;
+    }
+
+    /**
+     * Render custom HTML tooltip with colored deltas
+     */
+    _renderCustomTooltip(context) {
+        const { tooltip } = context;
+
+        let tooltipEl = document.getElementById('mwi-nw-chart-tooltip');
+        if (!tooltipEl) {
+            tooltipEl = document.createElement('div');
+            tooltipEl.id = 'mwi-nw-chart-tooltip';
+            tooltipEl.style.cssText = `
+                position: absolute;
+                background: rgba(0, 0, 0, 0.92);
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 8px 12px;
+                pointer-events: none;
+                font-size: 12px;
+                font-family: monospace;
+                color: #ccc;
+                white-space: nowrap;
+                z-index: 10;
+                transition: opacity 0.15s;
+            `;
+            const canvas = context.chart.canvas;
+            canvas.parentElement.appendChild(tooltipEl);
+        }
+
+        if (tooltip.opacity === 0) {
+            tooltipEl.style.opacity = '0';
+            return;
+        }
+
+        // Find the Total Net Worth data point
+        const totalPoint = tooltip.dataPoints?.find((dp) => dp.dataset.label === 'Total Net Worth');
+        if (!totalPoint) {
+            tooltipEl.style.opacity = '0';
+            return;
+        }
+
+        const raw = totalPoint.raw._raw;
+        if (!raw) {
+            tooltipEl.style.opacity = '0';
+            return;
+        }
+
+        const prevRaw = this._getPreviousRaw(totalPoint.dataset.data, totalPoint.dataIndex);
+
+        // Title
+        const title = new Date(totalPoint.raw.x).toLocaleString([], {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+        });
+
+        // Build lines
+        let html = `<div style="font-weight:bold; color:#fff; margin-bottom:4px;">${title}</div>`;
+
+        // Total
+        const totalDelta = this._formatDelta(raw.total, prevRaw?.total);
+        html += `<div style="color:#4ade80;">&#9632; ${t('Total:')} ${networthFormatter(raw.total)}${totalDelta}</div>`;
+
+        // Category breakdown
+        const categories = [];
+        categories.push({ label: t('Gold'), value: raw.gold || 0, prev: prevRaw?.gold });
+
+        const inventoryExGold = (raw.inventory || 0) - (raw.gold || 0);
+        const prevInventoryExGold = prevRaw ? (prevRaw.inventory || 0) - (prevRaw.gold || 0) : null;
+        categories.push({ label: t('Inventory'), value: inventoryExGold, prev: prevInventoryExGold });
+
+        categories.push({ label: t('Equipment'), value: raw.equipment || 0, prev: prevRaw?.equipment });
+        categories.push({ label: t('Listings'), value: raw.listings || 0, prev: prevRaw?.listings });
+        categories.push({ label: t('House'), value: raw.house || 0, prev: prevRaw?.house });
+        categories.push({ label: t('Abilities'), value: raw.abilities || 0, prev: prevRaw?.abilities });
+        if (raw.nonExcluded != null && raw.nonExcluded !== raw.total) {
+            const excluded = raw.total - raw.nonExcluded;
+            const prevExcluded = prevRaw?.nonExcluded != null ? prevRaw.total - prevRaw.nonExcluded : null;
+            categories.push({ label: t('Excluded'), value: excluded, prev: prevExcluded });
+        }
+
+        for (const cat of categories) {
+            const delta = this._formatDelta(cat.value, cat.prev);
+            html += `<div style="color:#ccc; padding-left:12px;">${cat.label}: ${networthFormatter(cat.value)}${delta}</div>`;
+        }
+
+        tooltipEl.innerHTML = html;
+        tooltipEl.style.opacity = '1';
+
+        // Position tooltip
+        const containerRect = context.chart.canvas.parentElement.getBoundingClientRect();
+        const offsetX = tooltip.caretX;
+        const offsetY = tooltip.caretY;
+
+        // Keep tooltip within canvas bounds
+        const tooltipWidth = tooltipEl.offsetWidth;
+        const tooltipHeight = tooltipEl.offsetHeight;
+        const containerWidth = containerRect.width;
+        const containerHeight = containerRect.height;
+
+        let left = offsetX + 12;
+        let top = offsetY - tooltipHeight / 2;
+
+        if (left + tooltipWidth > containerWidth) {
+            left = offsetX - tooltipWidth - 12;
+        }
+        if (top < 0) top = 0;
+        if (top + tooltipHeight > containerHeight) top = containerHeight - tooltipHeight;
+
+        tooltipEl.style.left = `${left}px`;
+        tooltipEl.style.top = `${top}px`;
+    }
+
+    /**
+     * Handle a click on the chart — show delete popup for the nearest data point.
+     * @param {Object} event - Chart.js event object
+     * @param {Array} elements - Active elements at click position
+     */
+    _onChartClick(event, elements) {
+        this._dismissDeletePopup();
+        if (!elements || elements.length === 0) return;
+
+        const raw = elements[0].element.$context?.raw;
+        if (!raw || isNaN(raw.x)) return;
+
+        // _raw is present on Total line points; category lines share the same timestamp
+        const snapshot = raw._raw || networthHistory.getHistory().find((s) => s.t === raw.x);
+        if (!snapshot) return;
+
+        this._showDeletePopup(event.native, snapshot);
+    }
+
+    /**
+     * Show a small popup near the click offering to delete the datapoint.
+     * @param {MouseEvent} nativeEvent - Native DOM mouse event for positioning
+     * @param {Object} snapshot - The snapshot object to potentially delete
+     */
+    _showDeletePopup(nativeEvent, snapshot) {
+        const popup = document.createElement('div');
+        popup.id = 'mwi-nw-delete-popup';
+
+        const left = Math.min(nativeEvent.clientX + 12, window.innerWidth - 210);
+        const top = nativeEvent.clientY - 10;
+
+        popup.style.cssText = `
+            position: fixed;
+            z-index: 100002;
+            background: #1e1e2e;
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 10px 12px;
+            font-size: 12px;
+            color: #ccc;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+            left: ${left}px;
+            top: ${top}px;
+            min-width: 180px;
+        `;
+
+        const date = new Date(snapshot.t).toLocaleString([], {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+        });
+
+        popup.innerHTML = `
+            <div style="margin-bottom:4px;font-weight:500;color:#fff;">${date}</div>
+            <div style="margin-bottom:10px;color:${config.COLOR_ACCENT};">${networthFormatter(snapshot.total)}</div>
+            <button id="mwi-nw-delete-confirm" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:11px;margin-right:6px;">${t('Delete point')}</button>
+            <button id="mwi-nw-delete-cancel" style="background:#2a2a2a;color:#999;border:1px solid #444;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:11px;">${t('Cancel')}</button>
+        `;
+
+        document.body.appendChild(popup);
+        this._deletePopup = popup;
+
+        popup.querySelector('#mwi-nw-delete-confirm').addEventListener('click', async () => {
+            await networthHistory.deleteSnapshot(snapshot.t);
+            this._dismissDeletePopup();
+            this.renderChart(this.currentRange, this.currentCustomFrom, this.currentCustomTo);
+        });
+
+        popup.querySelector('#mwi-nw-delete-cancel').addEventListener('click', () => {
+            this._dismissDeletePopup();
+        });
+
+        // Dismiss on outside click (defer to avoid catching the current click)
+        setTimeout(() => {
+            this._deletePopupOutsideHandler = (e) => {
+                if (!popup.contains(e.target)) {
+                    this._dismissDeletePopup();
+                }
+            };
+            document.addEventListener('click', this._deletePopupOutsideHandler);
+        }, 0);
+    }
+
+    /**
+     * Remove the delete popup and clean up its outside-click listener.
+     */
+    _dismissDeletePopup() {
+        if (this._deletePopup) {
+            this._deletePopup.remove();
+            this._deletePopup = null;
+        }
+        if (this._deletePopupOutsideHandler) {
+            document.removeEventListener('click', this._deletePopupOutsideHandler);
+            this._deletePopupOutsideHandler = null;
+        }
+    }
+
+    closeModal() {
+        this._dismissDeletePopup();
+
+        if (this.chartInstance) {
+            this.chartInstance.destroy();
+            this.chartInstance = null;
+        }
+
+        // Remove 24h breakdown popout if open
+        const breakdown = document.getElementById('mwi-nw-24h-breakdown');
+        if (breakdown) {
+            breakdown.remove();
+        }
+
+        const modal = document.getElementById('mwi-nw-chart-modal');
+        if (modal) {
+            modal.remove();
+        }
+
+        if (this.escHandler) {
+            document.removeEventListener('keydown', this.escHandler);
+            this.escHandler = null;
+        }
+
+        if (this.outsideClickHandler) {
+            document.removeEventListener('mousedown', this.outsideClickHandler);
+            this.outsideClickHandler = null;
+        }
+    }
+}
+
+const networthHistoryChart = new NetworthHistoryChart();
+
+export default networthHistoryChart;

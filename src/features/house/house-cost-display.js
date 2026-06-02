@@ -1,0 +1,904 @@
+/**
+ * House Upgrade Cost Display
+ * UI rendering for house upgrade costs
+ */
+
+import houseCostCalculator from './house-cost-calculator.js';
+import config from '../../core/config.js';
+import { t } from '../../core/i18n.js';
+import { coinFormatter, formatWithSeparator } from '../../utils/formatters.js';
+import dataManager from '../../core/data-manager.js';
+import { createTimerRegistry } from '../../utils/timer-registry.js';
+import { createAutofillManager } from '../../utils/marketplace-autofill.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
+import { isMarketplacePanel, getMyListingsTab } from '../../utils/game-locale.js';
+import {
+    createMaterialTab,
+    removeMaterialTabs,
+    setupMarketplaceCleanupObserver,
+    navigateToMarketplace,
+} from '../../utils/marketplace-tabs.js';
+
+class HouseCostDisplay {
+    constructor() {
+        this.isActive = false;
+        this.currentModalContent = null; // Track current modal to detect room switches
+        this.isInitialized = false;
+        this.currentMaterialsTabs = []; // Track marketplace tabs
+        this.cleanupObserver = null; // Marketplace cleanup observer
+        this.timerRegistry = createTimerRegistry();
+        this.autofillManager = createAutofillManager('MissingMats-Houses');
+        this._itemsUpdatedHandler = null; // Inventory change listener
+        this._houseRoomsUpdatedHandler = null; // House room level change listener
+        this._cumulativeState = null; // State for refreshing cumulative display
+        this._costContext = null; // { houseRoomHrid, currentLevel, targetLevel } for recalculating missing mats
+    }
+
+    /**
+     * Setup settings listeners for feature toggle and color changes
+     */
+    setupSettingListener() {
+        config.onSettingChange('houseUpgradeCosts', (value) => {
+            if (value) {
+                this.initialize();
+            } else {
+                this.disable();
+            }
+        });
+
+        config.onSettingChange('color_accent', () => {
+            if (this.isInitialized) {
+                this.refresh();
+            }
+        });
+    }
+
+    /**
+     * Initialize the display system
+     */
+    initialize() {
+        if (!config.getSetting('houseUpgradeCosts')) {
+            return;
+        }
+
+        this.isActive = true;
+        this.isInitialized = true;
+
+        // Setup cleanup observer for marketplace tabs (consistent with actions feature)
+        this.cleanupObserver = setupMarketplaceCleanupObserver(
+            () => this.handleMarketplaceCleanup(),
+            this.currentMaterialsTabs
+        );
+
+        // Listen for inventory changes to refresh the cumulative display
+        this._itemsUpdatedHandler = () => this._onInventoryChanged();
+        dataManager.on('items_updated', this._itemsUpdatedHandler);
+
+        // Listen for house room level changes to refresh the dropdown and display
+        this._houseRoomsUpdatedHandler = () => this._onHouseRoomUpdated();
+        dataManager.on('house_rooms_updated', this._houseRoomsUpdatedHandler);
+
+        this.autofillManager.initialize();
+    }
+
+    /**
+     * Augment native costs section with market pricing
+     * @param {Element} costsSection - The native HousePanel_costs element
+     * @param {string} houseRoomHrid - House room HRID
+     * @param {Element} modalContent - The modal content element
+     */
+    async addCostColumn(costsSection, houseRoomHrid, modalContent) {
+        // Remove any existing augmentation first
+        this.removeExistingColumn(modalContent);
+
+        const currentLevel = houseCostCalculator.getCurrentRoomLevel(houseRoomHrid);
+
+        // Don't show if already max level
+        if (currentLevel >= 8) {
+            return;
+        }
+
+        try {
+            // Add "Cumulative to Level" section
+            await this.addCompactToLevel(costsSection, houseRoomHrid, currentLevel);
+
+            // Mark this modal as processed
+            this.currentModalContent = modalContent;
+        } catch {
+            // Silently fail - augmentation is optional
+        }
+    }
+
+    /**
+     * Remove existing augmentations
+     * @param {Element} modalContent - The modal content element
+     */
+    removeExistingColumn(modalContent) {
+        // Remove all MWI-added elements
+        modalContent
+            .querySelectorAll('.mwi-house-pricing, .mwi-house-pricing-empty, .mwi-house-total, .mwi-house-to-level')
+            .forEach((el) => el.remove());
+
+        // Restore original grid columns
+        const itemRequirementsGrid = modalContent.querySelector('[class*="HousePanel_itemRequirements"]');
+        if (itemRequirementsGrid) {
+            itemRequirementsGrid.style.gridTemplateColumns = '';
+        }
+    }
+
+    /**
+     * Augment native cost items with market pricing
+     * @param {Element} costsSection - Native costs section
+     * @param {Object} costData - Cost data from calculator
+     */
+    async augmentNativeCosts(costsSection, costData) {
+        // Find the item requirements grid container
+        const itemRequirementsGrid = costsSection.querySelector('[class*="HousePanel_itemRequirements"]');
+        if (!itemRequirementsGrid) {
+            return;
+        }
+
+        // Modify the grid to accept 4 columns instead of 3
+        // Native grid is: icon | inventory count | input count
+        // We want: icon | inventory count | input count | pricing
+        const currentGridStyle = window.getComputedStyle(itemRequirementsGrid).gridTemplateColumns;
+
+        // Add a 4th column for pricing (auto width)
+        itemRequirementsGrid.style.gridTemplateColumns = currentGridStyle + ' auto';
+
+        // Find all item containers (these have the icons)
+        const itemContainers = itemRequirementsGrid.querySelectorAll('[class*="Item_itemContainer"]');
+        if (itemContainers.length === 0) {
+            return;
+        }
+
+        for (const itemContainer of itemContainers) {
+            // Game uses SVG sprites, not img tags
+            const svg = itemContainer.querySelector('svg');
+            if (!svg) continue;
+
+            // Extract item name from href (e.g., #lumber -> lumber)
+            const useElement = svg.querySelector('use');
+            const hrefValue = useElement?.getAttribute('href') || '';
+            const itemName = hrefValue.split('#')[1];
+            if (!itemName) continue;
+
+            // Convert to item HRID
+            const itemHrid = `/items/${itemName}`;
+
+            // Find matching material in costData
+            let materialData;
+            if (itemHrid === '/items/coin') {
+                materialData = {
+                    itemHrid: '/items/coin',
+                    count: costData.coins,
+                    marketPrice: 1,
+                    totalValue: costData.coins,
+                };
+            } else {
+                materialData = costData.materials.find((m) => m.itemHrid === itemHrid);
+            }
+
+            if (!materialData) continue;
+
+            // Skip coins (no pricing needed)
+            if (materialData.itemHrid === '/items/coin') {
+                // Add empty cell to maintain grid structure
+                this.addEmptyCell(itemRequirementsGrid, itemContainer);
+                continue;
+            }
+
+            // Add pricing as a new grid cell to the right
+            this.addPricingCell(itemRequirementsGrid, itemContainer, materialData);
+        }
+    }
+
+    /**
+     * Add empty cell for coins to maintain grid structure
+     * @param {Element} grid - The requirements grid
+     * @param {Element} itemContainer - The item icon container (badge)
+     */
+    addEmptyCell(grid, itemContainer) {
+        const emptyCell = document.createElement('span');
+        emptyCell.className = 'mwi-house-pricing-empty HousePanel_itemRequirementCell__3hSBN';
+
+        // Insert immediately after the item badge
+        itemContainer.after(emptyCell);
+    }
+
+    /**
+     * Add pricing as a new grid cell to the right of the item
+     * @param {Element} grid - The requirements grid
+     * @param {Element} itemContainer - The item icon container (badge)
+     * @param {Object} materialData - Material data with pricing
+     */
+    addPricingCell(grid, itemContainer, materialData) {
+        // Check if already augmented
+        const nextSibling = itemContainer.nextElementSibling;
+        if (nextSibling?.classList.contains('mwi-house-pricing')) {
+            return;
+        }
+
+        const inventoryCount = houseCostCalculator.getInventoryCount(materialData.itemHrid);
+        const hasEnough = inventoryCount >= materialData.count;
+        const amountNeeded = Math.max(0, materialData.count - inventoryCount);
+
+        // Create pricing cell
+        const pricingCell = document.createElement('span');
+        pricingCell.className = 'mwi-house-pricing HousePanel_itemRequirementCell__3hSBN';
+        pricingCell.style.cssText = `
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            color: ${config.COLOR_ACCENT};
+            padding-left: 8px;
+            white-space: nowrap;
+        `;
+
+        pricingCell.innerHTML = `
+            <span style="color: ${config.SCRIPT_COLOR_SECONDARY};">@ ${coinFormatter(materialData.marketPrice)}</span>
+            <span style="color: ${config.COLOR_ACCENT}; font-weight: bold;">= ${coinFormatter(materialData.totalValue)}</span>
+            <span style="color: ${hasEnough ? '#4ade80' : '#f87171'}; margin-left: auto; text-align: right;">${coinFormatter(amountNeeded)}</span>
+        `;
+
+        // Insert immediately after the item badge
+        itemContainer.after(pricingCell);
+    }
+
+    /**
+     * Add total cost below native costs section
+     * @param {Element} costsSection - Native costs section
+     * @param {Object} costData - Cost data
+     */
+    addTotalCost(costsSection, costData) {
+        const totalDiv = document.createElement('div');
+        totalDiv.className = 'mwi-house-total';
+        totalDiv.style.cssText = `
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 2px solid ${config.COLOR_ACCENT};
+            font-weight: bold;
+            font-size: 1rem;
+            color: ${config.COLOR_ACCENT};
+            text-align: center;
+        `;
+        totalDiv.textContent = t('Total Market Value: {0}', coinFormatter(costData.totalValue));
+        costsSection.appendChild(totalDiv);
+    }
+
+    /**
+     * Add compact "To Level" section
+     * @param {Element} costsSection - Native costs section
+     * @param {string} houseRoomHrid - House room HRID
+     * @param {number} currentLevel - Current level
+     */
+    async addCompactToLevel(costsSection, houseRoomHrid, currentLevel) {
+        const section = document.createElement('div');
+        section.className = 'mwi-house-to-level';
+        section.style.cssText = `
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border: 1px solid ${config.SCRIPT_COLOR_SECONDARY};
+        `;
+
+        // Compact header with inline dropdown
+        const headerRow = document.createElement('div');
+        headerRow.style.cssText = `
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        `;
+
+        const label = document.createElement('span');
+        label.style.cssText = `
+            color: ${config.COLOR_ACCENT};
+            font-weight: bold;
+            font-size: 0.875rem;
+        `;
+        label.textContent = t('Cumulative to Level:');
+
+        const dropdown = document.createElement('select');
+        dropdown.style.cssText = `
+            padding: 4px 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid ${config.SCRIPT_COLOR_SECONDARY};
+            color: ${config.SCRIPT_COLOR_MAIN};
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+        `;
+
+        // Add options
+        for (let level = currentLevel + 1; level <= 8; level++) {
+            const option = document.createElement('option');
+            option.value = level;
+            option.textContent = level;
+            dropdown.appendChild(option);
+        }
+
+        // Default to next level (currentLevel + 1)
+        const defaultLevel = currentLevel + 1;
+        dropdown.value = defaultLevel;
+
+        headerRow.appendChild(label);
+        headerRow.appendChild(dropdown);
+        section.appendChild(headerRow);
+
+        // Cost display container
+        const costContainer = document.createElement('div');
+        costContainer.className = 'mwi-cumulative-cost-container';
+        costContainer.style.cssText = `
+            font-size: 0.875rem;
+            margin-top: 8px;
+            text-align: left;
+        `;
+        section.appendChild(costContainer);
+
+        // Initial render
+        await this.updateCompactCumulativeDisplay(costContainer, houseRoomHrid, currentLevel, parseInt(dropdown.value));
+
+        // Store state for inventory-change refresh
+        this._cumulativeState = { costContainer, houseRoomHrid, currentLevel, dropdown };
+        this._costContext = { houseRoomHrid, currentLevel, targetLevel: parseInt(dropdown.value) };
+
+        // Update on change
+        dropdown.addEventListener('change', async () => {
+            this._costContext = { houseRoomHrid, currentLevel, targetLevel: parseInt(dropdown.value) };
+            await this.updateCompactCumulativeDisplay(
+                costContainer,
+                houseRoomHrid,
+                currentLevel,
+                parseInt(dropdown.value)
+            );
+        });
+
+        costsSection.parentElement.appendChild(section);
+    }
+
+    /**
+     * Update compact cumulative display
+     * @param {Element} container - Container element
+     * @param {string} houseRoomHrid - House room HRID
+     * @param {number} currentLevel - Current level
+     * @param {number} targetLevel - Target level
+     */
+    async updateCompactCumulativeDisplay(container, houseRoomHrid, currentLevel, targetLevel) {
+        container.innerHTML = '';
+
+        const costData = await houseCostCalculator.calculateCumulativeCost(houseRoomHrid, currentLevel, targetLevel);
+
+        // Materials list as vertical stack of single-line rows
+        const materialsList = document.createElement('div');
+        materialsList.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        `;
+
+        // Coins first
+        if (costData.coins > 0) {
+            this.appendMaterialRow(materialsList, {
+                itemHrid: '/items/coin',
+                count: costData.coins,
+                totalValue: costData.coins,
+            });
+        }
+
+        // Materials
+        for (const material of costData.materials) {
+            this.appendMaterialRow(materialsList, material);
+        }
+
+        container.appendChild(materialsList);
+
+        // Total
+        const totalDiv = document.createElement('div');
+        totalDiv.style.cssText = `
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 2px solid ${config.COLOR_ACCENT};
+            font-weight: bold;
+            font-size: 1rem;
+            color: ${config.COLOR_ACCENT};
+            text-align: center;
+        `;
+        totalDiv.textContent = t('Total Market Value: {0}', coinFormatter(costData.totalValue));
+        container.appendChild(totalDiv);
+
+        // Add Missing Mats Marketplace button if any materials are missing
+        const missingMaterials = this.getMissingMaterials(costData);
+        if (missingMaterials.length > 0) {
+            const button = this.createMissingMaterialsButton(missingMaterials);
+            container.appendChild(button);
+        }
+    }
+
+    /**
+     * Append material row as single-line compact format
+     * @param {Element} container - The container element
+     * @param {Object} material - Material data
+     */
+    appendMaterialRow(container, material) {
+        const itemName = houseCostCalculator.getItemName(material.itemHrid);
+        const inventoryCount = houseCostCalculator.getInventoryCount(material.itemHrid);
+        const hasEnough = inventoryCount >= material.count;
+        const amountNeeded = Math.max(0, material.count - inventoryCount);
+        const isCoin = material.itemHrid === '/items/coin';
+
+        const row = document.createElement('div');
+        row.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+            line-height: 1.4;
+        `;
+
+        // [inv / req] - left side
+        const inventorySpan = document.createElement('span');
+        inventorySpan.style.cssText = `
+            color: ${hasEnough ? 'white' : '#f87171'};
+            min-width: 120px;
+            text-align: right;
+        `;
+        inventorySpan.textContent = `${coinFormatter(inventoryCount)} / ${coinFormatter(material.count)}`;
+        row.appendChild(inventorySpan);
+
+        // [Badge] Material Name
+        const nameSpan = document.createElement('span');
+        nameSpan.style.cssText = `
+            color: white;
+            min-width: 140px;
+        `;
+        nameSpan.textContent = itemName;
+        row.appendChild(nameSpan);
+
+        // @ price = total (skip for coins)
+        if (!isCoin) {
+            const pricingSpan = document.createElement('span');
+            pricingSpan.style.cssText = `
+                color: ${config.COLOR_ACCENT};
+                min-width: 180px;
+            `;
+            pricingSpan.textContent = `@ ${coinFormatter(material.marketPrice)} = ${coinFormatter(material.totalValue)}`;
+            row.appendChild(pricingSpan);
+        } else {
+            // Empty spacer for coins
+            const spacer = document.createElement('span');
+            spacer.style.minWidth = '180px';
+            row.appendChild(spacer);
+        }
+
+        // Missing: X - right side
+        const missingSpan = document.createElement('span');
+        missingSpan.style.cssText = `
+            color: ${hasEnough ? '#4ade80' : '#f87171'};
+            margin-left: auto;
+            text-align: right;
+        `;
+        missingSpan.textContent = t('Missing: {0}', coinFormatter(amountNeeded));
+        row.appendChild(missingSpan);
+
+        container.appendChild(row);
+    }
+
+    /**
+     * Get missing materials from cost data
+     * @param {Object} costData - Cost data from calculator
+     * @returns {Array} Array of missing materials in marketplace format
+     */
+    getMissingMaterials(costData) {
+        const gameData = dataManager.getInitClientData();
+        const inventory = dataManager.getInventory();
+        const missing = [];
+
+        // Process all materials (skip coins)
+        for (const material of costData.materials) {
+            // Only count items in inventory (not equipped) with no enhancement
+            // Enhanced items and equipped items cannot be used for house construction
+            const inventoryItem = inventory.find(
+                (i) =>
+                    i.itemHrid === material.itemHrid &&
+                    i.itemLocationHrid === '/item_locations/inventory' &&
+                    (!i.enhancementLevel || i.enhancementLevel === 0)
+            );
+            const have = inventoryItem?.count || 0;
+            const missingAmount = Math.max(0, material.count - have);
+
+            // Only include if missing > 0
+            if (missingAmount > 0) {
+                const itemDetails = gameData.itemDetailMap[material.itemHrid];
+                if (itemDetails) {
+                    missing.push({
+                        itemHrid: material.itemHrid,
+                        itemName: itemNameTranslator.getDisplayName(material.itemHrid),
+                        missing: missingAmount,
+                        isTradeable: itemDetails.isTradable === true,
+                    });
+                }
+            }
+        }
+
+        return missing;
+    }
+
+    /**
+     * Create missing materials marketplace button
+     * @param {Array} missingMaterials - Array of missing material objects
+     * @returns {HTMLElement} Button element
+     */
+    createMissingMaterialsButton(missingMaterials) {
+        const button = document.createElement('button');
+        button.style.cssText = `
+            width: 100%;
+            padding: 10px 16px;
+            margin-top: 12px;
+            background: linear-gradient(180deg, rgba(91, 141, 239, 0.2) 0%, rgba(91, 141, 239, 0.1) 100%);
+            color: #ffffff;
+            border: 1px solid rgba(91, 141, 239, 0.4);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        `;
+        button.textContent = t('Missing Mats Marketplace');
+
+        // Hover effects
+        button.addEventListener('mouseenter', () => {
+            button.style.background =
+                'linear-gradient(180deg, rgba(91, 141, 239, 0.35) 0%, rgba(91, 141, 239, 0.25) 100%)';
+            button.style.borderColor = 'rgba(91, 141, 239, 0.6)';
+            button.style.boxShadow = '0 3px 6px rgba(0, 0, 0, 0.3)';
+        });
+
+        button.addEventListener('mouseleave', () => {
+            button.style.background =
+                'linear-gradient(180deg, rgba(91, 141, 239, 0.2) 0%, rgba(91, 141, 239, 0.1) 100%)';
+            button.style.borderColor = 'rgba(91, 141, 239, 0.4)';
+            button.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)';
+        });
+
+        // Click handler
+        button.addEventListener('click', async () => {
+            await this.handleMissingMaterialsClick(missingMaterials);
+        });
+
+        return button;
+    }
+
+    /**
+     * Handle missing materials button click
+     * @param {Array} missingMaterials - Array of missing material objects
+     */
+    async handleMissingMaterialsClick(missingMaterials) {
+        // Navigate to marketplace
+        const success = await this.navigateToMarketplace();
+        if (!success) {
+            console.error('[HouseCostDisplay] Failed to navigate to marketplace');
+            return;
+        }
+
+        // Wait for marketplace to settle
+        await new Promise((resolve) => {
+            const delayTimeout = setTimeout(resolve, 200);
+            this.timerRegistry.registerTimeout(delayTimeout);
+        });
+
+        // Create custom tabs
+        this.createMissingMaterialTabs(missingMaterials);
+    }
+
+    /**
+     * Navigate to marketplace by clicking navbar
+     * @returns {Promise<boolean>} True if successful
+     */
+    async navigateToMarketplace() {
+        // Find marketplace navbar button
+        const navButtons = document.querySelectorAll('.NavigationBar_nav__3uuUl');
+        const marketplaceButton = Array.from(navButtons).find((nav) => {
+            const svg = nav.querySelector('svg[aria-label="navigationBar.marketplace"]');
+            return svg !== null;
+        });
+
+        if (!marketplaceButton) {
+            console.error('[HouseCostDisplay] Marketplace navbar button not found');
+            return false;
+        }
+
+        // Click button
+        marketplaceButton.click();
+
+        // Wait for marketplace to appear
+        return await this.waitForMarketplace();
+    }
+
+    /**
+     * Wait for marketplace panel to appear
+     * @returns {Promise<boolean>} True if marketplace appeared
+     */
+    async waitForMarketplace() {
+        const maxAttempts = 50;
+        const delayMs = 100;
+
+        for (let i = 0; i < maxAttempts; i++) {
+            const tabsContainer = document.querySelector('.MuiTabs-flexContainer[role="tablist"]');
+            if (tabsContainer && isMarketplacePanel(tabsContainer)) {
+                return true;
+            }
+
+            await new Promise((resolve) => {
+                const delayTimeout = setTimeout(resolve, delayMs);
+                this.timerRegistry.registerTimeout(delayTimeout);
+            });
+        }
+
+        console.error('[HouseCostDisplay] Marketplace did not open within timeout');
+        return false;
+    }
+
+    /**
+     * Create custom tabs for missing materials
+     * @param {Array} missingMaterials - Array of missing material objects
+     */
+    createMissingMaterialTabs(missingMaterials) {
+        const tabsContainer = document.querySelector('.MuiTabs-flexContainer[role="tablist"]');
+        if (!tabsContainer) {
+            console.error('[HouseCostDisplay] Tabs container not found');
+            return;
+        }
+
+        // Remove existing custom tabs
+        removeMaterialTabs();
+
+        // Get reference tab
+        const referenceTab = getMyListingsTab(tabsContainer);
+        if (!referenceTab) {
+            console.error('[HouseCostDisplay] Reference tab not found');
+            return;
+        }
+
+        // Enable flex wrapping
+        tabsContainer.style.flexWrap = 'wrap';
+
+        // Use event delegation on tabs container to clear quantity when regular tabs are clicked
+        // This avoids memory leaks from adding listeners to each tab repeatedly
+        if (!tabsContainer.hasAttribute('data-mwi-delegated-listener')) {
+            tabsContainer.setAttribute('data-mwi-delegated-listener', 'true');
+            tabsContainer.addEventListener('click', (e) => {
+                // Check if clicked element is a regular tab (not our custom tab)
+                const clickedTab = e.target.closest('button');
+                if (clickedTab && !clickedTab.hasAttribute('data-mwi-custom-tab')) {
+                    this.autofillManager.clearQuantity();
+                }
+            });
+        }
+
+        // Create tab for each missing material
+        this.currentMaterialsTabs.length = 0; // Clear without reassigning (preserves observer reference)
+        for (const material of missingMaterials) {
+            let tabEl = null;
+            const tab = createMaterialTab(material, referenceTab, (_e, mat) => {
+                // Read the current missing quantity from the tab's data attribute,
+                // which is kept up-to-date by the inventory listener.
+                this.autofillManager.setPendingCalculation(() => {
+                    return parseInt(tabEl?.getAttribute('data-missing-quantity') || '0', 10);
+                });
+                // Navigate to marketplace
+                navigateToMarketplace(mat.itemHrid, 0);
+            });
+            tabEl = tab;
+            tab.setAttribute('data-item-name', material.itemName);
+            tabsContainer.appendChild(tab);
+            this.currentMaterialsTabs.push(tab);
+        }
+    }
+
+    /**
+     * Handle marketplace cleanup (when leaving marketplace)
+     * Called by the marketplace cleanup observer
+     */
+    handleMarketplaceCleanup() {
+        removeMaterialTabs();
+        this.currentMaterialsTabs.length = 0; // Clear without reassigning (preserves observer reference)
+        this.autofillManager.clearQuantity();
+    }
+
+    /**
+     * Refresh colors on existing displays
+     */
+    refresh() {
+        // Update pricing cell colors
+        document.querySelectorAll('.mwi-house-pricing').forEach((cell) => {
+            cell.style.color = config.COLOR_ACCENT;
+            const boldSpan = cell.querySelector('span[style*="font-weight: bold"]');
+            if (boldSpan) {
+                boldSpan.style.color = config.COLOR_ACCENT;
+            }
+        });
+
+        // Update total cost colors
+        document.querySelectorAll('.mwi-house-total').forEach((total) => {
+            total.style.borderTopColor = config.COLOR_ACCENT;
+            total.style.color = config.COLOR_ACCENT;
+        });
+
+        // Update "To Level" label colors
+        document.querySelectorAll('.mwi-house-to-level span[style*="font-weight: bold"]').forEach((label) => {
+            label.style.color = config.COLOR_ACCENT;
+        });
+
+        // Update cumulative total colors
+        document.querySelectorAll('.mwi-cumulative-cost-container span[style*="font-weight: bold"]').forEach((span) => {
+            span.style.color = config.COLOR_ACCENT;
+        });
+    }
+
+    /**
+     * Handle inventory changes — refresh the cumulative display if visible
+     */
+    async _onInventoryChanged() {
+        // Update marketplace tabs (visible while shopping)
+        this._updateMarketplaceTabs();
+
+        if (!this._cumulativeState) return;
+        const { costContainer, houseRoomHrid, currentLevel, dropdown } = this._cumulativeState;
+        // Only refresh if the container is still in the DOM
+        if (!costContainer.isConnected) {
+            this._cumulativeState = null;
+            return;
+        }
+        await this.updateCompactCumulativeDisplay(costContainer, houseRoomHrid, currentLevel, parseInt(dropdown.value));
+    }
+
+    /**
+     * Handle house room level changes — refresh the dropdown and cumulative display
+     */
+    async _onHouseRoomUpdated() {
+        if (!this._cumulativeState) return;
+        const { costContainer, houseRoomHrid, dropdown } = this._cumulativeState;
+        if (!costContainer.isConnected) {
+            this._cumulativeState = null;
+            return;
+        }
+
+        const newLevel = houseCostCalculator.getCurrentRoomLevel(houseRoomHrid);
+        if (newLevel >= 8) {
+            costContainer.innerHTML = '';
+            this._cumulativeState = null;
+            this._costContext = null;
+            return;
+        }
+
+        // Remove dropdown options at or below the new current level
+        while (dropdown.options.length > 0 && parseInt(dropdown.options[0].value) <= newLevel) {
+            dropdown.remove(0);
+        }
+
+        if (dropdown.options.length === 0) {
+            costContainer.innerHTML = '';
+            this._cumulativeState = null;
+            this._costContext = null;
+            return;
+        }
+
+        dropdown.value = dropdown.options[0].value;
+        const targetLevel = parseInt(dropdown.value);
+
+        this._cumulativeState.currentLevel = newLevel;
+        this._costContext = { houseRoomHrid, currentLevel: newLevel, targetLevel };
+
+        await this.updateCompactCumulativeDisplay(costContainer, houseRoomHrid, newLevel, targetLevel);
+    }
+
+    /**
+     * Update marketplace tab badges when inventory changes.
+     * Recalculates missing amounts and updates each tab's display.
+     */
+    async _updateMarketplaceTabs() {
+        if (this.currentMaterialsTabs.length === 0) return;
+        if (!this._costContext) return;
+
+        const { houseRoomHrid, currentLevel, targetLevel } = this._costContext;
+        const costData = await houseCostCalculator.calculateCumulativeCost(houseRoomHrid, currentLevel, targetLevel);
+        const updatedMaterials = this.getMissingMaterials(costData);
+
+        for (const tab of this.currentMaterialsTabs) {
+            const itemHrid = tab.getAttribute('data-item-hrid');
+            const material = updatedMaterials.find((m) => m.itemHrid === itemHrid);
+
+            const badgeSpan = tab.querySelector('[class*="TabsComponent_badge"]');
+            if (!badgeSpan) continue;
+
+            let statusColor;
+            let statusText;
+            let displayName = tab.getAttribute('data-item-name') || itemHrid;
+
+            if (!material) {
+                statusColor = '#4ade80';
+                statusText = t('Complete');
+            } else if (!material.isTradeable) {
+                statusColor = '#888888';
+                statusText = t('Not Tradeable');
+                displayName = material.itemName;
+            } else {
+                statusColor = '#ef4444';
+                statusText = t('Missing: {0}', formatWithSeparator(material.missing));
+                displayName = material.itemName;
+            }
+
+            const titleCaseName = displayName
+                .split(' ')
+                .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                .join(' ');
+
+            badgeSpan.innerHTML = `
+                <div style="text-align: center;">
+                    <div>${titleCaseName}</div>
+                    <div style="font-size: 0.75em; color: ${statusColor};">
+                        ${statusText}
+                    </div>
+                </div>
+            `;
+
+            tab.setAttribute('data-missing-quantity', material ? material.missing.toString() : '0');
+        }
+    }
+
+    /**
+     * Disable the feature
+     */
+    disable() {
+        // Remove all MWI-added elements
+        document
+            .querySelectorAll('.mwi-house-pricing, .mwi-house-pricing-empty, .mwi-house-total, .mwi-house-to-level')
+            .forEach((el) => el.remove());
+
+        // Restore all grid columns
+        document.querySelectorAll('[class*="HousePanel_itemRequirements"]').forEach((grid) => {
+            grid.style.gridTemplateColumns = '';
+        });
+
+        // Clean up marketplace tabs and observer
+        this.handleMarketplaceCleanup();
+        if (this.cleanupObserver) {
+            this.cleanupObserver();
+            this.cleanupObserver = null;
+        }
+
+        // Remove inventory listener
+        if (this._itemsUpdatedHandler) {
+            dataManager.off('items_updated', this._itemsUpdatedHandler);
+            this._itemsUpdatedHandler = null;
+        }
+
+        // Remove house room listener
+        if (this._houseRoomsUpdatedHandler) {
+            dataManager.off('house_rooms_updated', this._houseRoomsUpdatedHandler);
+            this._houseRoomsUpdatedHandler = null;
+        }
+
+        this._cumulativeState = null;
+        this._costContext = null;
+
+        this.autofillManager.cleanup();
+        this.timerRegistry.clearAll();
+
+        this.currentModalContent = null;
+        this.isActive = false;
+        this.isInitialized = false;
+    }
+}
+
+const houseCostDisplay = new HouseCostDisplay();
+houseCostDisplay.setupSettingListener();
+
+export default houseCostDisplay;
