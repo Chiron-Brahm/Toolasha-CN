@@ -1484,7 +1484,7 @@
         }
     }
 
-    const itemNameTranslator$1 = new ItemNameTranslator();
+    const itemNameTranslator = new ItemNameTranslator();
 
     /**
      * Enhancement Display
@@ -1702,7 +1702,7 @@
                     materialCost += itemCost;
 
                     // Store breakdown by item name with quantity and unit price
-                    const itemName = itemNameTranslator$1.getDisplayName(cost.itemHrid);
+                    const itemName = itemNameTranslator.getDisplayName(cost.itemHrid);
                     materialBreakdown[itemName] = {
                         cost: itemCost,
                         quantity: quantity,
@@ -1725,7 +1725,7 @@
                 }
 
                 protectionCost = calc.protectionCount * protectionPrice;
-                const protectionName = itemNameTranslator$1.getDisplayName(protectionItemHrid);
+                const protectionName = itemNameTranslator.getDisplayName(protectionItemHrid);
                 materialBreakdown[protectionName] = {
                     cost: protectionCost,
                     quantity: calc.protectionCount,
@@ -1981,7 +1981,7 @@
 
         // Item info
         lines.push(
-            `<div style="color: #ddd; margin-bottom: 12px; font-weight: bold;">${itemNameTranslator$1.getDisplayName(itemHrid)} <span style="color: #888;">(Item Level ${itemDetails.itemLevel})</span></div>`
+            `<div style="color: #ddd; margin-bottom: 12px; font-weight: bold;">${itemNameTranslator.getDisplayName(itemHrid)} <span style="color: #888;">(Item Level ${itemDetails.itemLevel})</span></div>`
         );
 
         // Current stats section
@@ -2005,22 +2005,22 @@
         // Display each equipment slot
         if (params.toolSlot) {
             lines.push(
-                `<div style="color: #ccc;"><span style="color: #888;">${t('Tool:')}</span> ${itemNameTranslator$1.getDisplayName(params.toolSlot.hrid)}${params.toolSlot.enhancementLevel > 0 ? ` +${params.toolSlot.enhancementLevel}` : ''}</div>`
+                `<div style="color: #ccc;"><span style="color: #888;">${t('Tool:')}</span> ${itemNameTranslator.getDisplayName(params.toolSlot.hrid)}${params.toolSlot.enhancementLevel > 0 ? ` +${params.toolSlot.enhancementLevel}` : ''}</div>`
             );
         }
         if (params.bodySlot) {
             lines.push(
-                `<div style="color: #ccc;"><span style="color: #888;">${t('Body:')}</span> ${itemNameTranslator$1.getDisplayName(params.bodySlot.hrid)}${params.bodySlot.enhancementLevel > 0 ? ` +${params.bodySlot.enhancementLevel}` : ''}</div>`
+                `<div style="color: #ccc;"><span style="color: #888;">${t('Body:')}</span> ${itemNameTranslator.getDisplayName(params.bodySlot.hrid)}${params.bodySlot.enhancementLevel > 0 ? ` +${params.bodySlot.enhancementLevel}` : ''}</div>`
             );
         }
         if (params.legsSlot) {
             lines.push(
-                `<div style="color: #ccc;"><span style="color: #888;">${t('Legs:')}</span> ${itemNameTranslator$1.getDisplayName(params.legsSlot.hrid)}${params.legsSlot.enhancementLevel > 0 ? ` +${params.legsSlot.enhancementLevel}` : ''}</div>`
+                `<div style="color: #ccc;"><span style="color: #888;">${t('Legs:')}</span> ${itemNameTranslator.getDisplayName(params.legsSlot.hrid)}${params.legsSlot.enhancementLevel > 0 ? ` +${params.legsSlot.enhancementLevel}` : ''}</div>`
             );
         }
         if (params.handsSlot) {
             lines.push(
-                `<div style="color: #ccc;"><span style="color: #888;">${t('Hands:')}</span> ${itemNameTranslator$1.getDisplayName(params.handsSlot.hrid)}${params.handsSlot.enhancementLevel > 0 ? ` +${params.handsSlot.enhancementLevel}` : ''}</div>`
+                `<div style="color: #ccc;"><span style="color: #888;">${t('Hands:')}</span> ${itemNameTranslator.getDisplayName(params.handsSlot.hrid)}${params.handsSlot.enhancementLevel > 0 ? ` +${params.handsSlot.enhancementLevel}` : ''}</div>`
             );
         }
         lines.push('</div>');
@@ -2258,7 +2258,7 @@
             // Materials per attempt with pricing
             enhancementCosts.forEach((cost) => {
                 const itemDetail = gameData.itemDetailMap[cost.itemHrid];
-                const itemName = itemNameTranslator$1.getDisplayName(cost.itemHrid);
+                const itemName = itemNameTranslator.getDisplayName(cost.itemHrid);
 
                 // Get price
                 let itemPrice = 0;
@@ -2285,7 +2285,7 @@
             // Show protection item cost if protection is active (level 2+) AND item is equipped
             if (protectFromLevel >= 2) {
                 if (protectionItemHrid) {
-                    const protectionItemName = itemNameTranslator$1.getDisplayName(protectionItemHrid);
+                    const protectionItemName = itemNameTranslator.getDisplayName(protectionItemHrid);
 
                     // Get protection item price
                     let protectionPrice = 0;
@@ -2730,7 +2730,7 @@
             let rawPerAction = 0;
             let processedPerAction = 0;
 
-            const rawItemName = itemNameTranslator$1.getDisplayName(drop.itemHrid);
+            const rawItemName = itemNameTranslator.getDisplayName(drop.itemHrid);
             const baseItemsPerHour = actionsPerHour * drop.dropRate * avgAmountPerAction * efficiencyMultiplier;
             const baseItemsPerAction = drop.dropRate * avgAmountPerAction;
             const baseRevenuePerAction = baseItemsPerAction * resolvedRawPrice;
@@ -2773,7 +2773,7 @@
                 const processedItemsPerAction = drop.dropRate * processedPerAction;
 
                 // Track processing details
-                const processedItemName = itemNameTranslator$1.getDisplayName(processedItemHrid);
+                const processedItemName = itemNameTranslator.getDisplayName(processedItemHrid);
 
                 // Value gain per conversion = cheese value - cost of milk used
                 const costOfMilkUsed = conversionRatio * resolvedRawPrice;
@@ -9127,7 +9127,7 @@
             let itemHridFromDom = this.buildItemHridFromName(itemNameFromDom || actionNameFromDom);
             // Fallback: Chinese name → HRID via itemNameTranslator
             if (!itemHridFromDom) {
-                itemHridFromDom = itemNameTranslator$1.getHridFromChineseName(itemNameFromDom || actionNameFromDom);
+                itemHridFromDom = itemNameTranslator.getHridFromChineseName(itemNameFromDom || actionNameFromDom);
             }
 
             return currentActions.find((currentAction) => {
@@ -10764,7 +10764,7 @@
                                     ? ` (${item.baseSpeed.toFixed(2)}% × ${(1 + item.drinkConcentration / 100).toFixed(2)})`
                                     : '';
                             speedLines.push(
-                                `  - ${itemNameTranslator$1.getDisplayName(item.hrid)}: +${item.speed.toFixed(2)}%${detailText}`
+                                `  - ${itemNameTranslator.getDisplayName(item.hrid)}: +${item.speed.toFixed(2)}%${detailText}`
                             );
                         }
 
@@ -10811,7 +10811,7 @@
                                         : '';
 
                                 speedLines.push(
-                                    `  - ${itemNameTranslator$1.getDisplayName(trinketSlot.itemHrid)}${enhText}: +${taskSpeedBonus.toFixed(2)}%${detailText}`
+                                    `  - ${itemNameTranslator.getDisplayName(trinketSlot.itemHrid)}${enhText}: +${taskSpeedBonus.toFixed(2)}%${detailText}`
                                 );
                             }
                         }
@@ -11644,7 +11644,7 @@
                         for (const item of xpData.charmBreakdown) {
                             const enhText = item.enhancementLevel > 0 ? ` +${item.enhancementLevel}` : '';
                             lines.push(
-                                `    • ${itemNameTranslator$1.getDisplayName(item.hrid)}${enhText}: +${item.value.toFixed(2)}%`
+                                `    • ${itemNameTranslator.getDisplayName(item.hrid)}${enhText}: +${item.value.toFixed(2)}%`
                             );
                         }
                     }
@@ -11654,7 +11654,7 @@
                         for (const item of xpData.wisdomBreakdown) {
                             const enhText = item.enhancementLevel > 0 ? ` +${item.enhancementLevel}` : '';
                             lines.push(
-                                `    • ${itemNameTranslator$1.getDisplayName(item.hrid)}${enhText}: +${item.value.toFixed(2)}%`
+                                `    • ${itemNameTranslator.getDisplayName(item.hrid)}${enhText}: +${item.value.toFixed(2)}%`
                             );
                         }
                     }
@@ -14836,7 +14836,7 @@
                 const totalQuantity = material.count * pathResult.attempts;
                 materialBreakdown.push({
                     itemHrid: material.itemHrid,
-                    name: itemNameTranslator$1.getDisplayName(material.itemHrid),
+                    name: itemNameTranslator.getDisplayName(material.itemHrid),
                     countPerAction: material.count,
                     totalQuantity,
                     unitPrice: price,
@@ -15891,7 +15891,7 @@
             if (storedNumActions > 0) displayName += ` (\u00d7${formatters_js.formatWithSeparator(storedNumActions)})`;
         } else if (storedEnhancementContext) {
             const ctx = storedEnhancementContext;
-            const itemName = itemNameTranslator$1.getDisplayName(ctx.itemHrid);
+            const itemName = itemNameTranslator.getDisplayName(ctx.itemHrid);
             displayName = `${itemName} +${ctx.startLevel}\u2192+${ctx.targetLevel}`;
         } else {
             return null;
@@ -19844,7 +19844,7 @@
         if (!itemHrid) return null;
 
         const enhancementLevel = requirements[0].enhancementLevel || 0;
-        const itemName = itemNameTranslator$1.getDisplayName(itemHrid);
+        const itemName = itemNameTranslator.getDisplayName(itemHrid);
 
         return { actionType, itemHrid, enhancementLevel, itemName };
     }
@@ -20168,7 +20168,7 @@
                 color: #fff;
                 font-weight: 500;
             `;
-                    teaName.textContent = itemNameTranslator$1.getDisplayName(tea.hrid);
+                    teaName.textContent = itemNameTranslator.getDisplayName(tea.hrid);
 
                     const teaBuffs = document.createElement('span');
                     teaBuffs.style.cssText = `
@@ -20554,7 +20554,7 @@
             for (const hrid of allConstraintTeas) {
                 const isPinned = this.pinnedTeas.has(hrid);
                 const isBanned = this.bannedTeas.has(hrid);
-                const teaDisplayName = itemNameTranslator$1.getDisplayName(hrid);
+                const teaDisplayName = itemNameTranslator.getDisplayName(hrid);
 
                 const row = document.createElement('div');
                 row.style.cssText = `
@@ -20732,7 +20732,7 @@
                     color: rgba(255, 255, 255, 0.8);
                     padding: 2px 0;
                 `;
-                    teaRow.textContent = itemNameTranslator$1.getDisplayName(tea.hrid);
+                    teaRow.textContent = itemNameTranslator.getDisplayName(tea.hrid);
                     xpCol.appendChild(teaRow);
                 }
 
@@ -20761,7 +20761,7 @@
                     color: rgba(255, 255, 255, 0.8);
                     padding: 2px 0;
                 `;
-                    teaRow.textContent = itemNameTranslator$1.getDisplayName(tea.hrid);
+                    teaRow.textContent = itemNameTranslator.getDisplayName(tea.hrid);
                     goldCol.appendChild(teaRow);
                 }
 
@@ -21585,9 +21585,9 @@
                 const details = dataManager.getActionDetails(actionHrid);
                 if (!details) continue;
 
-                let displayName = itemNameTranslator$1.getDisplayName(actionHrid);
+                let displayName = itemNameTranslator.getDisplayName(actionHrid);
                 if (pinnedItemHrid) {
-                    displayName = `${itemNameTranslator$1.getDisplayName(actionHrid)} ${itemNameTranslator$1.getDisplayName(pinnedItemHrid)}`;
+                    displayName = `${itemNameTranslator.getDisplayName(actionHrid)} ${itemNameTranslator.getDisplayName(pinnedItemHrid)}`;
                 }
 
                 let stats = actionPanelSort.getCachedStats(pinnedKey);
@@ -22883,7 +22883,7 @@
                 let normalDropsRevenue = 0;
 
                 for (const drop of normalDrops) {
-                    const itemName = itemNameTranslator$1.getDisplayName(drop.itemHrid);
+                    const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
                     const decimals = 2; // Always use 2 decimals
                     const dropRatePct = formatters_js.formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
 
@@ -22921,7 +22921,7 @@
                 let essenceRevenue = 0;
 
                 for (const drop of essenceDrops) {
-                    const itemName = itemNameTranslator$1.getDisplayName(drop.itemHrid);
+                    const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
                     const decimals = 2; // Always use 2 decimals
                     const dropRatePct = formatters_js.formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
 
@@ -22950,7 +22950,7 @@
                 let rareRevenue = 0;
 
                 for (const drop of rareDrops) {
-                    const itemName = itemNameTranslator$1.getDisplayName(drop.itemHrid);
+                    const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
                     const decimals = drop.dropsPerHour < 1 ? 2 : 1;
                     const baseDropRatePct = formatters_js.formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
                     const effectiveDropRatePct = formatters_js.formatPercentage(
@@ -22993,7 +22993,7 @@
             if (profitData.requirementCosts && profitData.requirementCosts.length > 0) {
                 const materialCostsContent = document.createElement('div');
                 for (const material of profitData.requirementCosts) {
-                    const itemName = itemNameTranslator$1.getDisplayName(material.itemHrid);
+                    const itemName = itemNameTranslator.getDisplayName(material.itemHrid);
                     const amountPerHour = material.count * profitData.actionsPerHour;
 
                     const line = document.createElement('div');
@@ -23033,7 +23033,7 @@
             // Catalyst Cost subsection (consumed only on success)
             if (profitData.catalystCost && profitData.catalystCost.itemHrid) {
                 const catalystContent = document.createElement('div');
-                const itemName = itemNameTranslator$1.getDisplayName(profitData.catalystCost.itemHrid);
+                const itemName = itemNameTranslator.getDisplayName(profitData.catalystCost.itemHrid);
 
                 // Calculate catalysts per hour (only consumed on success)
                 const catalystsPerHour = profitData.actionsPerHour * profitData.successRate;
@@ -23064,7 +23064,7 @@
             if (profitData.consumableCosts && profitData.consumableCosts.length > 0) {
                 const drinkCostsContent = document.createElement('div');
                 for (const drink of profitData.consumableCosts) {
-                    const itemName = itemNameTranslator$1.getDisplayName(drink.itemHrid);
+                    const itemName = itemNameTranslator.getDisplayName(drink.itemHrid);
 
                     // Format drinks per hour
                     const formattedDrinkAmount =
