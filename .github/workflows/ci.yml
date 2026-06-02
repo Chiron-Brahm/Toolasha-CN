@@ -8,12 +8,6 @@ on:
 
 jobs:
     lint-and-build:
-        # Run CI when:
-        # - push: normal commits (not release-please's release commits)
-        # - pull_request: normal PRs immediately, release-please PRs only after formatting
-        if: >
-            (github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'chore(main): release')) ||
-            (github.event_name == 'pull_request' && (!startsWith(github.head_ref, 'release-please--') || contains(github.event.head_commit.message, 'chore: sync version and format')))
         runs-on: ubuntu-latest
         steps:
             - name: Checkout code
