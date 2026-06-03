@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toolasha-CN
 // @namespace    http://tampermonkey.net/
-// @version      2.59.8
+// @version      2.59.9
 // @downloadURL  https://greasyfork.org/scripts/580878-toolasha-cn/code/Toolasha-CN.user.js
 // @updateURL    https://greasyfork.org/scripts/580878-toolasha-cn/code/Toolasha-CN.meta.js
 // @description  Toolasha - Enhanced tools for Milky Way Idle.
