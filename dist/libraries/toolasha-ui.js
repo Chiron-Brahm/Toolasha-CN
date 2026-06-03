@@ -5,7 +5,7 @@
  * License: CC-BY-NC-SA-4.0
  */
 
-(function (config, dataManager, domObserver, formatters_js, timerRegistry_js, domObserverHelpers_js, dom_js, storage, marketAPI, efficiency_js, webSocketHook, reactInput_js, actionPanelHelper_js, expectedValueCalculator, bonusRevenueCalculator_js, marketData_js, profitConstants_js, profitHelpers_js, profitCalculator, selectors_js, cleanupRegistry_js, settingsSchema_js, settingsStorage, enhancementConfig_js, materialCalculator_js, enhancementCalculator_js, teaParser_js, actionCalculator_js) {
+(function (config, dataManager, domObserver, formatters_js, timerRegistry_js, domObserverHelpers_js, i18n_js, dom_js, storage, marketAPI, efficiency_js, webSocketHook, reactInput_js, actionPanelHelper_js, expectedValueCalculator, bonusRevenueCalculator_js, marketData_js, profitConstants_js, profitHelpers_js, profitCalculator, selectors_js, cleanupRegistry_js, settingsSchema_js, settingsStorage, enhancementConfig_js, materialCalculator_js, enhancementCalculator_js, teaParser_js, actionCalculator_js) {
     'use strict';
 
     /**
@@ -639,46 +639,6 @@
     skillExperiencePercentage.setupSettingListener();
 
     /**
-     * Internationalization (i18n) Module
-     * Lightweight translation layer with English-as-key fallback.
-     *
-     * Usage:
-     *   import { t, registerLocale } from '../core/i18n.js';
-     *   t('Market Prices in Tooltips')  →  '市场价格提示' (if translated)
-     *   t('Market Prices in Tooltips')  →  'Market Prices in Tooltips' (fallback)
-     *   t('Cost: {0}/hr', '100K')       →  '花费: 100K/时'
-     */
-
-    /** @type {Record<string, string>} */
-    const translations = {};
-
-    /**
-     * Translate a string. Returns the Chinese translation if available, otherwise the English key itself.
-     * Supports positional interpolation with {0}, {1}, etc.
-     *
-     * @param {string} str - English key string
-     * @param {...(string|number)} args - Positional arguments for interpolation
-     * @returns {string} Translated or fallback string
-     *
-     * @example
-     *   t('Hello')                          // '你好'
-     *   t('Unknown key')                    // 'Unknown key' (fallback)
-     *   t('Profit: {0}/hr', '12.3K')        // '利润: 12.3K/时'
-     */
-    function t(str, ...args) {
-        const translated = translations[str] !== undefined ? translations[str] : str;
-
-        if (args.length === 0) {
-            return translated;
-        }
-
-        return translated.replace(/\{(\d+)\}/g, (_, index) => {
-            const arg = args[parseInt(index, 10)];
-            return arg !== undefined ? String(arg) : `{${index}}`;
-        });
-    }
-
-    /**
      * External Links
      * Adds links to external MWI tools in the left sidebar navigation
      */
@@ -738,27 +698,27 @@
         addLinks(container) {
             const links = [
                 {
-                    label: t('Combat Sim'),
+                    label: i18n_js.t('Combat Sim'),
                     url: 'https://shykai.github.io/MWICombatSimulatorTest/dist/',
                 },
                 {
-                    label: t('Milkyway Market'),
+                    label: i18n_js.t('Milkyway Market'),
                     url: 'https://milkyway.market/',
                 },
                 {
-                    label: t('Enhancelator'),
+                    label: i18n_js.t('Enhancelator'),
                     url: 'https://doh-nuts.github.io/Enhancelator/',
                 },
                 {
-                    label: t('Milkonomy'),
+                    label: i18n_js.t('Milkonomy'),
                     url: 'https://hyhfish.github.io/milkonomy/#/dashboard',
                 },
                 {
-                    label: t("Socko's Combat Tracker"),
+                    label: i18n_js.t("Socko's Combat Tracker"),
                     url: 'https://sockosnewcombattracker.pages.dev/',
                 },
                 {
-                    label: t('mwilinks'),
+                    label: i18n_js.t('mwilinks'),
                     url: 'https://www.mwilinks.site/',
                 },
             ];
@@ -2753,14 +2713,14 @@
             popover.appendChild(nameDiv);
 
             // View Action button
-            const viewActionBtn = this.createNavButton(t('View Action'), () => {
+            const viewActionBtn = this.createNavButton(i18n_js.t('View Action'), () => {
                 this.dismissPopover();
                 navigateToItem(itemHrid);
             });
             popover.appendChild(viewActionBtn);
 
             // Item Dictionary button
-            const dictBtn = this.createNavButton(t('Item Dictionary'), () => {
+            const dictBtn = this.createNavButton(i18n_js.t('Item Dictionary'), () => {
                 this.dismissPopover();
                 const game = getGameObject$1();
                 const itemDetails = dataManager.getItemDetails(itemHrid);
@@ -2851,12 +2811,12 @@
                 return;
             }
 
-            const viewActionBtn = this.createNavButton(t('View Action'), () => {
+            const viewActionBtn = this.createNavButton(i18n_js.t('View Action'), () => {
                 navigateToItem(itemHrid);
             });
             actionMenu.appendChild(viewActionBtn);
 
-            const dictBtn = this.createNavButton(t('Item Dictionary'), () => {
+            const dictBtn = this.createNavButton(i18n_js.t('Item Dictionary'), () => {
                 const game = getGameObject$1();
                 const itemDetails = dataManager.getItemDetails(itemHrid);
                 if (game?.handleOpenItemDictionary && itemDetails) {
@@ -3716,12 +3676,12 @@ ${starCSS}
             panelEl.insertAdjacentHTML(
                 'beforeend',
                 `<div class="toolasha-cf cf-sort-row" style="display:flex;align-items:center;gap:6px;margin-top:4px;">` +
-                    `<span style="font-size:12px;color:#aaa;">${t('Sort:')}</span>` +
+                    `<span style="font-size:12px;color:#aaa;">${i18n_js.t('Sort:')}</span>` +
                     `<select class="toolasha-cf cf-sort-select" style="font-size:12px;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:1px 4px;">` +
-                    `<option value="default"${this.sortMode === 'default' ? ' selected' : ''}>${t('Default')}</option>` +
-                    `<option value="items-needed"${this.sortMode === 'items-needed' ? ' selected' : ''}>${t('Items to next tier')}</option>` +
-                    `<option value="gold-cost"${this.sortMode === 'gold-cost' ? ' selected' : ''}>${t('Gold cost to next tier')}</option>` +
-                    `<option value="time-to-next-tier"${this.sortMode === 'time-to-next-tier' ? ' selected' : ''}>${t('Time to next tier')}</option>` +
+                    `<option value="default"${this.sortMode === 'default' ? ' selected' : ''}>${i18n_js.t('Default')}</option>` +
+                    `<option value="items-needed"${this.sortMode === 'items-needed' ? ' selected' : ''}>${i18n_js.t('Items to next tier')}</option>` +
+                    `<option value="gold-cost"${this.sortMode === 'gold-cost' ? ' selected' : ''}>${i18n_js.t('Gold cost to next tier')}</option>` +
+                    `<option value="time-to-next-tier"${this.sortMode === 'time-to-next-tier' ? ' selected' : ''}>${i18n_js.t('Time to next tier')}</option>` +
                     `</select></div>`
             );
             panelEl.querySelector('.cf-sort-select').addEventListener('change', (e) => {
@@ -3857,7 +3817,7 @@ ${starCSS}
 
             const header = document.createElement('div');
             header.className = 'toolasha-cf-favorites-header';
-            header.textContent = t('Favorites');
+            header.textContent = i18n_js.t('Favorites');
             section.appendChild(header);
 
             // Record positions: use the next non-favorite sibling as reference
@@ -4063,11 +4023,11 @@ ${starCSS}
          */
         _getBadgeStalenessTooltip(count) {
             if (!this.collectionsLastUpdated) {
-                return t('Collection data not yet loaded \u2014 visit Collections page to refresh');
+                return i18n_js.t('Collection data not yet loaded \u2014 visit Collections page to refresh');
             }
             const age = Date.now() - this.collectionsLastUpdated;
             const relativeTime = formatters_js.formatRelativeTime(age);
-            return t('{0} collected \u2014 updated {1} ago', formatCount(count), relativeTime);
+            return i18n_js.t('{0} collected \u2014 updated {1} ago', formatCount(count), relativeTime);
         }
 
         /**
@@ -4324,7 +4284,7 @@ ${starCSS}
                         this.openItemDictionary(itemHrid);
                     } else {
                         // Item not found in game data (best effort normalization was used)
-                        this.showError(t('Item "{0}" not found in game data', command.itemName));
+                        this.showError(i18n_js.t('Item "{0}" not found in game data', command.itemName));
                     }
                     break;
 
@@ -4338,7 +4298,7 @@ ${starCSS}
                         this.openMarketplace(itemHrid, command.enhancementLevel ?? 0);
                     } else {
                         // Item not found in game data (best effort normalization was used)
-                        this.showError(t('Item "{0}" not found in game data', command.itemName));
+                        this.showError(i18n_js.t('Item "{0}" not found in game data', command.itemName));
                     }
                     break;
             }
@@ -4427,7 +4387,7 @@ ${starCSS}
             });
 
             const matchList = properNames.slice(0, 5).join(', ') + (properNames.length > 5 ? '...' : '');
-            messageDiv.textContent = t('Multiple items match: {0}. Please be more specific.', matchList);
+            messageDiv.textContent = i18n_js.t('Multiple items match: {0}. Please be more specific.', matchList);
 
             chatHistory.appendChild(messageDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -4480,7 +4440,7 @@ ${starCSS}
          */
         openItemDictionary(itemHrid) {
             if (!this.gameCore?.handleOpenItemDictionary) {
-                this.showError(t('Feature unavailable after 2/21/26 game update'));
+                this.showError(i18n_js.t('Feature unavailable after 2/21/26 game update'));
                 return;
             }
 
@@ -4488,7 +4448,7 @@ ${starCSS}
                 this.gameCore.handleOpenItemDictionary(itemHrid);
             } catch (error) {
                 console.error('[Chat Commands] Failed to open Item Dictionary:', error);
-                this.showError(t('Failed to open Item Dictionary'));
+                this.showError(i18n_js.t('Failed to open Item Dictionary'));
             }
         }
 
@@ -4499,7 +4459,7 @@ ${starCSS}
          */
         openMarketplace(itemHrid, enhancementLevel = 0) {
             if (!this.gameCore?.handleGoToMarketplace) {
-                this.showError(t('Feature unavailable after 2/21/26 game update'));
+                this.showError(i18n_js.t('Feature unavailable after 2/21/26 game update'));
                 return;
             }
 
@@ -4507,7 +4467,7 @@ ${starCSS}
                 this.gameCore.handleGoToMarketplace(itemHrid, enhancementLevel);
             } catch (error) {
                 console.error('[Chat Commands] Failed to open marketplace:', error);
-                this.showError(t('Failed to open marketplace'));
+                this.showError(i18n_js.t('Failed to open marketplace'));
             }
         }
 
@@ -4721,7 +4681,7 @@ ${starCSS}
             font-weight: 600;
             color: ${config.COLOR_ACCENT};
         `;
-            title.textContent = t('Mentions — {0}', channelDisplayName);
+            title.textContent = i18n_js.t('Mentions — {0}', channelDisplayName);
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '×';
@@ -4768,7 +4728,7 @@ ${starCSS}
          */
         _updateContent(mentions, channelDisplayName) {
             const title = this.container.querySelector('#mwi-mention-popup-title');
-            if (title) title.textContent = t('Mentions — {0}', channelDisplayName);
+            if (title) title.textContent = i18n_js.t('Mentions — {0}', channelDisplayName);
 
             const body = this.container.querySelector('#mwi-mention-popup-body');
             if (body) {
@@ -4791,7 +4751,7 @@ ${starCSS}
                 font-size: 0.85rem;
                 text-align: center;
             `;
-                empty.textContent = t('No mentions');
+                empty.textContent = i18n_js.t('No mentions');
                 body.appendChild(empty);
                 return;
             }
@@ -5537,7 +5497,7 @@ ${starCSS}
     function resolveSystemMessage(messageKey, meta) {
         if (messageKey === 'systemChatMessage.characterLeveledUp') {
             const skillName = SKILL_HRID_TO_NAME[meta.skillHrid] || meta.skillHrid.split('/').pop().replace(/_/g, ' ');
-            return t('🎉 {0} reached {1} {2}!', meta.name, skillName, meta.level);
+            return i18n_js.t('🎉 {0} reached {1} {2}!', meta.name, skillName, meta.level);
         }
         return null;
     }
@@ -5553,7 +5513,7 @@ ${starCSS}
             const enhancement = link.itemEnhancementLevel > 0 ? ` +${link.itemEnhancementLevel}` : '';
             const count = link.itemCount > 1 ? ` ×${link.itemCount}` : '';
             const price = formatters_js.formatKMB(link.price);
-            const side = link.isSell ? t('Sell') : t('Buy');
+            const side = link.isSell ? i18n_js.t('Sell') : i18n_js.t('Buy');
             return `[${itemName}${enhancement}${count} @ ${price} ${side}]`;
         }
         if (link.linkType === '/chat_link_types/item') {
@@ -5693,7 +5653,7 @@ ${starCSS}
             const btn = document.createElement('button');
             btn.setAttribute('data-mwi-popout-chat', 'true');
             btn.textContent = '⧉';
-            btn.title = t('Pop out chat');
+            btn.title = i18n_js.t('Pop out chat');
             btn.style.cssText = `
             padding: 2px 6px;
             font-size: 13px;
@@ -5905,7 +5865,7 @@ ${starCSS}
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${t('MWI Chat')}</title>
+<title>${i18n_js.t('MWI Chat')}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -6055,11 +6015,11 @@ ${starCSS}
 </head>
 <body>
 <div id="topbar">
-  <span id="topbar-title">${t('MWI Chat')}</span>
+  <span id="topbar-title">${i18n_js.t('MWI Chat')}</span>
   <span id="topbar-name"></span>
-  <button id="add-pane-btn">${t('+ Pane')}</button>
-  <label id="vertical-label"><input type="checkbox" id="vertical-toggle"> ${t('Vertical')}</label>
-  <div id="disconnect-banner">${t('⚠ Disconnected from game tab')}</div>
+  <button id="add-pane-btn">${i18n_js.t('+ Pane')}</button>
+  <label id="vertical-label"><input type="checkbox" id="vertical-toggle"> ${i18n_js.t('Vertical')}</label>
+  <div id="disconnect-banner">${i18n_js.t('⚠ Disconnected from game tab')}</div>
 </div>
 <div id="panes"></div>
 
@@ -6073,12 +6033,12 @@ ${starCSS}
   const STORAGE_KEY = 'mwi-chat-popout-layout';
 
   const FILTER_PRESETS = [
-    { value: 'none',         label: '${t('No filter')}',      regex: null },
-    { value: 'enhanced_buy', label: '${t('Enhanced Buy')}',   regex: /\\+\\d+.*Buy\\]/i },
-    { value: 'enhanced_sell',label: '${t('Enhanced Sell')}',  regex: /\\+\\d+.*Sell\\]/i },
-    { value: 'buy_only',     label: '${t('Buy only')}',       regex: /Buy\\]/i },
-    { value: 'sell_only',    label: '${t('Sell only')}',      regex: /Sell\\]/i },
-    { value: 'custom',       label: '${t('Custom\u2026')}',   regex: null },
+    { value: 'none',         label: '${i18n_js.t('No filter')}',      regex: null },
+    { value: 'enhanced_buy', label: '${i18n_js.t('Enhanced Buy')}',   regex: /\\+\\d+.*Buy\\]/i },
+    { value: 'enhanced_sell',label: '${i18n_js.t('Enhanced Sell')}',  regex: /\\+\\d+.*Sell\\]/i },
+    { value: 'buy_only',     label: '${i18n_js.t('Buy only')}',       regex: /Buy\\]/i },
+    { value: 'sell_only',    label: '${i18n_js.t('Sell only')}',      regex: /Sell\\]/i },
+    { value: 'custom',       label: '${i18n_js.t('Custom\u2026')}',   regex: null },
   ];
 
   function buildCustomRegex(text) {
@@ -6176,7 +6136,7 @@ ${starCSS}
     const dragHandle = document.createElement('span');
     dragHandle.className = 'pane-drag-handle';
     dragHandle.textContent = '⠿';
-    dragHandle.title = '${t('Drag to reorder')}';
+    dragHandle.title = '${i18n_js.t('Drag to reorder')}';
 
     const select = document.createElement('select');
     select.className = 'pane-channel-select';
@@ -6185,7 +6145,7 @@ ${starCSS}
     const closeBtn = document.createElement('button');
     closeBtn.className = 'pane-close-btn';
     closeBtn.textContent = '✕';
-    closeBtn.title = '${t('Close pane')}';
+    closeBtn.title = '${i18n_js.t('Close pane')}';
     closeBtn.addEventListener('click', () => removePane(id));
 
     header.appendChild(dragHandle);
@@ -6209,7 +6169,7 @@ ${starCSS}
     const filterInput = document.createElement('input');
     filterInput.className = 'pane-filter-input';
     filterInput.type = 'text';
-    filterInput.placeholder = '${t('text or /regex/')}';
+    filterInput.placeholder = '${i18n_js.t('text or /regex/')}';
     filterInput.value = savedFilterCustom || '';
     filterInput.style.display = filterSelect.value === 'custom' ? '' : 'none';
 
@@ -6227,12 +6187,12 @@ ${starCSS}
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'pane-input';
-    input.placeholder = '${t('Type a message...')}';
+    input.placeholder = '${i18n_js.t('Type a message...')}';
     input.maxLength = 500;
 
     const sendBtn = document.createElement('button');
     sendBtn.className = 'pane-send-btn';
-    sendBtn.textContent = '${t('SEND')}';
+    sendBtn.textContent = '${i18n_js.t('SEND')}';
 
     const doSend = () => {
       const text = input.value.trim();
@@ -9152,14 +9112,14 @@ ${starCSS}
             if (profitData.rewards?.error || profitData.totalProfit === null || profitData.totalProfit === undefined) {
                 return {
                     value: null,
-                    unitLabel: t('gold/hr'),
-                    error: profitData.rewards?.error || t('Missing price data'),
+                    unitLabel: i18n_js.t('gold/hr'),
+                    error: profitData.rewards?.error || i18n_js.t('Missing price data'),
                 };
             }
 
             return {
                 value: profitData.totalProfit / hours,
-                unitLabel: t('gold/hr'),
+                unitLabel: i18n_js.t('gold/hr'),
                 error: null,
             };
         }
@@ -9167,7 +9127,7 @@ ${starCSS}
         const tokensReceived = profitData.rewards?.breakdown?.tokensReceived ?? 0;
         return {
             value: tokensReceived / hours,
-            unitLabel: t('tokens/hr'),
+            unitLabel: i18n_js.t('tokens/hr'),
             error: null,
         };
     }
@@ -9882,7 +9842,7 @@ ${starCSS}
                 console.error('[Task Profit Display] Failed to calculate profit:', error);
 
                 // Display error state in UI
-                this.displayErrorState(taskNode, t('Unable to calculate profit'));
+                this.displayErrorState(taskNode, i18n_js.t('Unable to calculate profit'));
 
                 // Remove from pending queue if present
                 this.pendingTaskNodes.delete(taskNode);
@@ -9991,7 +9951,7 @@ ${starCSS}
             let html = '<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">';
             html +=
                 '<select class="mwi-combat-est-loadout" style="font-size:11px; background:#1a1a1a; color:#ccc; border:1px solid #444; border-radius:3px; padding:2px 4px;">';
-            html += `<option value="">${t('— Current Gear —')}</option>`;
+            html += `<option value="">${i18n_js.t('— Current Gear —')}</option>`;
             for (const s of snapshots) {
                 html += `<option value="${s.name}">${s.name}</option>`;
             }
@@ -9999,7 +9959,7 @@ ${starCSS}
             html +=
                 '<button class="mwi-combat-est-btn" style="font-size:11px; padding:2px 8px; background:#1a3a5c; color:#4a9eff; border:1px solid #4a9eff44; border-radius:3px; cursor:pointer;">' +
                 '⚔ ' +
-                t('Estimate') +
+                i18n_js.t('Estimate') +
                 '</button>';
             html += '</div>';
             container.innerHTML = html;
@@ -10044,18 +10004,18 @@ ${starCSS}
                         : [],
                 });
                 container.innerHTML =
-                    '<span style="color:#f87171; font-size:11px;">' + t('Could not identify monster.') + '</span>';
+                    '<span style="color:#f87171; font-size:11px;">' + i18n_js.t('Could not identify monster.') + '</span>';
                 return;
             }
 
             const zoneHrid = dataManager.getCombatZoneForMonster(monsterHrid);
             if (!zoneHrid) {
                 container.innerHTML =
-                    '<span style="color:#f87171; font-size:11px;">' + t('No zone found for monster.') + '</span>';
+                    '<span style="color:#f87171; font-size:11px;">' + i18n_js.t('No zone found for monster.') + '</span>';
                 return;
             }
 
-            container.innerHTML = '<span style="color:#888; font-size:11px;">' + '⏳ ' + t('Simulating...') + '</span>';
+            container.innerHTML = '<span style="color:#888; font-size:11px;">' + '⏳ ' + i18n_js.t('Simulating...') + '</span>';
 
             try {
                 const gameData = buildGameDataPayload();
@@ -10142,9 +10102,9 @@ ${starCSS}
                 );
             } catch (e) {
                 console.error('[TaskProfit] Combat estimate failed:', e);
-                container.innerHTML = '<span style="color:#f87171; font-size:11px;">' + t('Estimate failed. ') + '</span>';
+                container.innerHTML = '<span style="color:#f87171; font-size:11px;">' + i18n_js.t('Estimate failed. ') + '</span>';
                 const retry = document.createElement('span');
-                retry.textContent = t('Retry');
+                retry.textContent = i18n_js.t('Retry');
                 retry.style.cssText = 'color:#4a9eff; cursor:pointer; font-size:11px;';
                 retry.addEventListener('click', () => this._renderCombatEstimateConfig(container, taskData));
                 container.appendChild(retry);
@@ -10209,37 +10169,37 @@ ${starCSS}
 
             const remaining = Math.max((taskData.quantity ?? 0) - (taskData.currentProgress ?? 0), 0);
             const lines = [];
-            lines.push(`<div style="font-weight: bold; margin-bottom: 4px;">${t('Task Profit Breakdown')}</div>`);
+            lines.push(`<div style="font-weight: bold; margin-bottom: 4px;">${i18n_js.t('Task Profit Breakdown')}</div>`);
             lines.push('<div style="border-bottom: 1px solid #555; margin-bottom: 4px;"></div>');
             lines.push(
-                `<div style="margin-bottom: 2px; color: #aaa;">${t('Monster:')} ${monsterName} × ${remaining.toLocaleString()} ${t('kills')} (${formatters_js.formatKMB(killsPerHour)}/hr)</div>`
+                `<div style="margin-bottom: 2px; color: #aaa;">${i18n_js.t('Monster:')} ${monsterName} × ${remaining.toLocaleString()} ${i18n_js.t('kills')} (${formatters_js.formatKMB(killsPerHour)}/hr)</div>`
             );
             lines.push(
-                `<div style="margin-bottom: 4px; color: #aaa;">${t('Loadout:')} ${loadoutName || t('Current Gear')}</div>`
+                `<div style="margin-bottom: 4px; color: #aaa;">${i18n_js.t('Loadout:')} ${loadoutName || i18n_js.t('Current Gear')}</div>`
             );
 
             // Task Rewards — matching skilling section exactly
-            lines.push(`<div style="margin-bottom: 4px; color: #aaa;">${t('Task Rewards:')}</div>`);
-            lines.push(`<div style="margin-left: 10px;">${t('Coins:')} ${formatters_js.formatKMB(rewardValue.coins)}</div>`);
+            lines.push(`<div style="margin-bottom: 4px; color: #aaa;">${i18n_js.t('Task Rewards:')}</div>`);
+            lines.push(`<div style="margin-left: 10px;">${i18n_js.t('Coins:')} ${formatters_js.formatKMB(rewardValue.coins)}</div>`);
             if (!rewardValue.error) {
                 lines.push(
-                    `<div style="margin-left: 10px;">${t('Task Tokens:')} ${formatters_js.formatKMB(rewardValue.taskTokens)}</div>`
+                    `<div style="margin-left: 10px;">${i18n_js.t('Task Tokens:')} ${formatters_js.formatKMB(rewardValue.taskTokens)}</div>`
                 );
                 lines.push(
-                    `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${rewardValue.breakdown.tokensReceived} ${t('tokens')} @ ${formatters_js.formatKMB(Math.round(rewardValue.breakdown.tokenValue))} ${t('each')})</div>`
+                    `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${rewardValue.breakdown.tokensReceived} ${i18n_js.t('tokens')} @ ${formatters_js.formatKMB(Math.round(rewardValue.breakdown.tokenValue))} ${i18n_js.t('each')})</div>`
                 );
                 lines.push(
-                    `<div style="margin-left: 10px;">${t("Purple's Gift:")} ${formatters_js.formatKMB(rewardValue.purpleGift)}</div>`
+                    `<div style="margin-left: 10px;">${i18n_js.t("Purple's Gift:")} ${formatters_js.formatKMB(rewardValue.purpleGift)}</div>`
                 );
                 lines.push(
-                    `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${formatters_js.formatKMB(Math.round(rewardValue.breakdown.giftPerTask))} ${t('per task')})</div>`
+                    `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${formatters_js.formatKMB(Math.round(rewardValue.breakdown.giftPerTask))} ${i18n_js.t('per task')})</div>`
                 );
             }
 
             // Drops — total over task duration
             if (dropEntries.length > 0) {
                 lines.push(
-                    `<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">${t('Drops:')} ${formatters_js.formatKMB(Math.round(totalDropValue))}</div>`
+                    `<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">${i18n_js.t('Drops:')} ${formatters_js.formatKMB(Math.round(totalDropValue))}</div>`
                 );
                 for (const d of dropEntries.slice(0, 8)) {
                     const taskCount = d.countPerHour * completionHours;
@@ -10253,7 +10213,7 @@ ${starCSS}
             // Consumables — total over task duration
             if (consumableEntries.length > 0) {
                 lines.push(
-                    `<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">${t('Consumables:')} -${formatters_js.formatKMB(Math.round(totalConsumableCost))}</div>`
+                    `<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">${i18n_js.t('Consumables:')} -${formatters_js.formatKMB(Math.round(totalConsumableCost))}</div>`
                 );
                 for (const c of consumableEntries) {
                     const taskCount = c.countPerHour * completionHours;
@@ -10267,7 +10227,7 @@ ${starCSS}
             breakdown.innerHTML = lines.join('');
 
             const rerunBtn = document.createElement('button');
-            rerunBtn.textContent = t('Re-run');
+            rerunBtn.textContent = i18n_js.t('Re-run');
             rerunBtn.style.cssText =
                 'margin-top:6px; font-size:11px; padding:2px 8px; background:#1a3a5c; color:#4a9eff; border:1px solid #4a9eff44; border-radius:3px; cursor:pointer;';
             rerunBtn.addEventListener('click', (e) => {
@@ -10313,7 +10273,7 @@ ${starCSS}
             if (profitData.error) {
                 profitContainer.innerHTML = `
                 <div style="color: ${config.SCRIPT_COLOR_ALERT};">
-                    ${t('Unable to calculate profit')}
+                    ${i18n_js.t('Unable to calculate profit')}
                 </div>
             `;
                 actionNode.appendChild(profitContainer);
@@ -10514,7 +10474,7 @@ ${starCSS}
             const formatTotalValue = (value) => (showTotals ? formatters_js.formatKMB(value) : '-- ⚠');
             const formatPerActionValue = (value) => (showTotals ? formatters_js.formatKMB(Math.round(value)) : '-- ⚠');
 
-            lines.push(`<div style="font-weight: bold; margin-bottom: 4px;">${t('Task Profit Breakdown')}</div>`);
+            lines.push(`<div style="font-weight: bold; margin-bottom: 4px;">${i18n_js.t('Task Profit Breakdown')}</div>`);
             lines.push('<div style="border-bottom: 1px solid #555; margin-bottom: 4px;"></div>');
 
             // Show warning if market data unavailable
@@ -10525,15 +10485,15 @@ ${starCSS}
             }
 
             // Task Rewards section
-            lines.push(`<div style="margin-bottom: 4px; color: #aaa;">${t('Task Rewards:')}</div>`);
-            lines.push(`<div style="margin-left: 10px;">${t('Coins:')} ${formatters_js.formatKMB(profitData.rewards.coins)}</div>`);
+            lines.push(`<div style="margin-bottom: 4px; color: #aaa;">${i18n_js.t('Task Rewards:')}</div>`);
+            lines.push(`<div style="margin-left: 10px;">${i18n_js.t('Coins:')} ${formatters_js.formatKMB(profitData.rewards.coins)}</div>`);
 
             if (!profitData.rewards.error) {
                 lines.push(
                     `<div style="margin-left: 10px;">Task Tokens: ${formatters_js.formatKMB(profitData.rewards.taskTokens)}</div>`
                 );
                 lines.push(
-                    `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${profitData.rewards.breakdown.tokensReceived} ${t('tokens')} @ ${formatters_js.formatKMB(Math.round(profitData.rewards.breakdown.tokenValue))} ${t('each')})</div>`
+                    `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${profitData.rewards.breakdown.tokensReceived} ${i18n_js.t('tokens')} @ ${formatters_js.formatKMB(Math.round(profitData.rewards.breakdown.tokenValue))} ${i18n_js.t('each')})</div>`
                 );
                 lines.push(
                     `<div style="margin-left: 10px;">Purple's Gift: ${formatters_js.formatKMB(profitData.rewards.purpleGift)}</div>`
@@ -10543,19 +10503,19 @@ ${starCSS}
                 );
             } else {
                 lines.push(
-                    `<div style="margin-left: 10px; color: #888; font-style: italic;">${t('Task Tokens: Loading...')}</div>`
+                    `<div style="margin-left: 10px; color: #888; font-style: italic;">${i18n_js.t('Task Tokens: Loading...')}</div>`
                 );
                 lines.push(
-                    `<div style="margin-left: 10px; color: #888; font-style: italic;">${t("Purple's Gift: Loading...")}</div>`
+                    `<div style="margin-left: 10px; color: #888; font-style: italic;">${i18n_js.t("Purple's Gift: Loading...")}</div>`
                 );
             }
             // Action profit section
-            lines.push(`<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">${t('Action Profit:')}</div>`);
+            lines.push(`<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">${i18n_js.t('Action Profit:')}</div>`);
 
             if (profitData.type === 'gathering') {
                 // Gathering Value (expandable)
                 lines.push(
-                    `<div class="mwi-expandable-header" data-section="gathering" style="margin-left: 10px; cursor: pointer; user-select: none;">${t('Gathering Value:')} ${formatTotalValue(profitData.action.totalValue)} ▸</div>`
+                    `<div class="mwi-expandable-header" data-section="gathering" style="margin-left: 10px; cursor: pointer; user-select: none;">${i18n_js.t('Gathering Value:')} ${formatTotalValue(profitData.action.totalValue)} ▸</div>`
                 );
                 lines.push(
                     `<div class="mwi-expandable-section" data-section="gathering" style="display: none; margin-left: 20px; font-size: 0.65rem; color: #888; margin-top: 2px;">`
@@ -10576,7 +10536,7 @@ ${starCSS}
                         const processingRevenueTotal = (details.processingRevenueBonusPerAction || 0) * quantity;
                         const primaryOutputTotal = baseRevenueTotal + gourmetRevenueTotal + processingRevenueTotal;
                         lines.push(
-                            `<div style="margin-top: 2px; color: #aaa;">${t('Primary Outputs:')} ${formatTotalValue(Math.round(primaryOutputTotal))}</div>`
+                            `<div style="margin-top: 2px; color: #aaa;">${i18n_js.t('Primary Outputs:')} ${formatTotalValue(Math.round(primaryOutputTotal))}</div>`
                         );
                         for (const output of details.baseOutputs) {
                             const itemsPerAction = output.itemsPerAction ?? output.itemsPerHour / actionsPerHour;
@@ -10584,7 +10544,7 @@ ${starCSS}
                             const itemsForTask = itemsPerAction * quantity;
                             const revenueForTask = revenuePerAction * quantity;
                             const dropRateText =
-                                output.dropRate < 1.0 ? ` (${formatters_js.formatPercentage(output.dropRate, 1)} ${t('drop')})` : '';
+                                output.dropRate < 1.0 ? ` (${formatters_js.formatPercentage(output.dropRate, 1)} ${i18n_js.t('drop')})` : '';
                             const missingPriceNote = output.missingPrice ? ' ⚠' : '';
                             lines.push(
                                 `<div>• ${output.name} (Base): ${itemsForTask.toFixed(1)} items @ ${formatters_js.formatKMB(Math.round(output.priceEach))}${missingPriceNote} = ${formatters_js.formatKMB(Math.round(revenueForTask))}${dropRateText}</div>`
@@ -10647,7 +10607,7 @@ ${starCSS}
                                 0
                             );
                             lines.push(
-                                `<div style="margin-top: 4px; color: #aaa;">${t('Essence Drops:')} ${formatTotalValue(Math.round(totalEssenceRevenue))}</div>`
+                                `<div style="margin-top: 4px; color: #aaa;">${i18n_js.t('Essence Drops:')} ${formatTotalValue(Math.round(totalEssenceRevenue))}</div>`
                             );
                             for (const drop of essenceDrops) {
                                 const dropsForTask = (drop.dropsPerAction || 0) * quantity;
@@ -10665,7 +10625,7 @@ ${starCSS}
                                 0
                             );
                             lines.push(
-                                `<div style="margin-top: 4px; color: #aaa;">${t('Rare Finds:')} ${formatTotalValue(Math.round(totalRareRevenue))}</div>`
+                                `<div style="margin-top: 4px; color: #aaa;">${i18n_js.t('Rare Finds:')} ${formatTotalValue(Math.round(totalRareRevenue))}</div>`
                             );
                             for (const drop of rareFindDrops) {
                                 const dropsForTask = (drop.dropsPerAction || 0) * quantity;
@@ -10690,7 +10650,7 @@ ${starCSS}
 
                 // Net Production (expandable)
                 lines.push(
-                    `<div class="mwi-expandable-header" data-section="production" style="margin-left: 10px; cursor: pointer; user-select: none;">${t('Net Production:')} ${formatTotalValue(netProductionValue)} ▸</div>`
+                    `<div class="mwi-expandable-header" data-section="production" style="margin-left: 10px; cursor: pointer; user-select: none;">${i18n_js.t('Net Production:')} ${formatTotalValue(netProductionValue)} ▸</div>`
                 );
                 lines.push(
                     `<div class="mwi-expandable-section" data-section="production" style="display: none; margin-left: 20px; font-size: 0.65rem; color: #888; margin-top: 2px;">`
@@ -10707,7 +10667,7 @@ ${starCSS}
                     const primaryOutputTotal = baseRevenueTotal + gourmetRevenueTotal;
 
                     lines.push(
-                        `<div style="margin-top: 2px; color: #aaa;">${t('Primary Outputs:')} ${formatTotalValue(Math.round(primaryOutputTotal))}</div>`
+                        `<div style="margin-top: 2px; color: #aaa;">${i18n_js.t('Primary Outputs:')} ${formatTotalValue(Math.round(primaryOutputTotal))}</div>`
                     );
 
                     lines.push(
@@ -10732,7 +10692,7 @@ ${starCSS}
                             0
                         );
                         lines.push(
-                            `<div style="margin-top: 4px; color: #aaa;">${t('Essence Drops:')} ${formatTotalValue(Math.round(totalEssenceRevenue))}</div>`
+                            `<div style="margin-top: 4px; color: #aaa;">${i18n_js.t('Essence Drops:')} ${formatTotalValue(Math.round(totalEssenceRevenue))}</div>`
                         );
                         for (const drop of essenceDrops) {
                             const dropsForTask = (drop.dropsPerAction || 0) * profitData.action.breakdown.quantity;
@@ -10750,7 +10710,7 @@ ${starCSS}
                             0
                         );
                         lines.push(
-                            `<div style="margin-top: 4px; color: #aaa;">${t('Rare Finds:')} ${formatTotalValue(Math.round(totalRareRevenue))}</div>`
+                            `<div style="margin-top: 4px; color: #aaa;">${i18n_js.t('Rare Finds:')} ${formatTotalValue(Math.round(totalRareRevenue))}</div>`
                         );
                         for (const drop of rareFindDrops) {
                             const dropsForTask = (drop.dropsPerAction || 0) * profitData.action.breakdown.quantity;
@@ -10771,7 +10731,7 @@ ${starCSS}
                     );
                     const hoursNeeded = effectiveActionsPerHour > 0 ? actionsNeeded / effectiveActionsPerHour : 0;
                     lines.push(
-                        `<div style="margin-top: 4px; color: #aaa;">${t('Material Costs:')} ${formatTotalValue(profitData.action.breakdown.materialCost)}</div>`
+                        `<div style="margin-top: 4px; color: #aaa;">${i18n_js.t('Material Costs:')} ${formatTotalValue(profitData.action.breakdown.materialCost)}</div>`
                     );
 
                     for (const mat of details.materialCosts) {
@@ -10811,7 +10771,7 @@ ${starCSS}
                   ? '#4ade80'
                   : config.COLOR_LOSS;
             lines.push(
-                `<div style="font-weight: bold; color: ${totalProfitColor};">${t('Total Profit:')} ${formatTotalValue(profitData.totalProfit)}</div>`
+                `<div style="font-weight: bold; color: ${totalProfitColor};">${i18n_js.t('Total Profit:')} ${formatTotalValue(profitData.totalProfit)}</div>`
             );
 
             return lines.join('');
@@ -10858,7 +10818,7 @@ ${starCSS}
             color: #888;
             font-style: italic;
         `;
-            loadingContainer.textContent = `⏳ ${t('Loading market data...')}`;
+            loadingContainer.textContent = `⏳ ${i18n_js.t('Loading market data...')}`;
 
             // Store task key for reroll detection
             const taskKey = `${taskData.description}|${taskData.quantity}`;
@@ -10928,7 +10888,7 @@ ${starCSS}
 
             // Determine if active (first in queue) or queued
             const isActive = matchActionHrid === activeActionHrid;
-            const label = isActive ? t('▶ Active') : t('⏸ Queued');
+            const label = isActive ? i18n_js.t('▶ Active') : i18n_js.t('⏸ Queued');
             const color = isActive ? config.COLOR_ACCENT : config.SCRIPT_COLOR_SECONDARY;
 
             if (existingIndicator) {
@@ -11468,7 +11428,7 @@ ${starCSS}
             }
 
             if (parts.length > 0) {
-                displayElement.textContent = t('Reroll spent: ') + parts.join(' + ');
+                displayElement.textContent = i18n_js.t('Reroll spent: ') + parts.join(' + ');
                 displayElement.style.display = 'block';
             } else {
                 displayElement.style.display = 'none';
@@ -12442,8 +12402,8 @@ ${starCSS}
             font-weight: 500;
             margin-top: 4px;
         `;
-            warning.textContent = `⚠ ${t('Combat icons unavailable')} - ${t('visit Combat to load sprites')}`;
-            warning.title = t('Combat monster sprites need to be loaded. Visit the Combat panel to load them.');
+            warning.textContent = `⚠ ${i18n_js.t('Combat icons unavailable')} - ${i18n_js.t('visit Combat to load sprites')}`;
+            warning.title = i18n_js.t('Combat monster sprites need to be loaded. Visit the Combat panel to load them.');
 
             titleElement.appendChild(warning);
             this.spriteWarningShown = true;
@@ -13108,7 +13068,7 @@ ${starCSS}
             if (!config.getSetting('taskSorter_hideButton')) {
                 this.sortButton = document.createElement('button');
                 this.sortButton.className = 'Button_button__1Fe9z Button_small__3fqC7';
-                this.sortButton.textContent = t('Sort Tasks');
+                this.sortButton.textContent = i18n_js.t('Sort Tasks');
                 this.sortButton.style.marginLeft = '8px';
                 this.sortButton.setAttribute('data-mwi-task-sort', 'true');
                 this.sortButton.addEventListener('click', () => this.sortTasks());
@@ -13488,7 +13448,7 @@ ${starCSS}
             // Create button
             this.highlightButton = document.createElement('button');
             this.highlightButton.className = 'Button_button__1Fe9z Button_small__3fqC7';
-            this.highlightButton.textContent = t('Highlight Task Items');
+            this.highlightButton.textContent = i18n_js.t('Highlight Task Items');
             this.highlightButton.style.marginLeft = '8px';
             this.highlightButton.setAttribute('data-mwi-task-highlight', 'true');
 
@@ -13527,7 +13487,7 @@ ${starCSS}
 
             // Update button state
             this.isHighlightActive = true;
-            this.highlightButton.textContent = t('Clear Highlight');
+            this.highlightButton.textContent = i18n_js.t('Clear Highlight');
             this.highlightButton.style.backgroundColor = '#22c55e';
         }
 
@@ -13547,7 +13507,7 @@ ${starCSS}
             // Update button state
             this.isHighlightActive = false;
             if (this.highlightButton) {
-                this.highlightButton.textContent = t('Highlight Task Items');
+                this.highlightButton.textContent = i18n_js.t('Highlight Task Items');
                 this.highlightButton.style.backgroundColor = '';
             }
         }
@@ -13873,7 +13833,7 @@ ${starCSS}
             // Create button matching MUI tab styling
             const button = document.createElement('div');
             button.className = 'MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1q2h7u5 toolasha-task-stats-btn';
-            button.textContent = t('Statistics');
+            button.textContent = i18n_js.t('Statistics');
             button.style.cursor = 'pointer';
             button.onclick = () => this.showPopup();
 
@@ -14165,7 +14125,7 @@ ${starCSS}
         `;
 
             const title = document.createElement('h2');
-            title.textContent = t('Task Statistics');
+            title.textContent = i18n_js.t('Task Statistics');
             title.style.cssText = `margin: 0; color: ${textColor}; font-size: 24px;`;
 
             const closeButton = document.createElement('button');
@@ -14269,29 +14229,29 @@ ${starCSS}
          * @returns {HTMLElement} Section element
          */
         createOverflowSection(overflow, textColor) {
-            const section = this.createSection(t('Task Slots'));
+            const section = this.createSection(i18n_js.t('Task Slots'));
 
             if (overflow.error) {
-                section.appendChild(this.createRow(t('Status'), overflow.error, config.COLOR_LOSS));
+                section.appendChild(this.createRow(i18n_js.t('Status'), overflow.error, config.COLOR_LOSS));
                 return section;
             }
 
             section.appendChild(
-                this.createRow(t('Slots Used'), `${overflow.usedSlots} / ${overflow.taskSlotCap}`, textColor)
+                this.createRow(i18n_js.t('Slots Used'), `${overflow.usedSlots} / ${overflow.taskSlotCap}`, textColor)
             );
-            section.appendChild(this.createRow(t('Available'), `${overflow.availableSlots}`, textColor));
+            section.appendChild(this.createRow(i18n_js.t('Available'), `${overflow.availableSlots}`, textColor));
             section.appendChild(
-                this.createRow(t('Cooldown'), `${overflow.taskCooldownHours}h per task`, config.COLOR_TEXT_SECONDARY)
+                this.createRow(i18n_js.t('Cooldown'), `${overflow.taskCooldownHours}h per task`, config.COLOR_TEXT_SECONDARY)
             );
 
             // Overflow time
             if (overflow.isOverflowing) {
-                section.appendChild(this.createRow(t('Status'), t('Tasks full!'), config.COLOR_LOSS));
+                section.appendChild(this.createRow(i18n_js.t('Status'), i18n_js.t('Tasks full!'), config.COLOR_LOSS));
             } else {
                 const overflowTimeStr = formatters_js.timeReadableZh(overflow.msUntilOverflow / 1000);
                 const overflowDateStr = overflow.overflowDate.toLocaleString();
-                section.appendChild(this.createRow(t('Full in'), overflowTimeStr, config.COLOR_INFO));
-                section.appendChild(this.createRow(t('Full at'), overflowDateStr, config.COLOR_TEXT_SECONDARY));
+                section.appendChild(this.createRow(i18n_js.t('Full in'), overflowTimeStr, config.COLOR_INFO));
+                section.appendChild(this.createRow(i18n_js.t('Full at'), overflowDateStr, config.COLOR_TEXT_SECONDARY));
             }
 
             return section;
@@ -14304,24 +14264,24 @@ ${starCSS}
          * @returns {HTMLElement} Section element
          */
         createRewardsSection(rewards, textColor) {
-            const section = this.createSection(t('Expected Rewards'));
+            const section = this.createSection(i18n_js.t('Expected Rewards'));
 
-            section.appendChild(this.createRow(t('Total Coins'), formatters_js.formatKMB(rewards.totalCoins), config.COLOR_GOLD));
-            section.appendChild(this.createRow(t('Total Task Tokens'), String(rewards.totalTokens), textColor));
+            section.appendChild(this.createRow(i18n_js.t('Total Coins'), formatters_js.formatKMB(rewards.totalCoins), config.COLOR_GOLD));
+            section.appendChild(this.createRow(i18n_js.t('Total Task Tokens'), String(rewards.totalTokens), textColor));
 
             if (!rewards.rewardValue.error) {
                 const tokenValueStr = `${formatters_js.formatKMB(Math.round(rewards.rewardValue.breakdown.tokenValue))} each`;
-                section.appendChild(this.createRow(t('Token Value'), tokenValueStr, config.COLOR_TEXT_SECONDARY));
+                section.appendChild(this.createRow(i18n_js.t('Token Value'), tokenValueStr, config.COLOR_TEXT_SECONDARY));
                 section.appendChild(
                     this.createRow(
-                        t('Tokens Value'),
+                        i18n_js.t('Tokens Value'),
                         formatters_js.formatKMB(Math.round(rewards.rewardValue.taskTokens)),
                         config.COLOR_PROFIT
                     )
                 );
                 section.appendChild(
                     this.createRow(
-                        t("Purple's Gift"),
+                        i18n_js.t("Purple's Gift"),
                         formatters_js.formatKMB(Math.round(rewards.rewardValue.purpleGift)),
                         config.COLOR_ESSENCE
                     )
@@ -14334,13 +14294,13 @@ ${starCSS}
 
                 section.appendChild(
                     this.createRow(
-                        t('Total Reward Value'),
+                        i18n_js.t('Total Reward Value'),
                         formatters_js.formatKMB(Math.round(rewards.rewardValue.total)),
                         config.COLOR_ACCENT
                     )
                 );
             } else {
-                section.appendChild(this.createRow(t('Token Value'), t('Loading...'), config.COLOR_TEXT_SECONDARY));
+                section.appendChild(this.createRow(i18n_js.t('Token Value'), i18n_js.t('Loading...'), config.COLOR_TEXT_SECONDARY));
             }
 
             return section;
@@ -14352,14 +14312,14 @@ ${starCSS}
          * @returns {HTMLElement} Section element
          */
         createActionProfitSection(rewards) {
-            const section = this.createSection(t('Action Profit'));
+            const section = this.createSection(i18n_js.t('Action Profit'));
 
             for (const detail of rewards.taskDetails) {
                 const profitStr = detail.isCombat
-                    ? t('N/A (combat)')
+                    ? i18n_js.t('N/A (combat)')
                     : detail.actionProfit !== null
                       ? formatters_js.formatKMB(Math.round(detail.actionProfit))
-                      : t('N/A');
+                      : i18n_js.t('N/A');
 
                 const profitColor = detail.isCombat
                     ? config.COLOR_TEXT_SECONDARY
@@ -14378,7 +14338,7 @@ ${starCSS}
             section.appendChild(separator);
 
             const totalStr =
-                rewards.totalActionProfit !== null ? formatters_js.formatKMB(Math.round(rewards.totalActionProfit)) : t('N/A');
+                rewards.totalActionProfit !== null ? formatters_js.formatKMB(Math.round(rewards.totalActionProfit)) : i18n_js.t('N/A');
             const totalColor =
                 rewards.totalActionProfit !== null && rewards.totalActionProfit >= 0
                     ? config.COLOR_PROFIT
@@ -14386,7 +14346,7 @@ ${starCSS}
                       ? config.COLOR_LOSS
                       : config.COLOR_TEXT_SECONDARY;
 
-            section.appendChild(this.createRow(t('Total Action Profit'), totalStr, totalColor));
+            section.appendChild(this.createRow(i18n_js.t('Total Action Profit'), totalStr, totalColor));
 
             // Combined total
             const separator2 = document.createElement('div');
@@ -14394,7 +14354,7 @@ ${starCSS}
             section.appendChild(separator2);
 
             section.appendChild(
-                this.createRow(t('Combined Total'), formatters_js.formatKMB(Math.round(rewards.combinedTotal)), config.COLOR_ACCENT)
+                this.createRow(i18n_js.t('Combined Total'), formatters_js.formatKMB(Math.round(rewards.combinedTotal)), config.COLOR_ACCENT)
             );
 
             return section;
@@ -14407,14 +14367,14 @@ ${starCSS}
          * @returns {HTMLElement} Section element
          */
         createCompletionTimeSection(rewards, textColor) {
-            const section = this.createSection(t('Completion Time'));
+            const section = this.createSection(i18n_js.t('Completion Time'));
 
             for (const detail of rewards.taskDetails) {
                 const timeStr = detail.isCombat
-                    ? t('N/A (combat)')
+                    ? i18n_js.t('N/A (combat)')
                     : detail.completionSeconds !== null
                       ? formatters_js.timeReadableZh(detail.completionSeconds)
-                      : t('N/A');
+                      : i18n_js.t('N/A');
 
                 const progressStr = detail.currentCount > 0 ? ` (${detail.currentCount}/${detail.goalCount})` : '';
 
@@ -14433,9 +14393,9 @@ ${starCSS}
             section.appendChild(separator);
 
             const totalTimeStr =
-                rewards.totalCompletionSeconds !== null ? formatters_js.timeReadableZh(rewards.totalCompletionSeconds) : t('N/A');
+                rewards.totalCompletionSeconds !== null ? formatters_js.timeReadableZh(rewards.totalCompletionSeconds) : i18n_js.t('N/A');
 
-            section.appendChild(this.createRow(t('Total (non-combat)'), totalTimeStr, config.COLOR_INFO));
+            section.appendChild(this.createRow(i18n_js.t('Total (non-combat)'), totalTimeStr, config.COLOR_INFO));
 
             return section;
         }
@@ -14548,7 +14508,7 @@ ${starCSS}
 
             const count = this._getClaimableButtons(taskList).length;
             if (count > 0) {
-                this.proxyButton.textContent = count > 1 ? `${t('Claim Reward')} (${count})` : t('Claim Reward');
+                this.proxyButton.textContent = count > 1 ? `${i18n_js.t('Claim Reward')} (${count})` : i18n_js.t('Claim Reward');
                 this.proxyButton.style.display = '';
             } else {
                 this.proxyButton.style.display = 'none';
@@ -14687,7 +14647,7 @@ ${starCSS}
             const btn = document.createElement('span');
             btn.className = 'mwi-task-protection-btn';
             btn.textContent = '🛡️';
-            btn.title = t('Configure task reroll protection');
+            btn.title = i18n_js.t('Configure task reroll protection');
             btn.style.cssText = 'cursor:pointer; font-size:16px; margin-left:6px; opacity:0.7; transition:opacity 0.1s;';
             btn.addEventListener('mouseover', () => {
                 btn.style.opacity = '1';
@@ -14834,7 +14794,7 @@ ${starCSS}
 
                         // Initial click — start 3s lockdown
                         card.dataset.mwiRerollLocked = '1';
-                        this._showWarning(card, t('Protected task! Unlocks in 3s...'));
+                        this._showWarning(card, i18n_js.t('Protected task! Unlocks in 3s...'));
 
                         // Clear any existing timers for this card
                         const existingTimer = this.confirmTimers.get(card);
@@ -14844,7 +14804,7 @@ ${starCSS}
                         const lockdownTimer = setTimeout(() => {
                             card.dataset.mwiRerollLocked = '';
                             card.dataset.mwiRerollConfirmed = '1';
-                            this._showWarning(card, t('Click reroll now to confirm.'));
+                            this._showWarning(card, i18n_js.t('Click reroll now to confirm.'));
 
                             // Auto-clear confirmation after another 3s
                             const confirmTimer = setTimeout(() => {
@@ -14866,7 +14826,7 @@ ${starCSS}
          * @param {string} [message='Protected task! Unlocks in 3s...']
          * @private
          */
-        _showWarning(taskCard, message = t('Protected task! Unlocks in 3s...')) {
+        _showWarning(taskCard, message = i18n_js.t('Protected task! Unlocks in 3s...')) {
             this._clearWarning(taskCard);
 
             const warning = document.createElement('div');
@@ -15054,7 +15014,7 @@ ${starCSS}
             flex-shrink: 0;
         `;
             header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:#4a9eff;">${t('Protected Tasks')}</span>
+            <span style="font-weight:700; font-size:14px; color:#4a9eff;">${i18n_js.t('Protected Tasks')}</span>
             <button id="mwi-task-protection-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">×</button>
@@ -15065,7 +15025,7 @@ ${starCSS}
             searchDiv.style.cssText = 'padding: 8px 14px; flex-shrink: 0;';
             const searchInput = document.createElement('input');
             searchInput.type = 'search';
-            searchInput.placeholder = t('Search actions, monsters, zones...');
+            searchInput.placeholder = i18n_js.t('Search actions, monsters, zones...');
             searchInput.style.cssText = `
             width: 100%;
             padding: 6px 10px;
@@ -15097,7 +15057,7 @@ ${starCSS}
 
                 let html = '';
                 if (!query && filtered.length === 0) {
-                    html = `<div style="color:#666; text-align:center; padding:20px 0;">${t('No protected tasks yet. Search to add.')}</div>`;
+                    html = `<div style="color:#666; text-align:center; padding:20px 0;">${i18n_js.t('No protected tasks yet. Search to add.')}</div>`;
                 }
 
                 for (const item of filtered.slice(0, 50)) {
@@ -15133,7 +15093,7 @@ ${starCSS}
                 }
 
                 if (filtered.length > 50) {
-                    html += `<div style="color:#666; text-align:center; padding:8px;">...${filtered.length - 50} ${t('more (refine search)')}</div>`;
+                    html += `<div style="color:#666; text-align:center; padding:8px;">...${filtered.length - 50} ${i18n_js.t('more (refine search)')}</div>`;
                 }
 
                 listContainer.innerHTML = html;
@@ -15212,7 +15172,7 @@ ${starCSS}
     const taskRerollProtection = new TaskRerollProtection();
 
     var taskRerollProtection$1 = {
-        name: t('Task Reroll Protection'),
+        name: i18n_js.t('Task Reroll Protection'),
         initialize: async () => {
             await taskRerollProtection.initialize();
         },
@@ -15291,7 +15251,7 @@ ${starCSS}
             const btn = document.createElement('span');
             btn.className = 'mwi-task-autoreroll-btn';
             btn.textContent = '\u{1F3AF}';
-            btn.title = t('Configure task auto-reroll reminders');
+            btn.title = i18n_js.t('Configure task auto-reroll reminders');
             btn.style.cssText = 'cursor:pointer; font-size:16px; margin-left:6px; opacity:0.7; transition:opacity 0.1s;';
             btn.addEventListener('mouseover', () => {
                 btn.style.opacity = '1';
@@ -15331,7 +15291,7 @@ ${starCSS}
 
             const badge = document.createElement('div');
             badge.className = 'mwi-autoreroll-badge';
-            badge.textContent = t('Reroll!');
+            badge.textContent = i18n_js.t('Reroll!');
             badge.style.cssText = `
             position: absolute;
             top: 4px;
@@ -15499,7 +15459,7 @@ ${starCSS}
             flex-shrink: 0;
         `;
             header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:#ef4444;">${t('Auto-Reroll List')}</span>
+            <span style="font-weight:700; font-size:14px; color:#ef4444;">${i18n_js.t('Auto-Reroll List')}</span>
             <button id="mwi-task-autoreroll-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">\u00d7</button>
@@ -15509,7 +15469,7 @@ ${starCSS}
             searchDiv.style.cssText = 'padding: 8px 14px; flex-shrink: 0;';
             const searchInput = document.createElement('input');
             searchInput.type = 'search';
-            searchInput.placeholder = t('Search actions, monsters, zones...');
+            searchInput.placeholder = i18n_js.t('Search actions, monsters, zones...');
             searchInput.style.cssText = `
             width: 100%;
             padding: 6px 10px;
@@ -15539,7 +15499,7 @@ ${starCSS}
 
                 let html = '';
                 if (!query && filtered.length === 0) {
-                    html = `<div style="color:#666; text-align:center; padding:20px 0;">${t('No auto-reroll tasks yet. Search to add.')}</div>`;
+                    html = `<div style="color:#666; text-align:center; padding:20px 0;">${i18n_js.t('No auto-reroll tasks yet. Search to add.')}</div>`;
                 }
 
                 for (const item of filtered.slice(0, 50)) {
@@ -15575,7 +15535,7 @@ ${starCSS}
                 }
 
                 if (filtered.length > 50) {
-                    html += `<div style="color:#666; text-align:center; padding:8px;">...${filtered.length - 50} ${t('more (refine search)')}</div>`;
+                    html += `<div style="color:#666; text-align:center; padding:8px;">...${filtered.length - 50} ${i18n_js.t('more (refine search)')}</div>`;
                 }
 
                 listContainer.innerHTML = html;
@@ -15653,7 +15613,7 @@ ${starCSS}
     const taskAutoReroll = new TaskAutoReroll();
 
     var taskAutoReroll$1 = {
-        name: t('Task Auto-Reroll Reminder'),
+        name: i18n_js.t('Task Auto-Reroll Reminder'),
         initialize: async () => {
             await taskAutoReroll.initialize();
         },
@@ -15855,7 +15815,7 @@ ${starCSS}
                 // Create the remaining XP display
                 const xpDisplay = document.createElement('span');
                 xpDisplay.className = 'mwi-remaining-xp';
-                xpDisplay.textContent = t('{0} XP left', formatters_js.formatLargeNumber(remainingXP));
+                xpDisplay.textContent = i18n_js.t('{0} XP left', formatters_js.formatLargeNumber(remainingXP));
 
                 // Build style with optional text shadow
                 const useBlackBorder = config.getSetting('skillRemainingXP_blackBorder', true);
@@ -16156,12 +16116,12 @@ ${starCSS}
         const s = (n) => (n === 1 ? '' : 's');
         const parts = [];
 
-        if (w >= 1) parts.push(t('{0} week{1}', w, s(w)));
-        if (d >= 1) parts.push(t('{0} day{1}', d, s(d)));
-        if (ms < w1 && h >= 1) parts.push(t('{0} hour{1}', h, s(h)));
-        if (ms < 6 * h1 && m >= 1) parts.push(t('{0} minute{1}', m, s(m)));
+        if (w >= 1) parts.push(i18n_js.t('{0} week{1}', w, s(w)));
+        if (d >= 1) parts.push(i18n_js.t('{0} day{1}', d, s(d)));
+        if (ms < w1 && h >= 1) parts.push(i18n_js.t('{0} hour{1}', h, s(h)));
+        if (ms < 6 * h1 && m >= 1) parts.push(i18n_js.t('{0} minute{1}', m, s(m)));
 
-        return parts.join(' ') || t('< 1 minute');
+        return parts.join(' ') || i18n_js.t('< 1 minute');
     }
 
     class XPTracker {
@@ -16294,7 +16254,7 @@ ${starCSS}
 
                 if (rate <= 0) return;
 
-                const rateText = t('{0} xp/h', formatters_js.formatKMB(rate));
+                const rateText = i18n_js.t('{0} xp/h', formatters_js.formatKMB(rate));
                 const rateSpan = document.createElement('span');
                 rateSpan.className = 'mwi-xp-rate';
                 rateSpan.textContent = rateText;
@@ -16407,7 +16367,7 @@ ${starCSS}
             const div = document.createElement('div');
             div.className = 'mwi-xp-time-left';
             div.style.cssText = `font-size: 12px; color: ${config.COLOR_HOURS_TO_LEVEL}; margin-top: 4px;`;
-            div.innerHTML = `<span style="font-weight:700">${timeStr}</span> ${t('till next level')}`;
+            div.innerHTML = `<span style="font-weight:700">${timeStr}</span> ${i18n_js.t('till next level')}`;
 
             divs[3].insertAdjacentElement('afterend', div);
         }
@@ -16809,13 +16769,13 @@ ${starCSS}
             header.style.cssText = `color: ${config.COLOR_GOLD}; font-weight: bold;`;
 
             if (askTotal === 0 && bidTotal === 0) {
-                header.textContent = t('Total Value: —');
+                header.textContent = i18n_js.t('Total Value: —');
                 wrapper.appendChild(header);
                 secondDiv.appendChild(wrapper);
                 return;
             }
 
-            header.textContent = t('▶ Total Value: {0}/{1}', formatters_js.formatKMB(askTotal), formatters_js.formatKMB(bidTotal));
+            header.textContent = i18n_js.t('▶ Total Value: {0}/{1}', formatters_js.formatKMB(askTotal), formatters_js.formatKMB(bidTotal));
             header.style.cursor = 'pointer';
             wrapper.appendChild(header);
 
@@ -16862,7 +16822,7 @@ ${starCSS}
                 let bidPerItem = 0;
 
                 if (baseHrid === '/items/coin') {
-                    name = t('Coins');
+                    name = i18n_js.t('Coins');
                     askPerItem = 1;
                     bidPerItem = 1;
                 } else {
@@ -16949,7 +16909,7 @@ ${starCSS}
                 if (item.askTotal > 0 || item.bidTotal > 0) {
                     totalSpan.textContent = `${formatters_js.formatKMB(item.askTotal)}/${formatters_js.formatKMB(item.bidTotal)}`;
                 } else {
-                    totalSpan.textContent = t('—');
+                    totalSpan.textContent = i18n_js.t('—');
                 }
                 row.appendChild(totalSpan);
 
@@ -17023,7 +16983,7 @@ ${starCSS}
             // Create average time span
             const avgTimeSpan = document.createElement('span');
             avgTimeSpan.className = 'mwi-loot-log-avgtime';
-            avgTimeSpan.textContent = t('⏱{0}', this.formatDuration(avgTime));
+            avgTimeSpan.textContent = i18n_js.t('⏱{0}', this.formatDuration(avgTime));
             avgTimeSpan.style.marginRight = '16px';
             avgTimeSpan.style.marginLeft = '2ch';
             avgTimeSpan.style.color = config.COLOR_INFO;
@@ -17040,9 +17000,9 @@ ${starCSS}
             dayValueSpan.className = 'mwi-loot-log-day-value';
 
             if (dayValueAsk === 0 && dayValueBid === 0) {
-                dayValueSpan.textContent = t('Daily Output: —');
+                dayValueSpan.textContent = i18n_js.t('Daily Output: —');
             } else {
-                dayValueSpan.textContent = t('Daily Output: {0}/{1}', formatters_js.formatKMB(dayValueAsk), formatters_js.formatKMB(dayValueBid));
+                dayValueSpan.textContent = i18n_js.t('Daily Output: {0}/{1}', formatters_js.formatKMB(dayValueAsk), formatters_js.formatKMB(dayValueBid));
             }
 
             dayValueSpan.style.float = 'right';
@@ -17082,7 +17042,7 @@ ${starCSS}
             color: rgba(96, 165, 250, 0.7);
             font-size: 0.85em;
         `;
-            separator.textContent = t('— Historical Entries ({0}) —', historicalEntries.length);
+            separator.textContent = i18n_js.t('— Historical Entries ({0}) —', historicalEntries.length);
 
             // Create wrapper
             const wrapper = document.createElement('div');
@@ -17102,7 +17062,7 @@ ${starCSS}
             if (historicalEntries.length > this.historicalBatchSize) {
                 const showMoreBtn = document.createElement('button');
                 showMoreBtn.className = 'mwi-loot-log-history-more';
-                showMoreBtn.textContent = t(
+                showMoreBtn.textContent = i18n_js.t(
                     'Show more ({0} remaining)',
                     historicalEntries.length - this.historicalRendered
                 );
@@ -17132,7 +17092,7 @@ ${starCSS}
                     if (remaining <= 0) {
                         showMoreBtn.remove();
                     } else {
-                        showMoreBtn.textContent = t('Show more ({0} remaining)', remaining);
+                        showMoreBtn.textContent = i18n_js.t('Show more ({0} remaining)', remaining);
                     }
                 });
                 wrapper.appendChild(showMoreBtn);
@@ -17197,7 +17157,7 @@ ${starCSS}
                     if (remaining === 0) {
                         wrapper.remove();
                     } else if (sep) {
-                        sep.textContent = t('— Historical Entries ({0}) —', remaining);
+                        sep.textContent = i18n_js.t('— Historical Entries ({0}) —', remaining);
                     }
                 }
             });
@@ -17225,7 +17185,7 @@ ${starCSS}
             timeDiv.style.cssText = 'margin-bottom: 2px;';
 
             const startDate = new Date(entry.startTime);
-            timeDiv.textContent = t('Start Time: {0}', startDate.toLocaleString());
+            timeDiv.textContent = i18n_js.t('Start Time: {0}', startDate.toLocaleString());
             entryEl.appendChild(timeDiv);
 
             this.injectTotalValue(timeDiv, entry);
@@ -17236,7 +17196,7 @@ ${starCSS}
 
             if (entry.startTime && entry.endTime) {
                 const durationSec = (new Date(entry.endTime) - new Date(entry.startTime)) / 1000;
-                durationDiv.textContent = t('Duration: {0}', this.formatDuration(durationSec));
+                durationDiv.textContent = i18n_js.t('Duration: {0}', this.formatDuration(durationSec));
             }
             entryEl.appendChild(durationDiv);
 
@@ -17355,7 +17315,7 @@ ${starCSS}
          * @returns {string}
          */
         getActionName(actionHrid) {
-            if (!actionHrid) return t('Unknown');
+            if (!actionHrid) return i18n_js.t('Unknown');
             const details = dataManager.getActionDetails(actionHrid);
             if (details?.name) return details.name;
             return actionHrid.split('/').pop().replace(/_/g, ' ');
@@ -17398,7 +17358,7 @@ ${starCSS}
 
     // Export as feature module
     var lootLogStats = {
-        name: t('Loot Log Statistics'),
+        name: i18n_js.t('Loot Log Statistics'),
         initialize: async () => {
             const lootLogStats = new LootLogStats();
             await lootLogStats.initialize();
@@ -17590,7 +17550,7 @@ ${starCSS}
          */
         getItemName(itemHrid) {
             if (itemHrid === '/items/coin') {
-                return t('Gold');
+                return i18n_js.t('Gold');
             }
 
             return itemNameTranslator.getDisplayName(itemHrid);
@@ -17604,7 +17564,7 @@ ${starCSS}
         getRoomName(houseRoomHrid) {
             const initData = dataManager.getInitClientData();
             const roomData = initData?.houseRoomDetailMap?.[houseRoomHrid];
-            return roomData?.name || t('Unknown Room');
+            return roomData?.name || i18n_js.t('Unknown Room');
         }
     }
 
@@ -18174,7 +18134,7 @@ ${starCSS}
             color: ${config.COLOR_ACCENT};
             text-align: center;
         `;
-            totalDiv.textContent = t('Total Market Value: {0}', formatters_js.coinFormatter(costData.totalValue));
+            totalDiv.textContent = i18n_js.t('Total Market Value: {0}', formatters_js.coinFormatter(costData.totalValue));
             costsSection.appendChild(totalDiv);
         }
 
@@ -18211,7 +18171,7 @@ ${starCSS}
             font-weight: bold;
             font-size: 0.875rem;
         `;
-            label.textContent = t('Cumulative to Level:');
+            label.textContent = i18n_js.t('Cumulative to Level:');
 
             const dropdown = document.createElement('select');
             dropdown.style.cssText = `
@@ -18318,7 +18278,7 @@ ${starCSS}
             color: ${config.COLOR_ACCENT};
             text-align: center;
         `;
-            totalDiv.textContent = t('Total Market Value: {0}', formatters_js.coinFormatter(costData.totalValue));
+            totalDiv.textContent = i18n_js.t('Total Market Value: {0}', formatters_js.coinFormatter(costData.totalValue));
             container.appendChild(totalDiv);
 
             // Add Missing Mats Marketplace button if any materials are missing
@@ -18392,7 +18352,7 @@ ${starCSS}
             margin-left: auto;
             text-align: right;
         `;
-            missingSpan.textContent = t('Missing: {0}', formatters_js.coinFormatter(amountNeeded));
+            missingSpan.textContent = i18n_js.t('Missing: {0}', formatters_js.coinFormatter(amountNeeded));
             row.appendChild(missingSpan);
 
             container.appendChild(row);
@@ -18460,7 +18420,7 @@ ${starCSS}
             transition: all 0.2s ease;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         `;
-            button.textContent = t('Missing Mats Marketplace');
+            button.textContent = i18n_js.t('Missing Mats Marketplace');
 
             // Hover effects
             button.addEventListener('mouseenter', () => {
@@ -18734,14 +18694,14 @@ ${starCSS}
 
                 if (!material) {
                     statusColor = '#4ade80';
-                    statusText = t('Complete');
+                    statusText = i18n_js.t('Complete');
                 } else if (!material.isTradeable) {
                     statusColor = '#888888';
-                    statusText = t('Not Tradeable');
+                    statusText = i18n_js.t('Not Tradeable');
                     displayName = material.itemName;
                 } else {
                     statusColor = '#ef4444';
-                    statusText = t('Missing: {0}', formatters_js.formatWithSeparator(material.missing));
+                    statusText = i18n_js.t('Missing: {0}', formatters_js.formatWithSeparator(material.missing));
                     displayName = material.itemName;
                 }
 
@@ -19243,8 +19203,8 @@ ${starCSS}
 
             const title = document.createElement('span');
             title.style.cssText = `font-size: 0.9rem; font-weight: 600; color: ${config.COLOR_ACCENT};`;
-            const contextLabel = this.loadoutName ? this.loadoutName : t('Scroll Defaults');
-            title.textContent = `${t('Scroll Simulation')} — ${contextLabel}`;
+            const contextLabel = this.loadoutName ? this.loadoutName : i18n_js.t('Scroll Defaults');
+            title.textContent = `${i18n_js.t('Scroll Simulation')} — ${contextLabel}`;
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '×';
@@ -19294,8 +19254,8 @@ ${starCSS}
             line-height: 1.4;
         `;
             note.textContent = this.loadoutName
-                ? t('These scrolls override the defaults when this loadout is active for a skill.')
-                : t('Applied when no loadout matches the current skill (or loadout snapshots are disabled).');
+                ? i18n_js.t('These scrolls override the defaults when this loadout is active for a skill.')
+                : i18n_js.t('Applied when no loadout matches the current skill (or loadout snapshots are disabled).');
             body.appendChild(note);
 
             // Scroll rows
@@ -19423,7 +19383,7 @@ ${starCSS}
 
         const button = document.createElement('button');
         button.id = BUTTON_ID;
-        button.textContent = t('Scroll Simulation');
+        button.textContent = i18n_js.t('Scroll Simulation');
         button.className = 'Button_button__1Fe9z';
         button.style.cssText = `white-space: nowrap;`;
         button.addEventListener('click', () => popup.open(loadoutName));
@@ -19460,7 +19420,7 @@ ${starCSS}
     }
 
     var scrollSimulatorUI = {
-        name: t('Scroll Simulator UI'),
+        name: i18n_js.t('Scroll Simulator UI'),
         initialize,
         openDefaultsPopup,
         disable,
@@ -19746,7 +19706,7 @@ ${starCSS}
             this.headerEl = header;
 
             const title = document.createElement('span');
-            title.textContent = t('PFormance');
+            title.textContent = i18n_js.t('PFormance');
             title.style.fontWeight = 'bold';
             title.style.color = COLORS.accent;
 
@@ -19761,7 +19721,7 @@ ${starCSS}
             });
 
             const closeBtn = this._headerButton('✕', () => this._removePanel());
-            closeBtn.title = t('Close');
+            closeBtn.title = i18n_js.t('Close');
 
             buttons.appendChild(collapseBtn);
             buttons.appendChild(closeBtn);
@@ -19876,12 +19836,12 @@ ${starCSS}
 
             this.contentEl.innerHTML = '';
             this.contentEl.appendChild(
-                this._createSection(t('Feature Init'), initEntries, this.featureSectionCollapsed, (v) => {
+                this._createSection(i18n_js.t('Feature Init'), initEntries, this.featureSectionCollapsed, (v) => {
                     this.featureSectionCollapsed = v;
                 })
             );
             this.contentEl.appendChild(
-                this._createSection(t('DOM Observers'), domEntries, this.domSectionCollapsed, (v) => {
+                this._createSection(i18n_js.t('DOM Observers'), domEntries, this.domSectionCollapsed, (v) => {
                     this.domSectionCollapsed = v;
                 })
             );
@@ -19928,7 +19888,7 @@ ${starCSS}
 
             if (entries.length === 0) {
                 const empty = document.createElement('div');
-                empty.textContent = t('No data');
+                empty.textContent = i18n_js.t('No data');
                 empty.style.padding = '4px 6px';
                 empty.style.color = COLORS.textDim;
                 empty.style.fontSize = '11px';
@@ -19946,9 +19906,9 @@ ${starCSS}
             const thead = document.createElement('thead');
             const headRow = document.createElement('tr');
             const columns =
-                title === t('Feature Init')
-                    ? [t('Name'), t('Time (ms)')]
-                    : [t('Name'), t('Calls/s'), t('Total ms'), t('CPU %')];
+                title === i18n_js.t('Feature Init')
+                    ? [i18n_js.t('Name'), i18n_js.t('Time (ms)')]
+                    : [i18n_js.t('Name'), i18n_js.t('Calls/s'), i18n_js.t('Total ms'), i18n_js.t('CPU %')];
 
             for (const col of columns) {
                 const th = document.createElement('th');
@@ -20409,7 +20369,7 @@ ${starCSS}
 
             const span = document.createElement('span');
             span.className = 'MuiTab-wrapper';
-            span.textContent = t('Toolasha');
+            span.textContent = i18n_js.t('Toolasha');
 
             button.appendChild(span);
 
@@ -20691,7 +20651,7 @@ ${starCSS}
                             white-space: nowrap;
                             transition: all 0.2s;
                         ">
-                        ${t('Edit Template')}
+                        ${i18n_js.t('Edit Template')}
                     </button>
                 `;
                 }
@@ -20816,14 +20776,14 @@ ${starCSS}
                             white-space: nowrap;
                             transition: all 0.2s;
                         ">
-                        ${t('Manage Overrides')}${count > 0 ? ` (${count})` : ''}
+                        ${i18n_js.t('Manage Overrides')}${count > 0 ? ` (${count})` : ''}
                     </button>
                 `;
                 }
 
                 case 'checkboxWithButton': {
                     const checkedCwb = currentSetting?.isTrue ?? settingDef.default ?? false;
-                    const btnLabel = settingDef.buttonLabel ?? t('Configure...');
+                    const btnLabel = settingDef.buttonLabel ?? i18n_js.t('Configure...');
                     return `
                     <div style="display:flex; align-items:center; gap:8px;">
                         <button type="button"
@@ -20872,7 +20832,7 @@ ${starCSS}
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
             searchInput.className = 'toolasha-search-input';
-            searchInput.placeholder = t('Search settings...');
+            searchInput.placeholder = i18n_js.t('Search settings...');
             searchInput.style.cssText = `
             flex: 1;
             padding: 8px 12px;
@@ -20885,7 +20845,7 @@ ${starCSS}
 
             // Clear button
             const clearButton = document.createElement('button');
-            clearButton.textContent = t('Clear');
+            clearButton.textContent = i18n_js.t('Clear');
             clearButton.className = 'toolasha-search-clear';
             clearButton.style.cssText = `
             padding: 8px 16px;
@@ -20971,43 +20931,43 @@ ${starCSS}
 
             // Sync button (at top - most important)
             const syncBtn = document.createElement('button');
-            syncBtn.textContent = t('Copy Settings to All Characters');
+            syncBtn.textContent = i18n_js.t('Copy Settings to All Characters');
             syncBtn.className = 'toolasha-utility-button toolasha-sync-button';
             syncBtn.addEventListener('click', () => this.handleSync());
 
             // Fetch Latest Prices button
             const fetchPricesBtn = document.createElement('button');
-            fetchPricesBtn.textContent = t('🔄 Fetch Latest Prices');
+            fetchPricesBtn.textContent = i18n_js.t('🔄 Fetch Latest Prices');
             fetchPricesBtn.className = 'toolasha-utility-button toolasha-fetch-prices-button';
             fetchPricesBtn.addEventListener('click', () => this.handleFetchPrices(fetchPricesBtn));
 
             // Reset button
             const resetBtn = document.createElement('button');
-            resetBtn.textContent = t('Reset to Defaults');
+            resetBtn.textContent = i18n_js.t('Reset to Defaults');
             resetBtn.className = 'toolasha-utility-button';
             resetBtn.addEventListener('click', () => this.handleReset());
 
             // Export button
             const exportBtn = document.createElement('button');
-            exportBtn.textContent = t('Export Settings');
+            exportBtn.textContent = i18n_js.t('Export Settings');
             exportBtn.className = 'toolasha-utility-button';
             exportBtn.addEventListener('click', () => this.handleExport());
 
             // Import button
             const importBtn = document.createElement('button');
-            importBtn.textContent = t('Import Settings');
+            importBtn.textContent = i18n_js.t('Import Settings');
             importBtn.className = 'toolasha-utility-button';
             importBtn.addEventListener('click', () => this.handleImport());
 
             // All Off button
             const allOffBtn = document.createElement('button');
-            allOffBtn.textContent = t('All Off');
+            allOffBtn.textContent = i18n_js.t('All Off');
             allOffBtn.className = 'toolasha-utility-button';
             allOffBtn.addEventListener('click', () => this.handleAllOff(restoreBtn));
 
             // Restore button (only shown when an All Off snapshot exists)
             const restoreBtn = document.createElement('button');
-            restoreBtn.textContent = t('Restore');
+            restoreBtn.textContent = i18n_js.t('Restore');
             restoreBtn.className = 'toolasha-utility-button';
             restoreBtn.style.display = 'none';
             restoreBtn.addEventListener('click', () => this.handleRestore(restoreBtn));
@@ -21028,7 +20988,7 @@ ${starCSS}
             buttonsDiv.appendChild(importBtn);
 
             const pformanceBtn = document.createElement('button');
-            pformanceBtn.textContent = t('PFormance');
+            pformanceBtn.textContent = i18n_js.t('PFormance');
             pformanceBtn.className = 'toolasha-utility-button';
             pformanceBtn.addEventListener('click', () => pformancePanel.show());
             buttonsDiv.appendChild(pformanceBtn);
@@ -21043,7 +21003,7 @@ ${starCSS}
         addRefreshNotice(container) {
             const notice = document.createElement('div');
             notice.className = 'toolasha-refresh-notice';
-            notice.textContent = t('Some settings require a page refresh to take effect');
+            notice.textContent = i18n_js.t('Some settings require a page refresh to take effect');
             container.appendChild(notice);
         }
 
@@ -21085,7 +21045,7 @@ ${starCSS}
                         const ver = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window).Toolasha?.version || '';
                         titleEl.textContent = `⚙️ Toolasha ${ver ? `v${ver} ` : ''}Settings (refresh to apply)`;
                     } else {
-                        titleEl.textContent = t('Settings');
+                        titleEl.textContent = i18n_js.t('Settings');
                     }
                 }
             };
@@ -21311,16 +21271,16 @@ ${starCSS}
                 const params = enhancementConfig_js.getEnhancingParams();
                 const fmt = (v) => (typeof v === 'number' ? v.toFixed(2).replace(/\.?0+$/, '') : v);
                 return `
-                <span style="color:#6b9fff; font-weight:bold;">${t('Computed Stats')}</span><br>
-                ${t('Effective Level:')} <span style="color:#e0e0e0;">${fmt(params.enhancingLevel)}</span> &nbsp;|&nbsp;
-                ${t('Tool Success:')} <span style="color:#e0e0e0;">${fmt(params.toolBonus)}%</span> &nbsp;|&nbsp;
-                ${t('Speed:')} <span style="color:#e0e0e0;">${fmt(params.speedBonus)}%</span><br>
-                ${t('Drink Conc:')} <span style="color:#e0e0e0;">${fmt((params.guzzlingBonus - 1) * 100)}%</span> &nbsp;|&nbsp;
-                ${t('Rare Find:')} <span style="color:#e0e0e0;">${fmt(params.rareFindBonus)}%</span> &nbsp;|&nbsp;
-                ${t('Experience:')} <span style="color:#e0e0e0;">${fmt(params.experienceBonus)}%</span>
+                <span style="color:#6b9fff; font-weight:bold;">${i18n_js.t('Computed Stats')}</span><br>
+                ${i18n_js.t('Effective Level:')} <span style="color:#e0e0e0;">${fmt(params.enhancingLevel)}</span> &nbsp;|&nbsp;
+                ${i18n_js.t('Tool Success:')} <span style="color:#e0e0e0;">${fmt(params.toolBonus)}%</span> &nbsp;|&nbsp;
+                ${i18n_js.t('Speed:')} <span style="color:#e0e0e0;">${fmt(params.speedBonus)}%</span><br>
+                ${i18n_js.t('Drink Conc:')} <span style="color:#e0e0e0;">${fmt((params.guzzlingBonus - 1) * 100)}%</span> &nbsp;|&nbsp;
+                ${i18n_js.t('Rare Find:')} <span style="color:#e0e0e0;">${fmt(params.rareFindBonus)}%</span> &nbsp;|&nbsp;
+                ${i18n_js.t('Experience:')} <span style="color:#e0e0e0;">${fmt(params.experienceBonus)}%</span>
             `;
             } catch {
-                return `<span style="color:#666;">${t('Stats unavailable (game data not loaded)')}</span>`;
+                return `<span style="color:#666;">${i18n_js.t('Stats unavailable (game data not loaded)')}</span>`;
             }
         }
 
@@ -21343,13 +21303,13 @@ ${starCSS}
 
             // If only 1 character (current), no need to sync
             if (characterCount <= 1) {
-                alert(t('You only have one character. Settings are already saved for this character.'));
+                alert(i18n_js.t('You only have one character. Settings are already saved for this character.'));
                 return;
             }
 
             // Confirm action
             const otherCharacters = characterCount - 1;
-            const message = t(
+            const message = i18n_js.t(
                 'This will copy your current settings to {0} other character{1}. Their existing settings will be overwritten.\n\nContinue?',
                 otherCharacters,
                 otherCharacters > 1 ? 's' : ''
@@ -21364,9 +21324,9 @@ ${starCSS}
 
             // Show result
             if (result.success) {
-                alert(t('Settings successfully copied to {0} character{1}!', result.count, result.count > 1 ? 's' : ''));
+                alert(i18n_js.t('Settings successfully copied to {0} character{1}!', result.count, result.count > 1 ? 's' : ''));
             } else {
-                alert(t('Failed to sync settings: {0}', result.error || t('Unknown error')));
+                alert(i18n_js.t('Failed to sync settings: {0}', result.error || i18n_js.t('Unknown error')));
             }
         }
 
@@ -21378,7 +21338,7 @@ ${starCSS}
             // Disable button and show loading state
             const originalText = button.textContent;
             button.disabled = true;
-            button.textContent = t('⏳ Fetching...');
+            button.textContent = i18n_js.t('⏳ Fetching...');
 
             try {
                 // Clear cache and fetch fresh data
@@ -21391,7 +21351,7 @@ ${starCSS}
                     });
 
                     // Show success state
-                    button.textContent = t('✅ Updated!');
+                    button.textContent = i18n_js.t('✅ Updated!');
                     button.style.backgroundColor = '#00ff00';
                     button.style.color = '#000';
 
@@ -21405,7 +21365,7 @@ ${starCSS}
                     this.timerRegistry.registerTimeout(resetSuccessTimeout);
                 } else {
                     // Failed - show error state
-                    button.textContent = t('❌ Failed');
+                    button.textContent = i18n_js.t('❌ Failed');
                     button.style.backgroundColor = '#ff0000';
 
                     // Reset button after 3 seconds
@@ -21420,7 +21380,7 @@ ${starCSS}
                 console.error('[SettingsUI] Fetch prices failed:', error);
 
                 // Show error state
-                button.textContent = t('❌ Error');
+                button.textContent = i18n_js.t('❌ Error');
                 button.style.backgroundColor = '#ff0000';
 
                 // Reset button after 3 seconds
@@ -21437,14 +21397,14 @@ ${starCSS}
          * Handle reset to defaults
          */
         async handleReset() {
-            if (!confirm(t('Reset all settings to defaults? This cannot be undone.'))) {
+            if (!confirm(i18n_js.t('Reset all settings to defaults? This cannot be undone.'))) {
                 return;
             }
 
             await settingsStorage.resetToDefaults();
             await this.config.resetToDefaults();
 
-            alert(t('Settings reset to defaults. Please refresh the page.'));
+            alert(i18n_js.t('Settings reset to defaults. Please refresh the page.'));
             window.location.reload();
         }
 
@@ -21483,23 +21443,23 @@ ${starCSS}
                     if (result) {
                         const msg =
                             result.skipped > 0
-                                ? t(
+                                ? i18n_js.t(
                                       'Settings imported successfully ({0} keys imported, {1} skipped from other characters). Please refresh the page.',
                                       result.imported,
                                       result.skipped
                                   )
-                                : t(
+                                : i18n_js.t(
                                       'Settings imported successfully ({0} keys imported). Please refresh the page.',
                                       result.imported
                                   );
                         alert(msg);
                         window.location.reload();
                     } else {
-                        alert(t('Failed to import settings. Please check the file format.'));
+                        alert(i18n_js.t('Failed to import settings. Please check the file format.'));
                     }
                 } catch (error) {
                     console.error('[Toolasha Settings] Import error:', error);
-                    alert(t('Failed to import settings.'));
+                    alert(i18n_js.t('Failed to import settings.'));
                 }
             });
 
@@ -21746,7 +21706,7 @@ ${starCSS}
             // Add text button
             const addTextBtn = document.createElement('button');
             addTextBtn.type = 'button';
-            addTextBtn.textContent = t('+ Add Text');
+            addTextBtn.textContent = i18n_js.t('+ Add Text');
             addTextBtn.style.cssText = `
             background: #2a2a2a;
             border: 1px solid #4a4a4a;
@@ -21766,7 +21726,7 @@ ${starCSS}
                 addTextBtn.style.borderColor = '#4a4a4a';
             };
             addTextBtn.onclick = () => {
-                const text = prompt(t('Enter text:'));
+                const text = prompt(i18n_js.t('Enter text:'));
                 if (text !== null && text !== '') {
                     templateItems.push({
                         type: 'text',
@@ -21791,7 +21751,7 @@ ${starCSS}
             // Restore to Default button (left side)
             const restoreBtn = document.createElement('button');
             restoreBtn.type = 'button';
-            restoreBtn.textContent = t('Restore to Default');
+            restoreBtn.textContent = i18n_js.t('Restore to Default');
             restoreBtn.style.cssText = `
             background: #6b5b3a;
             border: 1px solid #8b7b5a;
@@ -21802,7 +21762,7 @@ ${starCSS}
             font-size: 14px;
         `;
             restoreBtn.onclick = () => {
-                if (confirm(t('Reset template to default? This will discard your current template.'))) {
+                if (confirm(i18n_js.t('Reset template to default? This will discard your current template.'))) {
                     // Reset to default
                     templateItems.length = 0;
                     const defaultTemplate = setting.default || [];
@@ -21817,7 +21777,7 @@ ${starCSS}
 
             const cancelBtn = document.createElement('button');
             cancelBtn.type = 'button';
-            cancelBtn.textContent = t('Cancel');
+            cancelBtn.textContent = i18n_js.t('Cancel');
             cancelBtn.style.cssText = `
             background: #2a2a2a;
             border: 1px solid #4a4a4a;
@@ -21831,7 +21791,7 @@ ${starCSS}
 
             const saveBtn = document.createElement('button');
             saveBtn.type = 'button';
-            saveBtn.textContent = t('Save');
+            saveBtn.textContent = i18n_js.t('Save');
             saveBtn.style.cssText = `
             background: #4a7c59;
             border: 1px solid #5a8c69;
@@ -21952,7 +21912,7 @@ ${starCSS}
             padding-bottom: 10px;
         `;
             header.innerHTML = `
-            <h3 style="margin: 0; color: #e0e0e0;">${t('Custom Price Overrides')}</h3>
+            <h3 style="margin: 0; color: #e0e0e0;">${i18n_js.t('Custom Price Overrides')}</h3>
             <button class="toolasha-cpo-close-btn" style="
                 background: none;
                 border: none;
@@ -21972,7 +21932,7 @@ ${starCSS}
             margin-bottom: 16px;
             line-height: 1.4;
         `;
-            helpText.textContent = t(
+            helpText.textContent = i18n_js.t(
                 'Set custom buy/sell prices for items. Leave a field blank to use the marketplace price. Overridden prices show * in profit displays.'
             );
 
@@ -21992,11 +21952,11 @@ ${starCSS}
 
             const searchLabel = document.createElement('div');
             searchLabel.style.cssText = 'font-size: 11px; color: #888; margin-bottom: 4px;';
-            searchLabel.textContent = t('Item');
+            searchLabel.textContent = i18n_js.t('Item');
 
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = t('Search items...');
+            searchInput.placeholder = i18n_js.t('Search items...');
             searchInput.style.cssText = `
             width: 100%;
             padding: 6px 10px;
@@ -22031,7 +21991,7 @@ ${starCSS}
             const enhWrapper = document.createElement('div');
             const enhLabel = document.createElement('div');
             enhLabel.style.cssText = 'font-size: 11px; color: #888; margin-bottom: 4px;';
-            enhLabel.textContent = t('Enh');
+            enhLabel.textContent = i18n_js.t('Enh');
 
             const enhInput = document.createElement('input');
             enhInput.type = 'number';
@@ -22155,7 +22115,7 @@ ${starCSS}
                 if (entries.length === 0) {
                     const empty = document.createElement('div');
                     empty.style.cssText = 'padding: 20px; text-align: center; color: #666; font-size: 13px;';
-                    empty.textContent = t('No custom price overrides. Use the search bar above to add items.');
+                    empty.textContent = i18n_js.t('No custom price overrides. Use the search bar above to add items.');
                     tableContainer.appendChild(empty);
                     return;
                 }
@@ -22173,9 +22133,9 @@ ${starCSS}
                 gap: 8px;
             `;
                 headerRow.innerHTML = `
-                <div style="flex: 1;">${t('Item')}</div>
-                <div style="width: 80px; text-align: center;">${t('Buy Price')}</div>
-                <div style="width: 80px; text-align: center;">${t('Sell Price')}</div>
+                <div style="flex: 1;">${i18n_js.t('Item')}</div>
+                <div style="width: 80px; text-align: center;">${i18n_js.t('Buy Price')}</div>
+                <div style="width: 80px; text-align: center;">${i18n_js.t('Sell Price')}</div>
                 <div style="width: 28px;"></div>
             `;
                 tableContainer.appendChild(headerRow);
@@ -22339,7 +22299,7 @@ ${starCSS}
 
             const clearAllBtn = document.createElement('button');
             clearAllBtn.type = 'button';
-            clearAllBtn.textContent = t('Clear All');
+            clearAllBtn.textContent = i18n_js.t('Clear All');
             clearAllBtn.style.cssText = `
             background: #6b3a3a;
             border: 1px solid #8b5a5a;
@@ -22351,7 +22311,7 @@ ${starCSS}
         `;
             clearAllBtn.addEventListener('click', () => {
                 if (Object.keys(workingOverrides).length === 0) return;
-                if (!confirm(t('Remove all custom price overrides?'))) return;
+                if (!confirm(i18n_js.t('Remove all custom price overrides?'))) return;
                 for (const key of Object.keys(workingOverrides)) {
                     delete workingOverrides[key];
                 }
@@ -22363,7 +22323,7 @@ ${starCSS}
 
             const cancelBtn = document.createElement('button');
             cancelBtn.type = 'button';
-            cancelBtn.textContent = t('Cancel');
+            cancelBtn.textContent = i18n_js.t('Cancel');
             cancelBtn.style.cssText = `
             background: #2a2a2a;
             border: 1px solid #4a4a4a;
@@ -22377,7 +22337,7 @@ ${starCSS}
 
             const saveBtn = document.createElement('button');
             saveBtn.type = 'button';
-            saveBtn.textContent = t('Save');
+            saveBtn.textContent = i18n_js.t('Save');
             saveBtn.style.cssText = `
             background: #4a7c59;
             border: 1px solid #5a8c69;
@@ -22414,7 +22374,7 @@ ${starCSS}
                 const btn = document.querySelector('.toolasha-custom-price-edit-btn');
                 if (btn) {
                     const count = Object.keys(workingOverrides).length;
-                    btn.textContent = `${t('Manage Overrides')}${count > 0 ? ` (${count})` : ''}`;
+                    btn.textContent = `${i18n_js.t('Manage Overrides')}${count > 0 ? ` (${count})` : ''}`;
                 }
 
                 overlay.remove();
@@ -22508,7 +22468,7 @@ ${starCSS}
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.textContent = '×';
-            deleteBtn.title = t('Remove');
+            deleteBtn.title = i18n_js.t('Remove');
             deleteBtn.style.cssText = `
             background: #8b0000;
             border: 1px solid #a00000;
@@ -22605,13 +22565,13 @@ ${starCSS}
 
             const title = document.createElement('div');
             title.style.cssText = `font-weight: 700; font-size: 14px; color: ${enabled ? '#d4900a' : '#c0c0c0'};`;
-            title.textContent = t('Iron Cow Mode');
+            title.textContent = i18n_js.t('Iron Cow Mode');
 
             const desc = document.createElement('div');
             desc.style.cssText = 'font-size: 12px; color: #888; margin-top: 2px;';
             desc.innerHTML = enabled
-                ? t('Disable all market &amp; profit features. ACTIVE — market features locked.')
-                : t('Disable all market &amp; profit features for a no-marketplace playthrough.');
+                ? i18n_js.t('Disable all market &amp; profit features. ACTIVE — market features locked.')
+                : i18n_js.t('Disable all market &amp; profit features for a no-marketplace playthrough.');
 
             textBlock.appendChild(title);
             textBlock.appendChild(desc);
@@ -22664,8 +22624,8 @@ ${starCSS}
             const desc = wrapper.querySelector('div > div:last-child');
             if (desc) {
                 desc.innerHTML = enabled
-                    ? t('Disable all market &amp; profit features. ACTIVE — market features locked.')
-                    : t('Disable all market &amp; profit features for a no-marketplace playthrough.');
+                    ? i18n_js.t('Disable all market &amp; profit features. ACTIVE — market features locked.')
+                    : i18n_js.t('Disable all market &amp; profit features for a no-marketplace playthrough.');
             }
         }
 
@@ -23019,7 +22979,7 @@ ${starCSS}
             if (!actionInfo) return;
 
             const btn = document.createElement('button');
-            btn.textContent = t('View Action');
+            btn.textContent = i18n_js.t('View Action');
 
             // Copy class from existing popup button for visual consistency
             const existingBtn = actionMenu.querySelector('button');
@@ -23068,7 +23028,7 @@ ${starCSS}
             // Create the action button
             const actionButton = document.createElement('button');
             actionButton.className = 'mwi-view-action-button';
-            actionButton.textContent = t('View Action');
+            actionButton.textContent = i18n_js.t('View Action');
             actionButton.style.cssText = `
             background: #2a2a2a;
             color: #ffffff;
@@ -23735,10 +23695,10 @@ ${starCSS}
                     // Replace first text node (the label) while keeping badge span
                     const badgeSpan = badge.querySelector('.MuiBadge-badge');
                     badge.textContent = '';
-                    badge.appendChild(document.createTextNode(t('Transmute History')));
+                    badge.appendChild(document.createTextNode(i18n_js.t('Transmute History')));
                     if (badgeSpan) badge.appendChild(badgeSpan);
                 } else {
-                    tab.textContent = t('Transmute History');
+                    tab.textContent = i18n_js.t('Transmute History');
                 }
 
                 tab.addEventListener('click', (e) => {
@@ -23838,7 +23798,7 @@ ${starCSS}
         `;
 
             const title = document.createElement('h2');
-            title.textContent = t('Transmute History');
+            title.textContent = i18n_js.t('Transmute History');
             title.style.cssText = 'margin: 0; color: #fff;';
 
             const closeBtn = document.createElement('button');
@@ -24022,11 +23982,11 @@ ${starCSS}
             headerRow.style.background = '#1a1a1a';
 
             const columns = [
-                { key: 'startTime', label: t('Session Start'), filterable: true },
-                { key: 'inputItemHrid', label: t('Input Item'), filterable: true },
-                { key: 'totalAttempts', label: t('Attempts'), filterable: false },
-                { key: 'totalSuccesses', label: t('Successes'), filterable: false },
-                { key: 'results', label: t('Results'), filterable: true },
+                { key: 'startTime', label: i18n_js.t('Session Start'), filterable: true },
+                { key: 'inputItemHrid', label: i18n_js.t('Input Item'), filterable: true },
+                { key: 'totalAttempts', label: i18n_js.t('Attempts'), filterable: false },
+                { key: 'totalSuccesses', label: i18n_js.t('Successes'), filterable: false },
+                { key: 'results', label: i18n_js.t('Results'), filterable: true },
                 { key: '_delete', label: '', filterable: false },
             ];
 
@@ -24103,8 +24063,8 @@ ${starCSS}
                 cell.colSpan = columns.length;
                 cell.textContent =
                     this.sessions.length === 0
-                        ? t('No transmute history recorded yet.')
-                        : t('No sessions match the current filters.');
+                        ? i18n_js.t('No transmute history recorded yet.')
+                        : i18n_js.t('No sessions match the current filters.');
                 cell.style.cssText = 'padding: 20px; text-align: center; color: #888;';
                 row.appendChild(cell);
                 tbody.appendChild(row);
@@ -24140,7 +24100,7 @@ ${starCSS}
                     // Successes
                     const successCell = document.createElement('td');
                     const failures = session.totalAttempts - session.totalSuccesses;
-                    successCell.textContent = t('{0} ({1} failed)', session.totalSuccesses, failures);
+                    successCell.textContent = i18n_js.t('{0} ({1} failed)', session.totalSuccesses, failures);
                     successCell.style.cssText = `
                     padding: 6px 10px;
                     color: ${failures > 0 ? '#fbbf24' : '#4ade80'};
@@ -24158,7 +24118,7 @@ ${starCSS}
                     deleteCell.style.cssText = 'padding: 6px 4px; text-align: center;';
                     const deleteBtn = document.createElement('button');
                     deleteBtn.textContent = '✕';
-                    deleteBtn.title = t('Delete this session');
+                    deleteBtn.title = i18n_js.t('Delete this session');
                     deleteBtn.style.cssText = `
                     background: none; border: none; color: #dc2626;
                     cursor: pointer; font-size: 14px; padding: 2px 6px;
@@ -24219,12 +24179,12 @@ ${starCSS}
                 const name = this.getItemName(itemHrid);
 
                 if (result.isSelfReturn) {
-                    text.textContent = t('{0} x{1} (self-return)', name, result.count);
+                    text.textContent = i18n_js.t('{0} x{1} (self-return)', name, result.count);
                     text.style.color = '#888';
                 } else {
                     const total = formatters_js.formatKMB(result.totalValue || 0, 1);
                     const each = formatters_js.formatKMB(result.priceEach || 0, 1);
-                    text.textContent = t('{0} x{1} = {2} ({3} each)', name, result.count, total, each);
+                    text.textContent = i18n_js.t('{0} x{1} = {2} ({3} each)', name, result.count, total, each);
                 }
 
                 line.appendChild(text);
@@ -24242,7 +24202,7 @@ ${starCSS}
             // Stats
             const stats = document.createElement('span');
             stats.style.cssText = 'color: #aaa; font-size: 14px;';
-            stats.textContent = t('{0} sessions', this.filteredSessions.length);
+            stats.textContent = i18n_js.t('{0} sessions', this.filteredSessions.length);
             controls.appendChild(stats);
 
             const rightGroup = document.createElement('div');
@@ -24251,7 +24211,7 @@ ${starCSS}
             // Clear All Filters button (only when filters active)
             if (this.hasAnyFilter()) {
                 const clearFiltersBtn = document.createElement('button');
-                clearFiltersBtn.textContent = t('Clear All Filters');
+                clearFiltersBtn.textContent = i18n_js.t('Clear All Filters');
                 clearFiltersBtn.style.cssText = `
                 padding: 6px 12px; background: #e67e22; color: white;
                 border: none; border-radius: 4px; cursor: pointer;
@@ -24262,7 +24222,7 @@ ${starCSS}
 
             // Export button
             const exportBtn = document.createElement('button');
-            exportBtn.textContent = t('Export');
+            exportBtn.textContent = i18n_js.t('Export');
             exportBtn.style.cssText = `
             padding: 6px 12px; background: #2563eb; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -24272,7 +24232,7 @@ ${starCSS}
 
             // Clear History button
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = t('Clear History');
+            clearBtn.textContent = i18n_js.t('Clear History');
             clearBtn.style.cssText = `
             padding: 6px 12px; background: #dc2626; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -24297,7 +24257,7 @@ ${starCSS}
                 if (this.filters.dateFrom) parts.push(this.filters.dateFrom.toLocaleDateString());
                 if (this.filters.dateTo) parts.push(this.filters.dateTo.toLocaleDateString());
                 badges.push({
-                    label: t('Date: {0}', parts.join(' - ')),
+                    label: i18n_js.t('Date: {0}', parts.join(' - ')),
                     onRemove: () => {
                         this.filters.dateFrom = null;
                         this.filters.dateTo = null;
@@ -24311,9 +24271,9 @@ ${starCSS}
                 const label =
                     this.filters.selectedInputItems.length === 1
                         ? this.getItemName(this.filters.selectedInputItems[0])
-                        : t('{0} input items', this.filters.selectedInputItems.length);
+                        : i18n_js.t('{0} input items', this.filters.selectedInputItems.length);
                 badges.push({
-                    label: t('Input: {0}', label),
+                    label: i18n_js.t('Input: {0}', label),
                     icon: this.filters.selectedInputItems[0],
                     onRemove: () => {
                         this.filters.selectedInputItems = [];
@@ -24325,7 +24285,7 @@ ${starCSS}
 
             if (this.filters.resultsSearch.trim()) {
                 badges.push({
-                    label: t('Results: "{0}"', this.filters.resultsSearch.trim()),
+                    label: i18n_js.t('Results: "{0}"', this.filters.resultsSearch.trim()),
                     onRemove: () => {
                         this.filters.resultsSearch = '';
                         this.applyFilters();
@@ -24375,7 +24335,7 @@ ${starCSS}
             leftSide.style.cssText = 'display: flex; gap: 8px; align-items: center; color: #aaa;';
 
             const label = document.createElement('span');
-            label.textContent = t('Rows per page:');
+            label.textContent = i18n_js.t('Rows per page:');
 
             const rowsInput = document.createElement('input');
             rowsInput.type = 'number';
@@ -24411,7 +24371,7 @@ ${starCSS}
             });
 
             showAllLabel.appendChild(showAllCheckbox);
-            showAllLabel.appendChild(document.createTextNode(t('Show All')));
+            showAllLabel.appendChild(document.createTextNode(i18n_js.t('Show All')));
 
             leftSide.appendChild(label);
             leftSide.appendChild(rowsInput);
@@ -24441,7 +24401,7 @@ ${starCSS}
                 });
 
                 const pageInfo = document.createElement('span');
-                pageInfo.textContent = t('Page {0} of {1}', this.currentPage, totalPages || 1);
+                pageInfo.textContent = i18n_js.t('Page {0} of {1}', this.currentPage, totalPages || 1);
 
                 const nextBtn = document.createElement('button');
                 nextBtn.textContent = '▶';
@@ -24465,7 +24425,7 @@ ${starCSS}
                 rightSide.appendChild(nextBtn);
             } else {
                 const info = document.createElement('span');
-                info.textContent = t('Showing all {0} sessions', this.filteredSessions.length);
+                info.textContent = i18n_js.t('Showing all {0} sessions', this.filteredSessions.length);
                 rightSide.appendChild(info);
             }
 
@@ -24544,7 +24504,7 @@ ${starCSS}
          * @returns {HTMLElement}
          */
         createDateFilterPopup() {
-            const popup = this.createPopupBase(t('Filter by Date'));
+            const popup = this.createPopupBase(i18n_js.t('Filter by Date'));
 
             // Compute available range
             if (!this.cachedDateRange) {
@@ -24567,7 +24527,7 @@ ${starCSS}
                 color: #aaa; font-size: 11px; margin-bottom: 10px;
                 padding: 6px; background: #1a1a1a; border-radius: 3px;
             `;
-                rangeInfo.textContent = t(
+                rangeInfo.textContent = i18n_js.t(
                     'Available: {0} - {1}',
                     minDate.toLocaleDateString(),
                     maxDate.toLocaleDateString()
@@ -24576,13 +24536,13 @@ ${starCSS}
             }
 
             const fromInput = this.createDateInput(
-                t('From:'),
+                i18n_js.t('From:'),
                 this.filters.dateFrom ? this.filters.dateFrom.toISOString().split('T')[0] : '',
                 minDate,
                 maxDate
             );
             const toInput = this.createDateInput(
-                t('To:'),
+                i18n_js.t('To:'),
                 this.filters.dateTo ? this.filters.dateTo.toISOString().split('T')[0] : '',
                 minDate,
                 maxDate
@@ -24619,7 +24579,7 @@ ${starCSS}
          * @returns {HTMLElement}
          */
         createInputItemFilterPopup() {
-            const popup = this.createPopupBase(t('Filter by Input Item'));
+            const popup = this.createPopupBase(i18n_js.t('Filter by Input Item'));
             popup.style.minWidth = '220px';
 
             // Gather unique input items from all sessions
@@ -24637,7 +24597,7 @@ ${starCSS}
             // Search box
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = t('Search items...');
+            searchInput.placeholder = i18n_js.t('Search items...');
             searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 8px;
             background: #1a1a1a; border: 1px solid #555;
@@ -24709,12 +24669,12 @@ ${starCSS}
          * @returns {HTMLElement}
          */
         createResultsFilterPopup() {
-            const popup = this.createPopupBase(t('Filter by Result Item'));
+            const popup = this.createPopupBase(i18n_js.t('Filter by Result Item'));
             popup.style.minWidth = '220px';
 
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = t('Item name...');
+            searchInput.placeholder = i18n_js.t('Item name...');
             searchInput.value = this.filters.resultsSearch;
             searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 10px;
@@ -24803,7 +24763,7 @@ ${starCSS}
             row.style.cssText = 'display: flex; gap: 8px; margin-top: 10px;';
 
             const applyBtn = document.createElement('button');
-            applyBtn.textContent = t('Apply');
+            applyBtn.textContent = i18n_js.t('Apply');
             applyBtn.style.cssText = `
             flex: 1; padding: 6px; background: #4a90e2; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -24811,7 +24771,7 @@ ${starCSS}
             applyBtn.addEventListener('click', onApply);
 
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = t('Clear');
+            clearBtn.textContent = i18n_js.t('Clear');
             clearBtn.style.cssText = `
             flex: 1; padding: 6px; background: #666; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -24963,7 +24923,7 @@ ${starCSS}
          */
         async clearHistory() {
             const confirmed = confirm(
-                t(
+                i18n_js.t(
                     '⚠️ This will permanently delete ALL transmute history ({0} sessions).\nThis cannot be undone.\n\nAre you sure?',
                     this.sessions.length
                 )
@@ -24974,12 +24934,12 @@ ${starCSS}
                 await transmuteHistoryTracker.clearHistory();
                 this.sessions = [];
                 this.filteredSessions = [];
-                alert(t('Transmute history cleared.'));
+                alert(i18n_js.t('Transmute history cleared.'));
                 this.applyFilters();
                 this.renderTable();
             } catch (error) {
                 console.error('[TransmuteHistoryViewer] Failed to clear history:', error);
-                alert(t('Failed to clear history: {0}', error.message));
+                alert(i18n_js.t('Failed to clear history: {0}', error.message));
             }
         }
     }
@@ -25457,10 +25417,10 @@ ${starCSS}
                     // Replace first text node (the label) while keeping badge span
                     const badgeSpan = badge.querySelector('.MuiBadge-badge');
                     badge.textContent = '';
-                    badge.appendChild(document.createTextNode(t('Coinify History')));
+                    badge.appendChild(document.createTextNode(i18n_js.t('Coinify History')));
                     if (badgeSpan) badge.appendChild(badgeSpan);
                 } else {
-                    tab.textContent = t('Coinify History');
+                    tab.textContent = i18n_js.t('Coinify History');
                 }
 
                 tab.addEventListener('click', (e) => {
@@ -25560,7 +25520,7 @@ ${starCSS}
         `;
 
             const title = document.createElement('h2');
-            title.textContent = t('Coinify History');
+            title.textContent = i18n_js.t('Coinify History');
             title.style.cssText = 'margin: 0; color: #fff;';
 
             const closeBtn = document.createElement('button');
@@ -25726,15 +25686,15 @@ ${starCSS}
             headerRow.style.background = '#1a1a1a';
 
             const columns = [
-                { key: 'startTime', label: t('Session Start'), filterable: true },
-                { key: 'inputItemHrid', label: t('Input Item'), filterable: true },
-                { key: 'enhancementLevel', label: t('Enh. Level'), filterable: false },
-                { key: 'totalAttempts', label: t('Attempts'), filterable: false },
-                { key: 'totalSuccesses', label: t('Successes'), filterable: false },
-                { key: '_successRate', label: t('Success Rate'), filterable: false },
-                { key: 'totalCoinsEarned', label: t('Coins Earned'), filterable: false },
-                { key: '_catalystOfCoinification', label: t('Catalyst of Coinification'), filterable: false },
-                { key: '_primeCatalyst', label: t('Prime Catalyst'), filterable: false },
+                { key: 'startTime', label: i18n_js.t('Session Start'), filterable: true },
+                { key: 'inputItemHrid', label: i18n_js.t('Input Item'), filterable: true },
+                { key: 'enhancementLevel', label: i18n_js.t('Enh. Level'), filterable: false },
+                { key: 'totalAttempts', label: i18n_js.t('Attempts'), filterable: false },
+                { key: 'totalSuccesses', label: i18n_js.t('Successes'), filterable: false },
+                { key: '_successRate', label: i18n_js.t('Success Rate'), filterable: false },
+                { key: 'totalCoinsEarned', label: i18n_js.t('Coins Earned'), filterable: false },
+                { key: '_catalystOfCoinification', label: i18n_js.t('Catalyst of Coinification'), filterable: false },
+                { key: '_primeCatalyst', label: i18n_js.t('Prime Catalyst'), filterable: false },
                 { key: '_delete', label: '', filterable: false },
             ];
 
@@ -25821,8 +25781,8 @@ ${starCSS}
                 cell.colSpan = columns.length;
                 cell.textContent =
                     this.sessions.length === 0
-                        ? t('No coinify history recorded yet.')
-                        : t('No sessions match the current filters.');
+                        ? i18n_js.t('No coinify history recorded yet.')
+                        : i18n_js.t('No sessions match the current filters.');
                 cell.style.cssText = 'padding: 20px; text-align: center; color: #888;';
                 row.appendChild(cell);
                 tbody.appendChild(row);
@@ -25864,7 +25824,7 @@ ${starCSS}
                     // Successes
                     const successCell = document.createElement('td');
                     const failures = session.totalAttempts - session.totalSuccesses;
-                    successCell.textContent = t('{0} ({1} failed)', session.totalSuccesses, failures);
+                    successCell.textContent = i18n_js.t('{0} ({1} failed)', session.totalSuccesses, failures);
                     successCell.style.cssText = `
                     padding: 6px 10px;
                     color: ${failures > 0 ? '#fbbf24' : '#4ade80'};
@@ -25908,7 +25868,7 @@ ${starCSS}
                     deleteCell.style.cssText = 'padding: 6px 4px; text-align: center;';
                     const deleteBtn = document.createElement('button');
                     deleteBtn.textContent = '✕';
-                    deleteBtn.title = t('Delete this session');
+                    deleteBtn.title = i18n_js.t('Delete this session');
                     deleteBtn.style.cssText = `
                     background: none; border: none; color: #dc2626;
                     cursor: pointer; font-size: 14px; padding: 2px 6px;
@@ -25970,7 +25930,7 @@ ${starCSS}
             // Stats
             const stats = document.createElement('span');
             stats.style.cssText = 'color: #aaa; font-size: 14px;';
-            stats.textContent = t('{0} sessions', this.filteredSessions.length);
+            stats.textContent = i18n_js.t('{0} sessions', this.filteredSessions.length);
             controls.appendChild(stats);
 
             const rightGroup = document.createElement('div');
@@ -25979,7 +25939,7 @@ ${starCSS}
             // Clear All Filters button (only when filters active)
             if (this.hasAnyFilter()) {
                 const clearFiltersBtn = document.createElement('button');
-                clearFiltersBtn.textContent = t('Clear All Filters');
+                clearFiltersBtn.textContent = i18n_js.t('Clear All Filters');
                 clearFiltersBtn.style.cssText = `
                 padding: 6px 12px; background: #e67e22; color: white;
                 border: none; border-radius: 4px; cursor: pointer;
@@ -25990,7 +25950,7 @@ ${starCSS}
 
             // Export button
             const exportBtn = document.createElement('button');
-            exportBtn.textContent = t('Export');
+            exportBtn.textContent = i18n_js.t('Export');
             exportBtn.style.cssText = `
             padding: 6px 12px; background: #2563eb; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -26000,7 +25960,7 @@ ${starCSS}
 
             // Clear History button
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = t('Clear History');
+            clearBtn.textContent = i18n_js.t('Clear History');
             clearBtn.style.cssText = `
             padding: 6px 12px; background: #dc2626; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -26025,7 +25985,7 @@ ${starCSS}
                 if (this.filters.dateFrom) parts.push(this.filters.dateFrom.toLocaleDateString());
                 if (this.filters.dateTo) parts.push(this.filters.dateTo.toLocaleDateString());
                 badges.push({
-                    label: t('Date: {0}', parts.join(' - ')),
+                    label: i18n_js.t('Date: {0}', parts.join(' - ')),
                     onRemove: () => {
                         this.filters.dateFrom = null;
                         this.filters.dateTo = null;
@@ -26039,9 +25999,9 @@ ${starCSS}
                 const label =
                     this.filters.selectedInputItems.length === 1
                         ? this.getItemName(this.filters.selectedInputItems[0])
-                        : t('{0} input items', this.filters.selectedInputItems.length);
+                        : i18n_js.t('{0} input items', this.filters.selectedInputItems.length);
                 badges.push({
-                    label: t('Input: {0}', label),
+                    label: i18n_js.t('Input: {0}', label),
                     icon: this.filters.selectedInputItems[0],
                     onRemove: () => {
                         this.filters.selectedInputItems = [];
@@ -26092,7 +26052,7 @@ ${starCSS}
             leftSide.style.cssText = 'display: flex; gap: 8px; align-items: center; color: #aaa;';
 
             const label = document.createElement('span');
-            label.textContent = t('Rows per page:');
+            label.textContent = i18n_js.t('Rows per page:');
 
             const rowsInput = document.createElement('input');
             rowsInput.type = 'number';
@@ -26128,7 +26088,7 @@ ${starCSS}
             });
 
             showAllLabel.appendChild(showAllCheckbox);
-            showAllLabel.appendChild(document.createTextNode(t('Show All')));
+            showAllLabel.appendChild(document.createTextNode(i18n_js.t('Show All')));
 
             leftSide.appendChild(label);
             leftSide.appendChild(rowsInput);
@@ -26158,7 +26118,7 @@ ${starCSS}
                 });
 
                 const pageInfo = document.createElement('span');
-                pageInfo.textContent = t('Page {0} of {1}', this.currentPage, totalPages || 1);
+                pageInfo.textContent = i18n_js.t('Page {0} of {1}', this.currentPage, totalPages || 1);
 
                 const nextBtn = document.createElement('button');
                 nextBtn.textContent = '▶';
@@ -26182,7 +26142,7 @@ ${starCSS}
                 rightSide.appendChild(nextBtn);
             } else {
                 const info = document.createElement('span');
-                info.textContent = t('Showing all {0} sessions', this.filteredSessions.length);
+                info.textContent = i18n_js.t('Showing all {0} sessions', this.filteredSessions.length);
                 rightSide.appendChild(info);
             }
 
@@ -26258,7 +26218,7 @@ ${starCSS}
          * @returns {HTMLElement}
          */
         createDateFilterPopup() {
-            const popup = this.createPopupBase(t('Filter by Date'));
+            const popup = this.createPopupBase(i18n_js.t('Filter by Date'));
 
             // Compute available range
             if (!this.cachedDateRange) {
@@ -26281,7 +26241,7 @@ ${starCSS}
                 color: #aaa; font-size: 11px; margin-bottom: 10px;
                 padding: 6px; background: #1a1a1a; border-radius: 3px;
             `;
-                rangeInfo.textContent = t(
+                rangeInfo.textContent = i18n_js.t(
                     'Available: {0} - {1}',
                     minDate.toLocaleDateString(),
                     maxDate.toLocaleDateString()
@@ -26290,13 +26250,13 @@ ${starCSS}
             }
 
             const fromInput = this.createDateInput(
-                t('From:'),
+                i18n_js.t('From:'),
                 this.filters.dateFrom ? this.filters.dateFrom.toISOString().split('T')[0] : '',
                 minDate,
                 maxDate
             );
             const toInput = this.createDateInput(
-                t('To:'),
+                i18n_js.t('To:'),
                 this.filters.dateTo ? this.filters.dateTo.toISOString().split('T')[0] : '',
                 minDate,
                 maxDate
@@ -26333,7 +26293,7 @@ ${starCSS}
          * @returns {HTMLElement}
          */
         createInputItemFilterPopup() {
-            const popup = this.createPopupBase(t('Filter by Input Item'));
+            const popup = this.createPopupBase(i18n_js.t('Filter by Input Item'));
             popup.style.minWidth = '220px';
 
             // Gather unique input items from all sessions
@@ -26351,7 +26311,7 @@ ${starCSS}
             // Search box
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = t('Search items...');
+            searchInput.placeholder = i18n_js.t('Search items...');
             searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 8px;
             background: #1a1a1a; border: 1px solid #555;
@@ -26478,7 +26438,7 @@ ${starCSS}
             row.style.cssText = 'display: flex; gap: 8px; margin-top: 10px;';
 
             const applyBtn = document.createElement('button');
-            applyBtn.textContent = t('Apply');
+            applyBtn.textContent = i18n_js.t('Apply');
             applyBtn.style.cssText = `
             flex: 1; padding: 6px; background: #4a90e2; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -26486,7 +26446,7 @@ ${starCSS}
             applyBtn.addEventListener('click', onApply);
 
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = t('Clear');
+            clearBtn.textContent = i18n_js.t('Clear');
             clearBtn.style.cssText = `
             flex: 1; padding: 6px; background: #666; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -26648,7 +26608,7 @@ ${starCSS}
          */
         async clearHistory() {
             const confirmed = confirm(
-                t(
+                i18n_js.t(
                     'This will permanently delete ALL coinify history ({0} sessions).\nThis cannot be undone.\n\nAre you sure?',
                     this.sessions.length
                 )
@@ -26659,12 +26619,12 @@ ${starCSS}
                 await coinifyHistoryTracker.clearHistory();
                 this.sessions = [];
                 this.filteredSessions = [];
-                alert(t('Coinify history cleared.'));
+                alert(i18n_js.t('Coinify history cleared.'));
                 this.applyFilters();
                 this.renderTable();
             } catch (error) {
                 console.error('[CoinifyHistoryViewer] Failed to clear history:', error);
-                alert(t('Failed to clear history: {0}', error.message));
+                alert(i18n_js.t('Failed to clear history: {0}', error.message));
             }
         }
     }
@@ -27192,10 +27152,10 @@ ${starCSS}
                     // Replace first text node (the label) while keeping badge span
                     const badgeSpan = badge.querySelector('.MuiBadge-badge');
                     badge.textContent = '';
-                    badge.appendChild(document.createTextNode(t('Decompose History')));
+                    badge.appendChild(document.createTextNode(i18n_js.t('Decompose History')));
                     if (badgeSpan) badge.appendChild(badgeSpan);
                 } else {
-                    tab.textContent = t('Decompose History');
+                    tab.textContent = i18n_js.t('Decompose History');
                 }
 
                 tab.addEventListener('click', (e) => {
@@ -27297,7 +27257,7 @@ ${starCSS}
         `;
 
             const title = document.createElement('h2');
-            title.textContent = t('Decompose History');
+            title.textContent = i18n_js.t('Decompose History');
             title.style.cssText = 'margin: 0; color: #fff;';
 
             const closeBtn = document.createElement('button');
@@ -27481,15 +27441,15 @@ ${starCSS}
             headerRow.style.background = '#1a1a1a';
 
             const columns = [
-                { key: 'startTime', label: t('Session Start'), filterable: true },
-                { key: 'inputItemHrid', label: t('Input Item'), filterable: true },
-                { key: 'enhancementLevel', label: t('Enh. Level'), filterable: false },
-                { key: 'totalAttempts', label: t('Attempts'), filterable: false },
-                { key: 'totalSuccesses', label: t('Successes'), filterable: false },
-                { key: '_successRate', label: t('Success Rate'), filterable: false },
-                { key: 'results', label: t('Results'), filterable: true },
-                { key: '_catalystOfDecomposition', label: t('Catalyst of Decomposition'), filterable: false },
-                { key: '_primeCatalyst', label: t('Prime Catalyst'), filterable: false },
+                { key: 'startTime', label: i18n_js.t('Session Start'), filterable: true },
+                { key: 'inputItemHrid', label: i18n_js.t('Input Item'), filterable: true },
+                { key: 'enhancementLevel', label: i18n_js.t('Enh. Level'), filterable: false },
+                { key: 'totalAttempts', label: i18n_js.t('Attempts'), filterable: false },
+                { key: 'totalSuccesses', label: i18n_js.t('Successes'), filterable: false },
+                { key: '_successRate', label: i18n_js.t('Success Rate'), filterable: false },
+                { key: 'results', label: i18n_js.t('Results'), filterable: true },
+                { key: '_catalystOfDecomposition', label: i18n_js.t('Catalyst of Decomposition'), filterable: false },
+                { key: '_primeCatalyst', label: i18n_js.t('Prime Catalyst'), filterable: false },
                 { key: '_delete', label: '', filterable: false },
             ];
 
@@ -27576,8 +27536,8 @@ ${starCSS}
                 cell.colSpan = columns.length;
                 cell.textContent =
                     this.sessions.length === 0
-                        ? t('No decompose history recorded yet.')
-                        : t('No sessions match the current filters.');
+                        ? i18n_js.t('No decompose history recorded yet.')
+                        : i18n_js.t('No sessions match the current filters.');
                 cell.style.cssText = 'padding: 20px; text-align: center; color: #888;';
                 row.appendChild(cell);
                 tbody.appendChild(row);
@@ -27619,7 +27579,7 @@ ${starCSS}
                     // Successes
                     const successCell = document.createElement('td');
                     const failures = session.totalAttempts - session.totalSuccesses;
-                    successCell.textContent = t('{0} ({1} failed)', session.totalSuccesses, failures);
+                    successCell.textContent = i18n_js.t('{0} ({1} failed)', session.totalSuccesses, failures);
                     successCell.style.cssText = `
                     padding: 6px 10px;
                     color: ${failures > 0 ? '#fbbf24' : '#4ade80'};
@@ -27663,7 +27623,7 @@ ${starCSS}
                     deleteCell.style.cssText = 'padding: 6px 4px; text-align: center;';
                     const deleteBtn = document.createElement('button');
                     deleteBtn.textContent = '\u2715';
-                    deleteBtn.title = t('Delete this session');
+                    deleteBtn.title = i18n_js.t('Delete this session');
                     deleteBtn.style.cssText = `
                     background: none; border: none; color: #dc2626;
                     cursor: pointer; font-size: 14px; padding: 2px 6px;
@@ -27719,7 +27679,7 @@ ${starCSS}
                 const name = this.getItemName(itemHrid);
                 const total = formatters_js.formatKMB(result.totalValue || 0, 1);
                 const each = formatters_js.formatKMB(result.priceEach || 0, 1);
-                text.textContent = t('{0} x{1} = {2} ({3} each)', name, result.count, total, each);
+                text.textContent = i18n_js.t('{0} x{1} = {2} ({3} each)', name, result.count, total, each);
 
                 line.appendChild(text);
                 cell.appendChild(line);
@@ -27762,7 +27722,7 @@ ${starCSS}
             // Stats
             const stats = document.createElement('span');
             stats.style.cssText = 'color: #aaa; font-size: 14px;';
-            stats.textContent = t('{0} sessions', this.filteredSessions.length);
+            stats.textContent = i18n_js.t('{0} sessions', this.filteredSessions.length);
             controls.appendChild(stats);
 
             const rightGroup = document.createElement('div');
@@ -27771,7 +27731,7 @@ ${starCSS}
             // Clear All Filters button (only when filters active)
             if (this.hasAnyFilter()) {
                 const clearFiltersBtn = document.createElement('button');
-                clearFiltersBtn.textContent = t('Clear All Filters');
+                clearFiltersBtn.textContent = i18n_js.t('Clear All Filters');
                 clearFiltersBtn.style.cssText = `
                 padding: 6px 12px; background: #e67e22; color: white;
                 border: none; border-radius: 4px; cursor: pointer;
@@ -27792,7 +27752,7 @@ ${starCSS}
 
             // Clear History button
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = t('Clear History');
+            clearBtn.textContent = i18n_js.t('Clear History');
             clearBtn.style.cssText = `
             padding: 6px 12px; background: #dc2626; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -27895,7 +27855,7 @@ ${starCSS}
             leftSide.style.cssText = 'display: flex; gap: 8px; align-items: center; color: #aaa;';
 
             const label = document.createElement('span');
-            label.textContent = t('Rows per page:');
+            label.textContent = i18n_js.t('Rows per page:');
 
             const rowsInput = document.createElement('input');
             rowsInput.type = 'number';
@@ -28153,7 +28113,7 @@ ${starCSS}
             // Search box
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = t('Search items...');
+            searchInput.placeholder = i18n_js.t('Search items...');
             searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 8px;
             background: #1a1a1a; border: 1px solid #555;
@@ -28230,7 +28190,7 @@ ${starCSS}
 
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = t('Item name...');
+            searchInput.placeholder = i18n_js.t('Item name...');
             searchInput.value = this.filters.resultsSearch;
             searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 10px;
@@ -28319,7 +28279,7 @@ ${starCSS}
             row.style.cssText = 'display: flex; gap: 8px; margin-top: 10px;';
 
             const applyBtn = document.createElement('button');
-            applyBtn.textContent = t('Apply');
+            applyBtn.textContent = i18n_js.t('Apply');
             applyBtn.style.cssText = `
             flex: 1; padding: 6px; background: #4a90e2; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -29006,7 +28966,7 @@ ${starCSS}
                 alchemyPanel.dataset.mwiAlchemyLocked = '1';
 
                 const categoryName = this._getCategoryDisplayName(categoryHrid);
-                this._showWarning(alchemyPanel, t('Protected category ({0})! Unlocks in 3s...', categoryName));
+                this._showWarning(alchemyPanel, i18n_js.t('Protected category ({0})! Unlocks in 3s...', categoryName));
 
                 if (this.lockdownTimer) clearTimeout(this.lockdownTimer);
                 if (this.confirmTimer) clearTimeout(this.confirmTimer);
@@ -29014,7 +28974,7 @@ ${starCSS}
                 this.lockdownTimer = setTimeout(() => {
                     alchemyPanel.dataset.mwiAlchemyLocked = '';
                     alchemyPanel.dataset.mwiAlchemyConfirmed = '1';
-                    this._showWarning(alchemyPanel, t('Click again to confirm.'));
+                    this._showWarning(alchemyPanel, i18n_js.t('Click again to confirm.'));
 
                     this.confirmTimer = setTimeout(() => {
                         alchemyPanel.dataset.mwiAlchemyConfirmed = '';
@@ -29074,7 +29034,7 @@ ${starCSS}
             pinIcon.innerHTML = '\u{1F4CC}';
             pinIcon.style.cssText =
                 'cursor:pointer; font-size:16px; transition:all 0.2s; text-align:center; filter: grayscale(100%) brightness(0.7); display:none;';
-            pinIcon.title = t('Pin this action');
+            pinIcon.title = i18n_js.t('Pin this action');
 
             const updatePinIcon = () => {
                 const alchemyType = this._getAlchemyType();
@@ -29089,11 +29049,11 @@ ${starCSS}
                 if (isPinned) {
                     pinIcon.style.filter = 'grayscale(0%) brightness(1.2) drop-shadow(0 0 3px rgba(255, 100, 0, 0.8))';
                     pinIcon.style.transform = 'scale(1.1)';
-                    pinIcon.title = t('Unpin this action');
+                    pinIcon.title = i18n_js.t('Unpin this action');
                 } else {
                     pinIcon.style.filter = 'grayscale(100%) brightness(0.7)';
                     pinIcon.style.transform = 'scale(1)';
-                    pinIcon.title = t('Pin this action');
+                    pinIcon.title = i18n_js.t('Pin this action');
                 }
             };
 
@@ -29290,7 +29250,7 @@ ${starCSS}
             }
 
             const color = hasEnough ? '#4caf50' : '#ff6b6b';
-            const text = t('Gold for {0}: {1} / {2}', label, formatters_js.formatLargeNumber(goldNeeded), formatters_js.formatLargeNumber(goldBalance));
+            const text = i18n_js.t('Gold for {0}: {1} / {2}', label, formatters_js.formatLargeNumber(goldNeeded), formatters_js.formatLargeNumber(goldBalance));
             if (summaryDiv.textContent === text && summaryDiv.style.display === 'block') return;
             summaryDiv.style.display = 'block';
             summaryDiv.style.color = color;
@@ -29361,7 +29321,7 @@ ${starCSS}
 
             const header = document.createElement('div');
             header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;';
-            header.innerHTML = `<h3 style="margin:0; font-size:16px; color:#eee;">${t('Alchemy Action Protection')}</h3>`;
+            header.innerHTML = `<h3 style="margin:0; font-size:16px; color:#eee;">${i18n_js.t('Alchemy Action Protection')}</h3>`;
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '\u2715';
@@ -29373,7 +29333,7 @@ ${starCSS}
 
             const desc = document.createElement('p');
             desc.style.cssText = 'color:#999; margin:0 0 10px 0; font-size:12px;';
-            desc.textContent = t(
+            desc.textContent = i18n_js.t(
                 'Select which item categories to protect from each alchemy action. Protected items require a 3-second confirmation before the action proceeds.'
             );
             popup.appendChild(desc);
@@ -29511,7 +29471,7 @@ ${starCSS}
     const alchemyActionProtection = new AlchemyActionProtection();
 
     var alchemyActionProtection$1 = {
-        name: t('Alchemy Action Protection'),
+        name: i18n_js.t('Alchemy Action Protection'),
         initialize: async () => {
             await alchemyActionProtection.initialize();
         },
@@ -30952,7 +30912,7 @@ ${starCSS}
             titleContainer.style.textOverflow = 'ellipsis';
 
             const title = document.createElement('span');
-            title.textContent = t('Enhancement Tracker');
+            title.textContent = i18n_js.t('Enhancement Tracker');
             title.style.fontWeight = 'bold';
 
             const sessionCounter = document.createElement('span');
@@ -31033,7 +30993,7 @@ ${starCSS}
         createClearButton() {
             const button = document.createElement('button');
             button.innerHTML = '🗑️';
-            button.title = t('Clear all sessions');
+            button.title = i18n_js.t('Clear all sessions');
             Object.assign(button.style, {
                 background: 'none',
                 border: 'none',
@@ -31056,7 +31016,7 @@ ${starCSS}
             });
             button.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (confirm(t('Clear all enhancement sessions?'))) {
+                if (confirm(i18n_js.t('Clear all enhancement sessions?'))) {
                     this.clearAllSessions();
                 }
             });
@@ -31071,7 +31031,7 @@ ${starCSS}
             const button = document.createElement('button');
             button.id = 'enhancementCollapseButton';
             button.innerHTML = '▼';
-            button.title = t('Collapse panel');
+            button.title = i18n_js.t('Collapse panel');
             Object.assign(button.style, {
                 background: 'none',
                 border: 'none',
@@ -31166,7 +31126,7 @@ ${starCSS}
                 content.style.opacity = '0';
                 content.style.padding = '0 15px';
                 button.innerHTML = '▶';
-                button.title = t('Expand panel');
+                button.title = i18n_js.t('Expand panel');
                 this.floatingUI.style.width = '250px';
 
                 // Show compact summary after content fades
@@ -31181,7 +31141,7 @@ ${starCSS}
                 content.style.opacity = '1';
                 content.style.padding = '15px';
                 button.innerHTML = '▼';
-                button.title = t('Collapse panel');
+                button.title = i18n_js.t('Collapse panel');
                 this.floatingUI.style.width = '350px';
             }
         }
@@ -31309,13 +31269,13 @@ ${starCSS}
                 content.innerHTML = `
                 <div style="text-align: center; padding: 40px 20px; color: ${STYLE.colors.textSecondary};">
                     <div style="font-size: 32px; margin-bottom: 10px;">✧</div>
-                    <div style="font-size: 14px;">${t('Begin enhancing to populate data')}</div>
+                    <div style="font-size: 14px;">${i18n_js.t('Begin enhancing to populate data')}</div>
                 </div>
             `;
                 return;
             }
             if (!session) {
-                content.innerHTML = `<div style="text-align: center; color: ${STYLE.colors.danger};">${t('Invalid session')}</div>`;
+                content.innerHTML = `<div style="text-align: center; color: ${STYLE.colors.danger};">${i18n_js.t('Invalid session')}</div>`;
                 return;
             }
 
@@ -31376,25 +31336,25 @@ ${starCSS}
 
             // Status display
             const statusColor = session.state === SessionState.COMPLETED ? STYLE.colors.success : STYLE.colors.accent;
-            const statusText = session.state === SessionState.COMPLETED ? t('Completed') : t('In Progress');
+            const statusText = session.state === SessionState.COMPLETED ? i18n_js.t('Completed') : i18n_js.t('In Progress');
 
             // Build HTML
             let html = `
             <div style="margin-bottom: 10px; font-size: 13px;">
                 <div style="display: flex; justify-content: space-between;">
-                    <span>${t('Item')}:</span>
+                    <span>${i18n_js.t('Item')}:</span>
                     <strong>${itemName}</strong>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
-                    <span>${t('Target')}:</span>
+                    <span>${i18n_js.t('Target')}:</span>
                     <span>+${session.targetLevel}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
-                    <span>${t('Prot')}:</span>
+                    <span>${i18n_js.t('Prot')}:</span>
                     <span>+${session.protectFrom}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; margin-top: 5px; color: ${statusColor};">
-                    <span>${t('Status')}:</span>
+                    <span>${i18n_js.t('Status')}:</span>
                     <strong>${statusText}</strong>
                 </div>
             </div>
@@ -31408,11 +31368,11 @@ ${starCSS}
             <div style="margin-top: 8px;">
                 <div style="display: flex; justify-content: space-between; font-size: 13px;">
                     <div>
-                        <span>${t('Total Attempts')}:</span>
+                        <span>${i18n_js.t('Total Attempts')}:</span>
                         <strong> ${totalAttempts}</strong>
                     </div>
                     <div>
-                        <span>${t('Prots Used')}:</span>
+                        <span>${i18n_js.t('Prots Used')}:</span>
                         <strong> ${session.protectionCount || 0}</strong>
                     </div>
                 </div>
@@ -31443,11 +31403,11 @@ ${starCSS}
                 html += `
             <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px;">
                 <div style="color: ${STYLE.colors.textSecondary};">
-                    <span>${t('Expected Attempts')}:</span>
+                    <span>${i18n_js.t('Expected Attempts')}:</span>
                     <span> ${expAtt}</span>
                 </div>
                 <div style="color: ${STYLE.colors.textSecondary};">
-                    <span>${t('Expected Prots')}:</span>
+                    <span>${i18n_js.t('Expected Prots')}:</span>
                     <span> ${expProt}</span>
                 </div>
             </div>`;
@@ -31456,11 +31416,11 @@ ${starCSS}
                     html += `
             <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px; color: ${STYLE.colors.textSecondary};">
                 <div>
-                    <span>${t('Attempt Factor')}:</span>
+                    <span>${i18n_js.t('Attempt Factor')}:</span>
                     <strong> ${attFactor ? attFactor + 'x' : '—'}</strong>
                 </div>
                 <div>
-                    <span>${t('Prot Factor')}:</span>
+                    <span>${i18n_js.t('Prot Factor')}:</span>
                     <strong> ${protFactor ? protFactor + 'x' : '—'}</strong>
                 </div>
             </div>`;
@@ -31469,18 +31429,18 @@ ${starCSS}
 
             html += `
             <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 13px;">
-                <span>${t('Total XP Gained')}:</span>
+                <span>${i18n_js.t('Total XP Gained')}:</span>
                 <strong>${this.formatNumber(session.totalXP)}</strong>
             </div>
 
             <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 13px;">
-                <span>${t('Session Duration')}:</span>
+                <span>${i18n_js.t('Session Duration')}:</span>
                 <strong>${durationText}</strong>
             </div>
 
             <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 13px;">
-                <span>${t('XP/Hour')}:</span>
-                <strong>${xpPerHour > 0 ? this.formatNumber(xpPerHour) : t('Calculating...')}</strong>
+                <span>${i18n_js.t('XP/Hour')}:</span>
+                <strong>${xpPerHour > 0 ? this.formatNumber(xpPerHour) : i18n_js.t('Calculating...')}</strong>
             </div>
         `;
 
@@ -31505,7 +31465,7 @@ ${starCSS}
             const levels = Array.from(levelSet).sort((a, b) => b - a);
 
             if (levels.length === 0) {
-                return `<div style="text-align: center; padding: 20px; color: ${STYLE.colors.textSecondary};">${t('No attempts recorded yet')}</div>`;
+                return `<div style="text-align: center; padding: 20px; color: ${STYLE.colors.textSecondary};">${i18n_js.t('No attempts recorded yet')}</div>`;
             }
 
             let rows = '';
@@ -31537,10 +31497,10 @@ ${starCSS}
             <table style="${compactTableStyle}">
                 <thead>
                     <tr>
-                        <th style="${compactHeaderStyle}">${t('Lvl')}</th>
-                        <th style="${compactHeaderStyle}">${t('Success')}</th>
-                        <th style="${compactHeaderStyle}">${t('Fail')}</th>
-                        <th style="${compactHeaderStyle}">${t('%')}</th>
+                        <th style="${compactHeaderStyle}">${i18n_js.t('Lvl')}</th>
+                        <th style="${compactHeaderStyle}">${i18n_js.t('Success')}</th>
+                        <th style="${compactHeaderStyle}">${i18n_js.t('Fail')}</th>
+                        <th style="${compactHeaderStyle}">${i18n_js.t('%')}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -31571,7 +31531,7 @@ ${starCSS}
             html += `
             <div style="display: flex; justify-content: space-between; cursor: pointer; font-weight: bold; padding: 5px 0;"
                  onclick="document.getElementById('${detailsId}').style.display = document.getElementById('${detailsId}').style.display === 'none' ? 'block' : 'none'">
-                <span>${t('Total Cost (click for details)')}</span>
+                <span>${i18n_js.t('Total Cost (click for details)')}</span>
                 <span style="color: ${STYLE.colors.gold};">${this.formatNumber(session.totalCost)}</span>
             </div>
         `;
@@ -31585,7 +31545,7 @@ ${starCSS}
                     '<div style="margin-bottom: 8px; padding: 5px; background: rgba(0, 255, 234, 0.05); border-radius: 4px;">';
                 html +=
                     '<div style="font-weight: bold; margin-bottom: 3px; color: ${STYLE.colors.textSecondary};">' +
-                    t('Materials') +
+                    i18n_js.t('Materials') +
                     ':</div>';
 
                 for (const [itemHrid, data] of Object.entries(session.materialCosts)) {
@@ -31606,7 +31566,7 @@ ${starCSS}
             if (hasCoins) {
                 html += `
                 <div style="display: flex; justify-content: space-between; margin-top: 2px; padding: 5px; background: rgba(0, 255, 234, 0.05); border-radius: 4px;">
-                    <span style="font-weight: bold; color: ${STYLE.colors.textSecondary};">${t('Coins')} (${session.coinCount || 0}×):</span>
+                    <span style="font-weight: bold; color: ${STYLE.colors.textSecondary};">${i18n_js.t('Coins')} (${session.coinCount || 0}×):</span>
                     <span style="color: ${STYLE.colors.gold};">${this.formatNumber(session.coinCost)}</span>
                 </div>
             `;
@@ -31615,8 +31575,8 @@ ${starCSS}
             // Protection costs
             if (hasProtection) {
                 const protectionItemName = session.protectionItemHrid
-                    ? itemNameTranslator.getDisplayName(session.protectionItemHrid) || t('Protection')
-                    : t('Protection');
+                    ? itemNameTranslator.getDisplayName(session.protectionItemHrid) || i18n_js.t('Protection')
+                    : i18n_js.t('Protection');
 
                 html += `
                 <div style="display: flex; justify-content: space-between; margin-top: 2px; padding: 5px; background: rgba(0, 255, 234, 0.05); border-radius: 4px;">
@@ -32563,7 +32523,7 @@ ${starCSS}
 
             const btn = document.createElement('button');
             btn.className = BTN_CLASS;
-            btn.textContent = t('XPH Calc');
+            btn.textContent = i18n_js.t('XPH Calc');
             btn.style.cssText = `
             background: linear-gradient(180deg, rgba(0,200,150,0.2) 0%, rgba(0,200,150,0.1) 100%);
             color: #e0e0e0;
@@ -32622,7 +32582,7 @@ ${starCSS}
             flex-shrink: 0;
         `;
             header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:#00c896;">${t('Enhancement XPH Calculator')}</span>
+            <span style="font-weight:700; font-size:14px; color:#00c896;">${i18n_js.t('Enhancement XPH Calculator')}</span>
             <button id="mwi-xph-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">×</button>
@@ -32647,9 +32607,9 @@ ${starCSS}
                 'width:46px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444; border-radius:4px; padding:3px 6px; font-size:12px; text-align:center;';
 
             controls.innerHTML = `
-            <label style="color:#888; font-size:12px;">${t('Max level')}</label>
+            <label style="color:#888; font-size:12px;">${i18n_js.t('Max level')}</label>
             <input id="mwi-xph-maxlevel" type="number" min="1" max="20" value="${defaultMax}" style="${inputStyle}">
-            <label style="color:#888; font-size:12px; margin-left:6px;">${t('Protect from')}</label>
+            <label style="color:#888; font-size:12px; margin-left:6px;">${i18n_js.t('Protect from')}</label>
             <input id="mwi-xph-protect" type="number" min="0" max="19" value="${defaultProtect}" style="${inputStyle}">
             <button id="mwi-xph-run" style="
                 margin-left: auto;
@@ -32660,7 +32620,7 @@ ${starCSS}
                 padding: 5px 14px;
                 font-size: 12px;
                 font-weight: 600;
-                cursor: pointer;">${t('Calculate')}</button>
+                cursor: pointer;">${i18n_js.t('Calculate')}</button>
         `;
 
             // Table container
@@ -32673,10 +32633,10 @@ ${starCSS}
             <table style="width:100%; border-collapse:collapse;">
                 <thead style="position:sticky; top:0; background:#0a0a14; z-index:1;">
                     <tr>
-                        <th id="mwi-xph-th-name" style="${thBase} text-align:left;">${t('# Item')}</th>
-                        <th id="mwi-xph-th-xph"  style="${thBase} text-align:right;">${t('XP/hr')} ▼</th>
-                        <th id="mwi-xph-th-gpx"  style="${thBase} text-align:right;">${t('Gold/XP')}</th>
-                        <th id="mwi-xph-th-cphr" style="${thBase} text-align:right;">${t('Cost/hr')}</th>
+                        <th id="mwi-xph-th-name" style="${thBase} text-align:left;">${i18n_js.t('# Item')}</th>
+                        <th id="mwi-xph-th-xph"  style="${thBase} text-align:right;">${i18n_js.t('XP/hr')} ▼</th>
+                        <th id="mwi-xph-th-gpx"  style="${thBase} text-align:right;">${i18n_js.t('Gold/XP')}</th>
+                        <th id="mwi-xph-th-cphr" style="${thBase} text-align:right;">${i18n_js.t('Cost/hr')}</th>
                     </tr>
                 </thead>
                 <tbody id="mwi-xph-tbody"></tbody>
@@ -32688,7 +32648,7 @@ ${starCSS}
             status.id = 'mwi-xph-status';
             status.style.cssText =
                 'padding:6px 14px; color:#555; font-size:11px; border-top:1px solid #1a1a1a; flex-shrink:0; text-align:center;';
-            status.textContent = t('Enter parameters and click Calculate.');
+            status.textContent = i18n_js.t('Enter parameters and click Calculate.');
 
             this.panel.appendChild(header);
             this.panel.appendChild(controls);
@@ -32762,7 +32722,7 @@ ${starCSS}
             const gameData = dataManager.getInitClientData();
             const status = this.panel.querySelector('#mwi-xph-status');
             if (!gameData) {
-                status.textContent = t('No game data available.');
+                status.textContent = i18n_js.t('No game data available.');
                 return;
             }
 
@@ -32782,9 +32742,9 @@ ${starCSS}
             this._updateSortIndicators();
 
             const withCost = results.filter((r) => r.costPerHour !== null).length;
-            const partialNote = results.some((r) => r.costPartial) ? ` ${t('* = partial price data.')}` : '';
+            const partialNote = results.some((r) => r.costPartial) ? ` ${i18n_js.t('* = partial price data.')}` : '';
             status.textContent =
-                t('{count} items · {withCost} with cost data', { count: results.length, withCost }) + partialNote;
+                i18n_js.t('{count} items · {withCost} with cost data', { count: results.length, withCost }) + partialNote;
         }
 
         _sort(col) {
@@ -33480,12 +33440,12 @@ ${starCSS}
         const s = (n) => (n === 1 ? '' : 's');
         const parts = [];
 
-        if (w >= 1) parts.push(`${w} ${t('week')}${s(w)}`);
-        if (d >= 1) parts.push(`${d} ${t('day')}${s(d)}`);
-        if (ms < w1 && h >= 1) parts.push(`${h} ${t('hour')}${s(h)}`);
-        if (ms < 6 * h1 && m >= 1) parts.push(`${m} ${t('minute')}${s(m)}`);
+        if (w >= 1) parts.push(`${w} ${i18n_js.t('week')}${s(w)}`);
+        if (d >= 1) parts.push(`${d} ${i18n_js.t('day')}${s(d)}`);
+        if (ms < w1 && h >= 1) parts.push(`${h} ${i18n_js.t('hour')}${s(h)}`);
+        if (ms < 6 * h1 && m >= 1) parts.push(`${m} ${i18n_js.t('minute')}${s(m)}`);
 
-        return parts.join(' ') || t('< 1 minute');
+        return parts.join(' ') || i18n_js.t('< 1 minute');
     }
 
     /**
@@ -33517,7 +33477,7 @@ ${starCSS}
      * @returns {string} HTML
      */
     function buildChart(chart) {
-        if (chart.length === 0) return `<div style="color: var(--color-disabled);">${t('Not enough data for chart')}</div>`;
+        if (chart.length === 0) return `<div style="color: var(--color-disabled);">${i18n_js.t('Not enough data for chart')}</div>`;
 
         // Truncate outliers at 2x the median
         let maxXPH = 0;
@@ -33862,7 +33822,7 @@ ${starCSS}
             const stats = guildXPTracker.getGuildStats(guildName);
 
             // XP/h stats row
-            const rateLabel = stats.lastHourXPH > 0 ? t('Last hour XP/h') : t('Last XP/h');
+            const rateLabel = stats.lastHourXPH > 0 ? i18n_js.t('Last hour XP/h') : i18n_js.t('Last XP/h');
             const rateValue = stats.lastHourXPH > 0 ? stats.lastHourXPH : stats.lastXPH;
 
             const statsHTML = `
@@ -33872,7 +33832,7 @@ ${starCSS}
                     <div class="GuildPanel_value__Hm2I9">${fNum(rateValue)}</div>
                 </div>
                 <div class="GuildPanel_dataBlock__3qVhK">
-                    <div class="GuildPanel_label__-A63g">${t('Last day XP/h')}</div>
+                    <div class="GuildPanel_label__-A63g">${i18n_js.t('Last day XP/h')}</div>
                     <div class="GuildPanel_value__Hm2I9">${fNum(stats.lastDayXPH)}</div>
                 </div>
             </div>`;
@@ -33881,7 +33841,7 @@ ${starCSS}
             const chartHTML = `
             <div class="GuildPanel_dataBlockGroup__1d2rR ${CSS_PREFIX}" style="grid-column: 1 / 3; max-width: none;">
                 <div class="GuildPanel_dataBlock__3qVhK" style="height: 240px;">
-                    <div class="GuildPanel_label__-A63g">${t('Last week XP/h')}</div>
+                    <div class="GuildPanel_label__-A63g">${i18n_js.t('Last week XP/h')}</div>
                     ${buildChart(stats.chart)}
                 </div>
             </div>`;
@@ -33982,7 +33942,7 @@ ${starCSS}
 
             // Game Mode column
             addColumn(tableEl, {
-                name: t('Game Mode'),
+                name: i18n_js.t('Game Mode'),
                 insertAfter,
                 data: allStats.map((s) => s.gameMode),
                 format: (v) => gameModes[v] || v || '',
@@ -33993,7 +33953,7 @@ ${starCSS}
 
             // Joined column
             addColumn(tableEl, {
-                name: t('Joined'),
+                name: i18n_js.t('Joined'),
                 insertAfter: insertAfter + 1,
                 data: allStats.map((s) => s.joinTime),
                 format: (v) => (v ? new Date(v).toLocaleDateString() : ''),
@@ -34004,7 +33964,7 @@ ${starCSS}
 
             // Last XP/h column
             addColumn(tableEl, {
-                name: t('Last XP/h'),
+                name: i18n_js.t('Last XP/h'),
                 insertAfter: insertAfter + 2,
                 data: allStats.map((s) => s.lastXPH),
                 format: (v, i) => {
@@ -34018,7 +33978,7 @@ ${starCSS}
 
             // Last day XP/h column
             addColumn(tableEl, {
-                name: t('Last day XP/h'),
+                name: i18n_js.t('Last day XP/h'),
                 insertAfter: insertAfter + 3,
                 data: allStats.map((s) => s.lastDayXPH),
                 format: (v, i) => {
@@ -34195,7 +34155,7 @@ ${starCSS}
 
             // Last XP/h
             addColumn(tableEl, {
-                name: t('Last XP/h'),
+                name: i18n_js.t('Last XP/h'),
                 insertAfter,
                 data: allStats.map((s) => s.lastXPH),
                 format: (v, i) => {
@@ -34210,7 +34170,7 @@ ${starCSS}
 
             // Last day XP/h
             addColumn(tableEl, {
-                name: t('Last day XP/h'),
+                name: i18n_js.t('Last day XP/h'),
                 insertAfter: insertAfter + 1,
                 data: allStats.map((s) => s.lastDayXPH),
                 format: (v, i) => {
@@ -34423,8 +34383,8 @@ ${starCSS}
                 }
 
                 // Use standard Notification API
-                const notification = new Notification(t('Milky Way Idle'), {
-                    body: t('Your action queue is empty!'),
+                const notification = new Notification(i18n_js.t('Milky Way Idle'), {
+                    body: i18n_js.t('Your action queue is empty!'),
                     icon: 'https://www.milkywayidle.com/favicon.ico',
                     tag: 'empty-queue',
                     requireInteraction: false,
@@ -34749,7 +34709,7 @@ ${starCSS}
             user-select: none;
         `;
             header.innerHTML = `
-            <span style="font-weight:600; font-size:12px; color:${ACCENT};">${t('Queue Monitor')}</span>
+            <span style="font-weight:600; font-size:12px; color:${ACCENT};">${i18n_js.t('Queue Monitor')}</span>
             <button id="toolasha-qm-toggle" style="
                 background:none; border:none; color:#aaa; font-size:16px;
                 cursor:pointer; padding:0; line-height:1;">${this.collapsed ? '+' : '−'}</button>
@@ -34830,7 +34790,7 @@ ${starCSS}
 
             if (snapshots.length === 0) {
                 this.bodyEl.innerHTML = `<div style="color:#666; font-size:11px; text-align:center; padding:4px 0;">
-                ${t('No other character data yet.')}<br>${t('Switch characters to capture queue state.')}
+                ${i18n_js.t('No other character data yet.')}<br>${i18n_js.t('Switch characters to capture queue state.')}
             </div>`;
                 return;
             }
@@ -34860,11 +34820,11 @@ ${starCSS}
                 // Time display
                 let timeDisplay;
                 if (snap.actions.length === 0) {
-                    timeDisplay = t('Idle');
+                    timeDisplay = i18n_js.t('Idle');
                 } else if (snap.hasInfiniteAction && remaining <= 0) {
                     timeDisplay = '∞';
                 } else if (remaining <= 0) {
-                    timeDisplay = t('Done');
+                    timeDisplay = i18n_js.t('Done');
                 } else {
                     timeDisplay = formatters_js.timeReadableZh(remaining);
                     if (snap.hasInfiniteAction) {
@@ -34881,7 +34841,7 @@ ${starCSS}
                 html += `</div>`;
 
                 if (isStale) {
-                    html += `<div style="color:#f39c12; font-size:10px; margin-left:14px; margin-top:2px;">${t('Stale')} (>${Math.round((Date.now() - snap.timestamp) / 3600000)}h ago)</div>`;
+                    html += `<div style="color:#f39c12; font-size:10px; margin-left:14px; margin-top:2px;">${i18n_js.t('Stale')} (>${Math.round((Date.now() - snap.timestamp) / 3600000)}h ago)</div>`;
                 }
 
                 // Expanded action details
@@ -34894,7 +34854,7 @@ ${starCSS}
                             actionTimeStr = '∞';
                         } else if (action.estimatedSeconds !== null) {
                             const actionRemaining = Math.max(0, action.estimatedSeconds - Math.max(0, actionElapsed));
-                            actionTimeStr = actionRemaining <= 0 ? t('Done') : formatters_js.timeReadableZh(actionRemaining);
+                            actionTimeStr = actionRemaining <= 0 ? i18n_js.t('Done') : formatters_js.timeReadableZh(actionRemaining);
                         } else {
                             actionTimeStr = '?';
                         }
@@ -35048,4 +35008,4 @@ ${starCSS}
 
     console.log('[Toolasha] UI library loaded');
 
-})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Utils.formatters, Toolasha.Utils.timerRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.dom, Toolasha.Core.storage, Toolasha.Core.marketAPI, Toolasha.Utils.efficiency, Toolasha.Core.webSocketHook, Toolasha.Utils.reactInput, Toolasha.Utils.actionPanelHelper, Toolasha.Market.expectedValueCalculator, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.marketData, Toolasha.Utils.profitConstants, Toolasha.Utils.profitHelpers, Toolasha.Market.profitCalculator, Toolasha.Utils.selectors, Toolasha.Utils.cleanupRegistry, Toolasha.Core, Toolasha.Core.settingsStorage, Toolasha.Utils.enhancementConfig, Toolasha.Utils.materialCalculator, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.teaParser, Toolasha.Utils.actionCalculator);
+})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Utils.formatters, Toolasha.Utils.timerRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Core.i18n, Toolasha.Utils.dom, Toolasha.Core.storage, Toolasha.Core.marketAPI, Toolasha.Utils.efficiency, Toolasha.Core.webSocketHook, Toolasha.Utils.reactInput, Toolasha.Utils.actionPanelHelper, Toolasha.Market.expectedValueCalculator, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.marketData, Toolasha.Utils.profitConstants, Toolasha.Utils.profitHelpers, Toolasha.Market.profitCalculator, Toolasha.Utils.selectors, Toolasha.Utils.cleanupRegistry, Toolasha.Core, Toolasha.Core.settingsStorage, Toolasha.Utils.enhancementConfig, Toolasha.Utils.materialCalculator, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.teaParser, Toolasha.Utils.actionCalculator);

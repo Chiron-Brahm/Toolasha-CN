@@ -9278,6 +9278,7 @@
         },
         marketAPI,
         performanceMonitor,
+        i18n: { t, registerLocale },
     };
 
     console.log('[Toolasha] Core library loaded');

@@ -5,48 +5,8 @@
  * License: CC-BY-NC-SA-4.0
  */
 
-(function (dataManager, domObserver, config, enhancementConfig_js, enhancementCalculator_js, profitConstants_js, formatters_js, marketAPI, domObserverHelpers_js, storage, bonusRevenueCalculator_js, marketData_js, efficiency_js, profitHelpers_js, profitCalculator, uiComponents_js, actionPanelHelper_js, webSocketHook, dom_js, timerRegistry_js, actionCalculator_js, cleanupRegistry_js, teaParser_js, buffParser_js, equipmentParser_js, houseEfficiency_js, experienceParser_js, reactInput_js, experienceCalculator_js, materialCalculator_js, expectedValueCalculator, alchemyProfitCalculator) {
+(function (dataManager, domObserver, i18n_js, config, enhancementConfig_js, enhancementCalculator_js, profitConstants_js, formatters_js, marketAPI, domObserverHelpers_js, storage, bonusRevenueCalculator_js, marketData_js, efficiency_js, profitHelpers_js, profitCalculator, uiComponents_js, actionPanelHelper_js, webSocketHook, dom_js, timerRegistry_js, actionCalculator_js, cleanupRegistry_js, teaParser_js, buffParser_js, equipmentParser_js, houseEfficiency_js, experienceParser_js, reactInput_js, experienceCalculator_js, materialCalculator_js, expectedValueCalculator, alchemyProfitCalculator) {
     'use strict';
-
-    /**
-     * Internationalization (i18n) Module
-     * Lightweight translation layer with English-as-key fallback.
-     *
-     * Usage:
-     *   import { t, registerLocale } from '../core/i18n.js';
-     *   t('Market Prices in Tooltips')  →  '市场价格提示' (if translated)
-     *   t('Market Prices in Tooltips')  →  'Market Prices in Tooltips' (fallback)
-     *   t('Cost: {0}/hr', '100K')       →  '花费: 100K/时'
-     */
-
-    /** @type {Record<string, string>} */
-    const translations = {};
-
-    /**
-     * Translate a string. Returns the Chinese translation if available, otherwise the English key itself.
-     * Supports positional interpolation with {0}, {1}, etc.
-     *
-     * @param {string} str - English key string
-     * @param {...(string|number)} args - Positional arguments for interpolation
-     * @returns {string} Translated or fallback string
-     *
-     * @example
-     *   t('Hello')                          // '你好'
-     *   t('Unknown key')                    // 'Unknown key' (fallback)
-     *   t('Profit: {0}/hr', '12.3K')        // '利润: 12.3K/时'
-     */
-    function t(str, ...args) {
-        const translated = translations[str] !== undefined ? translations[str] : str;
-
-        if (args.length === 0) {
-            return translated;
-        }
-
-        return translated.replace(/\{(\d+)\}/g, (_, index) => {
-            const arg = args[parseInt(index, 10)];
-            return arg !== undefined ? String(arg) : `{${index}}`;
-        });
-    }
 
     /**
      * Enhancement XP Calculations
@@ -1652,10 +1612,10 @@
         lines.push('<div style="margin-top: 12px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;">');
         lines.push('<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">');
         lines.push(
-            `<div style="color: #ffa500; font-weight: bold; font-size: 0.95em;">${t('Costs by Enhancement Level:')}</div>`
+            `<div style="color: #ffa500; font-weight: bold; font-size: 0.95em;">${i18n_js.t('Costs by Enhancement Level:')}</div>`
         );
         lines.push(
-            `<button id="mwi-expand-costs-table-btn" style="background: rgba(0, 255, 234, 0.1); border: 1px solid #00ffe7; color: #00ffe7; cursor: pointer; font-size: 18px; font-weight: bold; padding: 4px 10px; border-radius: 4px; transition: all 0.15s ease;" title="${t('View full table')}">⤢</button>`
+            `<button id="mwi-expand-costs-table-btn" style="background: rgba(0, 255, 234, 0.1); border: 1px solid #00ffe7; color: #00ffe7; cursor: pointer; font-size: 18px; font-weight: bold; padding: 4px 10px; border-radius: 4px; transition: all 0.15s ease;" title="${i18n_js.t('View full table')}">⤢</button>`
         );
         lines.push('</div>');
 
@@ -1974,8 +1934,8 @@
         const isAutoDetect = config.getSettingValue('enhanceSim_autoDetect', false);
         lines.push(
             '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">' +
-                `<button id="mwi-enhance-mode-toggle" style="font-size: 0.7em; padding: 2px 7px; border-radius: 3px; border: 1px solid #888; background: rgba(0,0,0,0.3); color: #ccc; cursor: pointer;" title="${t('Toggle between Auto-Detect and Manual modes')}">${isAutoDetect ? t('🔍 Auto') : t('✏️ Manual')}</button>` +
-                `<span style="color: #ffa500; font-weight: bold; font-size: 1.1em;">${t('⚙️ ENHANCEMENT CALCULATOR')}</span>` +
+                `<button id="mwi-enhance-mode-toggle" style="font-size: 0.7em; padding: 2px 7px; border-radius: 3px; border: 1px solid #888; background: rgba(0,0,0,0.3); color: #ccc; cursor: pointer;" title="${i18n_js.t('Toggle between Auto-Detect and Manual modes')}">${isAutoDetect ? i18n_js.t('🔍 Auto') : i18n_js.t('✏️ Manual')}</button>` +
+                `<span style="color: #ffa500; font-weight: bold; font-size: 1.1em;">${i18n_js.t('⚙️ ENHANCEMENT CALCULATOR')}</span>` +
                 '</div>'
         );
 
@@ -1987,7 +1947,7 @@
         // Current stats section
         lines.push('<div style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; margin-bottom: 12px;">');
         lines.push(
-            `<div style="color: #ffa500; font-weight: bold; margin-bottom: 6px; font-size: 0.95em;">${t('Your Enhancing Stats:')}</div>`
+            `<div style="color: #ffa500; font-weight: bold; margin-bottom: 6px; font-size: 0.95em;">${i18n_js.t('Your Enhancing Stats:')}</div>`
         );
 
         // Two column layout for stats
@@ -1996,31 +1956,31 @@
         // Left column
         lines.push('<div>');
         lines.push(
-            `<div style="color: #ccc;"><span style="color: #888;">${t('Level:')}</span> ${Math.round(params.enhancingLevel - params.detectedTeaBonus)}${params.detectedTeaBonus > 0 ? ` <span style="color: #88ff88;">(+${params.detectedTeaBonus.toFixed(1)} ${t('tea')})</span>` : ''}</div>`
+            `<div style="color: #ccc;"><span style="color: #888;">${i18n_js.t('Level:')}</span> ${Math.round(params.enhancingLevel - params.detectedTeaBonus)}${params.detectedTeaBonus > 0 ? ` <span style="color: #88ff88;">(+${params.detectedTeaBonus.toFixed(1)} ${i18n_js.t('tea')})</span>` : ''}</div>`
         );
         lines.push(
-            `<div style="color: #ccc;"><span style="color: #888;">${t('House:')}</span> ${t('Observatory Lvl {0}', params.houseLevel)}</div>`
+            `<div style="color: #ccc;"><span style="color: #888;">${i18n_js.t('House:')}</span> ${i18n_js.t('Observatory Lvl {0}', params.houseLevel)}</div>`
         );
 
         // Display each equipment slot
         if (params.toolSlot) {
             lines.push(
-                `<div style="color: #ccc;"><span style="color: #888;">${t('Tool:')}</span> ${itemNameTranslator.getDisplayName(params.toolSlot.hrid)}${params.toolSlot.enhancementLevel > 0 ? ` +${params.toolSlot.enhancementLevel}` : ''}</div>`
+                `<div style="color: #ccc;"><span style="color: #888;">${i18n_js.t('Tool:')}</span> ${itemNameTranslator.getDisplayName(params.toolSlot.hrid)}${params.toolSlot.enhancementLevel > 0 ? ` +${params.toolSlot.enhancementLevel}` : ''}</div>`
             );
         }
         if (params.bodySlot) {
             lines.push(
-                `<div style="color: #ccc;"><span style="color: #888;">${t('Body:')}</span> ${itemNameTranslator.getDisplayName(params.bodySlot.hrid)}${params.bodySlot.enhancementLevel > 0 ? ` +${params.bodySlot.enhancementLevel}` : ''}</div>`
+                `<div style="color: #ccc;"><span style="color: #888;">${i18n_js.t('Body:')}</span> ${itemNameTranslator.getDisplayName(params.bodySlot.hrid)}${params.bodySlot.enhancementLevel > 0 ? ` +${params.bodySlot.enhancementLevel}` : ''}</div>`
             );
         }
         if (params.legsSlot) {
             lines.push(
-                `<div style="color: #ccc;"><span style="color: #888;">${t('Legs:')}</span> ${itemNameTranslator.getDisplayName(params.legsSlot.hrid)}${params.legsSlot.enhancementLevel > 0 ? ` +${params.legsSlot.enhancementLevel}` : ''}</div>`
+                `<div style="color: #ccc;"><span style="color: #888;">${i18n_js.t('Legs:')}</span> ${itemNameTranslator.getDisplayName(params.legsSlot.hrid)}${params.legsSlot.enhancementLevel > 0 ? ` +${params.legsSlot.enhancementLevel}` : ''}</div>`
             );
         }
         if (params.handsSlot) {
             lines.push(
-                `<div style="color: #ccc;"><span style="color: #888;">${t('Hands:')}</span> ${itemNameTranslator.getDisplayName(params.handsSlot.hrid)}${params.handsSlot.enhancementLevel > 0 ? ` +${params.handsSlot.enhancementLevel}` : ''}</div>`
+                `<div style="color: #ccc;"><span style="color: #888;">${i18n_js.t('Hands:')}</span> ${itemNameTranslator.getDisplayName(params.handsSlot.hrid)}${params.handsSlot.enhancementLevel > 0 ? ` +${params.handsSlot.enhancementLevel}` : ''}</div>`
             );
         }
         lines.push('</div>');
@@ -2040,7 +2000,7 @@
 
         if (totalSuccess > 0) {
             lines.push(
-                `<div class="mwi-enh-toggle" data-target="mwi-enh-success" style="color: #88ff88; cursor: pointer;"><span style="color: #888;">${t('Success:')}</span> +${totalSuccess.toFixed(2)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
+                `<div class="mwi-enh-toggle" data-target="mwi-enh-success" style="color: #88ff88; cursor: pointer;"><span style="color: #888;">${i18n_js.t('Success:')}</span> +${totalSuccess.toFixed(2)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
             );
             lines.push('<div id="mwi-enh-success" style="display: none;">');
 
@@ -2084,23 +2044,23 @@
 
             if (equipmentSuccess > 0) {
                 lines.push(
-                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Equipment:')}</span> +${equipmentSuccess.toFixed(2)}%</div>`
+                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Equipment:')}</span> +${equipmentSuccess.toFixed(2)}%</div>`
                 );
             }
             if (houseSuccess > 0) {
                 lines.push(
-                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('House (Observatory):')}</span> +${houseSuccess.toFixed(2)}%</div>`
+                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('House (Observatory):')}</span> +${houseSuccess.toFixed(2)}%</div>`
                 );
             }
             const achievementSuccess = params.achievementSuccessBonus || 0;
             if (achievementSuccess > 0) {
                 lines.push(
-                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Achievement:')}</span> +${achievementSuccess.toFixed(2)}%</div>`
+                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Achievement:')}</span> +${achievementSuccess.toFixed(2)}%</div>`
                 );
             }
             if (successLevelAdvantage > 0) {
                 lines.push(
-                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Level advantage:')}</span> +${successLevelAdvantage.toFixed(2)}%</div>`
+                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Level advantage:')}</span> +${successLevelAdvantage.toFixed(2)}%</div>`
                 );
             }
             lines.push('</div>');
@@ -2111,61 +2071,61 @@
 
         if (totalSpeed > 0) {
             lines.push(
-                `<div class="mwi-enh-toggle" data-target="mwi-enh-speed" style="color: #88ccff; cursor: pointer;"><span style="color: #888;">${t('Speed:')}</span> +${totalSpeed.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
+                `<div class="mwi-enh-toggle" data-target="mwi-enh-speed" style="color: #88ccff; cursor: pointer;"><span style="color: #888;">${i18n_js.t('Speed:')}</span> +${totalSpeed.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
             );
             lines.push('<div id="mwi-enh-speed" style="display: none;">');
 
             // Show breakdown from buff maps (each value is decimal, convert to %)
             if (speedBreakdown.equipment > 0) {
                 lines.push(
-                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Equipment:')}</span> +${(speedBreakdown.equipment * 100).toFixed(1)}%</div>`
+                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Equipment:')}</span> +${(speedBreakdown.equipment * 100).toFixed(1)}%</div>`
                 );
             }
             if (speedBreakdown.house > 0) {
                 lines.push(
-                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('House (Observatory):')}</span> +${(speedBreakdown.house * 100).toFixed(1)}%</div>`
+                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('House (Observatory):')}</span> +${(speedBreakdown.house * 100).toFixed(1)}%</div>`
                 );
             }
             if (speedBreakdown.community > 0) {
                 lines.push(
-                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Community:')}</span> +${(speedBreakdown.community * 100).toFixed(1)}%</div>`
+                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Community:')}</span> +${(speedBreakdown.community * 100).toFixed(1)}%</div>`
                 );
             }
             if (speedBreakdown.consumable > 0) {
                 lines.push(
-                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Tea:')}</span> +${(speedBreakdown.consumable * 100).toFixed(1)}%</div>`
+                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Tea:')}</span> +${(speedBreakdown.consumable * 100).toFixed(1)}%</div>`
                 );
             }
             if (speedBreakdown.personal > 0) {
                 lines.push(
-                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Labyrinth:')}</span> +${(speedBreakdown.personal * 100).toFixed(1)}%</div>`
+                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Labyrinth:')}</span> +${(speedBreakdown.personal * 100).toFixed(1)}%</div>`
                 );
             }
             if (speedBreakdown.levelAdvantage > 0) {
                 lines.push(
-                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Level advantage:')}</span> +${(speedBreakdown.levelAdvantage * 100).toFixed(1)}%</div>`
+                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Level advantage:')}</span> +${(speedBreakdown.levelAdvantage * 100).toFixed(1)}%</div>`
                 );
             }
             lines.push('</div>');
         } else {
-            lines.push(`<div style="color: #88ccff;"><span style="color: #888;">${t('Speed:')}</span> +0.0%</div>`);
+            lines.push(`<div style="color: #88ccff;"><span style="color: #888;">${i18n_js.t('Speed:')}</span> +0.0%</div>`);
         }
 
         // Base → effective action time
         lines.push(
-            `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Base:')}</span> ${baseTime.toFixed(2)}s → ${perActionTime.toFixed(2)}s</div>`
+            `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Base:')}</span> ${baseTime.toFixed(2)}s → ${perActionTime.toFixed(2)}s</div>`
         );
 
         if (params.teas.blessed) {
             // Calculate Blessed Tea bonus with Guzzling Pouch concentration
             const blessedBonus = 1.1; // Base 1.1% from Blessed Tea
             lines.push(
-                `<div style="color: #ffdd88;"><span style="color: #888;">${t('Blessed:')}</span> +${blessedBonus.toFixed(1)}%</div>`
+                `<div style="color: #ffdd88;"><span style="color: #888;">${i18n_js.t('Blessed:')}</span> +${blessedBonus.toFixed(1)}%</div>`
             );
         }
         if (params.rareFindBonus > 0) {
             lines.push(
-                `<div class="mwi-enh-toggle" data-target="mwi-enh-rarefind" style="color: #ffaa55; cursor: pointer;"><span style="color: #888;">${t('Rare Find:')}</span> +${params.rareFindBonus.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
+                `<div class="mwi-enh-toggle" data-target="mwi-enh-rarefind" style="color: #ffaa55; cursor: pointer;"><span style="color: #888;">${i18n_js.t('Rare Find:')}</span> +${params.rareFindBonus.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
             );
             lines.push('<div id="mwi-enh-rarefind" style="display: none;">');
 
@@ -2178,15 +2138,15 @@
                 );
                 if (equipmentRareFind > 0) {
                     lines.push(
-                        `<div style="color: #ffaa55; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Equipment:')}</span> +${equipmentRareFind.toFixed(1)}%</div>`
+                        `<div style="color: #ffaa55; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Equipment:')}</span> +${equipmentRareFind.toFixed(1)}%</div>`
                     );
                 }
                 lines.push(
-                    `<div style="color: #ffaa55; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('House Rooms:')}</span> +${params.houseRareFindBonus.toFixed(1)}%</div>`
+                    `<div style="color: #ffaa55; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('House Rooms:')}</span> +${params.houseRareFindBonus.toFixed(1)}%</div>`
                 );
                 if (achievementRareFind > 0) {
                     lines.push(
-                        `<div style="color: #ffaa55; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Achievement:')}</span> +${achievementRareFind.toFixed(1)}%</div>`
+                        `<div style="color: #ffaa55; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Achievement:')}</span> +${achievementRareFind.toFixed(1)}%</div>`
                     );
                 }
             }
@@ -2194,7 +2154,7 @@
         }
         if (params.experienceBonus > 0) {
             lines.push(
-                `<div class="mwi-enh-toggle" data-target="mwi-enh-experience" style="color: #ffdd88; cursor: pointer;"><span style="color: #888;">${t('Experience:')}</span> +${params.experienceBonus.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
+                `<div class="mwi-enh-toggle" data-target="mwi-enh-experience" style="color: #ffdd88; cursor: pointer;"><span style="color: #888;">${i18n_js.t('Experience:')}</span> +${params.experienceBonus.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
             );
             lines.push('<div id="mwi-enh-experience" style="display: none;">');
 
@@ -2210,28 +2170,28 @@
 
             if (equipmentExperience > 0) {
                 lines.push(
-                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Equipment:')}</span> +${equipmentExperience.toFixed(1)}%</div>`
+                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Equipment:')}</span> +${equipmentExperience.toFixed(1)}%</div>`
                 );
             }
             if (houseWisdom > 0) {
                 lines.push(
-                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('House Rooms (Wisdom):')}</span> +${houseWisdom.toFixed(1)}%</div>`
+                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('House Rooms (Wisdom):')}</span> +${houseWisdom.toFixed(1)}%</div>`
                 );
             }
             if (communityWisdom > 0) {
                 const wisdomLevel = params.communityWisdomLevel || 0;
                 lines.push(
-                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Community (Wisdom T{0}):', wisdomLevel)}</span> +${communityWisdom.toFixed(1)}%</div>`
+                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Community (Wisdom T{0}):', wisdomLevel)}</span> +${communityWisdom.toFixed(1)}%</div>`
                 );
             }
             if (teaWisdom > 0) {
                 lines.push(
-                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Wisdom Tea:')}</span> +${teaWisdom.toFixed(1)}%</div>`
+                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Wisdom Tea:')}</span> +${teaWisdom.toFixed(1)}%</div>`
                 );
             }
             if (achievementWisdom > 0) {
                 lines.push(
-                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${t('Achievement:')}</span> +${achievementWisdom.toFixed(1)}%</div>`
+                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Achievement:')}</span> +${achievementWisdom.toFixed(1)}%</div>`
                 );
             }
             lines.push('</div>');
@@ -2257,7 +2217,7 @@
         if (enhancementCosts && enhancementCosts.length > 0) {
             lines.push('<div style="margin-top: 12px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;">');
             lines.push(
-                `<div style="color: #ffa500; font-weight: bold; margin-bottom: 6px; font-size: 0.95em;">${t('Materials Per Attempt:')}</div>`
+                `<div style="color: #ffa500; font-weight: bold; margin-bottom: 6px; font-size: 0.95em;">${i18n_js.t('Materials Per Attempt:')}</div>`
             );
 
             // Get game data for item names
@@ -2306,7 +2266,7 @@
                     }
 
                     lines.push(
-                        `<div style="font-size: 0.85em; color: #ffa500; margin-top: 4px;">1× ${protectionItemName} <span style="color: #888;">${t('(if used)')} (@${protectionPrice.toLocaleString()})</span></div>`
+                        `<div style="font-size: 0.85em; color: #ffa500; margin-top: 4px;">1× ${protectionItemName} <span style="color: #888;">${i18n_js.t('(if used)')} (@${protectionPrice.toLocaleString()})</span></div>`
                     );
                 }
             }
@@ -2319,15 +2279,15 @@
 
         // Only show protection note if actually using protection
         if (protectFromLevel >= 2) {
-            lines.push(t('• Protection active from +{0} onwards (enhancement level -1 on failure)<br>', protectFromLevel));
+            lines.push(i18n_js.t('• Protection active from +{0} onwards (enhancement level -1 on failure)<br>', protectFromLevel));
         } else {
-            lines.push(t('• No protection used (all failures return to +0)<br>'));
+            lines.push(i18n_js.t('• No protection used (all failures return to +0)<br>'));
         }
 
-        lines.push(t('• Attempts and time are statistical averages<br>'));
+        lines.push(i18n_js.t('• Attempts and time are statistical averages<br>'));
 
         lines.push(
-            t(
+            i18n_js.t(
                 '• Action time: {0}s (includes {1}% speed bonus)',
                 perActionTime.toFixed(2),
                 (speedBreakdown.total * 100).toFixed(1)
@@ -2524,7 +2484,7 @@
 
         modal.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(0, 255, 234, 0.4); padding-bottom: 10px;">
-            <h2 style="margin: 0; color: #00ffe7; font-size: 20px;">${t('📊 Costs by Enhancement Level')}</h2>
+            <h2 style="margin: 0; color: #00ffe7; font-size: 20px;">${i18n_js.t('📊 Costs by Enhancement Level')}</h2>
             <button id="mwi-close-costs-modal" style="
                 background: none;
                 border: none;
@@ -2534,10 +2494,10 @@
                 padding: 0 8px;
                 line-height: 1;
                 transition: all 0.15s ease;
-            " title="${t('Close')}">×</button>
+            " title="${i18n_js.t('Close')}">×</button>
         </div>
         <div style="color: #9b9bff; font-size: 0.9em; margin-bottom: 15px;">
-            ${t('Full breakdown of enhancement costs for all levels')}
+            ${i18n_js.t('Full breakdown of enhancement costs for all levels')}
         </div>
     `;
 
@@ -3527,7 +3487,7 @@
         const costs = Math.round(profitData.drinkCostPerHour + marketTax);
         const summary = formatMissingLabel(
             netMissing,
-            `${formatters_js.formatLargeNumber(profit)}/hr, ${formatters_js.formatLargeNumber(profitPerDay)}/day | ${t('Total profit: 0')}`
+            `${formatters_js.formatLargeNumber(profit)}/hr, ${formatters_js.formatLargeNumber(profitPerDay)}/day | ${i18n_js.t('Total profit: 0')}`
         );
 
         const detailsContent = document.createElement('div');
@@ -3535,7 +3495,7 @@
         // Revenue Section
         const revenueDiv = document.createElement('div');
         const revenueLabel = formatMissingLabel(revenueMissing, `${formatters_js.formatLargeNumber(revenue)}/hr`);
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${t('Revenue: ') + revenueLabel}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${i18n_js.t('Revenue: ') + revenueLabel}</div>`;
 
         // Primary Outputs subsection
         const primaryDropsContent = document.createElement('div');
@@ -3689,7 +3649,7 @@
         // Costs Section
         const costsDiv = document.createElement('div');
         const costsLabel = formatMissingLabel(costsMissing, `${formatters_js.formatLargeNumber(costs)}/hr`);
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${t('Costs: ') + costsLabel}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: ') + costsLabel}</div>`;
 
         // Drink Costs subsection
         const drinkCostsContent = document.createElement('div');
@@ -3721,13 +3681,13 @@
         const marketTaxLine = document.createElement('div');
         marketTaxLine.style.marginLeft = '8px';
         const marketTaxLabel = marketTaxMissing ? '-- ⚠' : `${formatters_js.formatLargeNumber(marketTax)}/hr`;
-        marketTaxLine.textContent = t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
+        marketTaxLine.textContent = i18n_js.t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
         marketTaxContent.appendChild(marketTaxLine);
 
         const marketTaxHeader = marketTaxMissing ? '-- ⚠' : `${formatters_js.formatLargeNumber(marketTax)}/hr`;
         const marketTaxSection = uiComponents_js.createCollapsibleSection(
             '',
-            t('Market Tax: {0} (2%)', marketTaxHeader),
+            i18n_js.t('Market Tax: {0} (2%)', marketTaxHeader),
             null,
             marketTaxContent,
             false,
@@ -3848,7 +3808,7 @@
             }
             const modifiersSection = uiComponents_js.createCollapsibleSection(
                 '⚙️',
-                t('Modifiers'),
+                i18n_js.t('Modifiers'),
                 modifierSummaryParts.join(' | '),
                 modifierContent,
                 false,
@@ -3860,7 +3820,7 @@
         // Create "Detailed Breakdown" collapsible
         const topLevelContent = document.createElement('div');
         topLevelContent.innerHTML = `
-        <div style="margin-bottom: 4px;">${t('Actions: {0}/hr | Efficiency: +{1}%', profitData.actionsPerHour.toFixed(2), profitData.totalEfficiency.toFixed(2))}</div>
+        <div style="margin-bottom: 4px;">${i18n_js.t('Actions: {0}/hr | Efficiency: +{1}%', profitData.actionsPerHour.toFixed(2), profitData.totalEfficiency.toFixed(2))}</div>
     `;
 
         // Add Net Profit line at top level (always visible when Profitability is expanded)
@@ -3872,8 +3832,8 @@
         margin-bottom: 8px;
     `;
         netProfitLine.textContent = netMissing
-            ? t('Net Profit: -- ⚠')
-            : t('Net Profit: {0}/hr, {1}/day', formatters_js.formatLargeNumber(profit), formatters_js.formatLargeNumber(profitPerDay));
+            ? i18n_js.t('Net Profit: -- ⚠')
+            : i18n_js.t('Net Profit: {0}/hr, {1}/day', formatters_js.formatLargeNumber(profit), formatters_js.formatLargeNumber(profitPerDay));
         topLevelContent.appendChild(netProfitLine);
 
         // Add pricing mode label
@@ -3890,15 +3850,15 @@
             ? loadoutSnapshot.getSnapshotInfoForSkill(gatheringActionType)
             : null;
         const gatheringLoadoutLabel = gatheringSnapshotInfo
-            ? `${gatheringSnapshotInfo.name}${gatheringSnapshotInfo.isDefault ? t(' (Default)') : ''}`
-            : t('Equipped');
-        modeDiv.textContent = t('Pricing Mode: ') + modeLabel + ' • ' + t('Loadout: ') + gatheringLoadoutLabel;
+            ? `${gatheringSnapshotInfo.name}${gatheringSnapshotInfo.isDefault ? i18n_js.t(' (Default)') : ''}`
+            : i18n_js.t('Equipped');
+        modeDiv.textContent = i18n_js.t('Pricing Mode: ') + modeLabel + ' • ' + i18n_js.t('Loadout: ') + gatheringLoadoutLabel;
 
         topLevelContent.appendChild(modeDiv);
 
         const detailedBreakdownSection = uiComponents_js.createCollapsibleSection(
             '📊',
-            t('Per hour breakdown'),
+            i18n_js.t('Per hour breakdown'),
             null,
             detailsContent,
             false,
@@ -3939,7 +3899,7 @@
         }
 
         // Create main profit section
-        const profitSection = uiComponents_js.createCollapsibleSection('💰', t('Profitability'), summary, topLevelContent, false, 0);
+        const profitSection = uiComponents_js.createCollapsibleSection('💰', i18n_js.t('Profitability'), summary, topLevelContent, false, 0);
         profitSection.id = 'mwi-foraging-profit';
         profitSection.setAttribute('data-mwi-profit-display', 'true');
         profitSection.dataset.mwiActionHrid = actionHrid;
@@ -3957,13 +3917,13 @@
 
             const updateSummary = (newValue) => {
                 if (netMissing) {
-                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: -- ⚠')}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: -- ⚠')}`;
                     return;
                 }
                 const inputValue = inputField.value;
 
                 if (inputValue === '∞') {
-                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: {0}', t('[infinite]'))}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: {0}', i18n_js.t('[infinite]'))}`;
                 } else if (newValue > 0) {
                     const totals = profitHelpers_js.calculateGatheringActionTotalsFromBase({
                         actionsCount: newValue,
@@ -3976,9 +3936,9 @@
                         efficiencyMultiplier: profitData.efficiencyMultiplier || 1,
                     });
                     const totalProfit = Math.round(totals.totalProfit);
-                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: {0}', formatters_js.formatLargeNumber(totalProfit))}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: {0}', formatters_js.formatLargeNumber(totalProfit))}`;
                 } else {
-                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: 0')}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: 0')}`;
                 }
             };
 
@@ -4141,7 +4101,7 @@
             : revenueEstimated
               ? `${formatters_js.formatLargeNumber(revenue)}/hr ⚠`
               : `${formatters_js.formatLargeNumber(revenue)}/hr`;
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${t('Revenue: ') + revenueLabel}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${i18n_js.t('Revenue: ') + revenueLabel}</div>`;
 
         // Primary Outputs subsection
         const primaryOutputContent = document.createElement('div');
@@ -4255,7 +4215,7 @@
             : costsEstimated
               ? `${formatters_js.formatLargeNumber(costs)}/hr ⚠`
               : `${formatters_js.formatLargeNumber(costs)}/hr`;
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${t('Costs: ') + costsLabel}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: ') + costsLabel}</div>`;
 
         // Material Costs subsection
         const materialCostsContent = document.createElement('div');
@@ -4335,13 +4295,13 @@
             : marketTaxEstimated
               ? `${formatters_js.formatLargeNumber(marketTax)}/hr ⚠`
               : `${formatters_js.formatLargeNumber(marketTax)}/hr`;
-        marketTaxLine.textContent = t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
+        marketTaxLine.textContent = i18n_js.t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
         marketTaxContent.appendChild(marketTaxLine);
 
         const marketTaxHeader = marketTaxLabel;
         const marketTaxSection = uiComponents_js.createCollapsibleSection(
             '',
-            t('Market Tax: {0} (2%)', marketTaxHeader),
+            i18n_js.t('Market Tax: {0} (2%)', marketTaxHeader),
             null,
             marketTaxContent,
             false,
@@ -4475,7 +4435,7 @@
             }
             const modifiersSection = uiComponents_js.createCollapsibleSection(
                 '⚙️',
-                t('Modifiers'),
+                i18n_js.t('Modifiers'),
                 modifierSummaryParts.join(' | '),
                 modifierContent,
                 false,
@@ -4488,7 +4448,7 @@
         const topLevelContent = document.createElement('div');
         const effectiveActionsPerHour = profitData.actionsPerHour * profitData.efficiencyMultiplier;
         topLevelContent.innerHTML = `
-        <div style="margin-bottom: 4px;">${t('Actions: {0}/hr', effectiveActionsPerHour.toFixed(2))}</div>
+        <div style="margin-bottom: 4px;">${i18n_js.t('Actions: {0}/hr', effectiveActionsPerHour.toFixed(2))}</div>
     `;
 
         // Add Net Profit line at top level (always visible when Profitability is expanded)
@@ -4500,10 +4460,10 @@
         margin-bottom: 8px;
     `;
         netProfitLine.textContent = netMissing
-            ? t('Net Profit: -- ⚠')
+            ? i18n_js.t('Net Profit: -- ⚠')
             : netEstimated
-              ? t('Net Profit: {0}/hr ⚠, {1}/day ⚠', formatters_js.formatLargeNumber(profit), formatters_js.formatLargeNumber(profitPerDay))
-              : t('Net Profit: {0}/hr, {1}/day', formatters_js.formatLargeNumber(profit), formatters_js.formatLargeNumber(profitPerDay));
+              ? i18n_js.t('Net Profit: {0}/hr ⚠, {1}/day ⚠', formatters_js.formatLargeNumber(profit), formatters_js.formatLargeNumber(profitPerDay))
+              : i18n_js.t('Net Profit: {0}/hr, {1}/day', formatters_js.formatLargeNumber(profit), formatters_js.formatLargeNumber(profitPerDay));
         topLevelContent.appendChild(netProfitLine);
 
         // Add pricing mode label
@@ -4520,14 +4480,14 @@
             ? loadoutSnapshot.getSnapshotInfoForSkill(productionActionType)
             : null;
         const productionLoadoutLabel = productionSnapshotInfo
-            ? `${productionSnapshotInfo.name}${productionSnapshotInfo.isDefault ? t(' (Default)') : ''}`
-            : t('Equipped');
-        modeDiv.textContent = t('Pricing Mode: ') + modeLabel + ' • ' + t('Loadout: ') + productionLoadoutLabel;
+            ? `${productionSnapshotInfo.name}${productionSnapshotInfo.isDefault ? i18n_js.t(' (Default)') : ''}`
+            : i18n_js.t('Equipped');
+        modeDiv.textContent = i18n_js.t('Pricing Mode: ') + modeLabel + ' • ' + i18n_js.t('Loadout: ') + productionLoadoutLabel;
         topLevelContent.appendChild(modeDiv);
 
         const detailedBreakdownSection = uiComponents_js.createCollapsibleSection(
             '📊',
-            t('Per hour breakdown'),
+            i18n_js.t('Per hour breakdown'),
             null,
             detailsContent,
             false,
@@ -4568,7 +4528,7 @@
         }
 
         // Create main profit section
-        const profitSection = uiComponents_js.createCollapsibleSection('💰', t('Profitability'), summary, topLevelContent, false, 0);
+        const profitSection = uiComponents_js.createCollapsibleSection('💰', i18n_js.t('Profitability'), summary, topLevelContent, false, 0);
         profitSection.id = 'mwi-production-profit';
         profitSection.setAttribute('data-mwi-profit-display', 'true');
         profitSection.dataset.mwiActionHrid = actionHrid;
@@ -4584,13 +4544,13 @@
 
             const updateSummary = (newValue) => {
                 if (netMissing) {
-                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: -- ⚠')}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: -- ⚠')}`;
                     return;
                 }
                 const inputValue = inputField.value;
 
                 if (inputValue === '∞') {
-                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: {0}', t('[infinite]'))}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: {0}', i18n_js.t('[infinite]'))}`;
                 } else if (newValue > 0) {
                     const totals = profitHelpers_js.calculateProductionActionTotalsFromBase({
                         actionsCount: newValue,
@@ -4604,9 +4564,9 @@
                         efficiencyMultiplier: profitData.efficiencyMultiplier || 1,
                     });
                     const totalProfit = Math.round(totals.totalProfit);
-                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: {0}', formatters_js.formatLargeNumber(totalProfit))}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: {0}', formatters_js.formatLargeNumber(totalProfit))}`;
                 } else {
-                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: 0')}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: 0')}`;
                 }
             };
 
@@ -4697,7 +4657,7 @@
         // Revenue Section
         const revenueDiv = document.createElement('div');
         const revenueLabel = formatMissingLabel(revenueMissing, `${formatPerAction(revenuePerAction)}/action`);
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${t('Revenue: ') + revenueLabel}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${i18n_js.t('Revenue: ') + revenueLabel}</div>`;
 
         // Primary Outputs subsection
         const primaryDropsContent = document.createElement('div');
@@ -4870,7 +4830,7 @@
         // Costs Section
         const costsDiv = document.createElement('div');
         const costsLabel = formatMissingLabel(costsMissing, `${formatPerAction(costsPerAction)}/action`);
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${t('Costs: ') + costsLabel}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: ') + costsLabel}</div>`;
 
         // Drink Costs subsection
         const drinkCostsContent = document.createElement('div');
@@ -4904,12 +4864,12 @@
         const marketTaxLine = document.createElement('div');
         marketTaxLine.style.marginLeft = '8px';
         const marketTaxLabel = formatMissingLabel(marketTaxMissing, `${formatPerAction(marketTaxPerAction)}/action`);
-        marketTaxLine.textContent = t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
+        marketTaxLine.textContent = i18n_js.t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
         marketTaxContent.appendChild(marketTaxLine);
 
         const marketTaxSection = uiComponents_js.createCollapsibleSection(
             '',
-            t('Market Tax: {0} (2%)', marketTaxLabel),
+            i18n_js.t('Market Tax: {0} (2%)', marketTaxLabel),
             null,
             marketTaxContent,
             false,
@@ -4932,8 +4892,8 @@
         margin-bottom: 8px;
     `;
         netProfitLine.textContent = netMissing
-            ? t('Net Profit: -- ⚠')
-            : t('Net Profit: {0}/action', formatPerAction(profitPerAction));
+            ? i18n_js.t('Net Profit: -- ⚠')
+            : i18n_js.t('Net Profit: {0}/action', formatPerAction(profitPerAction));
         topLevelContent.appendChild(netProfitLine);
 
         const summarySection = uiComponents_js.createCollapsibleSection(
@@ -4946,7 +4906,7 @@
         );
         topLevelContent.appendChild(summarySection);
 
-        return uiComponents_js.createCollapsibleSection('🔢', t('Per action breakdown'), null, topLevelContent, false, 0);
+        return uiComponents_js.createCollapsibleSection('🔢', i18n_js.t('Per action breakdown'), null, topLevelContent, false, 0);
     }
 
     /**
@@ -4997,7 +4957,7 @@
             : revenueEstimated
               ? `${formatPerAction(revenuePerAction)}/action ⚠`
               : `${formatPerAction(revenuePerAction)}/action`;
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${t('Revenue: ') + revenueLabel}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${i18n_js.t('Revenue: ') + revenueLabel}</div>`;
 
         // Primary Outputs subsection
         const primaryOutputContent = document.createElement('div');
@@ -5120,7 +5080,7 @@
             : costsEstimated
               ? `${formatPerAction(costsPerAction)}/action ⚠`
               : `${formatPerAction(costsPerAction)}/action`;
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${t('Costs: ') + costsLabel}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: ') + costsLabel}</div>`;
 
         // Material Costs subsection
         const materialCostsContent = document.createElement('div');
@@ -5194,12 +5154,12 @@
             : marketTaxEstimated
               ? `${formatPerAction(marketTaxPerAction)}/action ⚠`
               : `${formatPerAction(marketTaxPerAction)}/action`;
-        marketTaxLine.textContent = t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
+        marketTaxLine.textContent = i18n_js.t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
         marketTaxContent.appendChild(marketTaxLine);
 
         const marketTaxSection = uiComponents_js.createCollapsibleSection(
             '',
-            t('Market Tax: {0} (2%)', marketTaxLabel),
+            i18n_js.t('Market Tax: {0} (2%)', marketTaxLabel),
             null,
             marketTaxContent,
             false,
@@ -5222,10 +5182,10 @@
         margin-bottom: 8px;
     `;
         netProfitLine.textContent = netMissing
-            ? t('Net Profit: -- ⚠')
+            ? i18n_js.t('Net Profit: -- ⚠')
             : netEstimated
-              ? t('Net Profit: {0}/action ⚠', formatPerAction(profitPerAction))
-              : t('Net Profit: {0}/action', formatPerAction(profitPerAction));
+              ? i18n_js.t('Net Profit: {0}/action ⚠', formatPerAction(profitPerAction))
+              : i18n_js.t('Net Profit: {0}/action', formatPerAction(profitPerAction));
         topLevelContent.appendChild(netProfitLine);
 
         const revenueSummaryLabel = revenueMissing
@@ -5248,7 +5208,7 @@
         );
         topLevelContent.appendChild(summarySection);
 
-        return uiComponents_js.createCollapsibleSection('🔢', t('Per action breakdown'), null, topLevelContent, false, 0);
+        return uiComponents_js.createCollapsibleSection('🔢', i18n_js.t('Per action breakdown'), null, topLevelContent, false, 0);
     }
 
     /**
@@ -5292,7 +5252,7 @@
         // Revenue Section
         const revenueDiv = document.createElement('div');
         const revenueLabel = formatMissingLabel(revenueMissing, formatters_js.formatLargeNumber(totalRevenue));
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${t('Revenue: ') + revenueLabel}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${i18n_js.t('Revenue: ') + revenueLabel}</div>`;
 
         // Primary Outputs subsection
         const primaryDropsContent = document.createElement('div');
@@ -5466,7 +5426,7 @@
         // Costs Section
         const costsDiv = document.createElement('div');
         const costsLabel = costsMissing ? '-- ⚠' : formatters_js.formatLargeNumber(totalCosts);
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${t('Costs: ') + costsLabel}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: ') + costsLabel}</div>`;
 
         // Drink Costs subsection
         const drinkCostsContent = document.createElement('div');
@@ -5500,13 +5460,13 @@
         const marketTaxLine = document.createElement('div');
         marketTaxLine.style.marginLeft = '8px';
         const marketTaxLabel = marketTaxMissing ? '-- ⚠' : formatters_js.formatLargeNumber(totalMarketTax);
-        marketTaxLine.textContent = t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
+        marketTaxLine.textContent = i18n_js.t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
         marketTaxContent.appendChild(marketTaxLine);
 
         const marketTaxHeader = marketTaxMissing ? '-- ⚠' : formatters_js.formatLargeNumber(totalMarketTax);
         const marketTaxSection = uiComponents_js.createCollapsibleSection(
             '',
-            t('Market Tax: {0} (2%)', marketTaxHeader),
+            i18n_js.t('Market Tax: {0} (2%)', marketTaxHeader),
             null,
             marketTaxContent,
             false,
@@ -5529,8 +5489,8 @@
         margin-bottom: 8px;
     `;
         netProfitLine.textContent = netMissing
-            ? t('Net Profit: -- ⚠')
-            : t('Net Profit: {0}', formatters_js.formatLargeNumber(totalProfit));
+            ? i18n_js.t('Net Profit: -- ⚠')
+            : i18n_js.t('Net Profit: {0}', formatters_js.formatLargeNumber(totalProfit));
         topLevelContent.appendChild(netProfitLine);
 
         const actionsSummary = `Revenue: ${formatMissingLabel(revenueMissing, formatters_js.formatLargeNumber(totalRevenue))} | Costs: ${formatMissingLabel(
@@ -5601,7 +5561,7 @@
             : revenueEstimated
               ? `${formatters_js.formatLargeNumber(totalRevenue)} ⚠`
               : formatters_js.formatLargeNumber(totalRevenue);
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${t('Revenue: ') + revenueLabel}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${i18n_js.t('Revenue: ') + revenueLabel}</div>`;
 
         // Primary Outputs subsection
         const primaryOutputContent = document.createElement('div');
@@ -5732,7 +5692,7 @@
             : costsEstimated
               ? `${formatters_js.formatLargeNumber(totalCosts)} ⚠`
               : formatters_js.formatLargeNumber(totalCosts);
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${t('Costs: ') + costsLabel}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: ') + costsLabel}</div>`;
 
         // Material Costs subsection
         const materialCostsContent = document.createElement('div');
@@ -5809,13 +5769,13 @@
             : marketTaxEstimated
               ? `${formatters_js.formatLargeNumber(totalMarketTax)} ⚠`
               : formatters_js.formatLargeNumber(totalMarketTax);
-        marketTaxLine.textContent = t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
+        marketTaxLine.textContent = i18n_js.t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
         marketTaxContent.appendChild(marketTaxLine);
 
         const marketTaxHeader = marketTaxLabel;
         const marketTaxSection = uiComponents_js.createCollapsibleSection(
             '',
-            t('Market Tax: {0} (2%)', marketTaxHeader),
+            i18n_js.t('Market Tax: {0} (2%)', marketTaxHeader),
             null,
             marketTaxContent,
             false,
@@ -5838,10 +5798,10 @@
         margin-bottom: 8px;
     `;
         netProfitLine.textContent = netMissing
-            ? t('Net Profit: -- ⚠')
+            ? i18n_js.t('Net Profit: -- ⚠')
             : netEstimated
-              ? t('Net Profit: {0} ⚠', formatters_js.formatLargeNumber(totalProfit))
-              : t('Net Profit: {0}', formatters_js.formatLargeNumber(totalProfit));
+              ? i18n_js.t('Net Profit: {0} ⚠', formatters_js.formatLargeNumber(totalProfit))
+              : i18n_js.t('Net Profit: {0}', formatters_js.formatLargeNumber(totalProfit));
         topLevelContent.appendChild(netProfitLine);
 
         const revenueDisplay = revenueMissing
@@ -6357,7 +6317,7 @@
             const input = document.createElement('input');
             input.id = 'mwi-action-filter';
             input.type = 'text';
-            input.placeholder = t('Filter actions...');
+            input.placeholder = i18n_js.t('Filter actions...');
             input.className = 'MuiInputBase-input'; // Use game's input class
             input.style.padding = '8px 12px';
             input.style.fontSize = '14px';
@@ -6397,16 +6357,16 @@
             // Create sort toggle button
             const SORT_MODES = ['default', 'profit', 'xp', 'coinsPerXp'];
             const SORT_LABELS = {
-                default: t('Sort: Default'),
-                profit: t('Sort: Profit'),
-                xp: t('Sort: XP'),
-                coinsPerXp: t('Sort: Profit/XP'),
+                default: i18n_js.t('Sort: Default'),
+                profit: i18n_js.t('Sort: Profit'),
+                xp: i18n_js.t('Sort: XP'),
+                coinsPerXp: i18n_js.t('Sort: Profit/XP'),
             };
             const sortBtn = document.createElement('button');
             sortBtn.id = 'mwi-action-sort-toggle';
             const updateSortBtn = () => {
                 const mode = actionPanelSort.getSortMode();
-                sortBtn.textContent = SORT_LABELS[mode] || t('Sort: Default');
+                sortBtn.textContent = SORT_LABELS[mode] || i18n_js.t('Sort: Default');
                 const isActive = mode !== 'default';
                 sortBtn.style.borderColor = isActive ? config.COLOR_ACCENT : 'rgba(255, 255, 255, 0.23)';
                 sortBtn.style.color = isActive ? config.COLOR_ACCENT : 'inherit';
@@ -6442,7 +6402,7 @@
             modeBtn.id = 'mwi-action-profit-mode';
             const updateModeBtn = () => {
                 const mode = config.getSettingValue('profitCalc_pricingMode', 'hybrid');
-                modeBtn.textContent = t('Mode: {0}', config.getPricingModeLabel(mode));
+                modeBtn.textContent = i18n_js.t('Mode: {0}', config.getPricingModeLabel(mode));
             };
             modeBtn.style.cssText = `
             padding: 8px 12px;
@@ -6472,12 +6432,12 @@
             // Create craft toggle button
             const craftBtn = document.createElement('button');
             craftBtn.id = 'mwi-action-craft-toggle';
-            craftBtn.title = t(
+            craftBtn.title = i18n_js.t(
                 'When on, uses crafting cost for upgrade items if cheaper than market, and includes crafting time in profit/hr'
             );
             const updateCraftBtn = () => {
                 const enabled = config.getSetting('profitCalc_craftUpgradeItems');
-                craftBtn.textContent = enabled ? t('Craft: On') : t('Craft: Off');
+                craftBtn.textContent = enabled ? i18n_js.t('Craft: On') : i18n_js.t('Craft: Off');
             };
             craftBtn.style.cssText = `
             padding: 8px 12px;
@@ -6529,7 +6489,7 @@
                     message.style.padding = '40px 20px';
                     message.style.color = 'rgba(255, 255, 255, 0.6)';
                     message.style.fontSize = '16px';
-                    message.textContent = t('No matching actions');
+                    message.textContent = i18n_js.t('No matching actions');
 
                     // Insert after the title
                     titleElement.parentElement.insertBefore(message, titleElement.nextSibling);
@@ -7863,7 +7823,7 @@
                     const actionObj = this.matchActionFromDiv(actionDiv, currentActions, usedActionIds);
 
                     if (!actionObj) {
-                        this.appendTimeToActionDiv(actionDiv, t('[Unknown action]'));
+                        this.appendTimeToActionDiv(actionDiv, i18n_js.t('[Unknown action]'));
                         continue;
                     }
 
@@ -7883,7 +7843,7 @@
                     // Format time text
                     let timeText;
                     if (result.isTrulyInfinite) {
-                        timeText = t('[∞]');
+                        timeText = i18n_js.t('[∞]');
                     } else if (result.isInfinite && result.materialLimit !== null) {
                         const timeStr = formatters_js.timeReadableZh(result.totalTime);
                         timeText = `[${timeStr} · ${result.limitLabel}: ${this.formatLargeNumber(result.materialLimit)}]`;
@@ -7899,7 +7859,7 @@
                         const hours = String(completionDate.getHours()).padStart(2, '0');
                         const minutes = String(completionDate.getMinutes()).padStart(2, '0');
                         const seconds = String(completionDate.getSeconds()).padStart(2, '0');
-                        timeText += ` ${t('Complete at')} ${hours}:${minutes}:${seconds}`;
+                        timeText += ` ${i18n_js.t('Complete at')} ${hours}:${minutes}:${seconds}`;
                     }
 
                     this.appendTimeToActionDiv(actionDiv, timeText);
@@ -7923,9 +7883,9 @@
                     let totalText;
                     if (hasInfinite) {
                         totalText =
-                            accumulatedTime > 0 ? t('Total: {0} + [∞]', formatters_js.timeReadableZh(accumulatedTime)) : t('Total: [∞]');
+                            accumulatedTime > 0 ? i18n_js.t('Total: {0} + [∞]', formatters_js.timeReadableZh(accumulatedTime)) : i18n_js.t('Total: [∞]');
                     } else {
-                        totalText = t('Total: {0}', formatters_js.timeReadableZh(accumulatedTime));
+                        totalText = i18n_js.t('Total: {0}', formatters_js.timeReadableZh(accumulatedTime));
                     }
                     totalDiv.textContent = totalText;
                     actionsContainer.appendChild(totalDiv);
@@ -8095,13 +8055,13 @@
 
             // Derive limit label
             if (limitType === 'gold') {
-                limitLabel = t('gold');
+                limitLabel = i18n_js.t('gold');
             } else if (limitType && limitType.startsWith('material:')) {
-                limitLabel = t('mat');
+                limitLabel = i18n_js.t('mat');
             } else if (limitType && limitType.startsWith('upgrade:')) {
-                limitLabel = t('upgrade');
+                limitLabel = i18n_js.t('upgrade');
             } else {
-                limitLabel = t('max');
+                limitLabel = i18n_js.t('max');
             }
 
             return {
@@ -8752,17 +8712,17 @@
             // Queue count
             if (config.getSetting('actionBar_showQueueCount')) {
                 if (queueSizeDisplay !== Infinity) {
-                    statsToAppend.push(`(${queueSizeDisplay.toLocaleString()} ${t('queued')})`);
+                    statsToAppend.push(`(${queueSizeDisplay.toLocaleString()} ${i18n_js.t('queued')})`);
                 } else if (materialLimit !== null) {
                     let limitLabel = '';
                     if (limitType === 'gold') {
-                        limitLabel = t('gold limit');
+                        limitLabel = i18n_js.t('gold limit');
                     } else if (limitType && limitType.startsWith('material:')) {
-                        limitLabel = t('mat limit');
+                        limitLabel = i18n_js.t('mat limit');
                     } else if (limitType && limitType.startsWith('upgrade:')) {
-                        limitLabel = t('upgrade limit');
+                        limitLabel = i18n_js.t('upgrade limit');
                     } else {
-                        limitLabel = t('max');
+                        limitLabel = i18n_js.t('max');
                     }
                     statsToAppend.push(`(∞ · ${limitLabel}: ${this.formatLargeNumber(materialLimit)})`);
                 } else {
@@ -8772,12 +8732,12 @@
 
             // Time per action
             if (config.getSetting('actionBar_showActionDuration')) {
-                statsToAppend.push(`${actionTime.toFixed(2)}${t('s/action')}`);
+                statsToAppend.push(`${actionTime.toFixed(2)}${i18n_js.t('s/action')}`);
             }
 
             // Actions/hr and items/hr
             if (config.getSetting('actionBar_showActionsPerHour')) {
-                const msg = `${actionsPerHourWithEfficiency.toFixed(0)} ${t('actions/hr')} (${itemsPerHour.toFixed(0)} ${t('items/hr')})`;
+                const msg = `${actionsPerHourWithEfficiency.toFixed(0)} ${i18n_js.t('actions/hr')} (${itemsPerHour.toFixed(0)} ${i18n_js.t('items/hr')})`;
                 statsToAppend.push(msg);
             }
 
@@ -8812,7 +8772,7 @@
                                   hour12: true,
                               }
                     );
-                    recycleHtml = `<span style="color:#4dd0a0; margin-left:12px; font-size:11px;">${t('Est. w/ recycle: {0} → {1}', recycleTimeStr, recycleClockTime)}</span>`;
+                    recycleHtml = `<span style="color:#4dd0a0; margin-left:12px; font-size:11px;">${i18n_js.t('Est. w/ recycle: {0} → {1}', recycleTimeStr, recycleClockTime)}</span>`;
                 }
                 this.displayElement.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${matsLabel} ${timeStr} → ${clockTime}${recycleHtml}`;
             } else {
@@ -8992,13 +8952,13 @@
             const statsToAppend = [];
 
             if (config.getSetting('actionBar_showActionDuration')) {
-                statsToAppend.push(`${perActionTime.toFixed(2)}${t('s/action')}`);
+                statsToAppend.push(`${perActionTime.toFixed(2)}${i18n_js.t('s/action')}`);
             }
-            statsToAppend.push(`${actualSuccessRate.toFixed(1)}${t('% success')}`);
-            statsToAppend.push(`${t('~{0} to target', formatters_js.formatWithSeparator(expectedAttempts))}`);
+            statsToAppend.push(`${actualSuccessRate.toFixed(1)}${i18n_js.t('% success')}`);
+            statsToAppend.push(`${i18n_js.t('~{0} to target', formatters_js.formatWithSeparator(expectedAttempts))}`);
 
             if (protectFrom > 0 && expectedProtections > 0) {
-                statsToAppend.push(t('~{0} protections', formatters_js.formatWithSeparator(expectedProtections)));
+                statsToAppend.push(i18n_js.t('~{0} protections', formatters_js.formatWithSeparator(expectedProtections)));
             }
 
             this.appendStatsToActionName(actionNameElement, statsToAppend.join(' · '));
@@ -9036,7 +8996,7 @@
                 }
 
                 const itemIconHtml = this.getItemIconHtml(limitingItemHrid);
-                const matsLabel = itemIconHtml ? `${itemIconHtml}:` : t('Mats:');
+                const matsLabel = itemIconHtml ? `${itemIconHtml}:` : i18n_js.t('Mats:');
                 this.displayElement.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${matsLabel} ${timeStr} → ${clockTime} (${formatters_js.formatWithSeparator(materialLimit)} actions)`;
             } else {
                 this.displayElement.innerHTML = '';
@@ -9952,7 +9912,7 @@
                         const minutes = String(completionDate.getMinutes()).padStart(2, '0');
                         const seconds = String(completionDate.getSeconds()).padStart(2, '0');
 
-                        completionText = ` ${t('Complete at')} ${hours}:${minutes}:${seconds}`;
+                        completionText = ` ${i18n_js.t('Complete at')} ${hours}:${minutes}:${seconds}`;
                     }
 
                     // Create time display element
@@ -10037,12 +9997,12 @@
                 let totalText = '';
                 if (hasInfinite) {
                     if (accumulatedTime > 0) {
-                        totalText = `${t('Total time')}: ${formatters_js.timeReadableZh(accumulatedTime)} + [∞]`;
+                        totalText = `${i18n_js.t('Total time')}: ${formatters_js.timeReadableZh(accumulatedTime)} + [∞]`;
                     } else {
-                        totalText = `${t('Total time')}: [∞]`;
+                        totalText = `${i18n_js.t('Total time')}: [∞]`;
                     }
                 } else {
-                    totalText = `${t('Total time')}: ${formatters_js.timeReadableZh(accumulatedTime)}`;
+                    totalText = `${i18n_js.t('Total time')}: ${formatters_js.timeReadableZh(accumulatedTime)}`;
                 }
 
                 totalDiv.innerHTML = totalText;
@@ -10384,7 +10344,7 @@
 
             if (remaining !== undefined) {
                 remaining = Math.max(0, remaining);
-                span.textContent = remaining.toFixed(1) + t('s / ') + this.totalTime.toFixed(1) + 's';
+                span.textContent = remaining.toFixed(1) + i18n_js.t('s / ') + this.totalTime.toFixed(1) + 's';
             }
         }
 
@@ -10539,7 +10499,7 @@
 
             const addToggle = document.createElement('button');
             addToggle.textContent = '+';
-            addToggle.title = t('Toggle add mode: click to accumulate counts instead of setting them');
+            addToggle.title = i18n_js.t('Toggle add mode: click to accumulate counts instead of setting them');
             addToggle.style.cssText = `
             font-size: 11px;
             font-weight: 700;
@@ -10561,7 +10521,7 @@
             });
             fragment.appendChild(addToggle);
 
-            fragment.appendChild(document.createTextNode(t('Do ')));
+            fragment.appendChild(document.createTextNode(i18n_js.t('Do ')));
 
             const activePresetValues = this._parsePresets(
                 config.getSettingValue('actionPanel_quickInputs_countPresets', ''),
@@ -10583,7 +10543,7 @@
                 fragment.appendChild(button);
             });
 
-            const maxButton = this.createButton(t('Max'), () => {
+            const maxButton = this.createButton(i18n_js.t('Max'), () => {
                 const currentInput =
                     panel.querySelector('[class*="maxActionCountInput"] input') ||
                     panel.querySelector('input[type="number"]') ||
@@ -10601,7 +10561,7 @@
             });
             fragment.appendChild(maxButton);
 
-            fragment.appendChild(document.createTextNode(t(' times')));
+            fragment.appendChild(document.createTextNode(i18n_js.t(' times')));
 
             return fragment;
         }
@@ -10930,7 +10890,7 @@
                         const inputValue = numberInput.value;
 
                         if (inputValue === '∞') {
-                            totalTimeLine.textContent = t('Total time: ∞');
+                            totalTimeLine.textContent = i18n_js.t('Total time: ∞');
                             return;
                         }
 
@@ -10941,9 +10901,9 @@
                             // Calculate time-consuming actions needed
                             const baseActionsNeeded = Math.ceil(queueCount / efficiencyMultiplier);
                             const totalSeconds = baseActionsNeeded * actionTime;
-                            totalTimeLine.textContent = t('Total time: {0}', formatters_js.timeReadableZh(totalSeconds));
+                            totalTimeLine.textContent = i18n_js.t('Total time: {0}', formatters_js.timeReadableZh(totalSeconds));
                         } else {
-                            totalTimeLine.textContent = t('Total time: 0s');
+                            totalTimeLine.textContent = i18n_js.t('Total time: 0s');
                         }
                     };
 
@@ -10991,11 +10951,11 @@
                     const actionsPerHourWithEfficiency = Math.round(
                         profitHelpers_js.calculateEffectiveActionsPerHour(profitHelpers_js.calculateActionsPerHour(actionTime), efficiencyMultiplier)
                     );
-                    const initialSummary = t('{0}/hr | Total time: 0s', actionsPerHourWithEfficiency);
+                    const initialSummary = i18n_js.t('{0}/hr | Total time: 0s', actionsPerHourWithEfficiency);
 
                     speedSection = uiComponents_js.createCollapsibleSection(
                         '⏱',
-                        t('Action Speed & Time'),
+                        i18n_js.t('Action Speed & Time'),
                         initialSummary,
                         speedContent,
                         false // Collapsed by default
@@ -11013,19 +10973,19 @@
                         if (speedSummaryDiv) {
                             const inputValue = numberInput.value;
                             if (inputValue === '∞') {
-                                speedSummaryDiv.textContent = t('{0}/hr | Total time: ∞', actionsPerHourWithEfficiency);
+                                speedSummaryDiv.textContent = i18n_js.t('{0}/hr | Total time: ∞', actionsPerHourWithEfficiency);
                             } else {
                                 const queueCount = parseInt(inputValue) || 0;
                                 if (queueCount > 0) {
                                     const baseActionsNeeded = Math.ceil(queueCount / efficiencyMultiplier);
                                     const totalSeconds = baseActionsNeeded * actionTime;
-                                    speedSummaryDiv.textContent = t(
+                                    speedSummaryDiv.textContent = i18n_js.t(
                                         '{0}/hr | Total time: {1}',
                                         actionsPerHourWithEfficiency,
                                         formatters_js.timeReadableZh(totalSeconds)
                                     );
                                 } else {
-                                    speedSummaryDiv.textContent = t(
+                                    speedSummaryDiv.textContent = i18n_js.t(
                                         '{0}/hr | Total time: 0s',
                                         actionsPerHourWithEfficiency
                                     );
@@ -11096,7 +11056,7 @@
                 `;
 
                     // FIRST ROW: Time-based buttons (hours)
-                    queueContent.appendChild(document.createTextNode(t('Do ')));
+                    queueContent.appendChild(document.createTextNode(i18n_js.t('Do ')));
 
                     const activePresetHours = this._parsePresets(
                         config.getSettingValue('actionPanel_quickInputs_hourPresets', ''),
@@ -11255,7 +11215,7 @@
             };
 
             const roomHrid = roomMapping[actionType];
-            if (!roomHrid) return t('Unknown Room');
+            if (!roomHrid) return i18n_js.t('Unknown Room');
 
             const room = houseRooms.get(roomHrid);
             const roomName = roomHrid
@@ -11799,7 +11759,7 @@
                         // Auto-fill queue input when target level changes
                         this.setInputValue(numberInput, result.actionsNeeded);
                     } else {
-                        targetLevelResult.textContent = t('Invalid level');
+                        targetLevelResult.textContent = i18n_js.t('Invalid level');
                         targetLevelResult.style.color = 'var(--color-error, #ff4444)';
                     }
                 };
@@ -12466,7 +12426,7 @@
             user-select: none;
             filter: grayscale(100%) brightness(0.7);
         `;
-            pinIcon.title = t('Pin this action to keep it visible');
+            pinIcon.title = i18n_js.t('Pin this action to keep it visible');
 
             // Pin hover effect
             pinIcon.addEventListener('mouseenter', () => {
@@ -12710,25 +12670,25 @@
 
             if (showMaxProduceable) {
                 html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-                html += `<span style="color: ${canProduceColor};">${t('Can produce: {0}', maxCrafts.toLocaleString())}</span></div>`;
+                html += `<span style="color: ${canProduceColor};">${i18n_js.t('Can produce: {0}', maxCrafts.toLocaleString())}</span></div>`;
             }
 
             if (showProfit) {
                 if (hasMissingPrices) {
                     html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-                    html += `<span data-stat="profit" style="color: ${config.SCRIPT_COLOR_ALERT};">${t('Profit/hr: -- ⚠')}</span></div>`;
+                    html += `<span data-stat="profit" style="color: ${config.SCRIPT_COLOR_ALERT};">${i18n_js.t('Profit/hr: -- ⚠')}</span></div>`;
                 } else if (resolvedProfitPerHour !== null) {
                     const profitColor = resolvedProfitPerHour >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                     const profitSign = resolvedProfitPerHour >= 0 ? '' : '-';
                     const estimatedNote = outputPriceEstimated ? ' ⚠' : '';
                     html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-                    html += `<span data-stat="profit" style="color: ${profitColor};">${t('Profit/hr: {0}', `${profitSign}${formatters_js.formatKMB(Math.abs(resolvedProfitPerHour))}${estimatedNote}`)}</span></div>`;
+                    html += `<span data-stat="profit" style="color: ${profitColor};">${i18n_js.t('Profit/hr: {0}', `${profitSign}${formatters_js.formatKMB(Math.abs(resolvedProfitPerHour))}${estimatedNote}`)}</span></div>`;
                 }
             }
 
             if (showExp && expPerHour !== null && expPerHour > 0) {
                 html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-                html += `<span data-stat="exp" style="color: #fff;">${t('Exp/hr: {0}', formatters_js.formatKMB(expPerHour))}</span></div>`;
+                html += `<span data-stat="exp" style="color: #fff;">${i18n_js.t('Exp/hr: {0}', formatters_js.formatKMB(expPerHour))}</span></div>`;
             }
 
             if (
@@ -13035,7 +12995,7 @@
                 pinIcon.style.filter = 'grayscale(100%) brightness(0.7)';
                 pinIcon.style.transform = 'scale(1)';
             }
-            pinIcon.title = isPinned ? t('Unpin this action') : t('Pin this action to keep it visible');
+            pinIcon.title = isPinned ? i18n_js.t('Unpin this action') : i18n_js.t('Pin this action to keep it visible');
         }
 
         /**
@@ -13597,12 +13557,12 @@
                 const profitColor = profitPerHour >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                 const profitSign = profitPerHour >= 0 ? '' : '-';
                 html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-                html += `<span data-stat="profit" style="color: ${profitColor};">${t('Profit/hr: {0}', `${profitSign}${formatters_js.formatKMB(Math.abs(profitPerHour))}`)}</span></div>`;
+                html += `<span data-stat="profit" style="color: ${profitColor};">${i18n_js.t('Profit/hr: {0}', `${profitSign}${formatters_js.formatKMB(Math.abs(profitPerHour))}`)}</span></div>`;
             }
 
             if (showExp && expPerHour !== null && expPerHour > 0) {
                 html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-                html += `<span data-stat="exp" style="color: #fff;">${t('Exp/hr: {0}', formatters_js.formatKMB(expPerHour))}</span></div>`;
+                html += `<span data-stat="exp" style="color: #fff;">${i18n_js.t('Exp/hr: {0}', formatters_js.formatKMB(expPerHour))}</span></div>`;
             }
 
             if (showProfit && showExp && profitPerHour !== null && expPerHour !== null && expPerHour > 0) {
@@ -14585,7 +14545,7 @@
             // No mirror used - return traditional result
             optimalStrategy = {
                 protectFrom: optimalTraditional.protectFrom,
-                label: optimalTraditional.protectFrom === 0 ? t('Never') : `+${optimalTraditional.protectFrom}`,
+                label: optimalTraditional.protectFrom === 0 ? i18n_js.t('Never') : `+${optimalTraditional.protectFrom}`,
                 expectedAttempts: optimalTraditional.expectedAttempts,
                 totalTime: optimalTraditional.totalTime,
                 baseCost: optimalTraditional.baseCost,
@@ -14768,7 +14728,7 @@
 
         return {
             protectFrom: optimalTraditional.protectFrom,
-            label: optimalTraditional.protectFrom === 0 ? t('Never') : `From +${optimalTraditional.protectFrom}`,
+            label: optimalTraditional.protectFrom === 0 ? i18n_js.t('Never') : `From +${optimalTraditional.protectFrom}`,
             expectedAttempts: totalAttempts,
             totalTime: totalTime,
             baseCost: 0, // Not applicable for mirror phase
@@ -15565,7 +15525,7 @@
     ) {
         const button = document.createElement('button');
         button.id = 'mwi-missing-mats-button';
-        button.textContent = t('Missing Mats Marketplace');
+        button.textContent = i18n_js.t('Missing Mats Marketplace');
         button.disabled = disabled;
         button.style.cssText = `
         width: 100%;
@@ -15687,9 +15647,9 @@
     function createMissingMaterialsButton(missingMaterials, actionHrid, numActions, disabled = false) {
         const button = document.createElement('button');
         button.id = 'mwi-missing-mats-button';
-        button.textContent = t('Missing Mats Marketplace');
+        button.textContent = i18n_js.t('Missing Mats Marketplace');
         button.disabled = disabled;
-        button.title = disabled && numActions <= 0 ? t('Enter a quantity to check missing materials') : '';
+        button.title = disabled && numActions <= 0 ? i18n_js.t('Enter a quantity to check missing materials') : '';
         button.style.cssText = `
         width: 100%;
         padding: 10px 16px;
@@ -15854,7 +15814,7 @@
     `;
 
         if (strategyInfo.protectFrom === 0) {
-            indicator.textContent = t('No protection needed');
+            indicator.textContent = i18n_js.t('No protection needed');
         } else {
             // Get item sprite URL from existing DOM
             const spriteUse = document.querySelector('use[href*="items_sprite"]');
@@ -15872,7 +15832,7 @@
             }
 
             const label = document.createElement('span');
-            label.textContent = t('From: +{0}', strategyInfo.protectFrom);
+            label.textContent = i18n_js.t('From: +{0}', strategyInfo.protectFrom);
             indicator.appendChild(label);
         }
 
@@ -15927,7 +15887,7 @@
         if (badgeSpan) {
             badgeSpan.innerHTML = `
             <div style="text-align: center;">
-                <div>${t('\u21a9 Return')}</div>
+                <div>${i18n_js.t('\u21a9 Return')}</div>
                 <div style="font-size: 0.75em; color: #60a5fa;">${displayName}</div>
             </div>
         `;
@@ -16141,15 +16101,15 @@
 
         if (!material.isTradeable) {
             statusColor = '#888888'; // Gray - not tradeable
-            statusText = t('Not Tradeable');
+            statusText = i18n_js.t('Not Tradeable');
         } else if (material.missing > 0) {
             statusColor = '#ef4444'; // Red - missing materials
             // Show queued amount if any materials are reserved by queue
             const queuedText = material.queued > 0 ? ` (${formatters_js.formatWithSeparator(material.queued)} Q'd)` : '';
-            statusText = t('Missing: {0}', `${formatters_js.formatWithSeparator(material.missing)}${queuedText}`);
+            statusText = i18n_js.t('Missing: {0}', `${formatters_js.formatWithSeparator(material.missing)}${queuedText}`);
         } else {
             statusColor = '#4ade80'; // Green - sufficient materials
-            statusText = t('Sufficient ({0})', formatters_js.formatWithSeparator(material.required));
+            statusText = i18n_js.t('Sufficient ({0})', formatters_js.formatWithSeparator(material.required));
         }
 
         // Title case: capitalize first letter of each word
@@ -16367,11 +16327,11 @@
     `;
         header.innerHTML = `
         <div>
-            <span style="font-size:15px; font-weight:600; color:#e0e0e0;">${t('Budget Calculator')}</span>
+            <span style="font-size:15px; font-weight:600; color:#e0e0e0;">${i18n_js.t('Budget Calculator')}</span>
             <span style="margin-left:10px; color:#aaa;">
-                ${t('Budget: {0}', formatters_js.formatKMB(budget))}
+                ${i18n_js.t('Budget: {0}', formatters_js.formatKMB(budget))}
                 &nbsp;→&nbsp;
-                <strong style="color:#7ec87e;">${t('{0} units', formatters_js.formatWithSeparator(result.n))}</strong>
+                <strong style="color:#7ec87e;">${i18n_js.t('{0} units', formatters_js.formatWithSeparator(result.n))}</strong>
             </span>
         </div>
         <button id="mwi-budget-modal-close" style="
@@ -16408,7 +16368,7 @@
 
                 const askCell = ask
                     ? `<td style="${tdStyle}">${formatters_js.formatKMB(ask)}</td>`
-                    : `<td style="${tdDimStyle}">${mat.isTradeable ? t('No data') : '—'}</td>`;
+                    : `<td style="${tdDimStyle}">${mat.isTradeable ? i18n_js.t('No data') : '—'}</td>`;
 
                 const costCell =
                     lineCost > 0
@@ -16434,22 +16394,22 @@
         <table style="width:100%; border-collapse:collapse;">
             <thead>
                 <tr>
-                    <th style="${thLeftStyle}">${t('Ingredient')}</th>
-                    <th style="${thStyle}">${t('Required')}</th>
-                    <th style="${thStyle}">${t('On Hand')}</th>
-                    <th style="${thStyle}">${t('To Buy')}</th>
-                    <th style="${thStyle}">${t('Ask Price')}</th>
-                    <th style="${thStyle}">${t('Total Cost')}</th>
+                    <th style="${thLeftStyle}">${i18n_js.t('Ingredient')}</th>
+                    <th style="${thStyle}">${i18n_js.t('Required')}</th>
+                    <th style="${thStyle}">${i18n_js.t('On Hand')}</th>
+                    <th style="${thStyle}">${i18n_js.t('To Buy')}</th>
+                    <th style="${thStyle}">${i18n_js.t('Ask Price')}</th>
+                    <th style="${thStyle}">${i18n_js.t('Total Cost')}</th>
                 </tr>
             </thead>
             <tbody>${rows}</tbody>
             <tfoot>
                 <tr>
-                    <td colspan="5" style="${summaryRowStyle}; text-align:left; color:#aaa;">${t('Per unit cost (ask)')}</td>
+                    <td colspan="5" style="${summaryRowStyle}; text-align:left; color:#aaa;">${i18n_js.t('Per unit cost (ask)')}</td>
                     <td style="${summaryRowStyle}">${formatters_js.formatKMB(Math.round(perUnitCost))}</td>
                 </tr>
                 <tr>
-                    <td colspan="5" style="${summaryRowStyle}; text-align:left; color:#aaa;">${t('Total spend')}</td>
+                    <td colspan="5" style="${summaryRowStyle}; text-align:left; color:#aaa;">${i18n_js.t('Total spend')}</td>
                     <td style="${summaryRowStyle}; color:#7ec87e;">${formatters_js.formatKMB(totalSpend)}</td>
                 </tr>
             </tfoot>
@@ -16564,7 +16524,7 @@
 
             const input = document.createElement('input');
             input.type = 'text';
-            input.placeholder = t('Budget (e.g. 50m)');
+            input.placeholder = i18n_js.t('Budget (e.g. 50m)');
             input.style.cssText = `
             flex: 1;
             background: #2a2a2a;
@@ -16577,7 +16537,7 @@
         `;
 
             const calcBtn = document.createElement('button');
-            calcBtn.textContent = t('Calculate');
+            calcBtn.textContent = i18n_js.t('Calculate');
             calcBtn.style.cssText = `
             background: linear-gradient(180deg, rgba(126,200,126,0.2) 0%, rgba(126,200,126,0.1) 100%);
             color: #e0e0e0;
@@ -16598,7 +16558,7 @@
             });
 
             const detailsLink = document.createElement('span');
-            detailsLink.title = t('View last breakdown');
+            detailsLink.title = i18n_js.t('View last breakdown');
             detailsLink.style.cssText = 'font-size:14px; cursor:pointer; opacity:0.4; user-select:none;';
             detailsLink.textContent = '📋';
             detailsLink.style.display = 'none';
@@ -16626,9 +16586,9 @@
 
                 const result = findMaxUnits(actionHrid, budget);
                 if (!result) {
-                    calcBtn.textContent = t('No data');
+                    calcBtn.textContent = i18n_js.t('No data');
                     const timeout = setTimeout(() => {
-                        calcBtn.textContent = t('Calculate');
+                        calcBtn.textContent = i18n_js.t('Calculate');
                     }, 2000);
                     this.timerRegistry.registerTimeout(timeout);
                     return;
@@ -17244,21 +17204,21 @@
         const content = document.createElement('div');
 
         // === Summary comparison ===
-        const unitCostText = plan.unitCost === Infinity ? '?' : t('{0}/ea', formatters_js.formatWithSeparator(Math.round(plan.unitCost)));
-        const buyText = plan.buyPrice !== null ? formatters_js.formatWithSeparator(Math.round(plan.buyPrice)) : t('N/A');
-        const craftText = plan.craftCost !== null ? formatters_js.formatWithSeparator(Math.round(plan.craftCost)) : t('N/A');
-        const strategyText = plan.strategy === 'buy' ? t('Buy from market') : t('Craft from materials');
+        const unitCostText = plan.unitCost === Infinity ? '?' : i18n_js.t('{0}/ea', formatters_js.formatWithSeparator(Math.round(plan.unitCost)));
+        const buyText = plan.buyPrice !== null ? formatters_js.formatWithSeparator(Math.round(plan.buyPrice)) : i18n_js.t('N/A');
+        const craftText = plan.craftCost !== null ? formatters_js.formatWithSeparator(Math.round(plan.craftCost)) : i18n_js.t('N/A');
+        const strategyText = plan.strategy === 'buy' ? i18n_js.t('Buy from market') : i18n_js.t('Craft from materials');
 
         const summary = document.createElement('div');
         summary.style.cssText = 'margin-bottom: 6px;';
         summary.innerHTML = `
         <div style="display: flex; justify-content: space-between; color: var(--text-color-primary, #fff);">
-            <span>${t('Optimal:')} <strong>${strategyText}</strong></span>
+            <span>${i18n_js.t('Optimal:')} <strong>${strategyText}</strong></span>
             <span>${unitCostText}</span>
         </div>
         <div style="display: flex; justify-content: space-between; color: var(--text-color-secondary, #888); font-size: 0.9em;">
-            <span>${t('Market buy:')} ${buyText}</span>
-            <span>${t('Craft cost:')} ${craftText}</span>
+            <span>${i18n_js.t('Market buy:')} ${buyText}</span>
+            <span>${i18n_js.t('Craft cost:')} ${craftText}</span>
         </div>
     `;
         content.appendChild(summary);
@@ -17283,7 +17243,7 @@
             if (onToggle) onToggle();
         });
         toggleRow.appendChild(checkbox);
-        toggleRow.appendChild(document.createTextNode(t('Buy raw materials only')));
+        toggleRow.appendChild(document.createTextNode(i18n_js.t('Buy raw materials only')));
         content.appendChild(toggleRow);
 
         // === No processing toggle ===
@@ -17306,7 +17266,7 @@
             if (onToggle) onToggle();
         });
         noProcessingRow.appendChild(noProcessingCheckbox);
-        noProcessingRow.appendChild(document.createTextNode(t('No processing (buy intermediates)')));
+        noProcessingRow.appendChild(document.createTextNode(i18n_js.t('No processing (buy intermediates)')));
         content.appendChild(noProcessingRow);
 
         // === Task mode toggle ===
@@ -17329,7 +17289,7 @@
             if (onToggle) onToggle();
         });
         taskToggleRow.appendChild(taskCheckbox);
-        taskToggleRow.appendChild(document.createTextNode(t('Task mode (force last step)')));
+        taskToggleRow.appendChild(document.createTextNode(i18n_js.t('Task mode (force last step)')));
         content.appendChild(taskToggleRow);
 
         // === Time cost toggle ===
@@ -17348,7 +17308,7 @@
         timeCostCheckbox.checked = timeCostEnabled;
         timeCostCheckbox.style.cssText = 'margin: 0; cursor: pointer;';
         timeCostRow.appendChild(timeCostCheckbox);
-        timeCostRow.appendChild(document.createTextNode(t('Factor in time cost')));
+        timeCostRow.appendChild(document.createTextNode(i18n_js.t('Factor in time cost')));
 
         const goldInput = document.createElement('input');
         goldInput.type = 'number';
@@ -17361,7 +17321,7 @@
     `;
         goldInput.style.display = timeCostEnabled ? '' : 'none';
         const goldLabel = document.createElement('span');
-        goldLabel.textContent = t('gold/hr');
+        goldLabel.textContent = i18n_js.t('gold/hr');
         goldLabel.style.fontSize = '0.85em';
         goldLabel.style.display = timeCostEnabled ? '' : 'none';
 
@@ -17383,7 +17343,7 @@
         // Only show breakdown if crafting is the optimal strategy
         if (plan.strategy !== 'craft' || plan.children.length === 0) {
             const costText = plan.unitCost === Infinity ? '?' : `${formatters_js.formatKMB(Math.round(plan.unitCost))}/ea`;
-            const section = uiComponents_js.createCollapsibleSection('', t('Best Crafting Plan'), costText, content, defaultOpen, 0);
+            const section = uiComponents_js.createCollapsibleSection('', i18n_js.t('Best Crafting Plan'), costText, content, defaultOpen, 0);
             section.id = UI_ID;
             section.className = 'mwi-crafting-plan-section';
             return section;
@@ -17404,7 +17364,7 @@
             color: var(--text-color-primary, #fff);
             margin-bottom: 4px;
         `;
-            shoppingHeader.textContent = t('Shopping List');
+            shoppingHeader.textContent = i18n_js.t('Shopping List');
             content.appendChild(shoppingHeader);
 
             // Sort by total cost descending
@@ -17419,7 +17379,7 @@
 
             // Total buy cost
             const totalBuyCost = sortedItems.reduce((sum, item) => sum + item.totalCost, 0);
-            const totalRow = createRow(t('Total material cost'), formatters_js.formatWithSeparator(Math.round(totalBuyCost)), {
+            const totalRow = createRow(i18n_js.t('Total material cost'), formatters_js.formatWithSeparator(Math.round(totalBuyCost)), {
                 leftColor: 'var(--text-color-primary, #fff)',
             });
             totalRow.style.borderTop = '1px solid var(--border-color, #333)';
@@ -17429,7 +17389,7 @@
 
             // === Buy Missing Materials button ===
             const buyButton = document.createElement('button');
-            buyButton.textContent = t('Buy Missing Materials');
+            buyButton.textContent = i18n_js.t('Buy Missing Materials');
             buyButton.style.cssText = `
             width: 100%; margin-top: 6px; padding: 6px;
             background: linear-gradient(135deg, #1e40af, #3b82f6);
@@ -17503,7 +17463,7 @@
             color: var(--text-color-primary, #fff);
             margin-bottom: 4px;
         `;
-            stepsHeader.textContent = t('Crafting Steps');
+            stepsHeader.textContent = i18n_js.t('Crafting Steps');
             content.appendChild(stepsHeader);
 
             const gameData = dataManager.getInitClientData();
@@ -17533,7 +17493,7 @@
             }
 
             if (totalCraftSeconds > 0) {
-                const totalTimeRow = createRow(t('Total craft time'), formatters_js.timeReadableZh(totalCraftSeconds), {
+                const totalTimeRow = createRow(i18n_js.t('Total craft time'), formatters_js.timeReadableZh(totalCraftSeconds), {
                     leftColor: 'var(--text-color-primary, #fff)',
                 });
                 totalTimeRow.style.borderTop = '1px solid var(--border-color, #333)';
@@ -17544,7 +17504,7 @@
         }
 
         const costText = plan.unitCost === Infinity ? '?' : `${formatters_js.formatKMB(Math.round(plan.unitCost))}/ea`;
-        const section = uiComponents_js.createCollapsibleSection('', t('Best Crafting Plan'), costText, content, defaultOpen, 0);
+        const section = uiComponents_js.createCollapsibleSection('', i18n_js.t('Best Crafting Plan'), costText, content, defaultOpen, 0);
         section.id = UI_ID;
         section.className = 'mwi-crafting-plan-section';
 
@@ -19949,11 +19909,11 @@
         `;
 
             // Create XP button
-            const xpButton = this.createButton(t('XP'), 'xp', config.COLOR_INFO);
+            const xpButton = this.createButton(i18n_js.t('XP'), 'xp', config.COLOR_INFO);
             // Create Gold button
-            const goldButton = this.createButton(t('Gold'), 'gold', config.COLOR_PROFIT);
+            const goldButton = this.createButton(i18n_js.t('Gold'), 'gold', config.COLOR_PROFIT);
             // Create Both button
-            const bothButton = this.createButton(t('Both'), 'both', config.COLOR_ACCENT);
+            const bothButton = this.createButton(i18n_js.t('Both'), 'both', config.COLOR_ACCENT);
 
             buttonContainer.appendChild(xpButton);
             buttonContainer.appendChild(goldButton);
@@ -20025,7 +19985,7 @@
             // Get current skill name — action filter doesn't track alchemy, so override when needed
             const skillName = isAlchemy ? 'Alchemy' : actionFilter.getCurrentSkillEnglishName();
             if (!skillName) {
-                this.showError(anchorButton, t('Could not detect current skill'));
+                this.showError(anchorButton, i18n_js.t('Could not detect current skill'));
                 return;
             }
 
@@ -20037,7 +19997,7 @@
             if (isAlchemy) {
                 alchemyContext = await getAlchemyContext();
                 if (!alchemyContext) {
-                    this.showError(anchorButton, t('No item selected in alchemy panel'));
+                    this.showError(anchorButton, i18n_js.t('No item selected in alchemy panel'));
                     return;
                 }
             }
@@ -20136,13 +20096,13 @@
             cursor: grab;
             user-select: none;
         `;
-            header.title = t('Drag to move');
+            header.title = i18n_js.t('Drag to move');
             if (drilldownAction) {
-                header.textContent = t('Optimal {0}/hr for {1}', goalLabel, drilldownAction);
+                header.textContent = i18n_js.t('Optimal {0}/hr for {1}', goalLabel, drilldownAction);
             } else if (alchemyContext) {
                 const dcPercent = result.drinkConcentration ? (result.drinkConcentration * 100).toFixed(2) : 0;
                 const dcSuffix = dcPercent > 0 ? ` (${dcPercent}% DC)` : '';
-                header.textContent = t(
+                header.textContent = i18n_js.t(
                     'Optimal {0}/hr for {1}: {2}',
                     goalLabel,
                     alchemyContext.actionType,
@@ -20152,7 +20112,7 @@
                 const displayName = locationTab || skillName;
                 const dcPercent = result.drinkConcentration ? (result.drinkConcentration * 100).toFixed(2) : 0;
                 const dcSuffix = dcPercent > 0 ? ` (${dcPercent}% DC)` : '';
-                header.textContent = t('Optimal {0}/hr for {1}', goalLabel, displayName + dcSuffix);
+                header.textContent = i18n_js.t('Optimal {0}/hr for {1}', goalLabel, displayName + dcSuffix);
             }
             popup.appendChild(header);
             this.makeDraggable(popup, header);
@@ -20168,7 +20128,7 @@
                 background: rgba(0, 0, 0, 0.3);
                 border-radius: 4px;
             `;
-                noResult.textContent = t('No valid combinations with current constraints.');
+                noResult.textContent = i18n_js.t('No valid combinations with current constraints.');
                 popup.appendChild(noResult);
             } else {
                 const teaList = document.createElement('div');
@@ -20226,11 +20186,11 @@
             stats.innerHTML = `
             <div style="margin-bottom: 4px;">
                 <span style="color: ${goal === 'xp' ? config.COLOR_INFO : config.COLOR_PROFIT};">
-                    ${t('Avg {0}/hr: {1}', goalLabel, avgValue)}
+                    ${i18n_js.t('Avg {0}/hr: {1}', goalLabel, avgValue)}
                 </span>
             </div>
             <div style="font-size: 11px;">
-                ${t('Level')} ${result.playerLevel} •
+                ${i18n_js.t('Level')} ${result.playerLevel} •
             </div>
         `;
 
@@ -20242,7 +20202,7 @@
                 text-decoration: underline;
                 color: rgba(255, 255, 255, 0.5);
             `;
-                backLink.textContent = t('← All {0} actions', skillName);
+                backLink.textContent = i18n_js.t('← All {0} actions', skillName);
                 backLink.addEventListener('click', () => {
                     const allResult = findOptimalTeas(skillName, goal, locationTab, null, null, alchemyContext);
                     if (!allResult.error && allResult.optimal) {
@@ -20259,18 +20219,18 @@
                 } else if (goal === 'gold') {
                     actionsText =
                         excludedCount > 0
-                            ? t(
+                            ? i18n_js.t(
                                   '{0} profitable of {1} (+{2} excluded)',
                                   profitableCount,
                                   result.actionsEvaluated,
                                   excludedCount
                               )
-                            : t('{0} profitable of {1}', profitableCount, result.actionsEvaluated);
+                            : i18n_js.t('{0} profitable of {1}', profitableCount, result.actionsEvaluated);
                 } else {
                     actionsText =
                         excludedCount > 0
-                            ? t('{0} actions (+{1} excluded)', result.actionsEvaluated, excludedCount)
-                            : t('{0} actions evaluated', result.actionsEvaluated);
+                            ? i18n_js.t('{0} actions (+{1} excluded)', result.actionsEvaluated, excludedCount)
+                            : i18n_js.t('{0} actions evaluated', result.actionsEvaluated);
                 }
 
                 const actionsToggle = document.createElement('span');
@@ -20280,7 +20240,7 @@
                 color: rgba(255, 255, 255, 0.5);
             `;
                 actionsToggle.textContent = actionsText;
-                actionsToggle.title = t('Click to expand');
+                actionsToggle.title = i18n_js.t('Click to expand');
 
                 const actionsDetail = document.createElement('div');
                 actionsDetail.style.cssText = `
@@ -20358,7 +20318,7 @@
                         color: rgba(255, 255, 255, 0.4);
                         padding-top: 4px;
                     `;
-                        separator.textContent = t('Excluded ({0} - level too low)', excludedActions.length);
+                        separator.textContent = i18n_js.t('Excluded ({0} - level too low)', excludedActions.length);
                         actionsDetail.appendChild(separator);
                     }
 
@@ -20378,7 +20338,7 @@
                     `;
 
                         const levelReq = document.createElement('span');
-                        levelReq.textContent = t('Lvl {0}', excluded.requiredLevel);
+                        levelReq.textContent = i18n_js.t('Lvl {0}', excluded.requiredLevel);
                         levelReq.style.cssText = `
                         color: rgba(255, 255, 255, 0.35);
                         font-style: italic;
@@ -20399,13 +20359,13 @@
                     } else if (goal === 'gold') {
                         expandedText =
                             excludedCount > 0
-                                ? t('▼ {0} profitable (+{1})', profitableCount, excludedCount)
-                                : t('▼ {0} profitable', profitableCount);
+                                ? i18n_js.t('▼ {0} profitable (+{1})', profitableCount, excludedCount)
+                                : i18n_js.t('▼ {0} profitable', profitableCount);
                     } else {
                         expandedText =
                             excludedCount > 0
-                                ? t('▼ {0} (+{1})', result.actionsEvaluated, excludedCount)
-                                : t('▼ {0} actions', result.actionsEvaluated);
+                                ? i18n_js.t('▼ {0} (+{1})', result.actionsEvaluated, excludedCount)
+                                : i18n_js.t('▼ {0} actions', result.actionsEvaluated);
                     }
                     actionsToggle.textContent = isHidden ? expandedText : actionsText;
                 });
@@ -20426,8 +20386,8 @@
                 text-decoration: underline;
                 color: ${config.COLOR_GOLD};
             `;
-                costToggle.textContent = t('Tea cost: {0}/hr ▶', formatters_js.formatKMB(costData.total));
-                costToggle.title = t('Click to expand');
+                costToggle.textContent = i18n_js.t('Tea cost: {0}/hr ▶', formatters_js.formatKMB(costData.total));
+                costToggle.title = i18n_js.t('Click to expand');
 
                 const costDetail = document.createElement('div');
                 costDetail.style.cssText = `
@@ -20450,7 +20410,7 @@
                 border-bottom: 1px solid rgba(255, 255, 255, 0.15);
                 margin-bottom: 4px;
             `;
-                [t('Tea'), t('Units/hr'), t('Unit cost'), t('Cost/hr')].forEach((label) => {
+                [i18n_js.t('Tea'), i18n_js.t('Units/hr'), i18n_js.t('Unit cost'), i18n_js.t('Cost/hr')].forEach((label) => {
                     const cell = document.createElement('span');
                     cell.textContent = label;
                     cell.style.textAlign = 'right';
@@ -20498,7 +20458,7 @@
                 border-top: 1px solid rgba(255, 255, 255, 0.15);
                 color: rgba(255, 255, 255, 0.5);
             `;
-                [t('Total'), '', '', formatters_js.formatKMB(costData.total)].forEach((text, i) => {
+                [i18n_js.t('Total'), '', '', formatters_js.formatKMB(costData.total)].forEach((text, i) => {
                     const cell = document.createElement('span');
                     cell.textContent = text;
                     cell.style.textAlign = i === 0 ? 'left' : 'right';
@@ -20510,7 +20470,7 @@
                 costToggle.addEventListener('click', () => {
                     const isHidden = costDetail.style.display === 'none';
                     costDetail.style.display = isHidden ? 'block' : 'none';
-                    costToggle.textContent = t('Tea cost: {0}/hr {1}', formatters_js.formatKMB(costData.total), isHidden ? '▼' : '▶');
+                    costToggle.textContent = i18n_js.t('Tea cost: {0}/hr {1}', formatters_js.formatKMB(costData.total), isHidden ? '▼' : '▶');
                 });
 
                 costSection.appendChild(costToggle);
@@ -20535,7 +20495,7 @@
                 color: rgba(255, 255, 255, 0.5);
                 margin-bottom: 6px;
             `;
-                altHeader.textContent = t('Alternatives:');
+                altHeader.textContent = i18n_js.t('Alternatives:');
                 altSection.appendChild(altHeader);
 
                 // Show top 3 alternatives (skip the optimal)
@@ -20566,7 +20526,7 @@
 
             const constraintHeader = document.createElement('div');
             constraintHeader.style.cssText = `font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 6px;`;
-            constraintHeader.textContent = t('Tea Constraints:');
+            constraintHeader.textContent = i18n_js.t('Tea Constraints:');
             constraintSection.appendChild(constraintHeader);
 
             const relevantTeas = getRelevantTeas(skillName.toLowerCase(), goal);
@@ -20600,7 +20560,7 @@
                 // Pin button ⊕
                 const pinBtn = document.createElement('button');
                 pinBtn.textContent = '⊕';
-                pinBtn.title = isPinned ? t('Remove pin') : t('Pin (force include)');
+                pinBtn.title = isPinned ? i18n_js.t('Remove pin') : i18n_js.t('Pin (force include)');
                 pinBtn.style.cssText = `
                 background: transparent;
                 border: 1px solid ${isPinned ? config.COLOR_GOLD : 'rgba(255,255,255,0.2)'};
@@ -20623,7 +20583,7 @@
                 // Ban button ⊘
                 const banBtn = document.createElement('button');
                 banBtn.textContent = '⊘';
-                banBtn.title = isBanned ? t('Remove ban') : t('Ban (force exclude)');
+                banBtn.title = isBanned ? i18n_js.t('Remove ban') : i18n_js.t('Ban (force exclude)');
                 banBtn.style.cssText = `
                 background: transparent;
                 border: 1px solid ${isBanned ? config.COLOR_LOSS : 'rgba(255,255,255,0.2)'};
@@ -20717,8 +20677,8 @@
             cursor: grab;
             user-select: none;
         `;
-            header.textContent = t('Optimal Teas for {0}', displayName);
-            header.title = t('Drag to move');
+            header.textContent = i18n_js.t('Optimal Teas for {0}', displayName);
+            header.title = i18n_js.t('Drag to move');
             popup.appendChild(header);
 
             this.makeDraggable(popup, header);
@@ -21216,7 +21176,7 @@
             margin-top: 2px;
             pointer-events: none;
         `;
-            span.textContent = count > 0 ? t('({0} in inventory)', formatCount(count)) : '';
+            span.textContent = count > 0 ? i18n_js.t('({0} in inventory)', formatCount(count)) : '';
 
             // Insert after the info container (nameEl's parent) so it sits on its own
             // line below the action name row. Inserting after nameEl itself puts the span
@@ -21252,7 +21212,7 @@
                 if (!span || !span.dataset.outputHrid) continue;
                 const count = countMap.get(span.dataset.outputHrid) || 0;
                 span.style.color = config.COLOR_INV_COUNT;
-                span.textContent = count > 0 ? t('({0} in inventory)', formatCount(count)) : '';
+                span.textContent = count > 0 ? i18n_js.t('({0} in inventory)', formatCount(count)) : '';
             }
         }
 
@@ -21378,11 +21338,11 @@
     const GATHERING_TYPES = ['/action_types/foraging', '/action_types/woodcutting', '/action_types/milking'];
 
     const COLUMNS = [
-        { key: 'name', label: t('Action'), align: 'left', filterable: false },
-        { key: 'skill', label: t('Skill'), align: 'left', filterable: true },
-        { key: 'level', label: t('Lv'), align: 'left', filterable: false },
-        { key: 'profitPerHour', label: t('Profit/hr'), align: 'right', filterable: false },
-        { key: 'expPerHour', label: t('XP/hr'), align: 'right', filterable: false },
+        { key: 'name', label: i18n_js.t('Action'), align: 'left', filterable: false },
+        { key: 'skill', label: i18n_js.t('Skill'), align: 'left', filterable: true },
+        { key: 'level', label: i18n_js.t('Lv'), align: 'left', filterable: false },
+        { key: 'profitPerHour', label: i18n_js.t('Profit/hr'), align: 'right', filterable: false },
+        { key: 'expPerHour', label: i18n_js.t('XP/hr'), align: 'right', filterable: false },
     ];
 
     const GRID_COLUMNS = '1fr 120px 50px 90px 90px';
@@ -21520,7 +21480,7 @@
             margin-bottom: 2px;
         `;
 
-            btn.innerHTML = `<span style="font-size: 1.1em;">📌</span><span>${t('Pinned')}</span>`;
+            btn.innerHTML = `<span style="font-size: 1.1em;">📌</span><span>${i18n_js.t('Pinned')}</span>`;
 
             btn.addEventListener('mouseenter', () => {
                 if (!this.isActive) {
@@ -21694,7 +21654,7 @@
         `;
             header.innerHTML = `
             <span style="font-size: 1.3em;">📌</span>
-            <span style="font-size: 1.1em; font-weight: bold;">${t('Pinned Actions')}</span>
+            <span style="font-size: 1.1em; font-weight: bold;">${i18n_js.t('Pinned Actions')}</span>
             <span style="color: #888; font-size: 0.85em;">(${actions.length})</span>
         `;
             this.pageContainer.appendChild(header);
@@ -21709,7 +21669,7 @@
         `;
 
             for (const tab of ['overview', 'materials']) {
-                const label = tab === 'overview' ? t('Overview') : t('Materials');
+                const label = tab === 'overview' ? i18n_js.t('Overview') : i18n_js.t('Materials');
                 const btn = document.createElement('button');
                 btn.dataset.tab = tab;
                 btn.textContent = label;
@@ -21775,9 +21735,9 @@
                 empty.style.cssText = 'text-align: center; padding: 40px 20px; color: #999;';
                 empty.innerHTML = `
                 <div style="font-size: 2em; margin-bottom: 12px;">📌</div>
-                <div style="font-size: 1.1em; margin-bottom: 8px;">${t('No pinned actions yet')}</div>
+                <div style="font-size: 1.1em; margin-bottom: 8px;">${i18n_js.t('No pinned actions yet')}</div>
                 <div style="font-size: 0.85em; color: #666;">
-                    ${t('Pin actions using the 📌 icon on action tiles to see them here.')}
+                    ${i18n_js.t('Pin actions using the 📌 icon on action tiles to see them here.')}
                 </div>
             `;
                 this.contentArea.appendChild(empty);
@@ -21918,7 +21878,7 @@
             if (actions.length === 0 && this.allActions.length > 0) {
                 const noResults = document.createElement('div');
                 noResults.style.cssText = 'text-align: center; padding: 20px; color: #888;';
-                noResults.textContent = t('No actions match the current filter.');
+                noResults.textContent = i18n_js.t('No actions match the current filter.');
                 this.contentArea.appendChild(noResults);
             }
         }
@@ -21943,7 +21903,7 @@
             if (productionActions.length === 0) {
                 const empty = document.createElement('div');
                 empty.style.cssText = 'text-align: center; padding: 40px 20px; color: #999;';
-                empty.textContent = t('No production actions pinned');
+                empty.textContent = i18n_js.t('No production actions pinned');
                 contentArea.appendChild(empty);
                 return;
             }
@@ -21985,7 +21945,7 @@
                 // Can produce count
                 const canProduceEl = document.createElement('div');
                 canProduceEl.style.cssText = `font-size: 0.85em; color: ${canProduce > 0 ? config.COLOR_PROFIT : config.COLOR_LOSS};`;
-                canProduceEl.textContent = t('Can produce: {0}', canProduce.toLocaleString());
+                canProduceEl.textContent = i18n_js.t('Can produce: {0}', canProduce.toLocaleString());
 
                 groupHeader.appendChild(iconEl);
                 groupHeader.appendChild(nameEl);
@@ -22056,7 +22016,7 @@
 
             // Title
             const title = document.createElement('div');
-            title.textContent = t('Filter by Skill');
+            title.textContent = i18n_js.t('Filter by Skill');
             title.style.cssText = 'color: #fff; font-weight: bold; margin-bottom: 10px; font-size: 0.85em;';
             popup.appendChild(title);
 
@@ -22091,7 +22051,7 @@
             btnRow.style.cssText = 'display: flex; gap: 8px;';
 
             const applyBtn = document.createElement('button');
-            applyBtn.textContent = t('Apply');
+            applyBtn.textContent = i18n_js.t('Apply');
             applyBtn.style.cssText = `
             flex: 1;
             padding: 6px;
@@ -22104,7 +22064,7 @@
         `;
 
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = t('Clear');
+            clearBtn.textContent = i18n_js.t('Clear');
             clearBtn.style.cssText = `
             flex: 1;
             padding: 6px;
@@ -22890,7 +22850,7 @@
 
             // Revenue Section
             const revenueDiv = document.createElement('div');
-            revenueDiv.innerHTML = `<div style="font-weight: 500; color: var(--text-color-primary, #fff); margin-bottom: 4px;">${t('Revenue: {0}/hr', formatters_js.formatLargeNumber(revenue))}</div>`;
+            revenueDiv.innerHTML = `<div style="font-weight: 500; color: var(--text-color-primary, #fff); margin-bottom: 4px;">${i18n_js.t('Revenue: {0}/hr', formatters_js.formatLargeNumber(revenue))}</div>`;
 
             // Split drops into normal, essence, and rare
             const normalDrops = profitData.dropRevenues.filter((drop) => !drop.isEssence && !drop.isRare);
@@ -22926,7 +22886,7 @@
 
                 const normalDropsSection = this.createTrackedCollapsible(
                     '',
-                    t('Normal Drops: {0}/hr', formatters_js.formatLargeNumber(Math.round(normalDropsRevenue))),
+                    i18n_js.t('Normal Drops: {0}/hr', formatters_js.formatLargeNumber(Math.round(normalDropsRevenue))),
                     null,
                     normalDropsContent,
                     false,
@@ -22955,7 +22915,7 @@
 
                 const essenceSection = this.createTrackedCollapsible(
                     '',
-                    t('Essence Drops: {0}/hr', formatters_js.formatLargeNumber(Math.round(essenceRevenue))),
+                    i18n_js.t('Essence Drops: {0}/hr', formatters_js.formatLargeNumber(Math.round(essenceRevenue))),
                     null,
                     essenceContent,
                     false,
@@ -22996,7 +22956,7 @@
 
                 const rareSection = this.createTrackedCollapsible(
                     '',
-                    t('Rare Drops: {0}/hr', formatters_js.formatLargeNumber(Math.round(rareRevenue))),
+                    i18n_js.t('Rare Drops: {0}/hr', formatters_js.formatLargeNumber(Math.round(rareRevenue))),
                     null,
                     rareContent,
                     false,
@@ -23007,7 +22967,7 @@
 
             // Costs Section
             const costsDiv = document.createElement('div');
-            costsDiv.innerHTML = `<div style="font-weight: 500; color: var(--text-color-primary, #fff); margin-top: 12px; margin-bottom: 4px;">${t('Costs: {0}/hr', formatters_js.formatLargeNumber(costs))}</div>`;
+            costsDiv.innerHTML = `<div style="font-weight: 500; color: var(--text-color-primary, #fff); margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: {0}/hr', formatters_js.formatLargeNumber(costs))}</div>`;
 
             // Material Costs subsection (consumed on ALL attempts)
             if (profitData.requirementCosts && profitData.requirementCosts.length > 0) {
@@ -23041,7 +23001,7 @@
 
                 const materialCostsSection = this.createTrackedCollapsible(
                     '',
-                    t('Material Costs: {0}/hr', formatters_js.formatLargeNumber(Math.round(profitData.materialCostPerHour))),
+                    i18n_js.t('Material Costs: {0}/hr', formatters_js.formatLargeNumber(Math.round(profitData.materialCostPerHour))),
                     null,
                     materialCostsContent,
                     false,
@@ -23071,7 +23031,7 @@
 
                 const catalystSection = this.createTrackedCollapsible(
                     '',
-                    t('Catalyst Cost: {0}/hr', formatters_js.formatLargeNumber(Math.round(profitData.catalystCost.costPerHour))),
+                    i18n_js.t('Catalyst Cost: {0}/hr', formatters_js.formatLargeNumber(Math.round(profitData.catalystCost.costPerHour))),
                     null,
                     catalystContent,
                     false,
@@ -23101,7 +23061,7 @@
                 profitData.consumableCosts.length;
                 const drinkCostsSection = this.createTrackedCollapsible(
                     '',
-                    t('Drink Costs: {0}/hr', formatters_js.formatLargeNumber(Math.round(profitData.totalTeaCostPerHour))),
+                    i18n_js.t('Drink Costs: {0}/hr', formatters_js.formatLargeNumber(Math.round(profitData.totalTeaCostPerHour))),
                     null,
                     drinkCostsContent,
                     false,
@@ -23119,7 +23079,7 @@
             // Main modifiers header
             const modifiersHeader = document.createElement('div');
             modifiersHeader.style.cssText = 'font-weight: 500; color: var(--text-color-primary, #fff); margin-bottom: 4px;';
-            modifiersHeader.textContent = t('Modifiers:');
+            modifiersHeader.textContent = i18n_js.t('Modifiers:');
             modifiersDiv.appendChild(modifiersHeader);
 
             // Success Rate breakdown
@@ -23130,20 +23090,20 @@
                 // Base success rate (from player level vs recipe requirement)
                 const line = document.createElement('div');
                 line.style.marginLeft = '8px';
-                line.textContent = `• ${t('Base Success Rate')}: ${formatters_js.formatPercentage(successBreakdown.base, 1)}`;
+                line.textContent = `• ${i18n_js.t('Base Success Rate')}: ${formatters_js.formatPercentage(successBreakdown.base, 1)}`;
                 successContent.appendChild(line);
 
                 // Tea bonus (from Catalytic Tea)
                 if (successBreakdown.tea > 0) {
                     const teaLine = document.createElement('div');
                     teaLine.style.marginLeft = '8px';
-                    teaLine.textContent = `• ${t('Tea Bonus')}: +${formatters_js.formatPercentage(successBreakdown.tea, 1)} (multiplicative)`;
+                    teaLine.textContent = `• ${i18n_js.t('Tea Bonus')}: +${formatters_js.formatPercentage(successBreakdown.tea, 1)} (multiplicative)`;
                     successContent.appendChild(teaLine);
                 }
 
                 const successSection = this.createTrackedCollapsible(
                     '',
-                    t('Success Rate: {0}', formatters_js.formatPercentage(profitData.successRate, 1)),
+                    i18n_js.t('Success Rate: {0}', formatters_js.formatPercentage(profitData.successRate, 1)),
                     null,
                     successContent,
                     false,
@@ -23154,7 +23114,7 @@
                 // Fallback if breakdown not available
                 const successRateLine = document.createElement('div');
                 successRateLine.style.marginLeft = '8px';
-                successRateLine.textContent = `• ${t('Success Rate')}: ${formatters_js.formatPercentage(profitData.successRate, 1)}`;
+                successRateLine.textContent = `• ${i18n_js.t('Success Rate')}: ${formatters_js.formatPercentage(profitData.successRate, 1)}`;
                 modifiersDiv.appendChild(successRateLine);
             }
 
@@ -23166,48 +23126,48 @@
                 if (effBreakdown.levelEfficiency > 0) {
                     const line = document.createElement('div');
                     line.style.marginLeft = '8px';
-                    line.textContent = `• ${t('Level Bonus')}: +${effBreakdown.levelEfficiency.toFixed(2)}%`;
+                    line.textContent = `• ${i18n_js.t('Level Bonus')}: +${effBreakdown.levelEfficiency.toFixed(2)}%`;
                     effContent.appendChild(line);
                 }
 
                 if (effBreakdown.houseEfficiency > 0) {
                     const line = document.createElement('div');
                     line.style.marginLeft = '8px';
-                    line.textContent = `• ${t('House Bonus')}: +${effBreakdown.houseEfficiency.toFixed(2)}%`;
+                    line.textContent = `• ${i18n_js.t('House Bonus')}: +${effBreakdown.houseEfficiency.toFixed(2)}%`;
                     effContent.appendChild(line);
                 }
 
                 if (effBreakdown.teaEfficiency > 0) {
                     const line = document.createElement('div');
                     line.style.marginLeft = '8px';
-                    line.textContent = `• ${t('Tea Bonus')}: +${effBreakdown.teaEfficiency.toFixed(2)}%`;
+                    line.textContent = `• ${i18n_js.t('Tea Bonus')}: +${effBreakdown.teaEfficiency.toFixed(2)}%`;
                     effContent.appendChild(line);
                 }
 
                 if (effBreakdown.equipmentEfficiency > 0) {
                     const line = document.createElement('div');
                     line.style.marginLeft = '8px';
-                    line.textContent = `• ${t('Equipment Bonus')}: +${effBreakdown.equipmentEfficiency.toFixed(2)}%`;
+                    line.textContent = `• ${i18n_js.t('Equipment Bonus')}: +${effBreakdown.equipmentEfficiency.toFixed(2)}%`;
                     effContent.appendChild(line);
                 }
 
                 if (effBreakdown.communityEfficiency > 0) {
                     const line = document.createElement('div');
                     line.style.marginLeft = '8px';
-                    line.textContent = `• ${t('Community Buff')}: +${effBreakdown.communityEfficiency.toFixed(2)}%`;
+                    line.textContent = `• ${i18n_js.t('Community Buff')}: +${effBreakdown.communityEfficiency.toFixed(2)}%`;
                     effContent.appendChild(line);
                 }
 
                 if (effBreakdown.achievementEfficiency > 0) {
                     const line = document.createElement('div');
                     line.style.marginLeft = '8px';
-                    line.textContent = `• ${t('Achievement Bonus')}: +${effBreakdown.achievementEfficiency.toFixed(2)}%`;
+                    line.textContent = `• ${i18n_js.t('Achievement Bonus')}: +${effBreakdown.achievementEfficiency.toFixed(2)}%`;
                     effContent.appendChild(line);
                 }
 
                 const effSection = this.createTrackedCollapsible(
                     '',
-                    t('Efficiency: +{0}', formatters_js.formatPercentage(profitData.efficiency, 1)),
+                    i18n_js.t('Efficiency: +{0}', formatters_js.formatPercentage(profitData.efficiency, 1)),
                     null,
                     effContent,
                     false,
@@ -23241,7 +23201,7 @@
 
                     const speedSection = this.createTrackedCollapsible(
                         '',
-                        t('Action Speed: +{0}', formatters_js.formatPercentage(actionSpeed, 1)),
+                        i18n_js.t('Action Speed: +{0}', formatters_js.formatPercentage(actionSpeed, 1)),
                         null,
                         speedContent,
                         false,
@@ -23281,7 +23241,7 @@
 
                     const rareSection = this.createTrackedCollapsible(
                         '',
-                        t('Rare Find: +{0}%', rareBreakdown.total.toFixed(2)),
+                        i18n_js.t('Rare Find: +{0}%', rareBreakdown.total.toFixed(2)),
                         null,
                         rareContent,
                         false,
@@ -23307,7 +23267,7 @@
 
                     const essenceSection = this.createTrackedCollapsible(
                         '',
-                        t('Essence Find: +{0}%', essenceBreakdown.total.toFixed(2)),
+                        i18n_js.t('Essence Find: +{0}%', essenceBreakdown.total.toFixed(2)),
                         null,
                         essenceContent,
                         false,
@@ -23336,7 +23296,7 @@
             color: ${profitColor};
             margin-bottom: 8px;
         `;
-            netProfitLine.textContent = t(
+            netProfitLine.textContent = i18n_js.t(
                 'Net Profit: {0}/hr, {1}/day',
                 formatters_js.formatLargeNumber(profit),
                 formatters_js.formatLargeNumber(profitPerDay)
@@ -23353,12 +23313,12 @@
             color: #888;
             font-size: 0.85em;
         `;
-            modeDiv.textContent = t('Pricing Mode: {0}', modeLabel);
+            modeDiv.textContent = i18n_js.t('Pricing Mode: {0}', modeLabel);
             topLevelContent.appendChild(modeDiv);
 
             const detailedBreakdownSection = this.createTrackedCollapsible(
                 '📊',
-                t('Detailed Breakdown'),
+                i18n_js.t('Detailed Breakdown'),
                 null,
                 detailsContent,
                 false,
@@ -23370,7 +23330,7 @@
             // Create main profit section
             const profitSection = this.createTrackedCollapsible(
                 '💰',
-                t('Profitability'),
+                i18n_js.t('Profitability'),
                 summary,
                 topLevelContent,
                 false,
@@ -23564,7 +23524,7 @@
                     const inputValue = inputField.value;
 
                     if (inputValue === '∞') {
-                        totalTimeLine.textContent = t('Total time: ∞');
+                        totalTimeLine.textContent = i18n_js.t('Total time: ∞');
                         return;
                     }
 
@@ -23574,7 +23534,7 @@
                         const totalSeconds = baseActionsNeeded * actionTime;
                         totalTimeLine.textContent = `Total time: ${formatters_js.timeReadableZh(totalSeconds)}`;
                     } else {
-                        totalTimeLine.textContent = t('Total time: 0s');
+                        totalTimeLine.textContent = i18n_js.t('Total time: 0s');
                     }
                 };
 
@@ -23818,7 +23778,7 @@
                         targetLevelResult.innerHTML = `${formatters_js.formatWithSeparator(result.actionsNeeded)} actions | ${formatters_js.timeReadableZh(result.timeNeeded)}`;
                         targetLevelResult.style.color = `var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY})`;
                     } else {
-                        targetLevelResult.textContent = t('Invalid level');
+                        targetLevelResult.textContent = i18n_js.t('Invalid level');
                         targetLevelResult.style.color = 'var(--color-error, #ff4444)';
                     }
                 };
@@ -24037,10 +23997,10 @@
                 if (badge) {
                     const badgeSpan = badge.querySelector('.MuiBadge-badge');
                     badge.textContent = '';
-                    badge.appendChild(document.createTextNode(t('Best Items')));
+                    badge.appendChild(document.createTextNode(i18n_js.t('Best Items')));
                     if (badgeSpan) badge.appendChild(badgeSpan);
                 } else {
-                    tab.textContent = t('Best Items');
+                    tab.textContent = i18n_js.t('Best Items');
                 }
 
                 tab.addEventListener('click', (e) => {
@@ -24257,12 +24217,12 @@
             // Sort toggle
             const sortLabel = document.createElement('span');
             sortLabel.style.cssText = 'color: #aaa; font-size: 0.75rem;';
-            sortLabel.textContent = t('Sort by:');
+            sortLabel.textContent = i18n_js.t('Sort by:');
             controls.appendChild(sortLabel);
 
             for (const mode of ['profit', 'xp']) {
                 const btn = document.createElement('button');
-                btn.textContent = mode === 'profit' ? t('Profit/hr') : t('XP/hr');
+                btn.textContent = mode === 'profit' ? i18n_js.t('Profit/hr') : i18n_js.t('XP/hr');
                 btn.setAttribute('data-mwi-sort-btn', mode);
                 btn.style.cssText = `
                 padding: 3px 8px; border-radius: 4px; cursor: pointer;
@@ -24278,7 +24238,7 @@
             // Profitable only toggle
             const profitToggle = document.createElement('button');
             profitToggle.setAttribute('data-mwi-profit-toggle', 'true');
-            profitToggle.textContent = t('Profitable only');
+            profitToggle.textContent = i18n_js.t('Profitable only');
             profitToggle.style.cssText = `
             padding: 3px 8px; border-radius: 4px; cursor: pointer;
             border: 1px solid #555; font-size: 0.75rem; color: #fff;
@@ -24297,7 +24257,7 @@
             searchRow.style.cssText = 'display: flex; margin-bottom: 8px;';
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = t('Search items...');
+            searchInput.placeholder = i18n_js.t('Search items...');
             searchInput.setAttribute('data-mwi-best-search', 'true');
             searchInput.style.cssText = `
             flex: 1; padding: 5px 10px; border-radius: 4px;
@@ -24325,14 +24285,14 @@
             // Profit/hr filter
             const profitFilter = document.createElement('span');
             profitFilter.style.cssText = 'display: flex; align-items: center; gap: 4px;';
-            profitFilter.innerHTML = t('Profit/hr:');
+            profitFilter.innerHTML = i18n_js.t('Profit/hr:');
             const profitMin = document.createElement('input');
             profitMin.type = 'text';
-            profitMin.placeholder = t('Min');
+            profitMin.placeholder = i18n_js.t('Min');
             profitMin.style.cssText = filterInputStyle;
             const profitMax = document.createElement('input');
             profitMax.type = 'text';
-            profitMax.placeholder = t('Max');
+            profitMax.placeholder = i18n_js.t('Max');
             profitMax.style.cssText = filterInputStyle;
 
             const parseFilterValue = (val) => {
@@ -24363,14 +24323,14 @@
             // Item price filter
             const priceFilter = document.createElement('span');
             priceFilter.style.cssText = 'display: flex; align-items: center; gap: 4px;';
-            priceFilter.innerHTML = t('Item price:');
+            priceFilter.innerHTML = i18n_js.t('Item price:');
             const priceMin = document.createElement('input');
             priceMin.type = 'text';
-            priceMin.placeholder = t('Min');
+            priceMin.placeholder = i18n_js.t('Min');
             priceMin.style.cssText = filterInputStyle;
             const priceMax = document.createElement('input');
             priceMax.type = 'text';
-            priceMax.placeholder = t('Max');
+            priceMax.placeholder = i18n_js.t('Max');
             priceMax.style.cssText = filterInputStyle;
             priceMin.addEventListener('change', onFilterChange);
             priceMax.addEventListener('change', onFilterChange);
@@ -24423,7 +24383,7 @@
             const title = this.modal.querySelector('[data-mwi-best-title]');
             if (title) {
                 const typeLabel = this.currentType.charAt(0).toUpperCase() + this.currentType.slice(1);
-                title.textContent = t('Best Items — {0}', typeLabel);
+                title.textContent = i18n_js.t('Best Items — {0}', typeLabel);
             }
 
             // Update tab styling
@@ -24458,7 +24418,7 @@
 
             for (const col of ['#', 'Item', 'Lvl', 'Catalyst', 'Profit/hr', 'XP/hr']) {
                 const th = document.createElement('th');
-                th.textContent = t(col);
+                th.textContent = i18n_js.t(col);
                 th.style.cssText = 'padding: 6px 8px; text-align: left; color: #aaa; font-weight: 500;';
                 if (col === '#' || col === 'Lvl') th.style.textAlign = 'center';
                 if (col === 'Profit/hr' || col === 'XP/hr') th.style.textAlign = 'right';
@@ -24548,14 +24508,14 @@
             if (sorted.length === 0) {
                 container.innerHTML =
                     '<div style="color: #888; padding: 20px; text-align: center;">' +
-                    t('No eligible items found') +
+                    i18n_js.t('No eligible items found') +
                     '</div>';
             } else {
                 container.appendChild(table);
                 if (sorted.length > maxRows) {
                     const more = document.createElement('div');
                     more.style.cssText = 'color: #888; text-align: center; padding: 8px; font-size: 0.75rem;';
-                    more.textContent = t('Showing top {0} of {1} items', maxRows, sorted.length);
+                    more.textContent = i18n_js.t('Showing top {0} of {1} items', maxRows, sorted.length);
                     container.appendChild(more);
                 }
             }
@@ -24592,7 +24552,7 @@
             const profitData = item.profitData;
 
             if (!profitData) {
-                container.textContent = t('No breakdown data available');
+                container.textContent = i18n_js.t('No breakdown data available');
                 container.style.color = '#888';
                 return container;
             }
@@ -24604,7 +24564,7 @@
                 const totalRevenue = profitData.dropRevenues
                     .filter((d) => !d.isSelfReturn)
                     .reduce((sum, d) => sum + d.revenuePerHour, 0);
-                revenueHeader.textContent = t('Revenue: {0}/hr', formatters_js.formatKMB(Math.round(totalRevenue)));
+                revenueHeader.textContent = i18n_js.t('Revenue: {0}/hr', formatters_js.formatKMB(Math.round(totalRevenue)));
                 container.appendChild(revenueHeader);
 
                 for (const drop of profitData.dropRevenues) {
@@ -24635,7 +24595,7 @@
             if (totalCosts > 0 || profitData.requirementCosts?.length > 0) {
                 const costsHeader = document.createElement('div');
                 costsHeader.style.cssText = 'color: #fff; font-weight: 500; margin-top: 6px; margin-bottom: 2px;';
-                costsHeader.textContent = t('Costs: {0}/hr', formatters_js.formatKMB(Math.round(totalCosts)));
+                costsHeader.textContent = i18n_js.t('Costs: {0}/hr', formatters_js.formatKMB(Math.round(totalCosts)));
                 container.appendChild(costsHeader);
 
                 // Input materials
@@ -24723,4 +24683,4 @@
 
     console.log('[Toolasha] Actions library loaded');
 
-})(Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.config, Toolasha.Utils.enhancementConfig, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.profitConstants, Toolasha.Utils.formatters, Toolasha.Core.marketAPI, Toolasha.Utils.domObserverHelpers, Toolasha.Core.storage, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.marketData, Toolasha.Utils.efficiency, Toolasha.Utils.profitHelpers, Toolasha.Market.profitCalculator, Toolasha.Utils.uiComponents, Toolasha.Utils.actionPanelHelper, Toolasha.Core.webSocketHook, Toolasha.Utils.dom, Toolasha.Utils.timerRegistry, Toolasha.Utils.actionCalculator, Toolasha.Utils.cleanupRegistry, Toolasha.Utils.teaParser, Toolasha.Utils.buffParser, Toolasha.Utils.equipmentParser, Toolasha.Utils.houseEfficiency, Toolasha.Utils.experienceParser, Toolasha.Utils.reactInput, Toolasha.Utils.experienceCalculator, Toolasha.Utils.materialCalculator, Toolasha.Market.expectedValueCalculator, Toolasha.Market.alchemyProfitCalculator);
+})(Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.i18n, Toolasha.Core.config, Toolasha.Utils.enhancementConfig, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.profitConstants, Toolasha.Utils.formatters, Toolasha.Core.marketAPI, Toolasha.Utils.domObserverHelpers, Toolasha.Core.storage, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.marketData, Toolasha.Utils.efficiency, Toolasha.Utils.profitHelpers, Toolasha.Market.profitCalculator, Toolasha.Utils.uiComponents, Toolasha.Utils.actionPanelHelper, Toolasha.Core.webSocketHook, Toolasha.Utils.dom, Toolasha.Utils.timerRegistry, Toolasha.Utils.actionCalculator, Toolasha.Utils.cleanupRegistry, Toolasha.Utils.teaParser, Toolasha.Utils.buffParser, Toolasha.Utils.equipmentParser, Toolasha.Utils.houseEfficiency, Toolasha.Utils.experienceParser, Toolasha.Utils.reactInput, Toolasha.Utils.experienceCalculator, Toolasha.Utils.materialCalculator, Toolasha.Market.expectedValueCalculator, Toolasha.Market.alchemyProfitCalculator);
