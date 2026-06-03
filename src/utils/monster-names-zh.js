@@ -88,5 +88,5 @@ export default {
     Werewolf: '狼人',
     Zombie: '僵尸',
     'Zombie Bear': '僵尸熊',
-    'Sherlock': '福尔摩斯',
+    Sherlock: '福尔摩斯',
 };

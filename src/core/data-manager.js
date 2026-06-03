@@ -1101,10 +1101,7 @@ class DataManager {
             if (dirty) {
                 try {
                     const existing = JSON.parse(localStorage.getItem('Toolasha_monsterCnMap') || '{}');
-                    localStorage.setItem(
-                        'Toolasha_monsterCnMap',
-                        JSON.stringify({ ...existing, ...found })
-                    );
+                    localStorage.setItem('Toolasha_monsterCnMap', JSON.stringify({ ...existing, ...found }));
                 } catch (e) {}
             }
         };

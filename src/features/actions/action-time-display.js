@@ -1540,10 +1540,7 @@ class ActionTimeDisplay {
                 communityBuffs: getCommunityBuffs(),
             });
 
-            const totalKills = allMonsters.reduce(
-                (sum, hrid) => sum + (simResult.deaths?.[hrid] || 0),
-                0
-            );
+            const totalKills = allMonsters.reduce((sum, hrid) => sum + (simResult.deaths?.[hrid] || 0), 0);
             const killsPerHour = totalKills / SIM_HOURS;
             if (killsPerHour <= 0) return null;
 
@@ -2354,7 +2351,9 @@ class ActionTimeDisplay {
                     if (combatEst && combatEst.totalSeconds > 0) {
                         const timeStr = timeReadableZh(combatEst.totalSeconds);
                         const completionDate = new Date();
-                        completionDate.setSeconds(completionDate.getSeconds() + accumulatedTime + combatEst.totalSeconds);
+                        completionDate.setSeconds(
+                            completionDate.getSeconds() + accumulatedTime + combatEst.totalSeconds
+                        );
                         const hours = String(completionDate.getHours()).padStart(2, '0');
                         const minutes = String(completionDate.getMinutes()).padStart(2, '0');
                         const seconds = String(completionDate.getSeconds()).padStart(2, '0');
