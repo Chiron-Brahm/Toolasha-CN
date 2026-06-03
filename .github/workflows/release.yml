@@ -20,6 +20,10 @@ jobs:
                   node-version: '20'
                   cache: 'npm'
 
+            - name: Get version
+              id: version
+              run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
             - name: Install dependencies
               run: npm ci
 
@@ -52,14 +56,14 @@ jobs:
                   git add dist/Toolasha.user.js dist/libraries/*.js
 
                   # Commit libraries
-                  git commit -m "chore(main): release ${{ github.event.head_commit.message }}"
+                  git commit -m "chore: release v${{ steps.version.outputs.VERSION }}"
 
                   # Pin entrypoint @require URLs to the library commit SHA
                   lib_sha=$(git rev-parse HEAD)
                   LIB_SHA="$lib_sha" node -e "const fs=require('fs');const path='dist/Toolasha.user.js';const base='https://cdn.jsdelivr.net/gh/${{ github.repository }}@'+process.env.LIB_SHA+'/dist/libraries/';const content=fs.readFileSync(path,'utf8');const updated=content.split('https://UPDATE-THIS-URL/').join(base);fs.writeFileSync(path,updated);"
 
                   git add dist/Toolasha.user.js
-                  git commit -m "chore(main): pin library requires"
+                  git commit -m "chore: pin library requires"
 
                   # Push releases branch
                   git push origin releases --force
@@ -67,9 +71,9 @@ jobs:
             - name: Upload userscripts as release artifact
               uses: softprops/action-gh-release@v2
               with:
-                  tag_name: v${{ github.sha }}
-                  name: Release ${{ github.sha }}
-                  generate_release_notes: false
+                  tag_name: v${{ steps.version.outputs.VERSION }}
+                  name: v${{ steps.version.outputs.VERSION }}
+                  generate_release_notes: true
                   files: |
                       dist/Toolasha.user.js
                       dist/libraries/*.js
