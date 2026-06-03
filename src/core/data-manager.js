@@ -8,6 +8,7 @@
 
 import webSocketHook from './websocket.js';
 import connectionState from './connection-state.js';
+import monsterNamesZh from '../utils/monster-names-zh.js';
 import storage from './storage.js';
 import { mergeMarketListings } from '../utils/market-listings.js';
 import { SCROLL_BUFF_VALUES } from '../utils/scroll-buff-values.js';
@@ -141,6 +142,9 @@ class DataManager {
 
                     // Build monster sort index map for task sorting
                     this.buildMonsterSortIndexMap();
+
+                    // Load monster Chinese→English name map (async, non-blocking)
+                    this._loadMonsterCnMap();
 
                     return true;
                 }
@@ -1010,14 +1014,106 @@ class DataManager {
             return null;
         }
 
-        // Search for monster by display name
-        for (const [hrid, monster] of Object.entries(this.initClientData.combatMonsterDetailMap)) {
-            if (monster.name === monsterName) {
+        const monsterMap = this.initClientData.combatMonsterDetailMap;
+        const cleanName = (monsterName || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
+
+        for (const [hrid, monster] of Object.entries(monsterMap)) {
+            if (monster.name === cleanName) {
                 return hrid;
             }
         }
 
+        if (this._monsterCnToEn && this._monsterCnToEn[cleanName]) {
+            const enName = this._monsterCnToEn[cleanName];
+            for (const [hrid, monster] of Object.entries(monsterMap)) {
+                if (monster.name === enName) {
+                    return hrid;
+                }
+            }
+        }
+
         return null;
+    }
+
+    _loadMonsterCnMap() {
+        if (this._monsterCnToEnLoaded) return;
+        this._monsterCnToEnLoaded = true;
+        this._monsterCnToEn = {};
+
+        for (const [enName, cnName] of Object.entries(monsterNamesZh)) {
+            if (cnName) this._monsterCnToEn[cnName] = enName;
+        }
+
+        try {
+            const saved = JSON.parse(localStorage.getItem('Toolasha_monsterCnMap') || '{}');
+            for (const [cnName, enName] of Object.entries(saved)) {
+                if (cnName && enName) this._monsterCnToEn[cnName] = enName;
+            }
+        } catch (e) {}
+
+        this._setupMonsterDomObserver();
+    }
+
+    _setupMonsterDomObserver() {
+        if (this._monsterObserverStarted) return;
+        this._monsterObserverStarted = true;
+
+        const harvest = () => {
+            const monsterMap = this.initClientData?.combatMonsterDetailMap;
+            if (!monsterMap) return;
+
+            const found = {};
+            const seen = new Set();
+
+            const walk = (root) => {
+                if (!root) return;
+                if (root.nodeType === 3) {
+                    const text = root.textContent?.trim();
+                    if (text && /^[一-龥]{2,15}$/.test(text) && !seen.has(text)) {
+                        seen.add(text);
+                        let elem = root.parentElement;
+                        for (let d = 0; elem && d < 4; d++, elem = elem.parentElement) {
+                            if (!elem.attributes) continue;
+                            for (const attr of elem.attributes) {
+                                if (attr.value && attr.value.startsWith('/monsters/') && monsterMap[attr.value]) {
+                                    found[text] = monsterMap[attr.value].name;
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    return;
+                }
+                for (const child of root.childNodes || []) walk(child);
+            };
+            walk(document.body);
+
+            if (Object.keys(found).length === 0) return;
+
+            let dirty = false;
+            for (const [cn, en] of Object.entries(found)) {
+                if (!this._monsterCnToEn[cn]) {
+                    this._monsterCnToEn[cn] = en;
+                    dirty = true;
+                }
+            }
+
+            if (dirty) {
+                try {
+                    const existing = JSON.parse(localStorage.getItem('Toolasha_monsterCnMap') || '{}');
+                    localStorage.setItem(
+                        'Toolasha_monsterCnMap',
+                        JSON.stringify({ ...existing, ...found })
+                    );
+                } catch (e) {}
+            }
+        };
+
+        setTimeout(harvest, 2000);
+        setInterval(harvest, 5000);
+
+        const observer = new MutationObserver(() => harvest());
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     }
 
     /**

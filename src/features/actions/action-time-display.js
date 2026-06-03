@@ -40,6 +40,8 @@ import { calculateEnhancementPredictions } from '../enhancement/enhancement-xp.j
 import { BASE_SUCCESS_RATES } from '../../utils/enhancement-calculator.js';
 import { t } from '../../core/i18n.js';
 import { itemNameTranslator } from '../../utils/item-name-translator.js';
+import { runSimulation } from '../combat-sim/combat-sim-runner.js';
+import { buildGameDataPayload, buildAllPlayerDTOs, getCommunityBuffs } from '../combat-sim/combat-sim-adapter.js';
 
 /**
  * ActionTimeDisplay class manages the time display panel and queue tooltips
@@ -774,15 +776,18 @@ class ActionTimeDisplay {
         const inventoryCount = inventoryCountMatch ? parseInt(inventoryCountMatch[1].replace(/,/g, ''), 10) : null;
         let action;
 
-        // Match against the front action (lowest ordinal = most active).
-        // Sort needed because the array is in insertion order, not ordinal order.
         if (cachedActions.length > 0) {
-            const sorted = cachedActions.sort((a, b) => a.ordinal - b.ordinal);
-            action = this.matchCurrentActionFromText(sorted.slice(0, 1), actionNameText);
-            // Fallback: if name matching fails (e.g. Chinese UI), use the first action directly
-            if (!action) {
-                action = sorted[0];
-            }
+            const sorted = [...cachedActions].sort((a, b) => a.ordinal - b.ordinal);
+            const debugActions = sorted.map((a) => {
+                const ad = dataManager.getActionDetails(a.actionHrid);
+                return {
+                    ordinal: a.ordinal,
+                    hrid: a.actionHrid,
+                    type: ad?.type || '?',
+                    name: ad?.name || '?',
+                };
+            });
+            action = this.matchCurrentActionFromText(sorted, actionNameText);
         }
 
         if (!action) {
@@ -1508,6 +1513,58 @@ class ActionTimeDisplay {
         return { count: realisticActions, totalTime };
     }
 
+    async estimateCombatTime(actionObj, actionDetails) {
+        try {
+            const initClientData = dataManager.getInitClientData();
+            const monsterMap = initClientData?.combatMonsterDetailMap || {};
+            const zoneAction = initClientData?.actionDetailMap?.[actionObj.actionHrid];
+            if (!zoneAction) return null;
+
+            const spawns = zoneAction.combatZoneInfo?.fightInfo?.randomSpawnInfo?.spawns || [];
+            const allMonsters = spawns.map((s) => s.combatMonsterHrid);
+            if (allMonsters.length === 0) return null;
+
+            const gameData = buildGameDataPayload();
+            if (!gameData) return null;
+
+            const { players } = await buildAllPlayerDTOs();
+            if (!players || !players.length) return null;
+
+            const SIM_HOURS = 0.1;
+            const simResult = await runSimulation({
+                gameData,
+                playerDTOs: players,
+                zoneHrid: actionObj.actionHrid,
+                difficultyTier: 0,
+                hours: SIM_HOURS,
+                communityBuffs: getCommunityBuffs(),
+            });
+
+            const totalKills = allMonsters.reduce(
+                (sum, hrid) => sum + (simResult.deaths?.[hrid] || 0),
+                0
+            );
+            const killsPerHour = totalKills / SIM_HOURS;
+            if (killsPerHour <= 0) return null;
+
+            let count = Infinity;
+            if (actionObj.hasMaxCount) {
+                count = actionObj.maxCount - actionObj.currentCount;
+            } else {
+                const taskHrid = actionObj.taskHrid || actionObj.taskTypeHrid;
+                if (taskHrid && initClientData?.taskDetailMap?.[taskHrid]?.count) {
+                    count = initClientData.taskDetailMap[taskHrid].count;
+                }
+            }
+            if (!isFinite(count) || count <= 0) return null;
+
+            const totalSeconds = Math.round((count / killsPerHour) * 3600);
+            return { count, killsPerHour, totalSeconds };
+        } catch (e) {
+            return null;
+        }
+    }
+
     parseActionNameFromDom(actionNameText) {
         // Strip ALL trailing parentheses groups (e.g., "(T3) (Party)" or "(50)")
         // This handles combat tiers and party indicators: "Infernal Abyss (T3) (Party)" → "Infernal Abyss"
@@ -1529,10 +1586,14 @@ class ActionTimeDisplay {
     }
 
     buildItemHridFromName(itemName) {
-        return `/items/${itemName
+        const asciiHrid = `/items/${itemName
             .toLowerCase()
             .replace(/[^a-z0-9\s]/g, '')
             .replace(/\s+/g, '_')}`;
+        if (/\/items\/[a-z]/.test(asciiHrid)) {
+            return asciiHrid;
+        }
+        return null;
     }
 
     /**
@@ -1578,6 +1639,14 @@ class ActionTimeDisplay {
             const actionDetails = dataManager.getActionDetails(currentAction.actionHrid);
             if (!actionDetails) {
                 return false;
+            }
+
+            // Combat actions: match by monster name from DOM (Chinese or English)
+            if (actionDetails.type === '/action_types/combat') {
+                const monsterHrid = dataManager.getMonsterHridFromName(actionNameFromDom);
+                if (!monsterHrid) return false;
+                const zoneHrid = dataManager.getCombatZoneForMonster(monsterHrid);
+                return zoneHrid === currentAction.actionHrid;
             }
 
             // Enhancing actions: DOM shows item name (e.g. "Cheese Sword +1"), not "Enhance: ..."
@@ -2014,7 +2083,6 @@ class ActionTimeDisplay {
             itemNameFromDiv = null;
         }
 
-        // Match action from cache (same logic as main display, excluding already-used actions)
         const match = cachedActions.find((a) => {
             if (usedActionIds.has(a.id)) {
                 return false; // Skip already-matched actions
@@ -2026,6 +2094,13 @@ class ActionTimeDisplay {
             }
 
             if (actionDetails.name !== actionNameFromDiv) {
+                if (actionDetails.type === '/action_types/combat') {
+                    const monsterHrid = dataManager.getMonsterHridFromName(actionNameFromDiv);
+                    if (!monsterHrid) return false;
+                    const zoneHrid = dataManager.getCombatZoneForMonster(monsterHrid);
+                    return zoneHrid === a.actionHrid;
+                }
+
                 let itemHridFromDiv = itemNameFromDiv
                     ? `/items/${itemNameFromDiv.toLowerCase().replace(/\s+/g, '_')}`
                     : `/items/${actionNameFromDiv.toLowerCase().replace(/\s+/g, '_')}`;
@@ -2048,14 +2123,6 @@ class ActionTimeDisplay {
         });
         if (match) return match;
 
-        // Fallback: if name matching fails (Chinese UI), match by ordinal order
-        const unmatched = cachedActions.filter((a) => !usedActionIds.has(a.id));
-        if (unmatched.length > 0) {
-            const fallback = unmatched[0];
-            usedActionIds.add(fallback.id);
-            return fallback;
-        }
-
         return null;
     }
 
@@ -2063,7 +2130,7 @@ class ActionTimeDisplay {
      * Inject time display into queue tooltip
      * @param {HTMLElement} queueMenu - Queue menu container element
      */
-    injectQueueTimes(queueMenu) {
+    async injectQueueTimes(queueMenu) {
         let shouldReconnectObserver = false;
 
         try {
@@ -2279,6 +2346,39 @@ class ActionTimeDisplay {
                 }
 
                 const isEnhancing = actionDetails.type === '/action_types/enhancing';
+                const isCombat = actionDetails.type === '/action_types/combat';
+
+                if (isCombat) {
+                    usedActionIds.add(actionObj.id);
+                    const combatEst = await this.estimateCombatTime(actionObj, actionDetails);
+                    if (combatEst && combatEst.totalSeconds > 0) {
+                        const timeStr = timeReadableZh(combatEst.totalSeconds);
+                        const completionDate = new Date();
+                        completionDate.setSeconds(completionDate.getSeconds() + accumulatedTime + combatEst.totalSeconds);
+                        const hours = String(completionDate.getHours()).padStart(2, '0');
+                        const minutes = String(completionDate.getMinutes()).padStart(2, '0');
+                        const seconds = String(completionDate.getSeconds()).padStart(2, '0');
+
+                        const combatTimeDiv = document.createElement('div');
+                        combatTimeDiv.className = 'mwi-queue-action-time';
+                        combatTimeDiv.style.cssText = `
+                            color: var(--text-color-secondary, ${config.COLOR_TEXT_SECONDARY});
+                            font-size: 0.85em;
+                            margin-top: 2px;
+                        `;
+                        combatTimeDiv.textContent = `[${timeStr} · ${this.formatLargeNumber(combatEst.count)} ${t('kills')}] ${t('Complete at')} ${hours}:${minutes}:${seconds}`;
+
+                        const actionTextContainer = actionDiv.querySelector('[class*="QueuedActions_actionText"]');
+                        if (actionTextContainer) {
+                            actionTextContainer.appendChild(combatTimeDiv);
+                        } else {
+                            actionDiv.appendChild(combatTimeDiv);
+                        }
+
+                        accumulatedTime += combatEst.totalSeconds;
+                    }
+                    continue;
+                }
 
                 // Check if infinite BEFORE calculating count
                 const isInfinite = !actionObj.hasMaxCount || actionObj.actionHrid.includes('/combat/');
@@ -2473,11 +2573,15 @@ class ActionTimeDisplay {
                 } else {
                     totalText = `${t('Total time')}: [∞]`;
                 }
-            } else {
+            } else if (accumulatedTime > 0) {
                 totalText = `${t('Total time')}: ${timeReadableZh(accumulatedTime)}`;
             }
 
-            totalDiv.innerHTML = totalText;
+            if (totalText) {
+                totalDiv.innerHTML = totalText;
+            } else {
+                totalDiv.remove();
+            }
 
             // Insert after queue menu
             queueMenu.insertAdjacentElement('afterend', totalDiv);
@@ -2574,7 +2678,7 @@ class ActionTimeDisplay {
                         ? config.getSettingValue('color_profit', '#4ade80')
                         : config.getSettingValue('color_loss', '#f87171');
                 const valueSign = totalProfit >= 0 ? '+' : '';
-                const valueLabel = isEstimatedValue ? 'Estimated value' : 'Total profit';
+                const valueLabel = isEstimatedValue ? t('Estimated value') : t('Total profit');
                 const valueText = `<br>${valueLabel}: <span style="color: ${valueColor};">${valueSign}${this.formatLargeNumber(Math.abs(Math.round(totalProfit)))}</span>`;
                 totalDiv.innerHTML = baseText + valueText;
             }
