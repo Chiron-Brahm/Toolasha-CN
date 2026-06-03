@@ -20,6 +20,8 @@
         "lint:md:fix": "markdownlint \"**/*.md\" --ignore node_modules --fix",
         "lint:md:links": "find . -name '*.md' ! -path './node_modules/*' -exec markdown-link-check --quiet {} \\;",
         "version:sync": "node scripts/sync-version.js",
+        "i18n:sync": "node scripts/sync-i18n.js",
+        "i18n:check": "node scripts/sync-i18n.js --dry-run",
         "prepare": "husky"
     },
     "keywords": [
