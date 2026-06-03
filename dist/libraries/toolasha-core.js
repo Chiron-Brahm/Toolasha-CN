@@ -6015,7 +6015,7 @@
         Werewolf: '狼人',
         Zombie: '僵尸',
         'Zombie Bear': '僵尸熊',
-        'Sherlock': '福尔摩斯',
+        Sherlock: '福尔摩斯',
     };
 
     /**
@@ -7188,10 +7188,7 @@
                 if (dirty) {
                     try {
                         const existing = JSON.parse(localStorage.getItem('Toolasha_monsterCnMap') || '{}');
-                        localStorage.setItem(
-                            'Toolasha_monsterCnMap',
-                            JSON.stringify({ ...existing, ...found })
-                        );
+                        localStorage.setItem('Toolasha_monsterCnMap', JSON.stringify({ ...existing, ...found }));
                     } catch (e) {}
                 }
             };
