@@ -1110,4 +1110,3 @@ function showCostsTableModal(container) {
         { childList: true }
     );
 }
-
