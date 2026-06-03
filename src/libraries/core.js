@@ -23,6 +23,7 @@ import marketAPI from '../api/marketplace.js';
 
 // i18n - register Chinese translations
 import '../core/i18n-zh-CN.js';
+import { t, registerLocale } from '../core/i18n.js';
 
 // Export to global namespace
 const toolashaRoot = window.Toolasha || {};
@@ -49,6 +50,7 @@ toolashaRoot.Core = {
     },
     marketAPI,
     performanceMonitor,
+    i18n: { t, registerLocale },
 };
 
 console.log('[Toolasha] Core library loaded');
