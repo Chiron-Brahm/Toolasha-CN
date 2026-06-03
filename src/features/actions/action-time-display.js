@@ -1980,9 +1980,12 @@ class ActionTimeDisplay {
 
         // Handle enhancing actions specially
         if (isEnhancingAction) {
-            // For enhancing, the text is just the item name (e.g., "Cheese Sword")
             const itemName = actionNameText;
-            const itemHrid = '/items/' + itemName.toLowerCase().replace(/\s+/g, '_');
+            let itemHrid = '/items/' + itemName.toLowerCase().replace(/\s+/g, '_');
+            if (/[\u4e00-\u9fff]/.test(itemHrid)) {
+                const chineseHrid = itemNameTranslator.getHridFromChineseName(itemName);
+                if (chineseHrid) itemHrid = chineseHrid;
+            }
 
             // Find enhancing action matching this item (excluding already-used actions)
             return cachedActions.find((a) => {
@@ -2023,9 +2026,14 @@ class ActionTimeDisplay {
             }
 
             if (actionDetails.name !== actionNameFromDiv) {
-                const itemHridFromDiv = itemNameFromDiv
+                let itemHridFromDiv = itemNameFromDiv
                     ? `/items/${itemNameFromDiv.toLowerCase().replace(/\s+/g, '_')}`
                     : `/items/${actionNameFromDiv.toLowerCase().replace(/\s+/g, '_')}`;
+                // Fallback: Chinese name → HRID via itemNameTranslator
+                if (!itemHridFromDiv || /[\u4e00-\u9fff]/.test(itemHridFromDiv)) {
+                    const chineseHrid = itemNameTranslator.getHridFromChineseName(itemNameFromDiv || actionNameFromDiv);
+                    if (chineseHrid) itemHridFromDiv = chineseHrid;
+                }
                 const outputItems = actionDetails.outputItems || [];
                 const dropTable = actionDetails.dropTable || [];
                 const matchesOutput = outputItems.some((item) => item.itemHrid === itemHridFromDiv);
