@@ -2,15 +2,13 @@
 
 ## [2.63.2](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.63.1...v2.63.2) (2026-06-13)
 
-
 ### Bug Fixes
 
-* correct version to 2.63.1 and point update URLs to fork releases ([5d20047](https://github.com/Chiron-Brahm/Toolasha-CN/commit/5d2004774305fb03313d5369d39a2f08fe6db41c))
-
+- correct version to 2.63.1 and point update URLs to fork releases ([5d20047](https://github.com/Chiron-Brahm/Toolasha-CN/commit/5d2004774305fb03313d5369d39a2f08fe6db41c))
 
 ### Styles
 
-* fix prettier formatting across codebase ([fc78a7a](https://github.com/Chiron-Brahm/Toolasha-CN/commit/fc78a7a6cd399e4a792b33cefa69ba72adb60e3f))
+- fix prettier formatting across codebase ([fc78a7a](https://github.com/Chiron-Brahm/Toolasha-CN/commit/fc78a7a6cd399e4a792b33cefa69ba72adb60e3f))
 
 ## [2.63.1](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.63.0...v2.63.1) (2026-06-13)
 
