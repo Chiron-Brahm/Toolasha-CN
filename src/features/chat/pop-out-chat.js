@@ -32,7 +32,7 @@ const CHANNELS = [
     { hrid: '/chat_channel_types/ironcow', name: 'Ironcow' },
 ];
 
-const CHANNEL_NAME_MAP = Object.fromEntries(CHANNELS.map((c) => [c.hrid, c.name]));
+const _CHANNEL_NAME_MAP = Object.fromEntries(CHANNELS.map((c) => [c.hrid, c.name]));
 
 const SKILL_HRID_TO_NAME = {
     '/skills/total_level': 'Total Level',

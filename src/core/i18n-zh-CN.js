@@ -1874,7 +1874,6 @@ registerLocale('zh-CN', {
     personal_buffs_updated: 'personal_buffs_updated',
     playerXP_leaderboard: 'playerXP_leaderboard',
     queueMonitor_collapsed: 'queueMonitor_collapsed',
-    queued: 'queued',
     quickInput_addMode: 'quickInput_addMode',
     reconnected: 'reconnected',
     's / ': 's / ',

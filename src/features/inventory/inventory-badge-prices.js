@@ -5,7 +5,6 @@
  */
 
 import config from '../../core/config.js';
-import { t } from '../../core/i18n.js';
 import domObserver from '../../core/dom-observer.js';
 import marketAPI from '../../api/marketplace.js';
 import { formatKMB } from '../../utils/formatters.js';

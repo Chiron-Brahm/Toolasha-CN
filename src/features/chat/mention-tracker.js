@@ -4,7 +4,6 @@
  */
 
 import config from '../../core/config.js';
-import { t } from '../../core/i18n.js';
 import dataManager from '../../core/data-manager.js';
 import webSocketHook from '../../core/websocket.js';
 import domObserver from '../../core/dom-observer.js';

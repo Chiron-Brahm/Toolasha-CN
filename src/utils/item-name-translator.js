@@ -43,7 +43,7 @@ class ItemNameTranslator {
             if (saved && typeof saved === 'object' && saved._version === CACHE_VERSION && Object.keys(saved).length > 1) {
                 this.cnNames = saved;
             }
-        } catch (_) { /* ignore */ }
+        } catch  { /* ignore */ }
         this.isLoaded = true;
 
         // Bulk import from static Chinese name mapping (Edible Tools translations)
@@ -156,7 +156,7 @@ class ItemNameTranslator {
                 for (const node of mutation.addedNodes) {
                     try {
                         processNode(node);
-                    } catch (_) {
+                    } catch  {
                         // Skip errors from processing individual nodes
                     }
                 }

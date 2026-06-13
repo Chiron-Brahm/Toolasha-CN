@@ -754,6 +754,7 @@ class CombatSimUI {
     }
 
     startAllZonesSimulation() {
+        // eslint-disable-next-line no-unused-vars
         const hours = parseFloat(this.panel?.querySelector('#mwi-csim-hours')?.value) || 100;
         const selected = [];
         for (const zone of getCombatZones()) {

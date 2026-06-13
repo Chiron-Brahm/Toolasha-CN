@@ -167,6 +167,7 @@ export function calculateDrinksPerHour(drinkConcentration = 0) {
 export function calculateTeaCostsPerHour({
     drinkSlots = [],
     drinkConcentration = 0,
+    // eslint-disable-next-line no-unused-vars
     itemDetailMap = {},
     getItemPrice,
 }) {

@@ -407,6 +407,7 @@ export class SimEditor {
                 continue;
             }
 
+            // eslint-disable-next-line no-unused-vars
             const item = itemDetailMap[equip.hrid];
             const name = itemNameTranslator.getDisplayName(equip.hrid);
 
@@ -475,6 +476,7 @@ export class SimEditor {
 
     /** @private */
     _renderConsumablesSection(dto, gameData) {
+        // eslint-disable-next-line no-unused-vars
         const itemDetailMap = gameData?.itemDetailMap || {};
         const foodCount = dto.food.filter((f) => f).length;
         const drinkCount = dto.drinks.filter((d) => d).length;
