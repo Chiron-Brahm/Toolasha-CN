@@ -22,6 +22,7 @@ const ALLOWED_FILES = new Set([
     'README.zh-CN.md',
     'FEATURES.md',
     'MWI-TOOLS-CHANGELOG.md',
+    'extensions-page.md',
     'userscript-header.txt',
 ]);
 

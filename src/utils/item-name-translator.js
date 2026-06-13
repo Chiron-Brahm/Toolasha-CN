@@ -40,10 +40,17 @@ class ItemNameTranslator {
         if (this.isLoaded) return;
         try {
             const saved = await storage.get(STORAGE_KEY, 'settings');
-            if (saved && typeof saved === 'object' && saved._version === CACHE_VERSION && Object.keys(saved).length > 1) {
+            if (
+                saved &&
+                typeof saved === 'object' &&
+                saved._version === CACHE_VERSION &&
+                Object.keys(saved).length > 1
+            ) {
                 this.cnNames = saved;
             }
-        } catch { /* ignore */ }
+        } catch {
+            /* ignore */
+        }
         this.isLoaded = true;
 
         // Bulk import from static Chinese name mapping (Edible Tools translations)
@@ -219,7 +226,6 @@ class ItemNameTranslator {
         if (enName) return enName;
         return itemHrid.split('/').pop().replace(/_/g, ' ');
     }
-
 }
 
 export const itemNameTranslator = new ItemNameTranslator();

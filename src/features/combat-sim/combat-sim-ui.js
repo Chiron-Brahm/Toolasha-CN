@@ -626,8 +626,8 @@ class CombatSimUI {
             option.textContent = zone.isDungeon
                 ? `[D] ${getMonsterDisplayName(zone.hrid)}`
                 : zone.hrid.includes('/actions/combat/')
-                    ? getMonsterDisplayName(zone.hrid)
-                    : getZoneDisplayName(zone);
+                  ? getMonsterDisplayName(zone.hrid)
+                  : getZoneDisplayName(zone);
             zoneSelect.appendChild(option);
         }
 

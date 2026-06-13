@@ -27,9 +27,7 @@ export function getMyListingsTab(tablist) {
     // Skip non-native tabs (Toolasha inventory tabs, missing material tabs)
     // to find the second native marketplace tab
     const nativeTabs = Array.from(tablist.children).filter(
-        (child) =>
-            !child.hasAttribute('data-mwi-custom-tab') &&
-            !child.classList.contains('toolasha-inv-tab')
+        (child) => !child.hasAttribute('data-mwi-custom-tab') && !child.classList.contains('toolasha-inv-tab')
     );
     return nativeTabs[1] || null;
 }
@@ -183,7 +181,7 @@ export function getMonsterDisplayName(monsterHrid) {
 // Chinese zone name mapping (from game's official Chinese translation)
 const CN_ZONE_NAMES = {
     // Non-dungeon zones
-    'Farmlands': '农田',
+    Farmlands: '农田',
     'Autumn Fields': '秋田',
     'Quiet Valley': '幽谷',
     'Misty Marsh': '雾沼',

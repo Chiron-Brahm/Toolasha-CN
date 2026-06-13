@@ -1977,10 +1977,9 @@ registerLocale('zh-CN', {
     '📊 Costs by Enhancement Level': '📊 各等级强化成本',
     '🔄 Fetch Latest Prices': '🔄 获取最新价格',
     '🔍 Auto': '🔍 自动',
-    'queued': '已排队',
+    queued: '已排队',
     's/action': '秒/次',
     'actions/hr': '次/时',
     'items/hr': '个/时',
     '📊 Tracked {0} - No consumption yet (rate decreases over time)': '📊 已追踪 {0} - 暂无消耗（速率随时间衰减）',
-
 });

@@ -45,7 +45,8 @@ class HousePanelObserver {
             'HousePanel_modalContent',
             (modalContent) => {
                 this.handleHouseModal(modalContent);
-            }, { debounce: true, debounceDelay: 150 }
+            },
+            { debounce: true, debounceDelay: 150 }
         );
         this.cleanupRegistry.registerCleanup(unregisterModal);
     }
@@ -148,7 +149,8 @@ class HousePanelObserver {
                 childList: true,
                 subtree: true,
                 characterData: true,
-            }, { debounce: true, debounceDelay: 150 }
+            },
+            { debounce: true, debounceDelay: 150 }
         );
         this.cleanupRegistry.registerCleanup(observer);
     }

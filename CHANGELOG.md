@@ -2,20 +2,17 @@
 
 ## [2.63.1](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.63.0...v2.63.1) (2026-06-13)
 
-
 ### Bug Fixes
 
-* restore missing getDisplayName() and missing t() calls in task profit display ([23b8453](https://github.com/Chiron-Brahm/Toolasha-CN/commit/23b8453a76aea526a02b5133aecd0fcd223cc2a1))
-
+- restore missing getDisplayName() and missing t() calls in task profit display ([23b8453](https://github.com/Chiron-Brahm/Toolasha-CN/commit/23b8453a76aea526a02b5133aecd0fcd223cc2a1))
 
 ### Performance Improvements
 
-* optimize DOM observer and add debouncing to 25+ handlers ([762a12e](https://github.com/Chiron-Brahm/Toolasha-CN/commit/762a12e484325021b8dfc398dae331edd61b8f8b))
-
+- optimize DOM observer and add debouncing to 25+ handlers ([762a12e](https://github.com/Chiron-Brahm/Toolasha-CN/commit/762a12e484325021b8dfc398dae331edd61b8f8b))
 
 ### Miscellaneous Chores
 
-* remove unused i18n imports and clean up lint warnings ([c4b2286](https://github.com/Chiron-Brahm/Toolasha-CN/commit/c4b228669a8d18c0cdbf36810ddfc4fb014f04c6))
+- remove unused i18n imports and clean up lint warnings ([c4b2286](https://github.com/Chiron-Brahm/Toolasha-CN/commit/c4b228669a8d18c0cdbf36810ddfc4fb014f04c6))
 
 ## [2.63.0](https://github.com/Celasha/Toolasha/compare/v2.62.14...v2.63.0) (2026-06-13)
 

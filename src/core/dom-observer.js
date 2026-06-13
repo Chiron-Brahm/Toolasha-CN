@@ -194,9 +194,10 @@ class DOMObserver {
                 // which eliminates the bulk of querySelectorAll cost during React's
                 // init burst (thousands of individual leaf additions).
                 if (node.childElementCount >= 3) {
-                    const combinedSelector = classArray.length === 1
-                        ? `[class*="${classArray[0]}"]`
-                        : classArray.map(c => `[class*="${c}"]`).join(',');
+                    const combinedSelector =
+                        classArray.length === 1
+                            ? `[class*="${classArray[0]}"]`
+                            : classArray.map((c) => `[class*="${c}"]`).join(',');
                     const matches = node.querySelectorAll(combinedSelector);
                     for (let i = 0; i < matches.length; i++) {
                         callback(matches[i], false);

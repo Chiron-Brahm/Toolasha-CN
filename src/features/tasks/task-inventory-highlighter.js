@@ -41,7 +41,8 @@ class TaskInventoryHighlighter {
             'TasksPanel_taskSlotCount',
             (headerElement) => {
                 this.addHighlightButton(headerElement);
-            }, { debounce: true, debounceDelay: 150 }
+            },
+            { debounce: true, debounceDelay: 150 }
         );
     }
 

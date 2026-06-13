@@ -123,10 +123,10 @@ describe('calculateTaskEfficiencyRating', () => {
 });
 
 beforeEach(() => {
-    registerLocale("zh-CN", {
-        "tokens/hr": "代币/时",
-        "gold/hr": "金币/时",
-        "Missing price data": "缺失价格数据",
+    registerLocale('zh-CN', {
+        'tokens/hr': '代币/时',
+        'gold/hr': '金币/时',
+        'Missing price data': '缺失价格数据',
     });
 });
 describe('getRelativeEfficiencyGradientColor', () => {
