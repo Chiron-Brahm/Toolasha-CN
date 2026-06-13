@@ -41,7 +41,7 @@ class ItemCountDisplay {
             'MarketplacePanel_marketItems',
             (marketContainer) => {
                 this.updateItemCounts(marketContainer);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
 
         // Check for existing market container

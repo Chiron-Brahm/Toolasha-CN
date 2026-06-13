@@ -62,7 +62,7 @@ class TaskRerollProtection {
             'TasksPanel_taskSlotCount',
             (panel) => {
                 this._injectConfigButton(panel);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
         this.unregisterHandlers.push(unregisterPanel);
 

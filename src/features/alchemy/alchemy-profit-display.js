@@ -89,7 +89,7 @@ class AlchemyProfitDisplay {
                 this.checkAndUpdateDisplay();
                 // Setup content observer when alchemy component appears
                 this.setupContentObserver(alchemyComponent);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
 
         // Initial check for existing panel

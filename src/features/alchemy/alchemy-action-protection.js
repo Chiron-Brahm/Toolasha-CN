@@ -130,7 +130,7 @@ class AlchemyActionProtection {
             'SkillActionDetail_primaryItemSelectorContainer',
             (itemSelectorContainer) => {
                 this._injectShieldButton(itemSelectorContainer);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
         this.unregisterHandlers.push(unregister);
 

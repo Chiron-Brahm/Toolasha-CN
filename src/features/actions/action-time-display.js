@@ -218,7 +218,7 @@ class ActionTimeDisplay {
                 this.injectQueueTimes(queueMenu);
 
                 this.setupQueueMenuObserver(queueMenu);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
 
         this.cleanupRegistry.registerCleanup(() => {
@@ -561,7 +561,7 @@ class ActionTimeDisplay {
                 this.createDisplayPanel();
                 this.setupActionNameObserver(actionNameElement);
                 this.updateDisplay();
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
     }
 
@@ -595,7 +595,7 @@ class ActionTimeDisplay {
             {
                 childList: true,
                 subtree: true,
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
     }
 
@@ -665,7 +665,7 @@ class ActionTimeDisplay {
                 childList: true,
                 characterData: true,
                 subtree: true,
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
     }
 
@@ -1230,7 +1230,7 @@ class ActionTimeDisplay {
                               minute: '2-digit',
                               second: '2-digit',
                               hour12: true,
-                          }
+                          }, { debounce: true, debounceDelay: 150 }
                 );
                 recycleHtml = `<span style="color:#4dd0a0; margin-left:12px; font-size:11px;">${t('Est. w/ recycle: {0} → {1}', recycleTimeStr, recycleClockTime)}</span>`;
             }
@@ -1265,7 +1265,7 @@ class ActionTimeDisplay {
                 childList: true,
                 characterData: true,
                 subtree: true,
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
     }
 

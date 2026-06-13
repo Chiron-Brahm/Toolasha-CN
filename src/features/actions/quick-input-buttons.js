@@ -231,7 +231,7 @@ class QuickInputButtons {
             'SkillActionDetail_skillActionDetail',
             (panel) => {
                 this.injectButtons(panel);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
 
         this.cleanupRegistry.registerCleanup(() => {
@@ -576,7 +576,7 @@ class QuickInputButtons {
                     {
                         attributes: true,
                         attributeFilter: ['value'],
-                    }
+                    }, { debounce: true, debounceDelay: 150 }
                 );
                 this.cleanupRegistry.registerCleanup(() => {
                     if (inputObserverCleanup) {
@@ -661,7 +661,7 @@ class QuickInputButtons {
                     {
                         attributes: true,
                         attributeFilter: ['value'],
-                    }
+                    }, { debounce: true, debounceDelay: 150 }
                 );
                 this.cleanupRegistry.registerCleanup(() => {
                     newInputObserverCleanup();

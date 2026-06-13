@@ -363,7 +363,7 @@ class XPTracker {
                         this._addTimeTillLevelUp(tooltipEl);
                     });
                 }
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
         this.unregisterObservers.push(unregister);
     }

@@ -184,7 +184,7 @@ class DOMObserver {
                 // Check if node matches any of the target classes
                 for (const targetClass of classArray) {
                     if (className.includes(targetClass)) {
-                        callback(node);
+                        callback(node, true);
                         return; // Only call once per node
                     }
                 }
@@ -193,10 +193,13 @@ class DOMObserver {
                 // Only applies when the node has children — leaf nodes are skipped,
                 // which eliminates the bulk of querySelectorAll cost during React's
                 // init burst (thousands of individual leaf additions).
-                if (node.childElementCount > 0) {
-                    for (const targetClass of classArray) {
-                        const matches = node.querySelectorAll(`[class*="${targetClass}"]`);
-                        matches.forEach((match) => callback(match));
+                if (node.childElementCount >= 3) {
+                    const combinedSelector = classArray.length === 1
+                        ? `[class*="${classArray[0]}"]`
+                        : classArray.map(c => `[class*="${c}"]`).join(',');
+                    const matches = node.querySelectorAll(combinedSelector);
+                    for (let i = 0; i < matches.length; i++) {
+                        callback(matches[i], false);
                     }
                 }
             },

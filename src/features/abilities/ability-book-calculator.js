@@ -67,7 +67,7 @@ class AbilityBookCalculator {
             'ItemDictionary_modalContent__WvEBY',
             (dictContent) => {
                 this.handleItemDictionary(dictContent);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
 
         this.isActive = true;

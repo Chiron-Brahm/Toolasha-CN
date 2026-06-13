@@ -51,7 +51,7 @@ class OutputTotals {
             'SkillActionDetail_skillActionDetail',
             (detailPanel) => {
                 this.attachToActionPanel(detailPanel);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
     }
 
@@ -276,7 +276,7 @@ class OutputTotals {
                 {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
             clone.innerText = `${expectedMin} - ${expectedMax} (${expectedAvg})`;
         } else {

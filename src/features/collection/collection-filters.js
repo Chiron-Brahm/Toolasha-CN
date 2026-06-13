@@ -300,7 +300,7 @@ function buildFlags(includeFilters = true, includeFavorites = true) {
                 className: 'celestial',
                 checked: false,
                 fn: (itemId, n) => itemId.includes('celestial') && n === 0,
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
     }
 
@@ -541,7 +541,7 @@ class CollectionFilters {
                 const collectionsPanel = node.closest('.AchievementsPanel_collections__qA6CY');
                 if (!collectionsPanel) return;
                 this._rerenderPanel(node);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
         this.unregisterHandlers.push(unregPanel);
 
@@ -552,7 +552,7 @@ class CollectionFilters {
                 'SkillActionGrid_skillActionGrid__1tJFk',
                 (node) => {
                     this._addSkillingBadges(node);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
             this.unregisterHandlers.push(unregSkilling);
         }

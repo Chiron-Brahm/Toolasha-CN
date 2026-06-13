@@ -60,7 +60,7 @@ class MarketSort {
             'MarketplacePanel_itemFilterContainer',
             (filterContainer) => {
                 this.injectSortUI(filterContainer);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
 
         this.unregisterHandlers.push(unregister);
@@ -81,7 +81,7 @@ class MarketSort {
                 if (this.sortButton) {
                     this.sortButton.textContent = t('Sort by Profit');
                 }
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
 
         this.unregisterHandlers.push(unregisterNav);

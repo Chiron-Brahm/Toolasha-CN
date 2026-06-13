@@ -74,7 +74,7 @@ class SkillExperiencePercentage {
             'NavigationBar_currentExperience',
             (progressBar) => {
                 this.setupProgressBarObserver(progressBar);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
         this.unregisterHandlers.push(unregister);
     }
@@ -101,7 +101,7 @@ class SkillExperiencePercentage {
             {
                 attributes: true,
                 attributeFilter: ['style'],
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
 
         // Store the observer so we can clean it up later
