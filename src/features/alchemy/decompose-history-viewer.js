@@ -4,13 +4,11 @@
  * Injected as a tab in the alchemy panel tab bar.
  */
 
-import { t } from '../../core/i18n.js';
 import config from '../../core/config.js';
+import dataManager from '../../core/data-manager.js';
 import { decomposeHistoryTracker } from './decompose-history-tracker.js';
-import { itemNameTranslator } from '../../utils/item-name-translator.js';
-import { formatKMB } from '../../utils/formatters.js';
+import { formatKMB, formatDateTime } from '../../utils/formatters.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
-import { isAlchemyPanel, getAlchemyTab } from '../../utils/game-locale.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 
 const CATALYST_OF_DECOMPOSITION_HRID = '/items/catalyst_of_decomposition';
@@ -100,14 +98,19 @@ class DecomposeHistoryViewer {
             const tablist = document.querySelector('[role="tablist"]');
             if (!tablist) return;
 
-            // Verify this is the alchemy tablist
-            if (!isAlchemyPanel(tablist)) return;
+            // Verify this is the alchemy tablist by checking for "Decompose" tab
+            const hasDecompose = Array.from(tablist.children).some(
+                (btn) => btn.textContent.includes('Decompose') && !btn.dataset.mwiDecomposeHistoryTab
+            );
+            if (!hasDecompose) return;
 
             // Already injected?
             if (tablist.querySelector('[data-mwi-decompose-history-tab="true"]')) return;
 
             // Clone an existing tab for structure
-            const referenceTab = getAlchemyTab(tablist, 2);
+            const referenceTab = Array.from(tablist.children).find(
+                (btn) => btn.textContent.includes('Decompose') && !btn.dataset.mwiDecomposeHistoryTab
+            );
             if (!referenceTab) return;
 
             const tab = referenceTab.cloneNode(true);
@@ -122,10 +125,10 @@ class DecomposeHistoryViewer {
                 // Replace first text node (the label) while keeping badge span
                 const badgeSpan = badge.querySelector('.MuiBadge-badge');
                 badge.textContent = '';
-                badge.appendChild(document.createTextNode(t('Decompose History')));
+                badge.appendChild(document.createTextNode('Decompose History'));
                 if (badgeSpan) badge.appendChild(badgeSpan);
             } else {
-                tab.textContent = t('Decompose History');
+                tab.textContent = 'Decompose History';
             }
 
             tab.addEventListener('click', (e) => {
@@ -227,7 +230,7 @@ class DecomposeHistoryViewer {
         `;
 
         const title = document.createElement('h2');
-        title.textContent = t('Decompose History');
+        title.textContent = 'Decompose History';
         title.style.cssText = 'margin: 0; color: #fff;';
 
         const closeBtn = document.createElement('button');
@@ -411,15 +414,15 @@ class DecomposeHistoryViewer {
         headerRow.style.background = '#1a1a1a';
 
         const columns = [
-            { key: 'startTime', label: t('Session Start'), filterable: true },
-            { key: 'inputItemHrid', label: t('Input Item'), filterable: true },
-            { key: 'enhancementLevel', label: t('Enh. Level'), filterable: false },
-            { key: 'totalAttempts', label: t('Attempts'), filterable: false },
-            { key: 'totalSuccesses', label: t('Successes'), filterable: false },
-            { key: '_successRate', label: t('Success Rate'), filterable: false },
-            { key: 'results', label: t('Results'), filterable: true },
-            { key: '_catalystOfDecomposition', label: t('Catalyst of Decomposition'), filterable: false },
-            { key: '_primeCatalyst', label: t('Prime Catalyst'), filterable: false },
+            { key: 'startTime', label: 'Session Start', filterable: true },
+            { key: 'inputItemHrid', label: 'Input Item', filterable: true },
+            { key: 'enhancementLevel', label: 'Enh. Level', filterable: false },
+            { key: 'totalAttempts', label: 'Attempts', filterable: false },
+            { key: 'totalSuccesses', label: 'Successes', filterable: false },
+            { key: '_successRate', label: 'Success Rate', filterable: false },
+            { key: 'results', label: 'Results', filterable: true },
+            { key: '_catalystOfDecomposition', label: 'Catalyst of Decomposition', filterable: false },
+            { key: '_primeCatalyst', label: 'Prime Catalyst', filterable: false },
             { key: '_delete', label: '', filterable: false },
         ];
 
@@ -506,8 +509,8 @@ class DecomposeHistoryViewer {
             cell.colSpan = columns.length;
             cell.textContent =
                 this.sessions.length === 0
-                    ? t('No decompose history recorded yet.')
-                    : t('No sessions match the current filters.');
+                    ? 'No decompose history recorded yet.'
+                    : 'No sessions match the current filters.';
             cell.style.cssText = 'padding: 20px; text-align: center; color: #888;';
             row.appendChild(cell);
             tbody.appendChild(row);
@@ -521,7 +524,7 @@ class DecomposeHistoryViewer {
 
                 // Session Start
                 const dateCell = document.createElement('td');
-                dateCell.textContent = new Date(session.startTime).toLocaleString();
+                dateCell.textContent = formatDateTime(new Date(session.startTime));
                 dateCell.style.padding = '6px 10px';
                 row.appendChild(dateCell);
 
@@ -549,7 +552,7 @@ class DecomposeHistoryViewer {
                 // Successes
                 const successCell = document.createElement('td');
                 const failures = session.totalAttempts - session.totalSuccesses;
-                successCell.textContent = t('{0} ({1} failed)', session.totalSuccesses, failures);
+                successCell.textContent = `${session.totalSuccesses} (${failures} failed)`;
                 successCell.style.cssText = `
                     padding: 6px 10px;
                     color: ${failures > 0 ? '#fbbf24' : '#4ade80'};
@@ -593,7 +596,7 @@ class DecomposeHistoryViewer {
                 deleteCell.style.cssText = 'padding: 6px 4px; text-align: center;';
                 const deleteBtn = document.createElement('button');
                 deleteBtn.textContent = '\u2715';
-                deleteBtn.title = t('Delete this session');
+                deleteBtn.title = 'Delete this session';
                 deleteBtn.style.cssText = `
                     background: none; border: none; color: #dc2626;
                     cursor: pointer; font-size: 14px; padding: 2px 6px;
@@ -649,7 +652,7 @@ class DecomposeHistoryViewer {
             const name = this.getItemName(itemHrid);
             const total = formatKMB(result.totalValue || 0, 1);
             const each = formatKMB(result.priceEach || 0, 1);
-            text.textContent = t('{0} x{1} = {2} ({3} each)', name, result.count, total, each);
+            text.textContent = `${name} x${result.count} = ${total} (${each} each)`;
 
             line.appendChild(text);
             cell.appendChild(line);
@@ -692,7 +695,7 @@ class DecomposeHistoryViewer {
         // Stats
         const stats = document.createElement('span');
         stats.style.cssText = 'color: #aaa; font-size: 14px;';
-        stats.textContent = t('{0} sessions', this.filteredSessions.length);
+        stats.textContent = `${this.filteredSessions.length} session${this.filteredSessions.length !== 1 ? 's' : ''}`;
         controls.appendChild(stats);
 
         const rightGroup = document.createElement('div');
@@ -701,7 +704,7 @@ class DecomposeHistoryViewer {
         // Clear All Filters button (only when filters active)
         if (this.hasAnyFilter()) {
             const clearFiltersBtn = document.createElement('button');
-            clearFiltersBtn.textContent = t('Clear All Filters');
+            clearFiltersBtn.textContent = 'Clear All Filters';
             clearFiltersBtn.style.cssText = `
                 padding: 6px 12px; background: #e67e22; color: white;
                 border: none; border-radius: 4px; cursor: pointer;
@@ -722,7 +725,7 @@ class DecomposeHistoryViewer {
 
         // Clear History button
         const clearBtn = document.createElement('button');
-        clearBtn.textContent = t('Clear History');
+        clearBtn.textContent = 'Clear History';
         clearBtn.style.cssText = `
             padding: 6px 12px; background: #dc2626; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -744,8 +747,8 @@ class DecomposeHistoryViewer {
 
         if (this.filters.dateFrom || this.filters.dateTo) {
             const parts = [];
-            if (this.filters.dateFrom) parts.push(this.filters.dateFrom.toLocaleDateString());
-            if (this.filters.dateTo) parts.push(this.filters.dateTo.toLocaleDateString());
+            if (this.filters.dateFrom) parts.push(formatDateTime(this.filters.dateFrom, { includeTime: false }));
+            if (this.filters.dateTo) parts.push(formatDateTime(this.filters.dateTo, { includeTime: false }));
             badges.push({
                 label: `Date: ${parts.join(' - ')}`,
                 onRemove: () => {
@@ -825,7 +828,7 @@ class DecomposeHistoryViewer {
         leftSide.style.cssText = 'display: flex; gap: 8px; align-items: center; color: #aaa;';
 
         const label = document.createElement('span');
-        label.textContent = t('Rows per page:');
+        label.textContent = 'Rows per page:';
 
         const rowsInput = document.createElement('input');
         rowsInput.type = 'number';
@@ -1017,7 +1020,7 @@ class DecomposeHistoryViewer {
                 color: #aaa; font-size: 11px; margin-bottom: 10px;
                 padding: 6px; background: #1a1a1a; border-radius: 3px;
             `;
-            rangeInfo.textContent = `Available: ${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`;
+            rangeInfo.textContent = `Available: ${formatDateTime(minDate, { includeTime: false })} - ${formatDateTime(maxDate, { includeTime: false })}`;
             popup.appendChild(rangeInfo);
         }
 
@@ -1083,7 +1086,7 @@ class DecomposeHistoryViewer {
         // Search box
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = t('Search items...');
+        searchInput.placeholder = 'Search items...';
         searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 8px;
             background: #1a1a1a; border: 1px solid #555;
@@ -1160,7 +1163,7 @@ class DecomposeHistoryViewer {
 
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = t('Item name...');
+        searchInput.placeholder = 'Item name...';
         searchInput.value = this.filters.resultsSearch;
         searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 10px;
@@ -1249,7 +1252,7 @@ class DecomposeHistoryViewer {
         row.style.cssText = 'display: flex; gap: 8px; margin-top: 10px;';
 
         const applyBtn = document.createElement('button');
-        applyBtn.textContent = t('Apply');
+        applyBtn.textContent = 'Apply';
         applyBtn.style.cssText = `
             flex: 1; padding: 6px; background: #4a90e2; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -1316,7 +1319,8 @@ class DecomposeHistoryViewer {
         if (this.itemNameCache.has(itemHrid)) {
             return this.itemNameCache.get(itemHrid);
         }
-        const name = itemNameTranslator.getDisplayName(itemHrid);
+        const details = dataManager.getItemDetails(itemHrid);
+        const name = details?.name || itemHrid.split('/').pop().replace(/_/g, ' ');
         this.itemNameCache.set(itemHrid, name);
         return name;
     }
@@ -1377,7 +1381,7 @@ class DecomposeHistoryViewer {
         ];
 
         const rows = this.sessions.map((session) => {
-            const start = new Date(session.startTime).toLocaleString();
+            const start = formatDateTime(new Date(session.startTime));
             const inputName = this.getItemName(session.inputItemHrid);
             const failures = session.totalAttempts - session.totalSuccesses;
             const rate =

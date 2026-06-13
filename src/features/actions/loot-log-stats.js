@@ -4,13 +4,12 @@
  * Port of Edible Tools loot tracker feature, integrated into Toolasha architecture
  */
 
-import { t } from '../../core/i18n.js';
 import config from '../../core/config.js';
 import domObserver from '../../core/dom-observer.js';
 import webSocketHook from '../../core/websocket.js';
 import dataManager from '../../core/data-manager.js';
 import { getItemPrices } from '../../utils/market-data.js';
-import { formatKMB, numberFormatter } from '../../utils/formatters.js';
+import { formatKMB, numberFormatter, formatDateTime } from '../../utils/formatters.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import expectedValueCalculator from '../market/expected-value-calculator.js';
 import lootLogHistory from './loot-log-history.js';
@@ -311,13 +310,13 @@ class LootLogStats {
         header.style.cssText = `color: ${config.COLOR_GOLD}; font-weight: bold;`;
 
         if (askTotal === 0 && bidTotal === 0) {
-            header.textContent = t('Total Value: —');
+            header.textContent = 'Total Value: —';
             wrapper.appendChild(header);
             secondDiv.appendChild(wrapper);
             return;
         }
 
-        header.textContent = t('▶ Total Value: {0}/{1}', formatKMB(askTotal), formatKMB(bidTotal));
+        header.textContent = `▶ Total Value: ${formatKMB(askTotal)}/${formatKMB(bidTotal)}`;
         header.style.cursor = 'pointer';
         wrapper.appendChild(header);
 
@@ -364,7 +363,7 @@ class LootLogStats {
             let bidPerItem = 0;
 
             if (baseHrid === '/items/coin') {
-                name = t('Coins');
+                name = 'Coins';
                 askPerItem = 1;
                 bidPerItem = 1;
             } else {
@@ -451,7 +450,7 @@ class LootLogStats {
             if (item.askTotal > 0 || item.bidTotal > 0) {
                 totalSpan.textContent = `${formatKMB(item.askTotal)}/${formatKMB(item.bidTotal)}`;
             } else {
-                totalSpan.textContent = t('—');
+                totalSpan.textContent = '—';
             }
             row.appendChild(totalSpan);
 
@@ -525,7 +524,7 @@ class LootLogStats {
         // Create average time span
         const avgTimeSpan = document.createElement('span');
         avgTimeSpan.className = 'mwi-loot-log-avgtime';
-        avgTimeSpan.textContent = t('⏱{0}', this.formatDuration(avgTime));
+        avgTimeSpan.textContent = `⏱${this.formatDuration(avgTime)}`;
         avgTimeSpan.style.marginRight = '16px';
         avgTimeSpan.style.marginLeft = '2ch';
         avgTimeSpan.style.color = config.COLOR_INFO;
@@ -542,9 +541,9 @@ class LootLogStats {
         dayValueSpan.className = 'mwi-loot-log-day-value';
 
         if (dayValueAsk === 0 && dayValueBid === 0) {
-            dayValueSpan.textContent = t('Daily Output: —');
+            dayValueSpan.textContent = 'Daily Output: —';
         } else {
-            dayValueSpan.textContent = t('Daily Output: {0}/{1}', formatKMB(dayValueAsk), formatKMB(dayValueBid));
+            dayValueSpan.textContent = `Daily Output: ${formatKMB(dayValueAsk)}/${formatKMB(dayValueBid)}`;
         }
 
         dayValueSpan.style.float = 'right';
@@ -584,7 +583,7 @@ class LootLogStats {
             color: rgba(96, 165, 250, 0.7);
             font-size: 0.85em;
         `;
-        separator.textContent = t('— Historical Entries ({0}) —', historicalEntries.length);
+        separator.textContent = `— Historical Entries (${historicalEntries.length}) —`;
 
         // Create wrapper
         const wrapper = document.createElement('div');
@@ -604,10 +603,7 @@ class LootLogStats {
         if (historicalEntries.length > this.historicalBatchSize) {
             const showMoreBtn = document.createElement('button');
             showMoreBtn.className = 'mwi-loot-log-history-more';
-            showMoreBtn.textContent = t(
-                'Show more ({0} remaining)',
-                historicalEntries.length - this.historicalRendered
-            );
+            showMoreBtn.textContent = `Show more (${historicalEntries.length - this.historicalRendered} remaining)`;
             showMoreBtn.style.cssText = `
                 display: block;
                 width: 100%;
@@ -634,7 +630,7 @@ class LootLogStats {
                 if (remaining <= 0) {
                     showMoreBtn.remove();
                 } else {
-                    showMoreBtn.textContent = t('Show more ({0} remaining)', remaining);
+                    showMoreBtn.textContent = `Show more (${remaining} remaining)`;
                 }
             });
             wrapper.appendChild(showMoreBtn);
@@ -699,7 +695,7 @@ class LootLogStats {
                 if (remaining === 0) {
                     wrapper.remove();
                 } else if (sep) {
-                    sep.textContent = t('— Historical Entries ({0}) —', remaining);
+                    sep.textContent = `— Historical Entries (${remaining}) —`;
                 }
             }
         });
@@ -727,7 +723,7 @@ class LootLogStats {
         timeDiv.style.cssText = 'margin-bottom: 2px;';
 
         const startDate = new Date(entry.startTime);
-        timeDiv.textContent = t('Start Time: {0}', startDate.toLocaleString());
+        timeDiv.textContent = `Start Time: ${formatDateTime(startDate)}`;
         entryEl.appendChild(timeDiv);
 
         this.injectTotalValue(timeDiv, entry);
@@ -738,7 +734,7 @@ class LootLogStats {
 
         if (entry.startTime && entry.endTime) {
             const durationSec = (new Date(entry.endTime) - new Date(entry.startTime)) / 1000;
-            durationDiv.textContent = t('Duration: {0}', this.formatDuration(durationSec));
+            durationDiv.textContent = `Duration: ${this.formatDuration(durationSec)}`;
         }
         entryEl.appendChild(durationDiv);
 
@@ -857,7 +853,7 @@ class LootLogStats {
      * @returns {string}
      */
     getActionName(actionHrid) {
-        if (!actionHrid) return t('Unknown');
+        if (!actionHrid) return 'Unknown';
         const details = dataManager.getActionDetails(actionHrid);
         if (details?.name) return details.name;
         return actionHrid.split('/').pop().replace(/_/g, ' ');
@@ -900,7 +896,7 @@ class LootLogStats {
 
 // Export as feature module
 export default {
-    name: t('Loot Log Statistics'),
+    name: 'Loot Log Statistics',
     initialize: async () => {
         const lootLogStats = new LootLogStats();
         await lootLogStats.initialize();

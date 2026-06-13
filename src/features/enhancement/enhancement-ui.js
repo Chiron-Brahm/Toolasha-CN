@@ -4,14 +4,12 @@
  * Based on Ultimate Enhancement Tracker v3.7.9
  */
 
-import { t } from '../../core/i18n.js';
 import enhancementTracker from './enhancement-tracker.js';
 import { SessionState, getSessionDuration } from './enhancement-session.js';
 import dataManager from '../../core/data-manager.js';
 import config from '../../core/config.js';
 import domObserver from '../../core/dom-observer.js';
-import { itemNameTranslator } from '../../utils/item-name-translator.js';
-import { formatPercentage } from '../../utils/formatters.js';
+import { formatPercentage, formatLargeNumber } from '../../utils/formatters.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { registerFloatingPanel, unregisterFloatingPanel, bringPanelToFront } from '../../utils/panel-z-index.js';
 
@@ -399,7 +397,7 @@ class EnhancementUI {
         titleContainer.style.textOverflow = 'ellipsis';
 
         const title = document.createElement('span');
-        title.textContent = t('Enhancement Tracker');
+        title.textContent = 'Enhancement Tracker';
         title.style.fontWeight = 'bold';
 
         const sessionCounter = document.createElement('span');
@@ -480,7 +478,7 @@ class EnhancementUI {
     createClearButton() {
         const button = document.createElement('button');
         button.innerHTML = '🗑️';
-        button.title = t('Clear all sessions');
+        button.title = 'Clear all sessions';
         Object.assign(button.style, {
             background: 'none',
             border: 'none',
@@ -503,7 +501,7 @@ class EnhancementUI {
         });
         button.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (confirm(t('Clear all enhancement sessions?'))) {
+            if (confirm('Clear all enhancement sessions?')) {
                 this.clearAllSessions();
             }
         });
@@ -518,7 +516,7 @@ class EnhancementUI {
         const button = document.createElement('button');
         button.id = 'enhancementCollapseButton';
         button.innerHTML = '▼';
-        button.title = t('Collapse panel');
+        button.title = 'Collapse panel';
         Object.assign(button.style, {
             background: 'none',
             border: 'none',
@@ -613,7 +611,7 @@ class EnhancementUI {
             content.style.opacity = '0';
             content.style.padding = '0 15px';
             button.innerHTML = '▶';
-            button.title = t('Expand panel');
+            button.title = 'Expand panel';
             this.floatingUI.style.width = '250px';
 
             // Show compact summary after content fades
@@ -628,7 +626,7 @@ class EnhancementUI {
             content.style.opacity = '1';
             content.style.padding = '15px';
             button.innerHTML = '▼';
-            button.title = t('Collapse panel');
+            button.title = 'Collapse panel';
             this.floatingUI.style.width = '350px';
         }
     }
@@ -647,7 +645,9 @@ class EnhancementUI {
 
         if (sessions.length === 0 || !session) return;
 
-        const itemName = itemNameTranslator.getDisplayName(session.itemHrid);
+        const gameData = dataManager.getInitClientData();
+        const itemDetails = gameData?.itemDetailMap?.[session.itemHrid];
+        const itemName = itemDetails?.name || 'Unknown Item';
 
         const totalAttempts = session.totalAttempts;
         const totalSuccess = session.totalSuccesses;
@@ -756,13 +756,13 @@ class EnhancementUI {
             content.innerHTML = `
                 <div style="text-align: center; padding: 40px 20px; color: ${STYLE.colors.textSecondary};">
                     <div style="font-size: 32px; margin-bottom: 10px;">✧</div>
-                    <div style="font-size: 14px;">${t('Begin enhancing to populate data')}</div>
+                    <div style="font-size: 14px;">Begin enhancing to populate data</div>
                 </div>
             `;
             return;
         }
         if (!session) {
-            content.innerHTML = `<div style="text-align: center; color: ${STYLE.colors.danger};">${t('Invalid session')}</div>`;
+            content.innerHTML = '<div style="text-align: center; color: ${STYLE.colors.danger};">Invalid session</div>';
             return;
         }
 
@@ -807,7 +807,9 @@ class EnhancementUI {
      * Generate HTML for session display
      */
     generateSessionHTML(session) {
-        const itemName = itemNameTranslator.getDisplayName(session.itemHrid);
+        const gameData = dataManager.getInitClientData();
+        const itemDetails = gameData?.itemDetailMap?.[session.itemHrid];
+        const itemName = itemDetails?.name || 'Unknown Item';
 
         // Calculate stats
         const totalAttempts = session.totalAttempts;
@@ -823,25 +825,25 @@ class EnhancementUI {
 
         // Status display
         const statusColor = session.state === SessionState.COMPLETED ? STYLE.colors.success : STYLE.colors.accent;
-        const statusText = session.state === SessionState.COMPLETED ? t('Completed') : t('In Progress');
+        const statusText = session.state === SessionState.COMPLETED ? 'Completed' : 'In Progress';
 
         // Build HTML
         let html = `
             <div style="margin-bottom: 10px; font-size: 13px;">
                 <div style="display: flex; justify-content: space-between;">
-                    <span>${t('Item')}:</span>
+                    <span>Item:</span>
                     <strong>${itemName}</strong>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
-                    <span>${t('Target')}:</span>
+                    <span>Target:</span>
                     <span>+${session.targetLevel}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
-                    <span>${t('Prot')}:</span>
+                    <span>Prot:</span>
                     <span>+${session.protectFrom}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; margin-top: 5px; color: ${statusColor};">
-                    <span>${t('Status')}:</span>
+                    <span>Status:</span>
                     <strong>${statusText}</strong>
                 </div>
             </div>
@@ -855,11 +857,11 @@ class EnhancementUI {
             <div style="margin-top: 8px;">
                 <div style="display: flex; justify-content: space-between; font-size: 13px;">
                     <div>
-                        <span>${t('Total Attempts')}:</span>
+                        <span>Total Attempts:</span>
                         <strong> ${totalAttempts}</strong>
                     </div>
                     <div>
-                        <span>${t('Prots Used')}:</span>
+                        <span>Prots Used:</span>
                         <strong> ${session.protectionCount || 0}</strong>
                     </div>
                 </div>
@@ -890,11 +892,11 @@ class EnhancementUI {
             html += `
             <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px;">
                 <div style="color: ${STYLE.colors.textSecondary};">
-                    <span>${t('Expected Attempts')}:</span>
+                    <span>Expected Attempts:</span>
                     <span> ${expAtt}</span>
                 </div>
                 <div style="color: ${STYLE.colors.textSecondary};">
-                    <span>${t('Expected Prots')}:</span>
+                    <span>Expected Prots:</span>
                     <span> ${expProt}</span>
                 </div>
             </div>`;
@@ -903,11 +905,11 @@ class EnhancementUI {
                 html += `
             <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px; color: ${STYLE.colors.textSecondary};">
                 <div>
-                    <span>${t('Attempt Factor')}:</span>
+                    <span>Attempt Factor:</span>
                     <strong> ${attFactor ? attFactor + 'x' : '—'}</strong>
                 </div>
                 <div>
-                    <span>${t('Prot Factor')}:</span>
+                    <span>Prot Factor:</span>
                     <strong> ${protFactor ? protFactor + 'x' : '—'}</strong>
                 </div>
             </div>`;
@@ -916,18 +918,18 @@ class EnhancementUI {
 
         html += `
             <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 13px;">
-                <span>${t('Total XP Gained')}:</span>
+                <span>Total XP Gained:</span>
                 <strong>${this.formatNumber(session.totalXP)}</strong>
             </div>
 
             <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 13px;">
-                <span>${t('Session Duration')}:</span>
+                <span>Session Duration:</span>
                 <strong>${durationText}</strong>
             </div>
 
             <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 13px;">
-                <span>${t('XP/Hour')}:</span>
-                <strong>${xpPerHour > 0 ? this.formatNumber(xpPerHour) : t('Calculating...')}</strong>
+                <span>XP/Hour:</span>
+                <strong>${xpPerHour > 0 ? this.formatNumber(xpPerHour) : 'Calculating...'}</strong>
             </div>
         `;
 
@@ -952,7 +954,7 @@ class EnhancementUI {
         const levels = Array.from(levelSet).sort((a, b) => b - a);
 
         if (levels.length === 0) {
-            return `<div style="text-align: center; padding: 20px; color: ${STYLE.colors.textSecondary};">${t('No attempts recorded yet')}</div>`;
+            return '<div style="text-align: center; padding: 20px; color: ${STYLE.colors.textSecondary};">No attempts recorded yet</div>';
         }
 
         let rows = '';
@@ -984,10 +986,10 @@ class EnhancementUI {
             <table style="${compactTableStyle}">
                 <thead>
                     <tr>
-                        <th style="${compactHeaderStyle}">${t('Lvl')}</th>
-                        <th style="${compactHeaderStyle}">${t('Success')}</th>
-                        <th style="${compactHeaderStyle}">${t('Fail')}</th>
-                        <th style="${compactHeaderStyle}">${t('%')}</th>
+                        <th style="${compactHeaderStyle}">Lvl</th>
+                        <th style="${compactHeaderStyle}">Success</th>
+                        <th style="${compactHeaderStyle}">Fail</th>
+                        <th style="${compactHeaderStyle}">%</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1019,7 +1021,7 @@ class EnhancementUI {
         html += `
             <div style="display: flex; justify-content: space-between; cursor: pointer; font-weight: bold; padding: 5px 0;"
                  onclick="document.getElementById('${detailsId}').style.display = document.getElementById('${detailsId}').style.display === 'none' ? 'block' : 'none'">
-                <span>${t('Total Cost (click for details)')}</span>
+                <span>💰 Total Cost (click for details)</span>
                 <span style="color: ${STYLE.colors.gold};">${this.formatNumber(session.totalCost)}</span>
             </div>
         `;
@@ -1032,12 +1034,11 @@ class EnhancementUI {
             html +=
                 '<div style="margin-bottom: 8px; padding: 5px; background: rgba(0, 255, 234, 0.05); border-radius: 4px;">';
             html +=
-                '<div style="font-weight: bold; margin-bottom: 3px; color: ${STYLE.colors.textSecondary};">' +
-                t('Materials') +
-                ':</div>';
+                '<div style="font-weight: bold; margin-bottom: 3px; color: ${STYLE.colors.textSecondary};">Materials:</div>';
 
             for (const [itemHrid, data] of Object.entries(session.materialCosts)) {
-                const itemName = itemNameTranslator.getDisplayName(itemHrid);
+                const itemDetails = gameData?.itemDetailMap?.[itemHrid];
+                const itemName = itemDetails?.name || itemHrid;
                 const unitCost = Math.floor(data.totalCost / data.count);
 
                 html += `
@@ -1054,7 +1055,7 @@ class EnhancementUI {
         if (hasCoins) {
             html += `
                 <div style="display: flex; justify-content: space-between; margin-top: 2px; padding: 5px; background: rgba(0, 255, 234, 0.05); border-radius: 4px;">
-                    <span style="font-weight: bold; color: ${STYLE.colors.textSecondary};">${t('Coins')} (${session.coinCount || 0}×):</span>
+                    <span style="font-weight: bold; color: ${STYLE.colors.textSecondary};">Coins (${session.coinCount || 0}×):</span>
                     <span style="color: ${STYLE.colors.gold};">${this.formatNumber(session.coinCost)}</span>
                 </div>
             `;
@@ -1063,8 +1064,8 @@ class EnhancementUI {
         // Protection costs
         if (hasProtection) {
             const protectionItemName = session.protectionItemHrid
-                ? gameData?.itemDetailMap?.[session.protectionItemHrid]?.name || t('Protection')
-                : t('Protection');
+                ? gameData?.itemDetailMap?.[session.protectionItemHrid]?.name || 'Protection'
+                : 'Protection';
 
             html += `
                 <div style="display: flex; justify-content: space-between; margin-top: 2px; padding: 5px; background: rgba(0, 255, 234, 0.05); border-radius: 4px;">
@@ -1084,7 +1085,7 @@ class EnhancementUI {
      * Format number with commas
      */
     formatNumber(num) {
-        return Math.floor(num).toLocaleString();
+        return formatLargeNumber(Math.floor(num));
     }
 
     /**

@@ -12,8 +12,7 @@ import domObserver from '../../core/dom-observer.js';
 import config from '../../core/config.js';
 import storage from '../../core/storage.js';
 import marketAPI from '../../api/marketplace.js';
-import { formatRelativeTime } from '../../utils/formatters.js';
-import { t } from '../../core/i18n.js';
+import { formatRelativeTime, formatDateTime } from '../../utils/formatters.js';
 
 class EstimatedListingAge {
     constructor() {
@@ -41,25 +40,7 @@ class EstimatedListingAge {
             return formatRelativeTime(ageMs);
         } else {
             // Show date/time (e.g., "01-13 14:30:45" or "01-13 2:30:45 PM")
-            const timeFormat = config.getSettingValue('market_listingTimeFormat', '24hour');
-            const dateFormat = config.getSettingValue('market_listingDateFormat', 'MM-DD');
-            const use12Hour = timeFormat === '12hour';
-
-            const date = new Date(timestamp);
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const datePart = dateFormat === 'DD-MM' ? `${day}-${month}` : `${month}-${day}`;
-
-            const timePart = date
-                .toLocaleString('en-US', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: use12Hour,
-                })
-                .trim();
-
-            return `${datePart} ${timePart}`;
+            return formatDateTime(new Date(timestamp));
         }
     }
 
@@ -648,8 +629,8 @@ class EstimatedListingAge {
         // Add header
         const header = document.createElement('th');
         header.classList.add('mwi-estimated-age-header');
-        header.textContent = t('~Age');
-        header.title = t('Estimated listing age (based on listing ID)');
+        header.textContent = '~Age';
+        header.title = 'Estimated listing age (based on listing ID)';
         thead.appendChild(header);
 
         // Track which of user's listings have been matched to prevent duplicates
@@ -686,7 +667,7 @@ class EstimatedListingAge {
                     // Estimated timestamp for other listings
                     const estimatedTimestamp = this.estimateTimestamp(listingId);
                     const formatted = this.formatTimestamp(estimatedTimestamp);
-                    cell.textContent = t('~{0}', formatted);
+                    cell.textContent = `~${formatted}`;
                     cell.style.color = '#999999'; // Gray to indicate estimate
                     cell.style.fontSize = '0.9em';
                 }
@@ -697,9 +678,7 @@ class EstimatedListingAge {
                 cell.style.fontSize = '0.9em';
             } else {
                 // Beyond top 20 - YOUR listings only
-                const hasCancel = row.querySelector(
-                    '[class*="Cancel_"], [class*="Button_cancel"], button[class*="cancel"]'
-                );
+                const hasCancel = row.textContent.includes('Cancel');
                 if (hasCancel) {
                     // Extract price and quantity for matching
                     const priceText = row.querySelector('[class*="price"]')?.textContent || '';
@@ -736,7 +715,7 @@ class EstimatedListingAge {
                         cell.style.color = '#00FF00'; // Green for YOUR listing
                         cell.style.fontSize = '0.9em';
                     } else {
-                        cell.textContent = t('~Unknown');
+                        cell.textContent = '~Unknown';
                         cell.style.color = '#666666';
                         cell.style.fontSize = '0.9em';
                     }
@@ -782,9 +761,7 @@ class EstimatedListingAge {
         for (const table of tables) {
             const rows = table.querySelectorAll('tbody tr');
             for (const row of rows) {
-                const hasCancel = row.querySelector(
-                    '[class*="Cancel_"], [class*="Button_cancel"], button[class*="cancel"]'
-                );
+                const hasCancel = row.textContent.includes('Cancel');
                 if (hasCancel) {
                     const priceText = row.querySelector('[class*="price"]')?.textContent || '';
                     const quantityText = row.children[0]?.textContent || '';
@@ -894,12 +871,12 @@ class EstimatedListingAge {
      */
     getStalenessTooltip(lastUpdated) {
         if (!lastUpdated) {
-            return t('Order book data - Visit market page to refresh');
+            return 'Order book data - Visit market page to refresh';
         }
 
         const age = Date.now() - lastUpdated;
         const relativeTime = formatRelativeTime(age);
-        return t('Order book data from {0} ago - Visit market page to refresh', relativeTime);
+        return `Order book data from ${relativeTime} ago - Visit market page to refresh`;
     }
 
     /**

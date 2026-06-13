@@ -11,7 +11,6 @@
  */
 
 import config from '../../../core/config.js';
-import { t } from '../../../core/i18n.js';
 import domObserver from '../../../core/dom-observer.js';
 import dataManager from '../../../core/data-manager.js';
 import inventorySort from '../inventory-sort.js';
@@ -535,6 +534,7 @@ export default class CustomTabsUI {
         this._actionBtnsEl = null; // +Tab/Export/Import appended to sort controls row on Toolasha tab
         this._tileObserver = null; // MutationObserver for instant tile visibility on React swaps
         this._observedContainer = null; // Container currently being observed by _tileObserver
+        this._dragBoundTiles = new WeakSet();
     }
 
     // -----------------------------------------------------------------------
@@ -647,10 +647,13 @@ export default class CustomTabsUI {
     // -----------------------------------------------------------------------
 
     _findCharacterTabList() {
-        const tablist = document.querySelector('.MuiTabs-root [role="tablist"]');
-        if (!tablist) return null;
-        // Inventory tab is always the first tab (index 0) in the character panel
-        return tablist.children[0] ? tablist : null;
+        const allTabLists = document.querySelectorAll('[role="tablist"]');
+        for (const tl of allTabLists) {
+            for (const tab of tl.querySelectorAll('[role="tab"]')) {
+                if (tab.textContent.trim() === 'Inventory') return tl;
+            }
+        }
+        return null;
     }
 
     _tryInjectTabButton() {
@@ -665,14 +668,16 @@ export default class CustomTabsUI {
                 'toolasha-inv-tab ' + (existingTab ? existingTab.className.replace(/Mui-selected/g, '') : '');
             btn.setAttribute('role', 'tab');
             btn.setAttribute('type', 'button');
-            btn.textContent = t('Toolasha');
+            btn.textContent = 'Toolasha';
             btn.style.minWidth = 'auto';
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this._activatePanel();
             });
 
-            const inventoryTab = tabList.children[0];
+            const inventoryTab = [...tabList.querySelectorAll('[role="tab"]')].find(
+                (t) => t.textContent.trim() === 'Inventory'
+            );
             if (inventoryTab) this._inventoryTabEl = inventoryTab;
             if (inventoryTab?.nextSibling) {
                 tabList.insertBefore(btn, inventoryTab.nextSibling);
@@ -854,7 +859,6 @@ export default class CustomTabsUI {
             tile.style.order = '';
             tile.draggable = false;
             delete tile.dataset.toolashaTabId;
-            delete tile.dataset.toolashaDragBound;
         }
 
         // Force full rebuild when tile count OR config item count changed — the lightweight path
@@ -883,7 +887,7 @@ export default class CustomTabsUI {
             if (this._config.tabs.length === 0) {
                 const empty = document.createElement('div');
                 empty.className = 'toolasha-ct-empty';
-                empty.textContent = t('No custom tabs yet. Click "+ Tab" to create one.');
+                empty.textContent = 'No custom tabs yet. Click "+ Tab" to create one.';
                 empty.style.order = orderCounter++;
                 invContainer.appendChild(empty);
                 this._injectedEls.push(empty);
@@ -1156,19 +1160,19 @@ export default class CustomTabsUI {
 
         const addBtn = document.createElement('button');
         addBtn.className = 'toolasha-ct-add-btn';
-        addBtn.textContent = t('+ Tab');
+        addBtn.textContent = '+ Tab';
         addBtn.addEventListener('click', () => this._onAddTab(null));
 
         const exportBtn = document.createElement('button');
         exportBtn.className = 'toolasha-ct-add-btn';
-        exportBtn.textContent = t('Export');
+        exportBtn.textContent = 'Export';
         exportBtn.addEventListener('click', () => this._exportLayout());
 
         const importBtn = document.createElement('div');
         importBtn.className = 'toolasha-ct-add-btn';
         importBtn.style.position = 'relative';
         importBtn.style.overflow = 'hidden';
-        importBtn.textContent = t('Import');
+        importBtn.textContent = 'Import';
         const importInput = document.createElement('input');
         importInput.type = 'file';
         importInput.accept = '.json,application/json';
@@ -1223,7 +1227,7 @@ export default class CustomTabsUI {
             const text = await file.text();
             const parsed = JSON.parse(text);
             if (parsed._toolasha !== 'tabs-v1' || !Array.isArray(parsed.tabs)) {
-                alert(t('[Toolasha] Invalid layout file.'));
+                alert('[Toolasha] Invalid layout file.');
                 console.error('[CustomTabs] Import failed: missing _toolasha marker or tabs array', parsed);
                 return;
             }
@@ -1236,7 +1240,7 @@ export default class CustomTabsUI {
             await this._applyLayout();
             this._save();
         } catch (err) {
-            alert(t('[Toolasha] Failed to read layout file.'));
+            alert('[Toolasha] Failed to read layout file.');
             console.error('[CustomTabs] Import error:', err);
         }
     }
@@ -1475,7 +1479,7 @@ export default class CustomTabsUI {
         const editBtn = document.createElement('button');
         editBtn.className = 'toolasha-ct-node-btn';
         editBtn.textContent = '✏';
-        editBtn.title = t('Edit tab');
+        editBtn.title = 'Edit tab';
         editBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this._openEditor(tab.id);
@@ -1485,7 +1489,7 @@ export default class CustomTabsUI {
         const addSubBtn = document.createElement('button');
         addSubBtn.className = 'toolasha-ct-node-btn';
         addSubBtn.textContent = '+';
-        addSubBtn.title = t('Add subtab');
+        addSubBtn.title = 'Add subtab';
         addSubBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this._onAddTab(tab.id);
@@ -1495,7 +1499,7 @@ export default class CustomTabsUI {
         const delBtn = document.createElement('button');
         delBtn.className = 'toolasha-ct-node-btn';
         delBtn.textContent = '×';
-        delBtn.title = t('Delete tab');
+        delBtn.title = 'Delete tab';
         delBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this._onDeleteTab(tab.id);
@@ -1735,13 +1739,13 @@ export default class CustomTabsUI {
 
     /**
      * Make a tile draggable and attach drag/drop event handlers.
-     * Uses dataset.toolashaDragBound to prevent duplicate listeners.
+     * Uses a WeakSet to prevent duplicate listeners (immune to layout resets).
      * @param {HTMLElement} tile
      */
     _setupTileDrag(tile) {
         tile.draggable = true;
-        if (tile.dataset.toolashaDragBound) return;
-        tile.dataset.toolashaDragBound = '1';
+        if (this._dragBoundTiles.has(tile)) return;
+        this._dragBoundTiles.add(tile);
 
         tile.addEventListener('dragstart', (e) => {
             const hrid = this._getHridFromTile(tile);
@@ -1855,7 +1859,7 @@ export default class CustomTabsUI {
 
         const headerEl = document.createElement('div');
         headerEl.className = 'toolasha-ct-unorg-header';
-        headerEl.innerHTML = `<span>${this._unorgOpen ? '▼' : '▶'}</span> <span>${t('Unorganized ({0})', totalTiles)}</span>`;
+        headerEl.innerHTML = `<span>${this._unorgOpen ? '▼' : '▶'}</span> <span>Unorganized (${totalTiles})</span>`;
         headerEl.style.order = orderCounter++;
         headerEl.addEventListener('click', () => {
             this._unorgOpen = !this._unorgOpen;
@@ -2096,7 +2100,7 @@ export default class CustomTabsUI {
         const colorPicker = document.createElement('input');
         colorPicker.type = 'color';
         colorPicker.className = 'toolasha-ct-color-picker';
-        colorPicker.title = t('Custom color');
+        colorPicker.title = 'Custom color';
         colorPicker.value = tab.color && tab.color.startsWith('#') ? tab.color : '#888888';
         colorPicker.addEventListener('input', () => {
             const hex = colorPicker.value;
@@ -2169,7 +2173,7 @@ export default class CustomTabsUI {
                 this._applyLayout();
             } else {
                 this._deleteConfirmId = tabId;
-                deleteBtn.textContent = t('Confirm Delete?');
+                deleteBtn.textContent = 'Confirm Delete?';
                 deleteBtn.style.background = '#a03030';
             }
         });
@@ -2188,12 +2192,12 @@ export default class CustomTabsUI {
                     this._renderAssignedItems(modal.querySelector('.toolasha-ct-assigned-list'), tabId);
                     if (this._isActive) this._applyLayout();
                 }
-                clearBtn.textContent = t('Clear All');
+                clearBtn.textContent = 'Clear All';
                 clearBtn.style.background = '';
                 clearConfirm = false;
             } else {
                 clearConfirm = true;
-                clearBtn.textContent = t('Confirm Clear?');
+                clearBtn.textContent = 'Confirm Clear?';
                 clearBtn.style.background = '#6a3a00';
             }
         });
@@ -2285,7 +2289,7 @@ export default class CustomTabsUI {
                         levelRow.className = 'toolasha-ct-search-result toolasha-ct-search-level-row';
                         const displayName = level === 0 ? details.name : `${details.name} +${level}`;
                         const ownedDot = owned
-                            ? `<span style="color:#7dcea0;margin-left:4px;" title="${t('In inventory')}">●</span>`
+                            ? `<span style="color:#7dcea0;margin-left:4px;" title="In inventory">●</span>`
                             : '';
                         levelRow.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(displayName)}</span>${ownedDot}`;
                         levelRow.addEventListener('click', () => {
@@ -2359,10 +2363,14 @@ export default class CustomTabsUI {
     }
 
     _renderAssignedItems(container, tabId) {
+        const scrollParent = container.closest('.toolasha-ct-modal-body');
+        const scrollPos = scrollParent?.scrollTop ?? 0;
+
         container.innerHTML = '';
         const tab = findTab(this._config, tabId)?.tab;
         if (!tab || tab.items.length === 0) {
             container.innerHTML = '<div style="color:#555;font-size:12px;padding:4px;">No items assigned</div>';
+            if (scrollParent) scrollParent.scrollTop = scrollPos;
             return;
         }
 
@@ -2438,25 +2446,44 @@ export default class CustomTabsUI {
                 dragFromIndex = null;
             });
 
-            if (index > 0) {
-                const toTopBtn = document.createElement('button');
-                toTopBtn.className = 'toolasha-ct-node-btn';
-                toTopBtn.textContent = '⇈';
-                toTopBtn.title = t('Move to top');
-                toTopBtn.style.marginLeft = '0';
+            const toTopBtn = document.createElement('button');
+            toTopBtn.className = 'toolasha-ct-node-btn';
+            toTopBtn.textContent = '⇈';
+            toTopBtn.title = 'Move to top';
+            toTopBtn.style.marginLeft = '0';
+            if (index === 0) {
+                toTopBtn.style.visibility = 'hidden';
+            } else {
                 toTopBtn.addEventListener('click', () => {
                     this._config = reorderItem(this._config, tabId, index, 0);
                     this._save();
                     this._renderAssignedItems(container, tabId);
                     if (this._isActive) this._applyLayout();
                 });
-                row.appendChild(toTopBtn);
             }
+            row.appendChild(toTopBtn);
+
+            const toBottomBtn = document.createElement('button');
+            toBottomBtn.className = 'toolasha-ct-node-btn';
+            toBottomBtn.textContent = '⇊';
+            toBottomBtn.title = 'Move to bottom';
+            toBottomBtn.style.marginLeft = '0';
+            if (index >= tab.items.length - 1) {
+                toBottomBtn.style.visibility = 'hidden';
+            } else {
+                toBottomBtn.addEventListener('click', () => {
+                    this._config = reorderItem(this._config, tabId, index, tab.items.length - 1);
+                    this._save();
+                    this._renderAssignedItems(container, tabId);
+                    if (this._isActive) this._applyLayout();
+                });
+            }
+            row.appendChild(toBottomBtn);
 
             const removeBtn = document.createElement('button');
             removeBtn.className = 'toolasha-ct-node-btn';
             removeBtn.textContent = '×';
-            removeBtn.title = t('Remove');
+            removeBtn.title = 'Remove';
             removeBtn.addEventListener('click', () => {
                 this._config = removeItemAtIndex(this._config, tabId, index);
                 // Clean item from loadout bindings so it won't be re-added on sync
@@ -2470,6 +2497,8 @@ export default class CustomTabsUI {
             row.appendChild(removeBtn);
             container.appendChild(row);
         });
+
+        if (scrollParent) scrollParent.scrollTop = scrollPos;
     }
 
     // -----------------------------------------------------------------------
@@ -2595,6 +2624,9 @@ export default class CustomTabsUI {
         const loadoutSnapshot = getLoadoutSnapshot();
 
         for (const baseHrid of relevantBases) {
+            // Cache may have been invalidated by a prior iteration's snapshot update
+            if (!this._boundBaseHrids) break;
+
             // Find highest enhancement level of this item in current inventory
             let highestOwned = -1;
             for (const item of inventory) {
@@ -2620,8 +2652,8 @@ export default class CustomTabsUI {
             // Also update the loadout snapshot
             loadoutSnapshot.updateEnhancementLevel(baseHrid, highestOwned);
 
-            // Update the cached level
-            this._boundBaseHrids.set(baseHrid, highestOwned);
+            // Update the cached level (may have been nulled by the snapshot update listener)
+            if (this._boundBaseHrids) this._boundBaseHrids.set(baseHrid, highestOwned);
         }
 
         if (anyChanged) {
@@ -2759,7 +2791,7 @@ export default class CustomTabsUI {
         if (entries.length === 0) {
             const msg = document.createElement('span');
             msg.style.cssText = 'font-size:11px;color:#888;';
-            msg.textContent = t('No loadout snapshots — open your loadout panel first.');
+            msg.textContent = 'No loadout snapshots — open your loadout panel first.';
             container.appendChild(msg);
             return;
         }
@@ -2927,7 +2959,7 @@ export default class CustomTabsUI {
 
         const label = document.createElement('span');
         label.style.cssText = 'flex: 1; text-align: center;';
-        label.textContent = t('Add to Tab');
+        label.textContent = 'Add to Tab';
         const chevron = document.createElement('span');
         chevron.style.cssText = 'font-size: 0.65em; transition: transform 0.15s; display: inline-block;';
         chevron.textContent = '▼';
@@ -2975,7 +3007,7 @@ export default class CustomTabsUI {
             `;
             if (tab.color && !alreadyAdded) btn.style.borderLeft = `3px solid ${tab.color}`;
             if (alreadyAdded) {
-                btn.title = t('Already in this tab');
+                btn.title = 'Already in this tab';
             } else {
                 btn.addEventListener('mouseenter', () => {
                     btn.style.opacity = '0.8';

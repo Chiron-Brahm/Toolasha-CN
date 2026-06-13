@@ -26,6 +26,9 @@ class ActionFilter {
         this.filterTimeout = null;
         this.unregisterHandlers = [];
         this.currentTitleElement = null; // Track which title we're attached to
+        this._updateModeBtn = null;
+        this._updateCraftBtn = null;
+        this._updateSortBtn = null;
     }
 
     /**
@@ -44,6 +47,18 @@ class ActionFilter {
         );
 
         this.unregisterHandlers.push(unregisterTitleObserver);
+
+        // Re-update button labels when config finishes loading from storage
+        config.onSettingChange('profitCalc_pricingMode', () => {
+            if (this._updateModeBtn) this._updateModeBtn();
+        });
+        config.onSettingChange('profitCalc_craftUpgradeItems', () => {
+            if (this._updateCraftBtn) this._updateCraftBtn();
+        });
+        actionPanelSort.onSortModeChange(() => {
+            if (this._updateSortBtn) this._updateSortBtn();
+        });
+
         this.initialized = true;
     }
 
@@ -65,9 +80,9 @@ class ActionFilter {
         // Track the new title element
         this.currentTitleElement = titleElement;
 
-        // Reset filter state for new page
+        // Reset UI refs for new page (panels are NOT cleared — they may have been
+        // registered before this title appeared in the same mutation batch)
         this.filterValue = '';
-        this.panels.clear();
         this.filterInput = null;
         this.sortButton = null;
         this.modeButton = null;
@@ -156,6 +171,7 @@ class ActionFilter {
             flex-shrink: 0;
         `;
         updateSortBtn();
+        this._updateSortBtn = updateSortBtn;
         sortBtn.addEventListener('click', () => {
             const current = actionPanelSort.getSortMode();
             const nextIndex = (SORT_MODES.indexOf(current) + 1) % SORT_MODES.length;
@@ -189,6 +205,7 @@ class ActionFilter {
             flex-shrink: 0;
         `;
         updateModeBtn();
+        this._updateModeBtn = updateModeBtn;
         modeBtn.addEventListener('click', async () => {
             const current = config.getSettingValue('profitCalc_pricingMode', 'hybrid');
             const nextIndex = (PROFIT_MODES.indexOf(current) + 1) % PROFIT_MODES.length;
@@ -224,6 +241,7 @@ class ActionFilter {
             flex-shrink: 0;
         `;
         updateCraftBtn();
+        this._updateCraftBtn = updateCraftBtn;
         craftBtn.addEventListener('click', async () => {
             const current = config.getSetting('profitCalc_craftUpgradeItems');
             config.setSetting('profitCalc_craftUpgradeItems', !current);
@@ -313,6 +331,9 @@ class ActionFilter {
         // Apply current filter if one is active
         if (this.filterValue) {
             this.applyFilterToPanel(actionPanel);
+            if (actionPanel.dataset.mwiFilterHidden === 'true') {
+                actionPanel.style.display = 'none';
+            }
         }
     }
 
@@ -418,18 +439,19 @@ class ActionFilter {
         // Reset filter value
         this.filterValue = '';
 
-        // Clear all panel filter states
-        for (const actionPanel of this.panels.keys()) {
-            actionPanel.dataset.mwiFilterHidden = 'false';
+        // Reset filter attributes on still-attached panels; purge detached ones
+        for (const [actionPanel] of this.panels.entries()) {
+            if (!actionPanel.parentElement) {
+                this.panels.delete(actionPanel);
+            } else {
+                actionPanel.dataset.mwiFilterHidden = 'false';
+            }
         }
 
         // Hide "No results" message
         if (this.noResultsMessage) {
             this.noResultsMessage.style.display = 'none';
         }
-
-        // Clear panels registry
-        this.panels.clear();
 
         // Remove injected input
         if (this.filterInput && this.filterInput.parentElement) {
@@ -446,6 +468,15 @@ class ActionFilter {
             this.modeButton.remove();
             this.modeButton = null;
         }
+
+        if (this.craftButton && this.craftButton.parentElement) {
+            this.craftButton.remove();
+            this.craftButton = null;
+        }
+
+        this._updateModeBtn = null;
+        this._updateCraftBtn = null;
+        this._updateSortBtn = null;
 
         if (this.noResultsMessage && this.noResultsMessage.parentElement) {
             this.noResultsMessage.remove();
@@ -528,6 +559,7 @@ class ActionFilter {
 
         // Clear filter
         this.clearFilter();
+        this.panels.clear();
 
         this.initialized = false;
     }

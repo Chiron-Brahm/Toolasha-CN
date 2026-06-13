@@ -70,6 +70,7 @@ class QuickInputButtons {
         this.presetHours = [0.5, 1, 2, 3, 4, 5, 6, 10, 12, 24];
         this.presetValues = [10, 100, 1000];
         this.cleanupRegistry = createCleanupRegistry();
+        this._targetLevelByAction = new Map();
     }
 
     /**
@@ -260,7 +261,7 @@ class QuickInputButtons {
             const currentActionName = actionNameElement?.textContent?.trim() || '';
             const previousActionName = panel.dataset.mwiInjectedAction || '';
 
-            if (panel.querySelector('.mwi-collapsible-section')) {
+            if (panel.querySelector('.mwi-collapsible-section') || panel.querySelector('.mwi-quick-input-btn')) {
                 if (currentActionName && currentActionName === previousActionName) {
                     return;
                 }
@@ -749,13 +750,13 @@ class QuickInputButtons {
             }
 
             // Insert sections into DOM
-            const hideActionStats = !config.getSetting('actionPanel_showProfitDetail');
+            const hideSpeedTime = !config.getSetting('actionPanel_showSpeedTime');
             const hideLevelProgress = !config.getSetting('actionPanel_showLevelProgress');
 
             inputContainer.insertAdjacentElement('afterend', queueContent);
             let lastInserted = queueContent;
 
-            if (speedSection && !hideActionStats) {
+            if (speedSection && !hideSpeedTime) {
                 lastInserted.insertAdjacentElement('afterend', speedSection);
                 lastInserted = speedSection;
             }
@@ -1341,6 +1342,9 @@ class QuickInputButtons {
             lines.push('');
 
             // Multi-level calculator (interactive section)
+            const savedTargetLevel = this._targetLevelByAction.get(actionDetails.hrid);
+            const initialTargetLevel =
+                savedTargetLevel && savedTargetLevel > currentLevel ? savedTargetLevel : nextLevel;
             lines.push(
                 `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">Target Level Calculator:</span>`
             );
@@ -1349,7 +1353,7 @@ class QuickInputButtons {
                 <input
                     type="number"
                     id="mwi-target-level-input"
-                    value="${nextLevel}"
+                    value="${initialTargetLevel}"
                     min="${nextLevel}"
                     max="200"
                     style="
@@ -1383,6 +1387,7 @@ class QuickInputButtons {
 
             const updateTargetLevel = () => {
                 const targetLevel = parseInt(targetLevelInput.value);
+                this._targetLevelByAction.set(actionDetails.hrid, targetLevel);
 
                 if (targetLevel > currentLevel && targetLevel <= 200) {
                     const result = calculateMultiLevelProgress(
@@ -1410,6 +1415,11 @@ class QuickInputButtons {
 
             targetLevelInput.addEventListener('input', updateTargetLevel);
             targetLevelInput.addEventListener('change', updateTargetLevel);
+
+            // If restoring a saved target level, compute and display the result immediately
+            if (initialTargetLevel !== nextLevel) {
+                updateTargetLevel();
+            }
 
             // Create summary for collapsed view (time to next level)
             const summary = `${timeReadableZh(singleLevel.timeNeeded)} to Level ${nextLevel}`;

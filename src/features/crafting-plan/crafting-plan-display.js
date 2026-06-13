@@ -7,10 +7,9 @@
 import config from '../../core/config.js';
 import domObserver from '../../core/dom-observer.js';
 import dataManager from '../../core/data-manager.js';
-import { t } from '../../core/i18n.js';
 import { computeBestCraftingPlan } from './crafting-plan-calculator.js';
 import { createCollapsibleSection } from '../../utils/ui-components.js';
-import { formatKMB, formatWithSeparator, timeReadableZh } from '../../utils/formatters.js';
+import { formatKMB, formatWithSeparator, timeReadable } from '../../utils/formatters.js';
 import { getActionHridFromName } from '../../utils/game-lookups.js';
 import { findActionInput } from '../../utils/action-panel-helper.js';
 import {
@@ -19,12 +18,19 @@ import {
     setupMarketplaceCleanupObserver,
     navigateToMarketplace,
 } from '../../utils/marketplace-tabs.js';
-import { isMarketplacePanel, getMyListingsTab } from '../../utils/game-locale.js';
 import { createAutofillManager } from '../../utils/marketplace-autofill.js';
 import { calculateActionStats } from '../../utils/action-calculator.js';
 import { calculateEfficiencyMultiplier } from '../../utils/efficiency.js';
+import { calculateExpPerHour } from '../../utils/experience-calculator.js';
 
 const UI_ID = 'mwi-crafting-plan';
+
+const PRICING_MODES = [
+    { value: 'conservative', label: 'Instant Buy' },
+    { value: 'hybrid', label: 'Instant Buy / Patient Sell' },
+    { value: 'optimistic', label: 'Patient Buy / Patient Sell' },
+    { value: 'patientBuy', label: 'Patient Buy' },
+];
 const craftingPlanTabs = [];
 let cleanupObserver = null;
 const autofillManager = createAutofillManager('CraftingPlan');
@@ -202,24 +208,58 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
     const content = document.createElement('div');
 
     // === Summary comparison ===
-    const unitCostText = plan.unitCost === Infinity ? '?' : t('{0}/ea', formatWithSeparator(Math.round(plan.unitCost)));
-    const buyText = plan.buyPrice !== null ? formatWithSeparator(Math.round(plan.buyPrice)) : t('N/A');
-    const craftText = plan.craftCost !== null ? formatWithSeparator(Math.round(plan.craftCost)) : t('N/A');
-    const strategyText = plan.strategy === 'buy' ? t('Buy from market') : t('Craft from materials');
+    const unitCostText = plan.unitCost === Infinity ? '?' : formatWithSeparator(Math.round(plan.unitCost));
+    const buyText = plan.buyPrice !== null ? formatWithSeparator(Math.round(plan.buyPrice)) : 'N/A';
+    const craftText = plan.craftCost !== null ? formatWithSeparator(Math.round(plan.craftCost)) : 'N/A';
+    const strategyText = plan.strategy === 'buy' ? 'Buy from market' : 'Craft from materials';
 
     const summary = document.createElement('div');
     summary.style.cssText = 'margin-bottom: 6px;';
     summary.innerHTML = `
         <div style="display: flex; justify-content: space-between; color: var(--text-color-primary, #fff);">
-            <span>${t('Optimal:')} <strong>${strategyText}</strong></span>
-            <span>${unitCostText}</span>
+            <span>Optimal: <strong>${strategyText}</strong></span>
+            <span>${unitCostText}/ea</span>
         </div>
         <div style="display: flex; justify-content: space-between; color: var(--text-color-secondary, #888); font-size: 0.9em;">
-            <span>${t('Market buy:')} ${buyText}</span>
-            <span>${t('Craft cost:')} ${craftText}</span>
+            <span>Market buy: ${buyText}</span>
+            <span>Craft cost: ${craftText}</span>
         </div>
     `;
     content.appendChild(summary);
+
+    // === Pricing mode toggle ===
+    const currentMode = PRICING_MODES.find((m) => m.value === mode) || PRICING_MODES[0];
+    const pricingRow = document.createElement('div');
+    pricingRow.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.85em;
+        color: var(--text-color-secondary, #888);
+        margin-bottom: 4px;
+    `;
+    const pricingLabel = document.createElement('span');
+    pricingLabel.textContent = 'Pricing:';
+    const pricingBtn = document.createElement('button');
+    pricingBtn.textContent = currentMode.label;
+    pricingBtn.style.cssText = `
+        font-size: 0.85em;
+        padding: 1px 6px;
+        background: var(--bg-color-tertiary, #1a1a1a);
+        color: var(--text-color-secondary, #ccc);
+        border: 1px solid var(--border-color, #444);
+        border-radius: 3px;
+        cursor: pointer;
+    `;
+    pricingBtn.addEventListener('click', () => {
+        const idx = PRICING_MODES.findIndex((m) => m.value === mode);
+        const next = PRICING_MODES[(idx + 1) % PRICING_MODES.length];
+        config.setSetting('profitCalc_pricingMode', next.value);
+        if (onToggle) onToggle();
+    });
+    pricingRow.appendChild(pricingLabel);
+    pricingRow.appendChild(pricingBtn);
+    content.appendChild(pricingRow);
 
     // === Buy intermediates toggle ===
     const toggleRow = document.createElement('label');
@@ -241,7 +281,7 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
         if (onToggle) onToggle();
     });
     toggleRow.appendChild(checkbox);
-    toggleRow.appendChild(document.createTextNode(t('Buy raw materials only')));
+    toggleRow.appendChild(document.createTextNode('Buy raw materials only'));
     content.appendChild(toggleRow);
 
     // === No processing toggle ===
@@ -264,7 +304,7 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
         if (onToggle) onToggle();
     });
     noProcessingRow.appendChild(noProcessingCheckbox);
-    noProcessingRow.appendChild(document.createTextNode(t('No processing (buy intermediates)')));
+    noProcessingRow.appendChild(document.createTextNode('No processing (buy intermediates)'));
     content.appendChild(noProcessingRow);
 
     // === Task mode toggle ===
@@ -287,7 +327,7 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
         if (onToggle) onToggle();
     });
     taskToggleRow.appendChild(taskCheckbox);
-    taskToggleRow.appendChild(document.createTextNode(t('Task mode (force last step)')));
+    taskToggleRow.appendChild(document.createTextNode('Task mode (force last step)'));
     content.appendChild(taskToggleRow);
 
     // === Time cost toggle ===
@@ -306,7 +346,7 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
     timeCostCheckbox.checked = timeCostEnabled;
     timeCostCheckbox.style.cssText = 'margin: 0; cursor: pointer;';
     timeCostRow.appendChild(timeCostCheckbox);
-    timeCostRow.appendChild(document.createTextNode(t('Factor in time cost')));
+    timeCostRow.appendChild(document.createTextNode('Factor in time cost'));
 
     const goldInput = document.createElement('input');
     goldInput.type = 'number';
@@ -319,7 +359,7 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
     `;
     goldInput.style.display = timeCostEnabled ? '' : 'none';
     const goldLabel = document.createElement('span');
-    goldLabel.textContent = t('gold/hr');
+    goldLabel.textContent = 'gold/hr';
     goldLabel.style.fontSize = '0.85em';
     goldLabel.style.display = timeCostEnabled ? '' : 'none';
 
@@ -341,7 +381,7 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
     // Only show breakdown if crafting is the optimal strategy
     if (plan.strategy !== 'craft' || plan.children.length === 0) {
         const costText = plan.unitCost === Infinity ? '?' : `${formatKMB(Math.round(plan.unitCost))}/ea`;
-        const section = createCollapsibleSection('', t('Best Crafting Plan'), costText, content, defaultOpen, 0);
+        const section = createCollapsibleSection('', 'Best Crafting Plan', costText, content, defaultOpen, 0);
         section.id = UI_ID;
         section.className = 'mwi-crafting-plan-section';
         return section;
@@ -362,7 +402,7 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
             color: var(--text-color-primary, #fff);
             margin-bottom: 4px;
         `;
-        shoppingHeader.textContent = t('Shopping List');
+        shoppingHeader.textContent = 'Shopping List';
         content.appendChild(shoppingHeader);
 
         // Sort by total cost descending
@@ -377,7 +417,7 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
 
         // Total buy cost
         const totalBuyCost = sortedItems.reduce((sum, item) => sum + item.totalCost, 0);
-        const totalRow = createRow(t('Total material cost'), formatWithSeparator(Math.round(totalBuyCost)), {
+        const totalRow = createRow('Total material cost', formatWithSeparator(Math.round(totalBuyCost)), {
             leftColor: 'var(--text-color-primary, #fff)',
         });
         totalRow.style.borderTop = '1px solid var(--border-color, #333)';
@@ -387,7 +427,7 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
 
         // === Buy Missing Materials button ===
         const buyButton = document.createElement('button');
-        buyButton.textContent = t('Buy Missing Materials');
+        buyButton.textContent = 'Buy Missing Materials';
         buyButton.style.cssText = `
             width: 100%; margin-top: 6px; padding: 6px;
             background: linear-gradient(135deg, #1e40af, #3b82f6);
@@ -436,7 +476,12 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
             // Wait for marketplace to appear
             for (let i = 0; i < 50; i++) {
                 const tabsContainer = document.querySelector('.MuiTabs-flexContainer[role="tablist"]');
-                if (tabsContainer && isMarketplacePanel(tabsContainer)) break;
+                if (tabsContainer) {
+                    const hasMarketListings = Array.from(tabsContainer.children).some((btn) =>
+                        btn.textContent.includes('Market Listings')
+                    );
+                    if (hasMarketListings) break;
+                }
                 await new Promise((resolve) => setTimeout(resolve, 100));
             }
 
@@ -461,18 +506,20 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
             color: var(--text-color-primary, #fff);
             margin-bottom: 4px;
         `;
-        stepsHeader.textContent = t('Crafting Steps');
+        stepsHeader.textContent = 'Crafting Steps';
         content.appendChild(stepsHeader);
 
         const gameData = dataManager.getInitClientData();
         const skills = dataManager.getSkills();
         const equipment = dataManager.getEquipment();
         let totalCraftSeconds = 0;
+        let totalXP = 0;
 
         for (let i = 0; i < craftSteps.length; i++) {
             const step = craftSteps[i];
             const qty = formatWithSeparator(step.quantity);
             let timeStr = '';
+            let xpStr = '';
             if (step.actionHrid) {
                 const actionDetails = gameData?.actionDetailMap?.[step.actionHrid];
                 if (actionDetails) {
@@ -484,14 +531,25 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
                     const effMultiplier = calculateEfficiencyMultiplier(stats.totalEfficiency);
                     const totalSeconds = (stats.actionTime * step.actionsNeeded) / effMultiplier;
                     totalCraftSeconds += totalSeconds;
-                    timeStr = ` (${timeReadableZh(totalSeconds)})`;
+                    timeStr = ` (${timeReadable(totalSeconds)}`;
+                }
+                const expData = calculateExpPerHour(step.actionHrid);
+                if (expData?.expPerHour > 0 && expData.actionsPerHour > 0) {
+                    const xpPerAction = expData.expPerHour / expData.actionsPerHour;
+                    totalXP += xpPerAction * step.actionsNeeded;
+                    xpStr = ` · ${formatKMB(expData.expPerHour)} xp/hr`;
+                }
+                if (timeStr) {
+                    timeStr += `${xpStr})`;
+                } else if (xpStr) {
+                    timeStr = ` (${xpStr.slice(3)})`;
                 }
             }
             content.appendChild(createRow(`${i + 1}. ${step.itemName}`, `x${qty}${timeStr}`));
         }
 
         if (totalCraftSeconds > 0) {
-            const totalTimeRow = createRow(t('Total craft time'), timeReadableZh(totalCraftSeconds), {
+            const totalTimeRow = createRow('Total craft time', timeReadable(totalCraftSeconds), {
                 leftColor: 'var(--text-color-primary, #fff)',
             });
             totalTimeRow.style.borderTop = '1px solid var(--border-color, #333)';
@@ -499,10 +557,18 @@ function buildPlanUI(actionHrid, onToggle, defaultOpen = false) {
             totalTimeRow.style.paddingTop = '4px';
             content.appendChild(totalTimeRow);
         }
+
+        if (totalXP > 0) {
+            content.appendChild(
+                createRow('Total XP', formatKMB(Math.round(totalXP)), {
+                    leftColor: 'var(--text-color-primary, #fff)',
+                })
+            );
+        }
     }
 
     const costText = plan.unitCost === Infinity ? '?' : `${formatKMB(Math.round(plan.unitCost))}/ea`;
-    const section = createCollapsibleSection('', t('Best Crafting Plan'), costText, content, defaultOpen, 0);
+    const section = createCollapsibleSection('', 'Best Crafting Plan', costText, content, defaultOpen, 0);
     section.id = UI_ID;
     section.className = 'mwi-crafting-plan-section';
 
@@ -520,7 +586,7 @@ function createCraftingPlanTabs(missingMaterials) {
     removeMaterialTabs();
     craftingPlanTabs.length = 0;
 
-    const referenceTab = getMyListingsTab(tabsContainer);
+    const referenceTab = Array.from(tabsContainer.children).find((btn) => btn.textContent.includes('My Listings'));
     if (!referenceTab) return;
 
     tabsContainer.style.flexWrap = 'wrap';

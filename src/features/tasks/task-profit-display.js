@@ -8,15 +8,21 @@ import config from '../../core/config.js';
 import dataManager from '../../core/data-manager.js';
 import domObserver from '../../core/dom-observer.js';
 import webSocketHook from '../../core/websocket.js';
-import { t } from '../../core/i18n.js';
 import { setReactInputValue } from '../../utils/react-input.js';
 import { findActionInput } from '../../utils/action-panel-helper.js';
 import { calculateTaskProfit, calculateTaskRewardValue } from './task-profit-calculator.js';
 import expectedValueCalculator from '../market/expected-value-calculator.js';
-import { timeReadableZh, formatPercentage, formatKMB } from '../../utils/formatters.js';
+import { timeReadable, formatPercentage, formatKMB } from '../../utils/formatters.js';
 import { GAME, TOOLASHA } from '../../utils/selectors.js';
-import { calculateSecondsForActions, calculateEffectiveActionsPerHour } from '../../utils/profit-helpers.js';
+import {
+    calculateSecondsForActions,
+    calculateEffectiveActionsPerHour,
+    calculateActionsPerHour,
+} from '../../utils/profit-helpers.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
+import { calculateActionStats } from '../../utils/action-calculator.js';
+import { debugEquipmentSpeedBonuses, parseEquipmentSpeedBonuses } from '../../utils/equipment-parser.js';
+import { MIN_ACTION_TIME_SECONDS } from '../../utils/profit-constants.js';
 import { runSimulation } from '../combat-sim/combat-sim-runner.js';
 import {
     buildAllPlayerDTOs,
@@ -37,6 +43,17 @@ function getLoadoutSnapshot() {
 const REGEX_TASK_PROGRESS = /(\d+)\s*\/\s*(\d+)/;
 const RATING_MODE_TOKENS = 'tokens';
 const RATING_MODE_GOLD = 'gold';
+
+const HOUSE_ROOM_MAP = {
+    '/action_types/cheesesmithing': '/house_rooms/forge',
+    '/action_types/cooking': '/house_rooms/kitchen',
+    '/action_types/crafting': '/house_rooms/workshop',
+    '/action_types/foraging': '/house_rooms/garden',
+    '/action_types/milking': '/house_rooms/dairy_barn',
+    '/action_types/tailoring': '/house_rooms/sewing_parlor',
+    '/action_types/woodcutting': '/house_rooms/log_shed',
+    '/action_types/brewing': '/house_rooms/brewery',
+};
 
 /**
  * Calculate task completion time in seconds based on task progress and action rates
@@ -60,7 +77,33 @@ function calculateTaskCompletionSeconds(profitData) {
     const efficiencyMultiplier = profitData.action.details.efficiencyMultiplier || 1;
     const baseActionsNeeded = Math.ceil(remainingActions / (efficiencyMultiplier > 0 ? efficiencyMultiplier : 1));
 
-    return calculateSecondsForActions(baseActionsNeeded, actionsPerHour);
+    const taskSpeedBonus = dataManager.getTaskSpeedBonus();
+    const adjustedActionsPerHour = actionsPerHour * (1 + taskSpeedBonus / 100);
+
+    return calculateSecondsForActions(baseActionsNeeded, adjustedActionsPerHour);
+}
+
+/**
+ * Calculate total task time in seconds (full quantity, ignoring progress)
+ * Used for rate calculations (gold/hr) where we need the overall rate, not time remaining.
+ * @param {Object} profitData - Profit calculation result
+ * @returns {number|null} Total task time in seconds or null if unavailable
+ */
+function calculateTaskTotalSeconds(profitData) {
+    const actionsPerHour = profitData?.action?.details?.actionsPerHour;
+    const totalQuantity = profitData?.taskInfo?.quantity;
+
+    if (!actionsPerHour || !totalQuantity) {
+        return null;
+    }
+
+    const efficiencyMultiplier = profitData.action?.details?.efficiencyMultiplier || 1;
+    const baseActionsNeeded = Math.ceil(totalQuantity / (efficiencyMultiplier > 0 ? efficiencyMultiplier : 1));
+
+    const taskSpeedBonus = dataManager.getTaskSpeedBonus();
+    const adjustedActionsPerHour = actionsPerHour * (1 + taskSpeedBonus / 100);
+
+    return calculateSecondsForActions(baseActionsNeeded, adjustedActionsPerHour);
 }
 
 /**
@@ -70,7 +113,7 @@ function calculateTaskCompletionSeconds(profitData) {
  * @returns {Object|null} Rating data or null if unavailable
  */
 function calculateTaskEfficiencyRating(profitData, ratingMode) {
-    const completionSeconds = calculateTaskCompletionSeconds(profitData);
+    const completionSeconds = calculateTaskTotalSeconds(profitData);
     if (!completionSeconds || completionSeconds <= 0) {
         return null;
     }
@@ -81,14 +124,14 @@ function calculateTaskEfficiencyRating(profitData, ratingMode) {
         if (profitData.rewards?.error || profitData.totalProfit === null || profitData.totalProfit === undefined) {
             return {
                 value: null,
-                unitLabel: t('gold/hr'),
-                error: profitData.rewards?.error || t('Missing price data'),
+                unitLabel: 'gold/hr',
+                error: profitData.rewards?.error || 'Missing price data',
             };
         }
 
         return {
             value: profitData.totalProfit / hours,
-            unitLabel: t('gold/hr'),
+            unitLabel: 'gold/hr',
             error: null,
         };
     }
@@ -96,7 +139,7 @@ function calculateTaskEfficiencyRating(profitData, ratingMode) {
     const tokensReceived = profitData.rewards?.breakdown?.tokensReceived ?? 0;
     return {
         value: tokensReceived / hours,
-        unitLabel: t('tokens/hr'),
+        unitLabel: 'tokens/hr',
         error: null,
     };
 }
@@ -345,6 +388,7 @@ class TaskProfitDisplay {
         this.isInitialized = false;
         this.timerRegistry = createTimerRegistry();
         this.marketDataInitPromise = null; // Guard against duplicate market data inits
+        this._simQueue = Promise.resolve();
     }
 
     /**
@@ -769,16 +813,28 @@ class TaskProfitDisplay {
                 combatMarker.style.display = 'none';
                 combatMarker.dataset.taskKey = `${taskData.description}|${taskData.quantity}`;
 
-                // Visible estimate container
-                const estimateContainer = document.createElement('div');
-                estimateContainer.className = 'mwi-task-profit';
-                estimateContainer.style.cssText = 'margin-top: 4px; font-size: 0.75rem;';
-                this._renderCombatEstimateConfig(estimateContainer, taskData);
-
                 const actionNode = taskNode.querySelector(GAME.TASK_ACTION);
                 if (actionNode) {
                     actionNode.appendChild(combatMarker);
-                    actionNode.appendChild(estimateContainer);
+                }
+
+                if (config.getSetting('taskCombatEstimate')) {
+                    const estimateContainer = document.createElement('div');
+                    estimateContainer.className = 'mwi-task-profit';
+                    estimateContainer.style.cssText = 'margin-top: 4px; font-size: 0.75rem;';
+
+                    if (config.getSetting('combatSim_autoEstimate')) {
+                        const defaultLoadout = config.getSettingValue('combatSim_defaultLoadout', '');
+                        this._simQueue = this._simQueue.then(() =>
+                            this._runCombatSimEstimate(estimateContainer, taskData, defaultLoadout)
+                        );
+                    } else {
+                        this._renderCombatEstimateConfig(estimateContainer, taskData);
+                    }
+
+                    if (actionNode) {
+                        actionNode.appendChild(estimateContainer);
+                    }
                 }
                 return;
             }
@@ -807,7 +863,7 @@ class TaskProfitDisplay {
             console.error('[Task Profit Display] Failed to calculate profit:', error);
 
             // Display error state in UI
-            this.displayErrorState(taskNode, t('Unable to calculate profit'));
+            this.displayErrorState(taskNode, 'Unable to calculate profit');
 
             // Remove from pending queue if present
             this.pendingTaskNodes.delete(taskNode);
@@ -831,16 +887,20 @@ class TaskProfitDisplay {
             ? nameNode.textContent.replace(zoneSpan.textContent, '').trim()
             : nameNode.textContent.trim();
 
-        // Get quantity from progress div (use CSS class instead of text matching)
+        // Get quantity from progress (plain div with text "Progress: 0 / 1562")
+        // Find all divs in taskInfo and look for the one containing "Progress:"
         let quantity = 0;
         let currentProgress = 0;
-        const progressDiv = taskNode.querySelector('[class*="progress"]');
-        if (progressDiv) {
-            const text = progressDiv.textContent.trim();
-            const match = text.match(REGEX_TASK_PROGRESS);
-            if (match) {
-                currentProgress = parseInt(match[1]); // Current progress
-                quantity = parseInt(match[2]); // Total quantity
+        const taskInfoDivs = taskNode.querySelectorAll('div');
+        for (const div of taskInfoDivs) {
+            const text = div.textContent.trim();
+            if (text.startsWith('Progress:')) {
+                const match = text.match(REGEX_TASK_PROGRESS);
+                if (match) {
+                    currentProgress = parseInt(match[1]); // Current progress
+                    quantity = parseInt(match[2]); // Total quantity
+                }
+                break;
             }
         }
 
@@ -913,25 +973,44 @@ class TaskProfitDisplay {
             .getAllSnapshots()
             .filter((s) => !s.actionTypeHrid || s.actionTypeHrid === '/action_types/combat');
 
+        const defaultLoadout = config.getSettingValue('combatSim_defaultLoadout', '');
+
         let html = '<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">';
         html +=
             '<select class="mwi-combat-est-loadout" style="font-size:11px; background:#1a1a1a; color:#ccc; border:1px solid #444; border-radius:3px; padding:2px 4px;">';
-        html += `<option value="">${t('— Current Gear —')}</option>`;
+        html += `<option value=""${!defaultLoadout ? ' selected' : ''}>— Current Gear —</option>`;
         for (const s of snapshots) {
-            html += `<option value="${s.name}">${s.name}</option>`;
+            const selected = s.name === defaultLoadout ? ' selected' : '';
+            html += `<option value="${s.name}"${selected}>${s.name}</option>`;
         }
         html += '</select>';
         html +=
-            '<button class="mwi-combat-est-btn" style="font-size:11px; padding:2px 8px; background:#1a3a5c; color:#4a9eff; border:1px solid #4a9eff44; border-radius:3px; cursor:pointer;">' +
-            '⚔ ' +
-            t('Estimate') +
-            '</button>';
+            '<button class="mwi-combat-est-mode" data-mode="solo" title="Solo: simulate only target monster. Zone: simulate full zone spawn table." style="font-size:11px; padding:2px 6px; background:#1a1a1a; color:#ccc; border:1px solid #444; border-radius:3px; cursor:pointer;">Solo</button>';
+        html +=
+            '<button class="mwi-combat-est-btn" style="font-size:11px; padding:2px 8px; background:#1a3a5c; color:#4a9eff; border:1px solid #4a9eff44; border-radius:3px; cursor:pointer;">⚔ Estimate</button>';
         html += '</div>';
         container.innerHTML = html;
 
+        const modeBtn = container.querySelector('.mwi-combat-est-mode');
+        modeBtn.addEventListener('click', () => {
+            const current = modeBtn.dataset.mode;
+            if (current === 'solo') {
+                modeBtn.dataset.mode = 'zone';
+                modeBtn.textContent = 'Zone';
+                modeBtn.style.color = '#aaddff';
+                modeBtn.style.borderColor = '#4a9eff44';
+            } else {
+                modeBtn.dataset.mode = 'solo';
+                modeBtn.textContent = 'Solo';
+                modeBtn.style.color = '#ccc';
+                modeBtn.style.borderColor = '#444';
+            }
+        });
+
         container.querySelector('.mwi-combat-est-btn').addEventListener('click', () => {
             const loadoutName = container.querySelector('.mwi-combat-est-loadout').value;
-            this._runCombatSimEstimate(container, taskData, loadoutName);
+            const mode = modeBtn.dataset.mode;
+            this._runCombatSimEstimate(container, taskData, loadoutName, mode);
         });
     }
 
@@ -940,9 +1019,10 @@ class TaskProfitDisplay {
      * @param {Element} container - Container element to render into
      * @param {Object} taskData - Parsed task data
      * @param {string} loadoutName - Loadout snapshot name (empty = current gear)
+     * @param {string} mode - 'solo' (single monster) or 'zone' (full spawn table)
      * @private
      */
-    async _runCombatSimEstimate(container, taskData, loadoutName) {
+    async _runCombatSimEstimate(container, taskData, loadoutName, mode = 'solo') {
         // Extract monster name from "Defeat - Monster Name" description
         const match = taskData.description.match(/^Defeat\s*-\s*(.+)$/i);
         const monsterName = match?.[1]?.trim() || null;
@@ -968,19 +1048,17 @@ class TaskProfitDisplay {
                       )
                     : [],
             });
-            container.innerHTML =
-                '<span style="color:#f87171; font-size:11px;">' + t('Could not identify monster.') + '</span>';
+            container.innerHTML = '<span style="color:#f87171; font-size:11px;">Could not identify monster.</span>';
             return;
         }
 
         const zoneHrid = dataManager.getCombatZoneForMonster(monsterHrid);
         if (!zoneHrid) {
-            container.innerHTML =
-                '<span style="color:#f87171; font-size:11px;">' + t('No zone found for monster.') + '</span>';
+            container.innerHTML = '<span style="color:#f87171; font-size:11px;">No zone found for monster.</span>';
             return;
         }
 
-        container.innerHTML = '<span style="color:#888; font-size:11px;">' + '⏳ ' + t('Simulating...') + '</span>';
+        container.innerHTML = '<span style="color:#888; font-size:11px;">⏳ Simulating…</span>';
 
         try {
             const gameData = buildGameDataPayload();
@@ -993,41 +1071,49 @@ class TaskProfitDisplay {
                 applyLoadoutSnapshotToDTO(players[0], loadoutName, gameData);
             }
 
-            // Single-monster mode: filter zone spawn table to only the target monster.
-            // Preserve all fields from the real spawn entry (rate, strength, difficultyTier, etc.)
-            // so the sim engine's weighted-selection logic works correctly.
             const zoneAction = gameData.actionDetailMap[zoneHrid];
             const allSpawns = zoneAction.combatZoneInfo?.fightInfo?.randomSpawnInfo?.spawns || [];
-            const monsterSpawn = allSpawns.find((s) => s.combatMonsterHrid === monsterHrid) || {
-                combatMonsterHrid: monsterHrid,
-                rate: 1,
-                strength: 1,
-                difficultyTier: 0,
-            };
-            const filteredGameData = {
-                ...gameData,
-                actionDetailMap: {
-                    ...gameData.actionDetailMap,
-                    [zoneHrid]: {
-                        ...zoneAction,
-                        combatZoneInfo: {
-                            ...zoneAction.combatZoneInfo,
-                            fightInfo: {
-                                ...zoneAction.combatZoneInfo.fightInfo,
-                                randomSpawnInfo: {
-                                    ...zoneAction.combatZoneInfo.fightInfo.randomSpawnInfo,
-                                    spawns: [monsterSpawn],
+            const bossSpawns = zoneAction.combatZoneInfo?.fightInfo?.bossSpawns || [];
+            const isBossTarget = bossSpawns.some((s) => s.combatMonsterHrid === monsterHrid);
+
+            let simGameData;
+            if (mode === 'zone' || isBossTarget) {
+                // Zone mode or boss target: use full unfiltered spawn table
+                // Bosses need the full zone (9 regular fights per boss spawn)
+                simGameData = gameData;
+            } else {
+                // Solo mode: filter spawn table to only the target monster
+                const monsterSpawn = allSpawns.find((s) => s.combatMonsterHrid === monsterHrid) || {
+                    combatMonsterHrid: monsterHrid,
+                    rate: 1,
+                    strength: 1,
+                    difficultyTier: 0,
+                };
+                simGameData = {
+                    ...gameData,
+                    actionDetailMap: {
+                        ...gameData.actionDetailMap,
+                        [zoneHrid]: {
+                            ...zoneAction,
+                            combatZoneInfo: {
+                                ...zoneAction.combatZoneInfo,
+                                fightInfo: {
+                                    ...zoneAction.combatZoneInfo.fightInfo,
+                                    randomSpawnInfo: {
+                                        ...zoneAction.combatZoneInfo.fightInfo.randomSpawnInfo,
+                                        spawns: [monsterSpawn],
+                                    },
+                                    bossSpawns: [],
                                 },
-                                bossSpawns: [],
                             },
                         },
                     },
-                },
-            };
+                };
+            }
 
             const SIM_HOURS = 1;
             const simResult = await runSimulation({
-                gameData: filteredGameData,
+                gameData: simGameData,
                 playerDTOs: players,
                 zoneHrid,
                 difficultyTier: 0,
@@ -1039,12 +1125,12 @@ class TaskProfitDisplay {
             const killsPerHour = Math.round(kills / SIM_HOURS);
             const remaining = Math.max((taskData.quantity ?? 0) - (taskData.currentProgress ?? 0), 0);
             const completionSeconds = killsPerHour > 0 ? Math.round((remaining / killsPerHour) * 3600) : null;
-            const timeEstimate = completionSeconds !== null ? timeReadableZh(completionSeconds) : '???';
+            const timeEstimate = completionSeconds !== null ? timeReadable(completionSeconds) : '???';
 
             const playerHrid = players[0]?.hrid || 'player1';
             const { netPerHour, dropEntries, consumableEntries } = calculateSimRevenue(
                 simResult,
-                filteredGameData,
+                simGameData,
                 playerHrid,
                 SIM_HOURS
             );
@@ -1063,13 +1149,16 @@ class TaskProfitDisplay {
                 netPerHour,
                 rewardValue,
                 dropEntries,
-                consumableEntries
+                consumableEntries,
+                mode,
+                simResult,
+                zoneHrid
             );
         } catch (e) {
             console.error('[TaskProfit] Combat estimate failed:', e);
-            container.innerHTML = '<span style="color:#f87171; font-size:11px;">' + t('Estimate failed. ') + '</span>';
+            container.innerHTML = '<span style="color:#f87171; font-size:11px;">Estimate failed. </span>';
             const retry = document.createElement('span');
-            retry.textContent = t('Retry');
+            retry.textContent = 'Retry';
             retry.style.cssText = 'color:#4a9eff; cursor:pointer; font-size:11px;';
             retry.addEventListener('click', () => this._renderCombatEstimateConfig(container, taskData));
             container.appendChild(retry);
@@ -1101,7 +1190,10 @@ class TaskProfitDisplay {
         netPerHour,
         rewardValue,
         dropEntries,
-        consumableEntries
+        consumableEntries,
+        mode,
+        simResult,
+        zoneHrid
     ) {
         container.innerHTML = '';
         if (completionSeconds !== null) {
@@ -1134,37 +1226,31 @@ class TaskProfitDisplay {
 
         const remaining = Math.max((taskData.quantity ?? 0) - (taskData.currentProgress ?? 0), 0);
         const lines = [];
-        lines.push(`<div style="font-weight: bold; margin-bottom: 4px;">${t('Task Profit Breakdown')}</div>`);
+        lines.push('<div style="font-weight: bold; margin-bottom: 4px;">Task Profit Breakdown</div>');
         lines.push('<div style="border-bottom: 1px solid #555; margin-bottom: 4px;"></div>');
         lines.push(
-            `<div style="margin-bottom: 2px; color: #aaa;">${t('Monster:')} ${monsterName} × ${remaining.toLocaleString()} ${t('kills')} (${formatKMB(killsPerHour)}/hr)</div>`
+            `<div style="margin-bottom: 2px; color: #aaa;">Monster: ${monsterName} × ${remaining.toLocaleString()} kills (${formatKMB(killsPerHour)}/hr)</div>`
         );
-        lines.push(
-            `<div style="margin-bottom: 4px; color: #aaa;">${t('Loadout:')} ${loadoutName || t('Current Gear')}</div>`
-        );
+        lines.push(`<div style="margin-bottom: 4px; color: #aaa;">Loadout: ${loadoutName || 'Current Gear'}</div>`);
 
         // Task Rewards — matching skilling section exactly
-        lines.push(`<div style="margin-bottom: 4px; color: #aaa;">${t('Task Rewards:')}</div>`);
-        lines.push(`<div style="margin-left: 10px;">${t('Coins:')} ${formatKMB(rewardValue.coins)}</div>`);
+        lines.push('<div style="margin-bottom: 4px; color: #aaa;">Task Rewards:</div>');
+        lines.push(`<div style="margin-left: 10px;">Coins: ${formatKMB(rewardValue.coins)}</div>`);
         if (!rewardValue.error) {
+            lines.push(`<div style="margin-left: 10px;">Task Tokens: ${formatKMB(rewardValue.taskTokens)}</div>`);
             lines.push(
-                `<div style="margin-left: 10px;">${t('Task Tokens:')} ${formatKMB(rewardValue.taskTokens)}</div>`
+                `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${rewardValue.breakdown.tokensReceived} tokens @ ${formatKMB(Math.round(rewardValue.breakdown.tokenValue))} each)</div>`
             );
+            lines.push(`<div style="margin-left: 10px;">Purple's Gift: ${formatKMB(rewardValue.purpleGift)}</div>`);
             lines.push(
-                `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${rewardValue.breakdown.tokensReceived} ${t('tokens')} @ ${formatKMB(Math.round(rewardValue.breakdown.tokenValue))} ${t('each')})</div>`
-            );
-            lines.push(
-                `<div style="margin-left: 10px;">${t("Purple's Gift:")} ${formatKMB(rewardValue.purpleGift)}</div>`
-            );
-            lines.push(
-                `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${formatKMB(Math.round(rewardValue.breakdown.giftPerTask))} ${t('per task')})</div>`
+                `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${formatKMB(Math.round(rewardValue.breakdown.giftPerTask))} per task)</div>`
             );
         }
 
         // Drops — total over task duration
         if (dropEntries.length > 0) {
             lines.push(
-                `<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">${t('Drops:')} ${formatKMB(Math.round(totalDropValue))}</div>`
+                `<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">Drops: ${formatKMB(Math.round(totalDropValue))}</div>`
             );
             for (const d of dropEntries.slice(0, 8)) {
                 const taskCount = d.countPerHour * completionHours;
@@ -1178,7 +1264,7 @@ class TaskProfitDisplay {
         // Consumables — total over task duration
         if (consumableEntries.length > 0) {
             lines.push(
-                `<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">${t('Consumables:')} -${formatKMB(Math.round(totalConsumableCost))}</div>`
+                `<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">Consumables: -${formatKMB(Math.round(totalConsumableCost))}</div>`
             );
             for (const c of consumableEntries) {
                 const taskCount = c.countPerHour * completionHours;
@@ -1192,7 +1278,7 @@ class TaskProfitDisplay {
         breakdown.innerHTML = lines.join('');
 
         const rerunBtn = document.createElement('button');
-        rerunBtn.textContent = t('Re-run');
+        rerunBtn.textContent = 'Re-run';
         rerunBtn.style.cssText =
             'margin-top:6px; font-size:11px; padding:2px 8px; background:#1a3a5c; color:#4a9eff; border:1px solid #4a9eff44; border-radius:3px; cursor:pointer;';
         rerunBtn.addEventListener('click', (e) => {
@@ -1208,7 +1294,80 @@ class TaskProfitDisplay {
         });
 
         container.appendChild(mainLine);
+
+        // Efficiency rating (tokens/hr or gold/hr) — matching skilling task format
+        // Use total task time (not remaining) so rate doesn't inflate as task progresses
+        const totalKills = taskData.quantity ?? 0;
+        const totalTaskSeconds = killsPerHour > 0 ? Math.round((totalKills / killsPerHour) * 3600) : 0;
+        if (config.getSetting('taskEfficiencyRating') && totalTaskSeconds > 0) {
+            const ratingMode = config.getSettingValue('taskEfficiencyRatingMode', RATING_MODE_TOKENS);
+            const totalHours = totalTaskSeconds / 3600;
+            const totalDropValueFull = dropEntries.reduce((s, d) => s + d.totalValue * totalHours, 0);
+            const totalConsumableCostFull = consumableEntries.reduce((s, c) => s + c.totalCost * totalHours, 0);
+            const totalProfitFull = Math.round(totalDropValueFull - totalConsumableCostFull + rewardValue.total);
+            let ratingValue, unitLabel;
+
+            if (ratingMode === RATING_MODE_GOLD) {
+                ratingValue = totalProfitFull / totalHours;
+                unitLabel = 'gold/hr';
+            } else {
+                const tokensReceived = rewardValue.breakdown?.tokensReceived ?? 0;
+                ratingValue = tokensReceived / totalHours;
+                unitLabel = 'tokens/hr';
+            }
+
+            const ratingLine = document.createElement('div');
+            ratingLine.className = 'mwi-task-profit-rating';
+            ratingLine.style.cssText = 'margin-top: 2px; font-size: 0.7rem;';
+            ratingLine.dataset.ratingValue = `${ratingValue}`;
+            ratingLine.dataset.ratingMode = ratingMode;
+            ratingLine.style.color = config.COLOR_ACCENT;
+            ratingLine.textContent = `⚡ ${formatKMB(ratingValue)} ${unitLabel}`;
+            container.appendChild(ratingLine);
+
+            this.updateEfficiencyGradientColors();
+        }
+
         container.appendChild(breakdown);
+
+        // Zone summary: show aggregate time to clear all tasks in this zone
+        if (mode === 'zone' && simResult && zoneHrid) {
+            const taskListNode = document.querySelector(GAME.TASK_LIST);
+            const allTaskInfos = taskListNode ? taskListNode.querySelectorAll(GAME.TASK_INFO) : [];
+            const zoneTasks = [];
+
+            for (const node of allTaskInfos) {
+                const td = this.parseTaskData(node);
+                if (!td) continue;
+                const m = td.description.match(/^Defeat\s*-\s*(.+)$/i);
+                if (!m) continue;
+                const mName = m[1].trim();
+                const mHrid = dataManager.getMonsterHridFromName(mName);
+                if (!mHrid) continue;
+                const mZone = dataManager.getCombatZoneForMonster(mHrid);
+                if (mZone !== zoneHrid) continue;
+
+                const rem = Math.max((td.quantity ?? 0) - (td.currentProgress ?? 0), 0);
+                const mKills = simResult.deaths?.[mHrid] ?? 0;
+                const mKillsPerHour = mKills / 1; // SIM_HOURS = 1
+                const hoursNeeded = mKillsPerHour > 0 ? rem / mKillsPerHour : Infinity;
+                zoneTasks.push({ name: mName, remaining: rem, killsPerHour: mKillsPerHour, hoursNeeded });
+            }
+
+            if (zoneTasks.length > 1) {
+                const bottleneck = zoneTasks.reduce((a, b) => (a.hoursNeeded > b.hoursNeeded ? a : b));
+                const totalSeconds = Math.round(bottleneck.hoursNeeded * 3600);
+                const totalFightsPerHour = Object.values(simResult.deaths).reduce((s, v) => s + v, 0);
+                const fightsNeeded = Math.round(totalFightsPerHour * bottleneck.hoursNeeded);
+
+                const summary = document.createElement('div');
+                summary.style.cssText =
+                    'margin-top: 4px; font-size: 0.7rem; color: #aaddff; border-top: 1px solid #333; padding-top: 4px;';
+                const zoneName = dataManager.getInitClientData()?.actionDetailMap?.[zoneHrid]?.name || 'Zone';
+                summary.textContent = `${zoneName}: ~${formatKMB(fightsNeeded)} fights | ${timeReadable(totalSeconds)} (bottleneck: ${bottleneck.name})`;
+                container.appendChild(summary);
+            }
+        }
     }
 
     /**
@@ -1238,7 +1397,7 @@ class TaskProfitDisplay {
         if (profitData.error) {
             profitContainer.innerHTML = `
                 <div style="color: ${config.SCRIPT_COLOR_ALERT};">
-                    ${t('Unable to calculate profit')}
+                    Unable to calculate profit
                 </div>
             `;
             actionNode.appendChild(profitContainer);
@@ -1247,7 +1406,7 @@ class TaskProfitDisplay {
 
         // Calculate time estimate for task completion
         const completionSeconds = calculateTaskCompletionSeconds(profitData);
-        const timeEstimate = completionSeconds !== null ? timeReadableZh(completionSeconds) : '???';
+        const timeEstimate = completionSeconds !== null ? timeReadable(completionSeconds) : '???';
 
         // Store machine-readable value for task sorter
         if (completionSeconds !== null) {
@@ -1320,10 +1479,40 @@ class TaskProfitDisplay {
             profitContainer.appendChild(profitLine);
             profitContainer.appendChild(breakdownSection);
         } else if (completionSeconds !== null) {
+            const showSpeedBreakdown = config.getSetting('taskSpeedBreakdown');
+            const speedTimeHTML = showSpeedBreakdown ? this.buildSpeedTimeHTML(profitData) : '';
+            const hasSpeedBreakdown = !!speedTimeHTML;
+
             const timeLine = document.createElement('div');
-            timeLine.style.cssText = `color: ${config.COLOR_ACCENT};`;
-            timeLine.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${timeEstimate}`;
-            profitContainer.appendChild(timeLine);
+            timeLine.style.cssText = `color: ${config.COLOR_ACCENT};${hasSpeedBreakdown ? ' cursor: pointer; user-select: none;' : ''}`;
+            timeLine.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${timeEstimate}${hasSpeedBreakdown ? ' ▸' : ''}`;
+
+            if (hasSpeedBreakdown) {
+                const speedSection = document.createElement('div');
+                speedSection.style.cssText = `
+                    display: none;
+                    margin-top: 6px;
+                    padding: 8px;
+                    background: rgba(0, 0, 0, 0.2);
+                    border-radius: 4px;
+                    font-size: 0.7rem;
+                    color: #ddd;
+                `;
+                speedSection.innerHTML = speedTimeHTML;
+
+                const timeLineListener = () => {
+                    const isHidden = speedSection.style.display === 'none';
+                    speedSection.style.display = isHidden ? 'block' : 'none';
+                    timeLine.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${timeEstimate} ${isHidden ? '▾' : '▸'}`;
+                };
+                timeLine.addEventListener('click', timeLineListener);
+                listeners.set(timeLine, timeLineListener);
+
+                profitContainer.appendChild(timeLine);
+                profitContainer.appendChild(speedSection);
+            } else {
+                profitContainer.appendChild(timeLine);
+            }
         }
 
         this.eventListeners.set(profitContainer, listeners);
@@ -1439,7 +1628,7 @@ class TaskProfitDisplay {
         const formatTotalValue = (value) => (showTotals ? formatKMB(value) : '-- ⚠');
         const formatPerActionValue = (value) => (showTotals ? formatKMB(Math.round(value)) : '-- ⚠');
 
-        lines.push(`<div style="font-weight: bold; margin-bottom: 4px;">${t('Task Profit Breakdown')}</div>`);
+        lines.push('<div style="font-weight: bold; margin-bottom: 4px;">Task Profit Breakdown</div>');
         lines.push('<div style="border-bottom: 1px solid #555; margin-bottom: 4px;"></div>');
 
         // Show warning if market data unavailable
@@ -1450,15 +1639,15 @@ class TaskProfitDisplay {
         }
 
         // Task Rewards section
-        lines.push(`<div style="margin-bottom: 4px; color: #aaa;">${t('Task Rewards:')}</div>`);
-        lines.push(`<div style="margin-left: 10px;">${t('Coins:')} ${formatKMB(profitData.rewards.coins)}</div>`);
+        lines.push('<div style="margin-bottom: 4px; color: #aaa;">Task Rewards:</div>');
+        lines.push(`<div style="margin-left: 10px;">Coins: ${formatKMB(profitData.rewards.coins)}</div>`);
 
         if (!profitData.rewards.error) {
             lines.push(
                 `<div style="margin-left: 10px;">Task Tokens: ${formatKMB(profitData.rewards.taskTokens)}</div>`
             );
             lines.push(
-                `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${profitData.rewards.breakdown.tokensReceived} ${t('tokens')} @ ${formatKMB(Math.round(profitData.rewards.breakdown.tokenValue))} ${t('each')})</div>`
+                `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${profitData.rewards.breakdown.tokensReceived} tokens @ ${formatKMB(Math.round(profitData.rewards.breakdown.tokenValue))} each)</div>`
             );
             lines.push(
                 `<div style="margin-left: 10px;">Purple's Gift: ${formatKMB(profitData.rewards.purpleGift)}</div>`
@@ -1468,19 +1657,19 @@ class TaskProfitDisplay {
             );
         } else {
             lines.push(
-                `<div style="margin-left: 10px; color: #888; font-style: italic;">${t('Task Tokens: Loading...')}</div>`
+                `<div style="margin-left: 10px; color: #888; font-style: italic;">Task Tokens: Loading...</div>`
             );
             lines.push(
-                `<div style="margin-left: 10px; color: #888; font-style: italic;">${t("Purple's Gift: Loading...")}</div>`
+                `<div style="margin-left: 10px; color: #888; font-style: italic;">Purple's Gift: Loading...</div>`
             );
         }
         // Action profit section
-        lines.push(`<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">${t('Action Profit:')}</div>`);
+        lines.push('<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">Action Profit:</div>');
 
         if (profitData.type === 'gathering') {
             // Gathering Value (expandable)
             lines.push(
-                `<div class="mwi-expandable-header" data-section="gathering" style="margin-left: 10px; cursor: pointer; user-select: none;">${t('Gathering Value:')} ${formatTotalValue(profitData.action.totalValue)} ▸</div>`
+                `<div class="mwi-expandable-header" data-section="gathering" style="margin-left: 10px; cursor: pointer; user-select: none;">Gathering Value: ${formatTotalValue(profitData.action.totalValue)} ▸</div>`
             );
             lines.push(
                 `<div class="mwi-expandable-section" data-section="gathering" style="display: none; margin-left: 20px; font-size: 0.65rem; color: #888; margin-top: 2px;">`
@@ -1501,7 +1690,7 @@ class TaskProfitDisplay {
                     const processingRevenueTotal = (details.processingRevenueBonusPerAction || 0) * quantity;
                     const primaryOutputTotal = baseRevenueTotal + gourmetRevenueTotal + processingRevenueTotal;
                     lines.push(
-                        `<div style="margin-top: 2px; color: #aaa;">${t('Primary Outputs:')} ${formatTotalValue(Math.round(primaryOutputTotal))}</div>`
+                        `<div style="margin-top: 2px; color: #aaa;">Primary Outputs: ${formatTotalValue(Math.round(primaryOutputTotal))}</div>`
                     );
                     for (const output of details.baseOutputs) {
                         const itemsPerAction = output.itemsPerAction ?? output.itemsPerHour / actionsPerHour;
@@ -1509,7 +1698,7 @@ class TaskProfitDisplay {
                         const itemsForTask = itemsPerAction * quantity;
                         const revenueForTask = revenuePerAction * quantity;
                         const dropRateText =
-                            output.dropRate < 1.0 ? ` (${formatPercentage(output.dropRate, 1)} ${t('drop')})` : '';
+                            output.dropRate < 1.0 ? ` (${formatPercentage(output.dropRate, 1)} drop)` : '';
                         const missingPriceNote = output.missingPrice ? ' ⚠' : '';
                         lines.push(
                             `<div>• ${output.name} (Base): ${itemsForTask.toFixed(1)} items @ ${formatKMB(Math.round(output.priceEach))}${missingPriceNote} = ${formatKMB(Math.round(revenueForTask))}${dropRateText}</div>`
@@ -1572,7 +1761,7 @@ class TaskProfitDisplay {
                             0
                         );
                         lines.push(
-                            `<div style="margin-top: 4px; color: #aaa;">${t('Essence Drops:')} ${formatTotalValue(Math.round(totalEssenceRevenue))}</div>`
+                            `<div style="margin-top: 4px; color: #aaa;">Essence Drops: ${formatTotalValue(Math.round(totalEssenceRevenue))}</div>`
                         );
                         for (const drop of essenceDrops) {
                             const dropsForTask = (drop.dropsPerAction || 0) * quantity;
@@ -1590,7 +1779,7 @@ class TaskProfitDisplay {
                             0
                         );
                         lines.push(
-                            `<div style="margin-top: 4px; color: #aaa;">${t('Rare Finds:')} ${formatTotalValue(Math.round(totalRareRevenue))}</div>`
+                            `<div style="margin-top: 4px; color: #aaa;">Rare Finds: ${formatTotalValue(Math.round(totalRareRevenue))}</div>`
                         );
                         for (const drop of rareFindDrops) {
                             const dropsForTask = (drop.dropsPerAction || 0) * quantity;
@@ -1615,7 +1804,7 @@ class TaskProfitDisplay {
 
             // Net Production (expandable)
             lines.push(
-                `<div class="mwi-expandable-header" data-section="production" style="margin-left: 10px; cursor: pointer; user-select: none;">${t('Net Production:')} ${formatTotalValue(netProductionValue)} ▸</div>`
+                `<div class="mwi-expandable-header" data-section="production" style="margin-left: 10px; cursor: pointer; user-select: none;">Net Production: ${formatTotalValue(netProductionValue)} ▸</div>`
             );
             lines.push(
                 `<div class="mwi-expandable-section" data-section="production" style="display: none; margin-left: 20px; font-size: 0.65rem; color: #888; margin-top: 2px;">`
@@ -1632,7 +1821,7 @@ class TaskProfitDisplay {
                 const primaryOutputTotal = baseRevenueTotal + gourmetRevenueTotal;
 
                 lines.push(
-                    `<div style="margin-top: 2px; color: #aaa;">${t('Primary Outputs:')} ${formatTotalValue(Math.round(primaryOutputTotal))}</div>`
+                    `<div style="margin-top: 2px; color: #aaa;">Primary Outputs: ${formatTotalValue(Math.round(primaryOutputTotal))}</div>`
                 );
 
                 lines.push(
@@ -1657,7 +1846,7 @@ class TaskProfitDisplay {
                         0
                     );
                     lines.push(
-                        `<div style="margin-top: 4px; color: #aaa;">${t('Essence Drops:')} ${formatTotalValue(Math.round(totalEssenceRevenue))}</div>`
+                        `<div style="margin-top: 4px; color: #aaa;">Essence Drops: ${formatTotalValue(Math.round(totalEssenceRevenue))}</div>`
                     );
                     for (const drop of essenceDrops) {
                         const dropsForTask = (drop.dropsPerAction || 0) * profitData.action.breakdown.quantity;
@@ -1675,7 +1864,7 @@ class TaskProfitDisplay {
                         0
                     );
                     lines.push(
-                        `<div style="margin-top: 4px; color: #aaa;">${t('Rare Finds:')} ${formatTotalValue(Math.round(totalRareRevenue))}</div>`
+                        `<div style="margin-top: 4px; color: #aaa;">Rare Finds: ${formatTotalValue(Math.round(totalRareRevenue))}</div>`
                     );
                     for (const drop of rareFindDrops) {
                         const dropsForTask = (drop.dropsPerAction || 0) * profitData.action.breakdown.quantity;
@@ -1696,7 +1885,7 @@ class TaskProfitDisplay {
                 );
                 const hoursNeeded = effectiveActionsPerHour > 0 ? actionsNeeded / effectiveActionsPerHour : 0;
                 lines.push(
-                    `<div style="margin-top: 4px; color: #aaa;">${t('Material Costs:')} ${formatTotalValue(profitData.action.breakdown.materialCost)}</div>`
+                    `<div style="margin-top: 4px; color: #aaa;">Material Costs: ${formatTotalValue(profitData.action.breakdown.materialCost)}</div>`
                 );
 
                 for (const mat of details.materialCosts) {
@@ -1728,6 +1917,21 @@ class TaskProfitDisplay {
             );
         }
 
+        // Action Speed & Time (expandable)
+        if (config.getSetting('taskSpeedBreakdown')) {
+            const speedTimeHTML = this.buildSpeedTimeHTML(profitData);
+            if (speedTimeHTML) {
+                lines.push(
+                    `<div class="mwi-expandable-header" data-section="speedtime" style="margin-top: 6px; cursor: pointer; user-select: none; color: #aaa;">Action Speed & Time ▸</div>`
+                );
+                lines.push(
+                    `<div class="mwi-expandable-section" data-section="speedtime" style="display: none; margin-left: 10px; font-size: 0.65rem; color: #888; margin-top: 2px;">`
+                );
+                lines.push(speedTimeHTML);
+                lines.push('</div>');
+            }
+        }
+
         // Total
         lines.push('<div style="border-top: 1px solid #555; margin-top: 6px; padding-top: 4px;"></div>');
         const totalProfitColor = profitData.hasMissingPrices
@@ -1736,7 +1940,188 @@ class TaskProfitDisplay {
               ? '#4ade80'
               : config.COLOR_LOSS;
         lines.push(
-            `<div style="font-weight: bold; color: ${totalProfitColor};">${t('Total Profit:')} ${formatTotalValue(profitData.totalProfit)}</div>`
+            `<div style="font-weight: bold; color: ${totalProfitColor};">Total Profit: ${formatTotalValue(profitData.totalProfit)}</div>`
+        );
+
+        return lines.join('');
+    }
+
+    /**
+     * Build speed, efficiency, and timing breakdown HTML for the expandable section
+     * @param {Object} profitData - Profit calculation result
+     * @returns {string} HTML string or empty string if unavailable
+     */
+    buildSpeedTimeHTML(profitData) {
+        const actionHrid = profitData.taskInfo?.actionHrid;
+        if (!actionHrid) return '';
+
+        const gameData = dataManager.getInitClientData();
+        const actionDetails = gameData?.actionDetailMap?.[actionHrid];
+        if (!actionDetails) return '';
+
+        const skills = dataManager.getSkills();
+        const equipment = dataManager.getEquipment();
+        const itemDetailMap = gameData.itemDetailMap || {};
+
+        const stats = calculateActionStats(actionDetails, {
+            skills,
+            equipment,
+            itemDetailMap,
+            actionHrid: null,
+            includeCommunityBuff: true,
+            includeBreakdown: true,
+        });
+        if (!stats) return '';
+
+        const { actionTime: timeAfterEquip, totalEfficiency, efficiencyBreakdown: eb } = stats;
+        const baseTime = actionDetails.baseTimeCost / 1e9;
+        const speedBonus = parseEquipmentSpeedBonuses(equipment, actionDetails.type, itemDetailMap);
+        const personalSpeedBonus = dataManager.getPersonalBuffFlatBoost(actionDetails.type, '/buff_types/action_speed');
+        const displayTimeAfterEquip = Math.max(MIN_ACTION_TIME_SECONDS, timeAfterEquip);
+
+        const isTaskAction = dataManager.isTaskAction(actionHrid);
+        const taskSpeedBonus = isTaskAction ? dataManager.getTaskSpeedBonus() : 0;
+        const finalActionTime =
+            taskSpeedBonus > 0
+                ? Math.max(MIN_ACTION_TIME_SECONDS, timeAfterEquip / (1 + taskSpeedBonus / 100))
+                : displayTimeAfterEquip;
+
+        const efficiencyMultiplier = 1 + totalEfficiency / 100;
+        const actionsPerHour = calculateActionsPerHour(finalActionTime);
+        const effectiveAPH = actionsPerHour * efficiencyMultiplier;
+
+        const totalQuantity = profitData.taskInfo?.quantity || 0;
+        const currentProgress = profitData.taskInfo?.currentProgress || 0;
+        const remaining = Math.max(totalQuantity - currentProgress, 0);
+        const baseActionsNeeded = remaining > 0 ? Math.ceil(remaining / efficiencyMultiplier) : 0;
+        const completionSeconds = baseActionsNeeded * finalActionTime;
+
+        const lines = [];
+
+        // Speed
+        lines.push(`<div>Base: ${baseTime.toFixed(2)}s → ${displayTimeAfterEquip.toFixed(2)}s</div>`);
+        if (speedBonus + personalSpeedBonus > 0) {
+            lines.push(
+                `<div>Speed: +${formatPercentage(speedBonus + personalSpeedBonus, 1)} | ${calculateActionsPerHour(timeAfterEquip).toFixed(0)}/hr</div>`
+            );
+        } else {
+            lines.push(`<div>${calculateActionsPerHour(timeAfterEquip).toFixed(0)}/hr</div>`);
+        }
+
+        const allSpeedBonuses = debugEquipmentSpeedBonuses(equipment, itemDetailMap);
+        const skillName = actionDetails.type.replace('/action_types/', '');
+        const skillSpecificSpeed = skillName + 'Speed';
+        const relevantSpeeds = allSpeedBonuses.filter(
+            (item) => item.speedType === skillSpecificSpeed || item.speedType === 'skillingSpeed'
+        );
+        for (const item of relevantSpeeds) {
+            const enhText = item.enhancementLevel > 0 ? ` +${item.enhancementLevel}` : '';
+            lines.push(
+                `<div style="margin-left: 10px;">- ${item.itemName}${enhText}: +${formatPercentage(item.scaledBonus, 1)}</div>`
+            );
+        }
+        if (personalSpeedBonus > 0) {
+            lines.push(
+                `<div style="margin-left: 10px;">- Scroll of Action Speed: +${formatPercentage(personalSpeedBonus, 1)}</div>`
+            );
+        }
+
+        // Task Speed
+        if (isTaskAction && taskSpeedBonus > 0) {
+            lines.push(
+                `<div style="margin-top: 4px; font-weight: 500; color: #ccc;">Task Speed (multiplicative): +${taskSpeedBonus.toFixed(2)}%</div>`
+            );
+            lines.push(
+                `<div>${displayTimeAfterEquip.toFixed(2)}s → ${finalActionTime.toFixed(2)}s | ${actionsPerHour.toFixed(0)}/hr</div>`
+            );
+            const trinketSlot = equipment.get('/item_locations/trinket');
+            if (trinketSlot?.itemHrid) {
+                const badgeDetails = itemDetailMap[trinketSlot.itemHrid];
+                if (badgeDetails) {
+                    const enhText = trinketSlot.enhancementLevel > 0 ? ` +${trinketSlot.enhancementLevel}` : '';
+                    const baseTaskSpeed = badgeDetails.equipmentDetail?.noncombatStats?.taskSpeed || 0;
+                    const enhBonus = badgeDetails.equipmentDetail?.noncombatEnhancementBonuses?.taskSpeed || 0;
+                    const enhLevel = trinketSlot.enhancementLevel || 0;
+                    const detailText =
+                        enhBonus > 0
+                            ? ` (${(baseTaskSpeed * 100).toFixed(2)}% + ${(enhBonus * enhLevel * 100).toFixed(2)}%)`
+                            : '';
+                    lines.push(
+                        `<div style="margin-left: 10px;">- ${badgeDetails.name}${enhText}: +${taskSpeedBonus.toFixed(2)}%${detailText}</div>`
+                    );
+                }
+            }
+        }
+
+        // Efficiency
+        lines.push(
+            `<div style="margin-top: 4px; font-weight: 500; color: #ccc;">Efficiency: +${totalEfficiency.toFixed(2)}% → Output: ×${efficiencyMultiplier.toFixed(2)} (${Math.round(effectiveAPH)}/hr)</div>`
+        );
+        if (eb.levelEfficiency > 0 || eb.actionLevelBreakdown?.length > 0) {
+            lines.push(`<div style="margin-left: 10px;">- Level: +${eb.levelEfficiency.toFixed(2)}%</div>`);
+            const rawLevelDelta = eb.skillLevel - eb.baseRequirement;
+            lines.push(
+                `<div style="margin-left: 20px;">- Raw level delta: +${rawLevelDelta.toFixed(2)}% (${eb.skillLevel} - ${eb.baseRequirement} base requirement)</div>`
+            );
+            if (eb.actionLevelBreakdown?.length > 0) {
+                for (const tea of eb.actionLevelBreakdown) {
+                    lines.push(
+                        `<div style="margin-left: 20px;">- ${tea.name} impact: ${(-tea.baseActionLevel).toFixed(2)}% (raises requirement)</div>`
+                    );
+                    if (tea.dcContribution > 0) {
+                        lines.push(
+                            `<div style="margin-left: 30px;">- Drink Concentration: ${(-tea.dcContribution).toFixed(2)}%</div>`
+                        );
+                    }
+                }
+            }
+        }
+        if (eb.houseEfficiency > 0) {
+            const roomHrid = HOUSE_ROOM_MAP[actionDetails.type];
+            let roomLabel = 'Unknown Room';
+            if (roomHrid) {
+                const room = dataManager.getHouseRooms().get(roomHrid);
+                const roomName = roomHrid
+                    .split('/')
+                    .pop()
+                    .split('_')
+                    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join(' ');
+                roomLabel = `${roomName} level ${room?.level || 0}`;
+            }
+            lines.push(
+                `<div style="margin-left: 10px;">- House: +${eb.houseEfficiency.toFixed(2)}% (${roomLabel})</div>`
+            );
+        }
+        if (eb.equipmentEfficiency > 0) {
+            lines.push(`<div style="margin-left: 10px;">- Equipment: +${eb.equipmentEfficiency.toFixed(2)}%</div>`);
+        }
+        if (eb.achievementEfficiency > 0) {
+            lines.push(`<div style="margin-left: 10px;">- Achievement: +${eb.achievementEfficiency.toFixed(2)}%</div>`);
+        }
+        if (eb.teaBreakdown?.length > 0) {
+            for (const tea of eb.teaBreakdown) {
+                lines.push(`<div style="margin-left: 10px;">- ${tea.name}: +${tea.baseEfficiency.toFixed(2)}%</div>`);
+                if (tea.dcContribution > 0) {
+                    lines.push(
+                        `<div style="margin-left: 20px;">- Drink Concentration: +${tea.dcContribution.toFixed(2)}%</div>`
+                    );
+                }
+            }
+        }
+        if (eb.communityEfficiency > 0) {
+            const communityBuffLevel = dataManager.getCommunityBuffLevel('/community_buff_types/production_efficiency');
+            lines.push(
+                `<div style="margin-left: 10px;">- Community: +${eb.communityEfficiency.toFixed(2)}% (Production Efficiency T${communityBuffLevel})</div>`
+            );
+        }
+        if (eb.personalEfficiency > 0) {
+            lines.push(`<div style="margin-left: 10px;">- Seal: +${eb.personalEfficiency.toFixed(2)}%</div>`);
+        }
+
+        // Total time
+        lines.push(
+            `<div style="margin-top: 4px; font-weight: 500; color: ${config.COLOR_INFO};">Total time: ${timeReadable(completionSeconds)}</div>`
         );
 
         return lines.join('');
@@ -1783,7 +2168,7 @@ class TaskProfitDisplay {
             color: #888;
             font-style: italic;
         `;
-        loadingContainer.textContent = `⏳ ${t('Loading market data...')}`;
+        loadingContainer.textContent = '⏳ Loading market data...';
 
         // Store task key for reroll detection
         const taskKey = `${taskData.description}|${taskData.quantity}`;
@@ -1853,7 +2238,7 @@ class TaskProfitDisplay {
 
         // Determine if active (first in queue) or queued
         const isActive = matchActionHrid === activeActionHrid;
-        const label = isActive ? t('▶ Active') : t('⏸ Queued');
+        const label = isActive ? '▶ Active' : '⏸ Queued';
         const color = isActive ? config.COLOR_ACCENT : config.SCRIPT_COLOR_SECONDARY;
 
         if (existingIndicator) {

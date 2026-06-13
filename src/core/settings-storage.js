@@ -77,7 +77,7 @@ class SettingsStorage {
                 }
 
                 // Copy other properties
-                if (settingDef.options) {
+                if (settingDef.options && typeof settingDef.options !== 'function') {
                     settings[settingId].options = settingDef.options;
                 }
                 if (settingDef.min !== undefined) {
@@ -105,6 +105,12 @@ class SettingsStorage {
                         settings[settingId].value = savedValue.value;
                     }
                 }
+            }
+
+            // Migrate: formatting_useKMBFormat changed from checkbox to select
+            const fmtSaved = saved['formatting_useKMBFormat'];
+            if (fmtSaved && fmtSaved.hasOwnProperty('isTrue') && !fmtSaved.hasOwnProperty('value')) {
+                settings['formatting_useKMBFormat'].value = fmtSaved.isTrue ? 'compact' : 'full';
             }
         }
 

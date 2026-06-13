@@ -19,7 +19,7 @@ import marketAPI from '../../api/marketplace.js';
 import { calculateGatheringProfit } from './gathering-profit.js';
 import profitCalculator from '../market/profit-calculator.js';
 import { calculateActionStats } from '../../utils/action-calculator.js';
-import { timeReadableZh, formatWithSeparator } from '../../utils/formatters.js';
+import { timeReadable, formatWithSeparator, formatDateTime } from '../../utils/formatters.js';
 import { calculateEfficiencyMultiplier } from '../../utils/efficiency.js';
 import { createCleanupRegistry } from '../../utils/cleanup-registry.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
@@ -38,8 +38,16 @@ import {
 } from '../../utils/profit-helpers.js';
 import { calculateEnhancementPredictions } from '../enhancement/enhancement-xp.js';
 import { BASE_SUCCESS_RATES } from '../../utils/enhancement-calculator.js';
-import { t } from '../../core/i18n.js';
-import { itemNameTranslator } from '../../utils/item-name-translator.js';
+
+/**
+ * Format a completion Date as a clock string, respecting user's time/date format settings.
+ * @param {Date} completionTime
+ * @param {boolean} includeDate - Whether to include the date portion
+ * @returns {string}
+ */
+function formatCompletionTime(completionTime, includeDate) {
+    return formatDateTime(completionTime, { includeDate, includeTime: true, includeSeconds: true });
+}
 
 /**
  * ActionTimeDisplay class manages the time display panel and queue tooltips
@@ -287,7 +295,7 @@ class ActionTimeDisplay {
                 const actionObj = this.matchActionFromDiv(actionDiv, currentActions, usedActionIds);
 
                 if (!actionObj) {
-                    this.appendTimeToActionDiv(actionDiv, t('[Unknown action]'));
+                    this.appendTimeToActionDiv(actionDiv, '[Unknown action]');
                     continue;
                 }
 
@@ -307,12 +315,12 @@ class ActionTimeDisplay {
                 // Format time text
                 let timeText;
                 if (result.isTrulyInfinite) {
-                    timeText = t('[∞]');
+                    timeText = '[∞]';
                 } else if (result.isInfinite && result.materialLimit !== null) {
-                    const timeStr = timeReadableZh(result.totalTime);
+                    const timeStr = timeReadable(result.totalTime);
                     timeText = `[${timeStr} · ${result.limitLabel}: ${this.formatLargeNumber(result.materialLimit)}]`;
                 } else {
-                    const timeStr = timeReadableZh(result.totalTime);
+                    const timeStr = timeReadable(result.totalTime);
                     timeText = `[${timeStr}]`;
                 }
 
@@ -320,10 +328,7 @@ class ActionTimeDisplay {
                 if (!hasInfinite && !result.isTrulyInfinite) {
                     const completionDate = new Date();
                     completionDate.setSeconds(completionDate.getSeconds() + accumulatedTime);
-                    const hours = String(completionDate.getHours()).padStart(2, '0');
-                    const minutes = String(completionDate.getMinutes()).padStart(2, '0');
-                    const seconds = String(completionDate.getSeconds()).padStart(2, '0');
-                    timeText += ` ${t('Complete at')} ${hours}:${minutes}:${seconds}`;
+                    timeText += ` Complete at ${formatCompletionTime(completionDate, false)}`;
                 }
 
                 this.appendTimeToActionDiv(actionDiv, timeText);
@@ -346,10 +351,9 @@ class ActionTimeDisplay {
 
                 let totalText;
                 if (hasInfinite) {
-                    totalText =
-                        accumulatedTime > 0 ? t('Total: {0} + [∞]', timeReadableZh(accumulatedTime)) : t('Total: [∞]');
+                    totalText = accumulatedTime > 0 ? `Total: ${timeReadable(accumulatedTime)} + [∞]` : 'Total: [∞]';
                 } else {
-                    totalText = t('Total: {0}', timeReadableZh(accumulatedTime));
+                    totalText = `Total: ${timeReadable(accumulatedTime)}`;
                 }
                 totalDiv.textContent = totalText;
                 actionsContainer.appendChild(totalDiv);
@@ -389,33 +393,12 @@ class ActionTimeDisplay {
      * @returns {Object|null} { totalTime, hasInfinite, actionId } or null
      */
     calculateCurrentActionTime(currentActions, inventoryLookup) {
-        // Detect current action from DOM
         const actionNameElement = document.querySelector('div[class*="Header_actionName"]');
         if (!actionNameElement || !actionNameElement.textContent) return null;
 
         const actionNameText = this.getCleanActionName(actionNameElement);
-        const actionNameMatch = actionNameText.match(/^(.+?)(?:\s*\([^)]+\))?$/);
-        const fullNameFromDom = actionNameMatch ? actionNameMatch[1].trim() : actionNameText;
-
-        let actionNameFromDom, itemNameFromDom;
-        if (fullNameFromDom.includes(':')) {
-            const parts = fullNameFromDom.split(':');
-            actionNameFromDom = parts[0].trim();
-            itemNameFromDom = parts.slice(1).join(':').trim();
-        } else {
-            actionNameFromDom = fullNameFromDom;
-            itemNameFromDom = null;
-        }
-
-        const currentAction = currentActions.find((a) => {
-            const actionDetails = dataManager.getActionDetails(a.actionHrid);
-            if (!actionDetails || actionDetails.name !== actionNameFromDom) return false;
-            if (itemNameFromDom && a.primaryItemHash) {
-                const itemHrid = '/items/' + itemNameFromDom.toLowerCase().replace(/\s+/g, '_');
-                return a.primaryItemHash.includes(itemHrid);
-            }
-            return true;
-        });
+        const sorted = [...currentActions].sort((a, b) => a.ordinal - b.ordinal);
+        const currentAction = this.matchCurrentActionFromText(sorted.slice(0, 1), actionNameText);
 
         if (!currentAction) return null;
 
@@ -519,13 +502,13 @@ class ActionTimeDisplay {
 
         // Derive limit label
         if (limitType === 'gold') {
-            limitLabel = t('gold');
+            limitLabel = 'gold';
         } else if (limitType && limitType.startsWith('material:')) {
-            limitLabel = t('mat');
+            limitLabel = 'mat';
         } else if (limitType && limitType.startsWith('upgrade:')) {
-            limitLabel = t('upgrade');
+            limitLabel = 'upgrade';
         } else {
-            limitLabel = t('max');
+            limitLabel = 'max';
         }
 
         return {
@@ -779,10 +762,6 @@ class ActionTimeDisplay {
         if (cachedActions.length > 0) {
             const sorted = cachedActions.sort((a, b) => a.ordinal - b.ordinal);
             action = this.matchCurrentActionFromText(sorted.slice(0, 1), actionNameText);
-            // Fallback: if name matching fails (e.g. Chinese UI), use the first action directly
-            if (!action) {
-                action = sorted[0];
-            }
         }
 
         if (!action) {
@@ -1144,26 +1123,12 @@ class ActionTimeDisplay {
         completionTime.setSeconds(completionTime.getSeconds() + totalTimeSeconds);
 
         // Format time strings (timeReadable handles days/hours/minutes properly)
-        const timeStr = timeReadableZh(totalTimeSeconds);
+        const timeStr = timeReadable(totalTimeSeconds);
 
         // Format completion time
         const now = new Date();
         const isToday = completionTime.toDateString() === now.toDateString();
-
-        let clockTime;
-        if (isToday) {
-            // Today: Just show time in 12-hour format
-            clockTime = completionTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        } else {
-            // Future date: Show date and time in 12-hour format
-            clockTime = completionTime.toLocaleString('zh-CN', {
-                month: 'numeric',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-            });
-        }
+        const clockTime = formatCompletionTime(completionTime, !isToday);
 
         // Build display HTML
         // Line 1: Append stats to game's action name div
@@ -1172,17 +1137,17 @@ class ActionTimeDisplay {
         // Queue count
         if (config.getSetting('actionBar_showQueueCount')) {
             if (queueSizeDisplay !== Infinity) {
-                statsToAppend.push(`(${queueSizeDisplay.toLocaleString()} ${t('queued')})`);
+                statsToAppend.push(`(${queueSizeDisplay.toLocaleString()} queued)`);
             } else if (materialLimit !== null) {
                 let limitLabel = '';
                 if (limitType === 'gold') {
-                    limitLabel = t('gold limit');
+                    limitLabel = 'gold limit';
                 } else if (limitType && limitType.startsWith('material:')) {
-                    limitLabel = t('mat limit');
+                    limitLabel = 'mat limit';
                 } else if (limitType && limitType.startsWith('upgrade:')) {
-                    limitLabel = t('upgrade limit');
+                    limitLabel = 'upgrade limit';
                 } else {
-                    limitLabel = t('max');
+                    limitLabel = 'max';
                 }
                 statsToAppend.push(`(∞ · ${limitLabel}: ${this.formatLargeNumber(materialLimit)})`);
             } else {
@@ -1192,13 +1157,14 @@ class ActionTimeDisplay {
 
         // Time per action
         if (config.getSetting('actionBar_showActionDuration')) {
-            statsToAppend.push(`${actionTime.toFixed(2)}${t('s/action')}`);
+            statsToAppend.push(`${actionTime.toFixed(2)}s/action`);
         }
 
         // Actions/hr and items/hr
         if (config.getSetting('actionBar_showActionsPerHour')) {
-            const msg = `${actionsPerHourWithEfficiency.toFixed(0)} ${t('actions/hr')} (${itemsPerHour.toFixed(0)} ${t('items/hr')})`;
-            statsToAppend.push(msg);
+            statsToAppend.push(
+                `${actionsPerHourWithEfficiency.toFixed(0)} actions/hr (${itemsPerHour.toFixed(0)} items/hr)`
+            );
         }
 
         // Append to game's div (with marker for cleanup)
@@ -1217,22 +1183,10 @@ class ActionTimeDisplay {
             if (recycleTimeSeconds !== null) {
                 const recycleCompletion = new Date();
                 recycleCompletion.setSeconds(recycleCompletion.getSeconds() + recycleTimeSeconds);
-                const recycleTimeStr = timeReadableZh(recycleTimeSeconds);
+                const recycleTimeStr = timeReadable(recycleTimeSeconds);
                 const recycleIsToday = recycleCompletion.toDateString() === new Date().toDateString();
-                const recycleClockTime = recycleCompletion.toLocaleString(
-                    'zh-CN',
-                    recycleIsToday
-                        ? { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }
-                        : {
-                              month: 'numeric',
-                              day: 'numeric',
-                              hour: 'numeric',
-                              minute: '2-digit',
-                              second: '2-digit',
-                              hour12: true,
-                          }, { debounce: true, debounceDelay: 150 }
-                );
-                recycleHtml = `<span style="color:#4dd0a0; margin-left:12px; font-size:11px;">${t('Est. w/ recycle: {0} → {1}', recycleTimeStr, recycleClockTime)}</span>`;
+                const recycleClockTime = formatCompletionTime(recycleCompletion, !recycleIsToday);
+                recycleHtml = `<span style="color:#4dd0a0; margin-left:12px; font-size:11px;">Est. w/ recycle: ${recycleTimeStr} → ${recycleClockTime}</span>`;
             }
             this.displayElement.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${matsLabel} ${timeStr} → ${clockTime}${recycleHtml}`;
         } else {
@@ -1310,9 +1264,23 @@ class ActionTimeDisplay {
 
         const { expectedAttempts, expectedProtections, perActionTime, successMultiplier } = predictions;
 
+        // Detect Philosopher's Mirror — guarantees success on every attempt
+        let protectionItemHrid = null;
+        if (action.secondaryItemHash) {
+            const { itemHrid: secItemHrid } = this.parseItemHash(action.secondaryItemHash);
+            protectionItemHrid = secItemHrid;
+        }
+        if (!protectionItemHrid && action.enhancingProtectionItemHrid) {
+            protectionItemHrid = action.enhancingProtectionItemHrid;
+        }
+        const usesMirror = protectionItemHrid === '/items/philosophers_mirror';
+
+        const effectiveAttempts = usesMirror ? targetLevel - currentLevel : expectedAttempts;
+        const effectiveProtections = usesMirror ? 0 : expectedProtections;
+
         // Calculate current level success rate
         const baseRate = currentLevel < BASE_SUCCESS_RATES.length ? BASE_SUCCESS_RATES[currentLevel] : 30;
-        const actualSuccessRate = Math.min(100, baseRate * successMultiplier);
+        const actualSuccessRate = usesMirror ? 100 : Math.min(100, baseRate * successMultiplier);
 
         // Determine queue count
         let queuedActions;
@@ -1340,30 +1308,15 @@ class ActionTimeDisplay {
             // Also check protection item availability if protection is active
             if (
                 protectFrom > 0 &&
-                expectedProtections > 0 &&
+                effectiveProtections > 0 &&
                 config.getSetting('actionPanel_enhanceMatLimitProtections')
             ) {
-                let protectionItemHrid = null;
-
-                // Extract from secondaryItemHash
-                if (action.secondaryItemHash) {
-                    const { itemHrid: secItemHrid } = this.parseItemHash(action.secondaryItemHash);
-                    protectionItemHrid = secItemHrid;
-                }
-
-                // Fallback to direct field
-                if (!protectionItemHrid && action.enhancingProtectionItemHrid) {
-                    protectionItemHrid = action.enhancingProtectionItemHrid;
-                }
-
                 if (protectionItemHrid) {
                     const byHrid = inventoryLookup?.byHrid || {};
                     const availableProtections = byHrid[protectionItemHrid] || 0;
 
-                    if (availableProtections < expectedProtections) {
-                        // Protection items are the bottleneck — estimate how many attempts
-                        // we can sustain. Protection usage ratio = expectedProtections / expectedAttempts
-                        const protectionRatio = expectedProtections / expectedAttempts;
+                    if (availableProtections < effectiveProtections) {
+                        const protectionRatio = effectiveProtections / effectiveAttempts;
                         const maxAttemptsFromProtection =
                             protectionRatio > 0 ? Math.floor(availableProtections / protectionRatio) : Infinity;
 
@@ -1373,6 +1326,17 @@ class ActionTimeDisplay {
                             limitingItemHrid = protectionItemHrid;
                         }
                     }
+                }
+            }
+
+            // Philosopher's Mirror is consumed 1 per action — treat as material limit
+            if (usesMirror) {
+                const byHrid = inventoryLookup?.byHrid || {};
+                const availableMirrors = byHrid['/items/philosophers_mirror'] || 0;
+                if (availableMirrors < queuedActions) {
+                    queuedActions = availableMirrors;
+                    materialLimit = availableMirrors;
+                    limitingItemHrid = '/items/philosophers_mirror';
                 }
             }
         }
@@ -1412,13 +1376,13 @@ class ActionTimeDisplay {
         const statsToAppend = [];
 
         if (config.getSetting('actionBar_showActionDuration')) {
-            statsToAppend.push(`${perActionTime.toFixed(2)}${t('s/action')}`);
+            statsToAppend.push(`${perActionTime.toFixed(2)}s/action`);
         }
-        statsToAppend.push(`${actualSuccessRate.toFixed(1)}${t('% success')}`);
-        statsToAppend.push(`${t('~{0} to target', formatWithSeparator(expectedAttempts))}`);
+        statsToAppend.push(`${actualSuccessRate.toFixed(1)}% success`);
+        statsToAppend.push(`~${formatWithSeparator(effectiveAttempts)} to target`);
 
-        if (protectFrom > 0 && expectedProtections > 0) {
-            statsToAppend.push(t('~{0} protections', formatWithSeparator(expectedProtections)));
+        if (protectFrom > 0 && effectiveProtections > 0) {
+            statsToAppend.push(`~${formatWithSeparator(effectiveProtections)} protections`);
         }
 
         this.appendStatsToActionName(actionNameElement, statsToAppend.join(' · '));
@@ -1430,29 +1394,17 @@ class ActionTimeDisplay {
             materialTime > 0 &&
             isFinite(materialTime)
         ) {
-            const timeStr = timeReadableZh(materialTime);
+            const timeStr = timeReadable(materialTime);
 
             const completionTime = new Date();
             completionTime.setSeconds(completionTime.getSeconds() + materialTime);
 
             const now = new Date();
             const isToday = completionTime.toDateString() === now.toDateString();
-
-            let clockTime;
-            if (isToday) {
-                clockTime = completionTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            } else {
-                clockTime = completionTime.toLocaleString('zh-CN', {
-                    month: 'numeric',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                });
-            }
+            const clockTime = formatCompletionTime(completionTime, !isToday);
 
             const itemIconHtml = this.getItemIconHtml(limitingItemHrid);
-            const matsLabel = itemIconHtml ? `${itemIconHtml}:` : t('Mats:');
+            const matsLabel = itemIconHtml ? `${itemIconHtml}:` : 'Mats:';
             this.displayElement.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${matsLabel} ${timeStr} → ${clockTime} (${formatWithSeparator(materialLimit)} actions)`;
         } else {
             this.displayElement.innerHTML = '';
@@ -1483,6 +1435,24 @@ class ActionTimeDisplay {
 
         const perActionTime = predictions.perActionTime;
 
+        // Philosopher's Mirror guarantees success — exactly (target - current) actions
+        let usesMirror = false;
+        if (actionObj.secondaryItemHash) {
+            const { itemHrid: secItemHrid } = this.parseItemHash(actionObj.secondaryItemHash);
+            if (secItemHrid === '/items/philosophers_mirror') usesMirror = true;
+        }
+        if (!usesMirror && actionObj.enhancingProtectionItemHrid === '/items/philosophers_mirror') {
+            usesMirror = true;
+        }
+
+        if (usesMirror) {
+            let actions = targetLevel - currentLevel;
+            if (actionObj.hasMaxCount) {
+                actions = Math.min(actions, actionObj.maxCount - actionObj.currentCount);
+            }
+            return { count: actions, totalTime: actions * perActionTime };
+        }
+
         // Determine queue count
         let queuedActions;
         if (actionObj.hasMaxCount) {
@@ -1492,9 +1462,10 @@ class ActionTimeDisplay {
             queuedActions = limitResult?.maxActions ?? Infinity;
         }
 
-        if (queuedActions === Infinity) return null;
-
-        const realisticActions = Math.min(queuedActions, predictions.expectedAttempts);
+        const realisticActions =
+            queuedActions === Infinity
+                ? predictions.expectedAttempts
+                : Math.min(queuedActions, predictions.expectedAttempts);
         const totalTime = realisticActions * perActionTime;
 
         return { count: realisticActions, totalTime };
@@ -1560,11 +1531,7 @@ class ActionTimeDisplay {
 
     matchCurrentActionFromText(currentActions, actionNameText) {
         const { actionNameFromDom, itemNameFromDom } = this.parseActionNameFromDom(actionNameText);
-        let itemHridFromDom = this.buildItemHridFromName(itemNameFromDom || actionNameFromDom);
-        // Fallback: Chinese name → HRID via itemNameTranslator
-        if (!itemHridFromDom) {
-            itemHridFromDom = itemNameTranslator.getHridFromChineseName(itemNameFromDom || actionNameFromDom);
-        }
+        const itemHridFromDom = this.buildItemHridFromName(itemNameFromDom || actionNameFromDom);
 
         return currentActions.find((currentAction) => {
             const actionDetails = dataManager.getActionDetails(currentAction.actionHrid);
@@ -1627,15 +1594,16 @@ class ActionTimeDisplay {
      * @returns {string} Clean action name text
      */
     getCleanActionName(actionNameElement) {
-        // Find our marker span (if it exists)
+        // Walk direct children to join their text with spaces, preserving word boundaries
+        // that textContent would collapse (e.g. <span>Dragon</span><span>Fruit</span> → "Dragon Fruit")
         const markerSpan = actionNameElement.querySelector('.mwi-appended-stats');
-        if (markerSpan) {
-            // Remove the marker span temporarily to get clean text
-            const cleanText = actionNameElement.textContent.replace(markerSpan.textContent, '').trim();
-            return cleanText;
+        const parts = [];
+        for (const node of actionNameElement.childNodes) {
+            if (node === markerSpan) continue;
+            const text = node.textContent.trim();
+            if (text) parts.push(text);
         }
-        // No marker found, return as-is
-        return actionNameElement.textContent.trim();
+        return parts.join(' ').replace(/\s+/g, ' ').trim();
     }
 
     /**
@@ -1972,7 +1940,7 @@ class ActionTimeDisplay {
         // Handle enhancing actions specially
         if (isEnhancingAction) {
             // For enhancing, the text is just the item name (e.g., "Cheese Sword")
-            const itemName = actionNameText;
+            const itemName = actionNameText.replace(/\s*\+\d+$/, '');
             const itemHrid = '/items/' + itemName.toLowerCase().replace(/\s+/g, '_');
 
             // Find enhancing action matching this item (excluding already-used actions)
@@ -2003,7 +1971,7 @@ class ActionTimeDisplay {
         }
 
         // Match action from cache (same logic as main display, excluding already-used actions)
-        const match = cachedActions.find((a) => {
+        return cachedActions.find((a) => {
             if (usedActionIds.has(a.id)) {
                 return false; // Skip already-matched actions
             }
@@ -2027,19 +1995,14 @@ class ActionTimeDisplay {
                 }
             }
 
+            // If there's an item name, match on primaryItemHash
+            if (itemNameFromDiv && a.primaryItemHash) {
+                const itemHrid = '/items/' + itemNameFromDiv.toLowerCase().replace(/\s+/g, '_');
+                return a.primaryItemHash.includes(itemHrid);
+            }
+
             return true;
         });
-        if (match) return match;
-
-        // Fallback: if name matching fails (Chinese UI), match by ordinal order
-        const unmatched = cachedActions.filter((a) => !usedActionIds.has(a.id));
-        if (unmatched.length > 0) {
-            const fallback = unmatched[0];
-            usedActionIds.add(fallback.id);
-            return fallback;
-        }
-
-        return null;
     }
 
     /**
@@ -2047,6 +2010,7 @@ class ActionTimeDisplay {
      * @param {HTMLElement} queueMenu - Queue menu container element
      */
     injectQueueTimes(queueMenu) {
+        // Track if we need to reconnect observer at the end
         let shouldReconnectObserver = false;
 
         try {
@@ -2083,43 +2047,9 @@ class ActionTimeDisplay {
             let currentAction = null;
             const actionNameElement = document.querySelector('div[class*="Header_actionName"]');
             if (actionNameElement && actionNameElement.textContent) {
-                // Use getCleanActionName to strip any stats we previously appended
                 const actionNameText = this.getCleanActionName(actionNameElement);
-
-                // Parse action name (same logic as main display)
-                // Also handles formatted numbers like "Farmland (276K)" or "Zone (1.2M)"
-                const actionNameMatch = actionNameText.match(/^(.+?)(?:\s*\([^)]+\))?$/);
-                const fullNameFromDom = actionNameMatch ? actionNameMatch[1].trim() : actionNameText;
-
-                let actionNameFromDom, itemNameFromDom;
-                if (fullNameFromDom.includes(':')) {
-                    const parts = fullNameFromDom.split(':');
-                    actionNameFromDom = parts[0].trim();
-                    itemNameFromDom = parts.slice(1).join(':').trim();
-                } else {
-                    actionNameFromDom = fullNameFromDom;
-                    itemNameFromDom = null;
-                }
-
-                // Match current action from cache
-                currentAction = currentActions.find((a) => {
-                    const actionDetails = dataManager.getActionDetails(a.actionHrid);
-                    if (!actionDetails || actionDetails.name !== actionNameFromDom) {
-                        return false;
-                    }
-
-                    if (itemNameFromDom && a.primaryItemHash) {
-                        const itemHrid = '/items/' + itemNameFromDom.toLowerCase().replace(/\s+/g, '_');
-                        const matches = a.primaryItemHash.includes(itemHrid);
-                        return matches;
-                    }
-
-                    return true;
-                });
-
-                if (currentAction) {
-                    // Current action matched
-                }
+                const sorted = [...currentActions].sort((a, b) => a.ordinal - b.ordinal);
+                currentAction = this.matchCurrentActionFromText(sorted.slice(0, 1), actionNameText);
             }
 
             // Calculate time for current action to include in total
@@ -2363,11 +2293,7 @@ class ActionTimeDisplay {
                     const completionDate = new Date();
                     completionDate.setSeconds(completionDate.getSeconds() + accumulatedTime);
 
-                    const hours = String(completionDate.getHours()).padStart(2, '0');
-                    const minutes = String(completionDate.getMinutes()).padStart(2, '0');
-                    const seconds = String(completionDate.getSeconds()).padStart(2, '0');
-
-                    completionText = ` ${t('Complete at')} ${hours}:${minutes}:${seconds}`;
+                    completionText = ` Complete at ${formatCompletionTime(completionDate, false)}`;
                 }
 
                 // Create time display element
@@ -2393,10 +2319,10 @@ class ActionTimeDisplay {
                     } else {
                         limitLabel = 'max';
                     }
-                    const timeStr = timeReadableZh(totalTime);
+                    const timeStr = timeReadable(totalTime);
                     timeDiv.textContent = `[${timeStr} · ${limitLabel}: ${this.formatLargeNumber(materialLimit)}]${completionText}`;
                 } else {
-                    const timeStr = timeReadableZh(totalTime);
+                    const timeStr = timeReadable(totalTime);
                     timeDiv.textContent = `[${timeStr}]${completionText}`;
                 }
 
@@ -2451,13 +2377,14 @@ class ActionTimeDisplay {
             // Build total time text
             let totalText = '';
             if (hasInfinite) {
+                // Show finite time first, then add infinity indicator
                 if (accumulatedTime > 0) {
-                    totalText = `${t('Total time')}: ${timeReadableZh(accumulatedTime)} + [∞]`;
+                    totalText = `Total time: ${timeReadable(accumulatedTime)} + [∞]`;
                 } else {
-                    totalText = `${t('Total time')}: [∞]`;
+                    totalText = 'Total time: [∞]';
                 }
             } else {
-                totalText = `${t('Total time')}: ${timeReadableZh(accumulatedTime)}`;
+                totalText = `Total time: ${timeReadable(accumulatedTime)}`;
             }
 
             totalDiv.innerHTML = totalText;

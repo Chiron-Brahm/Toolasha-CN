@@ -434,9 +434,17 @@ class ListingPriceDisplay {
 
                 // If quantity info is available from row, use it for precise matching
                 if (rowInfo.filledQuantity !== null && rowInfo.orderQuantity !== null) {
-                    const quantityMatch =
-                        listing.filledQuantity === rowInfo.filledQuantity &&
-                        listing.orderQuantity === rowInfo.orderQuantity;
+                    const filledMatch =
+                        rowInfo.filledSuffixMultiplier > 1
+                            ? Math.floor(listing.filledQuantity / rowInfo.filledSuffixMultiplier) ===
+                              Math.floor(rowInfo.filledQuantity / rowInfo.filledSuffixMultiplier)
+                            : listing.filledQuantity === rowInfo.filledQuantity;
+                    const orderMatch =
+                        rowInfo.orderSuffixMultiplier > 1
+                            ? Math.floor(listing.orderQuantity / rowInfo.orderSuffixMultiplier) ===
+                              Math.floor(rowInfo.orderQuantity / rowInfo.orderSuffixMultiplier)
+                            : listing.orderQuantity === rowInfo.orderQuantity;
+                    const quantityMatch = filledMatch && orderMatch;
                     return quantityMatch;
                 }
 
@@ -505,18 +513,27 @@ class ListingPriceDisplay {
             }
         }
 
-        // Extract quantity (3rd cell) - format: "+7 0 / 1" or "0 / 1" (enhancement level may prefix)
+        // Extract quantity (3rd cell) - format: "+7 0 / 1" or "0 / 1" or "62075 / 405K"
         let filledQuantity = null;
         let orderQuantity = null;
+        let filledSuffixMultiplier = 1;
+        let orderSuffixMultiplier = 1;
         const quantityCell = row.children[2];
         if (quantityCell) {
             let text = quantityCell.textContent.trim();
             // Strip leading enhancement level prefix (e.g., "+7" from "+70 / 1")
             text = text.replace(/^\+\d+\s*/, '');
-            const match = text.match(/(\d+)\s*\/\s*(\d+)/);
+            const match = text.match(/([0-9,.]+)\s*([KMB]?)\s*\/\s*([0-9,.]+)\s*([KMB]?)/i);
             if (match) {
-                filledQuantity = Number(match[1]);
-                orderQuantity = Number(match[2]);
+                const getSuffixMultiplier = (s) => {
+                    if (!s) return 1;
+                    const c = s.toUpperCase();
+                    return c === 'K' ? 1000 : c === 'M' ? 1000000 : c === 'B' ? 1000000000 : 1;
+                };
+                filledSuffixMultiplier = getSuffixMultiplier(match[2]);
+                orderSuffixMultiplier = getSuffixMultiplier(match[4]);
+                filledQuantity = Math.round(parseFloat(match[1].replace(/,/g, '')) * filledSuffixMultiplier);
+                orderQuantity = Math.round(parseFloat(match[3].replace(/,/g, '')) * orderSuffixMultiplier);
             }
         }
 
@@ -577,7 +594,16 @@ class ListingPriceDisplay {
             price = numStr ? Number(numStr) * multiplier : NaN;
         }
 
-        return { itemHrid, enhancementLevel, isSell, price, filledQuantity, orderQuantity };
+        return {
+            itemHrid,
+            enhancementLevel,
+            isSell,
+            price,
+            filledQuantity,
+            orderQuantity,
+            filledSuffixMultiplier,
+            orderSuffixMultiplier,
+        };
     }
 
     /**

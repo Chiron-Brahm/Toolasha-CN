@@ -9,7 +9,7 @@ import networthHistory, { GAP_THRESHOLD_MS } from './networth-history.js';
 import config from '../../core/config.js';
 import dataManager from '../../core/data-manager.js';
 import storage from '../../core/storage.js';
-import { networthFormatter } from '../../utils/formatters.js';
+import { networthFormatter, formatDateTime } from '../../utils/formatters.js';
 
 const RANGE_MS = {
     '24h': 24 * 60 * 60 * 1000,
@@ -863,15 +863,9 @@ class NetworthHistoryChart {
                             callback: (value) => {
                                 const d = new Date(value);
                                 if (isShortRange) {
-                                    return d.toLocaleTimeString([], {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                    });
+                                    return formatDateTime(d, { includeDate: false, includeSeconds: false });
                                 }
-                                return d.toLocaleDateString([], {
-                                    month: 'short',
-                                    day: 'numeric',
-                                });
+                                return formatDateTime(d, { includeTime: false });
                             },
                         },
                         grid: { color: '#333' },
@@ -927,7 +921,7 @@ class NetworthHistoryChart {
             const rangeChange = currentTotal - first.total;
             const rangePercent = first.total > 0 ? (rangeChange / first.total) * 100 : 0;
 
-            const ratePerHour = hoursElapsed > 0 ? (last.total - first.total) / hoursElapsed : 0;
+            const ratePerHour = hoursElapsed > 0 ? (currentTotal - first.total) / hoursElapsed : 0;
 
             parts.push(
                 `<span>${t('Current:')} <strong style="color: ${config.COLOR_ACCENT};">${networthFormatter(Math.round(currentTotal))}</strong></span>`
@@ -959,8 +953,7 @@ class NetworthHistoryChart {
         if (this.categoryVisibility.showNonExcluded && hasNonExclStats) {
             const currentNE = this.networthFeature?.currentData?.totalNetworth ?? last.nonExcluded ?? last.total;
             const firstNE = first.nonExcluded ?? first.total;
-            const lastNE = last.nonExcluded ?? last.total;
-            const neRate = hoursElapsed > 0 ? (lastNE - firstNE) / hoursElapsed : 0;
+            const neRate = hoursElapsed > 0 ? (currentNE - firstNE) / hoursElapsed : 0;
 
             let neStatHtml = `<span style="color: #a78bfa;">${t('Non-Excl')}</span>: <strong style="color: #a78bfa;">${networthFormatter(Math.round(currentNE))}</strong>`;
 
@@ -1449,12 +1442,7 @@ class NetworthHistoryChart {
         const prevRaw = this._getPreviousRaw(totalPoint.dataset.data, totalPoint.dataIndex);
 
         // Title
-        const title = new Date(totalPoint.raw.x).toLocaleString([], {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-        });
+        const title = formatDateTime(new Date(totalPoint.raw.x), { includeSeconds: false });
 
         // Build lines
         let html = `<div style="font-weight:bold; color:#fff; margin-bottom:4px;">${title}</div>`;
@@ -1559,12 +1547,7 @@ class NetworthHistoryChart {
             min-width: 180px;
         `;
 
-        const date = new Date(snapshot.t).toLocaleString([], {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-        });
+        const date = formatDateTime(new Date(snapshot.t), { includeSeconds: false });
 
         popup.innerHTML = `
             <div style="margin-bottom:4px;font-weight:500;color:#fff;">${date}</div>

@@ -3,19 +3,17 @@
  * Displays profit calculator in alchemy action detail panel
  */
 
-import { t } from '../../core/i18n.js';
 import config from '../../core/config.js';
 import domObserver from '../../core/dom-observer.js';
 import dataManager from '../../core/data-manager.js';
 import alchemyProfit from './alchemy-profit.js';
 import alchemyProfitCalculator from '../market/alchemy-profit-calculator.js';
-import { formatWithSeparator, formatPercentage, formatLargeNumber, timeReadableZh } from '../../utils/formatters.js';
+import { formatWithSeparator, formatPercentage, formatLargeNumber, timeReadable } from '../../utils/formatters.js';
 import { createCollapsibleSection } from '../../utils/ui-components.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { calculateExperienceMultiplier } from '../../utils/experience-parser.js';
 import { calculateActionsPerHour } from '../../utils/profit-helpers.js';
 import { calculateMultiLevelProgress } from '../../utils/experience-calculator.js';
-import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 class AlchemyProfitDisplay {
     constructor() {
@@ -31,6 +29,7 @@ class AlchemyProfitDisplay {
         this.equipmentChangeHandler = null;
         this.sectionExpanded = new Map(); // Persistent expand/collapse state across rebuilds
         this.cachedInputField = null; // Cache input field since it gets removed when action starts
+        this._alchemyTargetLevel = null;
     }
 
     /**
@@ -277,52 +276,43 @@ class AlchemyProfitDisplay {
             const drops = await alchemyProfit.extractDrops(actionHrid);
             const requirements = await alchemyProfit.extractRequirements();
 
-            // Determine action type from actionHrid (most reliable) or DOM tab state
+            // Determine action type from DOM tab state (primary) or actionHrid (fallback).
+            // Tab detection is preferred because getCurrentActionHrid() returns ANY running
+            // alchemy action across all slots, which may differ from the tab being viewed.
             let isCoinify = false;
             let isTransmute = false;
             let isDecompose = false;
 
-            if (actionHrid) {
-                // Player is actively performing an alchemy action - use actionHrid
+            const tabContainer = document.querySelector('[class*="AlchemyPanel_tabsComponentContainer"]');
+            const selectedTab = tabContainer?.querySelector('[role="tab"][aria-selected="true"]');
+            const tabText = selectedTab?.textContent?.trim()?.toLowerCase() || '';
+
+            if (tabText.includes('coinify')) {
+                isCoinify = true;
+            } else if (tabText.includes('transmute')) {
+                isTransmute = true;
+            } else if (tabText.includes('decompose')) {
+                isDecompose = true;
+            } else if (actionHrid) {
                 isCoinify = actionHrid === '/actions/alchemy/coinify';
                 isTransmute = actionHrid === '/actions/alchemy/transmute';
                 isDecompose = actionHrid === '/actions/alchemy/decompose';
             } else {
-                // Not actively performing - check which tab is selected in the DOM
-                // Use [role="tab"] selector which reliably matches MUI tab elements
-                const tabContainer = document.querySelector('[class*="AlchemyPanel_tabsComponentContainer"]');
-                const tablist = tabContainer?.querySelector('[role="tablist"]');
-                if (tablist) {
-                    const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
-                    const selectedIdx = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
-                    // Alchemy tabs order: [Coinify=0, Transmute=1, Decompose=2]
-                    if (selectedIdx === 0) {
-                        isCoinify = true;
-                    } else if (selectedIdx === 1) {
-                        isTransmute = true;
-                    } else if (selectedIdx === 2) {
+                // Final fallback: use drop/item data heuristics
+                isCoinify = drops.length > 0 && drops[0].itemHrid === '/items/coin';
+                if (!isCoinify && requirements && requirements.length > 0) {
+                    const reqItemHrid = requirements[0].itemHrid;
+                    const reqItemDetails = dataManager.getItemDetails(reqItemHrid);
+                    const hasDecompose =
+                        Array.isArray(reqItemDetails?.alchemyDetail?.decomposeItems) &&
+                        reqItemDetails.alchemyDetail.decomposeItems.length > 0;
+                    const hasTransmute = !!reqItemDetails?.alchemyDetail?.transmuteDropTable;
+                    if (hasDecompose && !hasTransmute) {
                         isDecompose = true;
-                    }
-                }
-
-                if (!isCoinify && !isTransmute && !isDecompose) {
-                    // Final fallback: use drop/item data heuristics
-                    isCoinify = drops.length > 0 && drops[0].itemHrid === '/items/coin';
-                    if (!isCoinify && requirements && requirements.length > 0) {
-                        const reqItemHrid = requirements[0].itemHrid;
-                        const reqItemDetails = dataManager.getItemDetails(reqItemHrid);
-                        const hasDecompose =
-                            Array.isArray(reqItemDetails?.alchemyDetail?.decomposeItems) &&
-                            reqItemDetails.alchemyDetail.decomposeItems.length > 0;
-                        const hasTransmute = !!reqItemDetails?.alchemyDetail?.transmuteDropTable;
-                        // If both exist, default to transmute; if only one, use that one
-                        if (hasDecompose && !hasTransmute) {
-                            isDecompose = true;
-                        } else if (hasTransmute) {
-                            isTransmute = true;
-                        } else if (hasDecompose) {
-                            isDecompose = true;
-                        }
+                    } else if (hasTransmute) {
+                        isTransmute = true;
+                    } else if (hasDecompose) {
+                        isDecompose = true;
                     }
                 }
             }
@@ -447,7 +437,7 @@ class AlchemyProfitDisplay {
 
         // Revenue Section
         const revenueDiv = document.createElement('div');
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: var(--text-color-primary, #fff); margin-bottom: 4px;">${t('Revenue: {0}/hr', formatLargeNumber(revenue))}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: var(--text-color-primary, #fff); margin-bottom: 4px;">Revenue: ${formatLargeNumber(revenue)}/hr</div>`;
 
         // Split drops into normal, essence, and rare
         const normalDrops = profitData.dropRevenues.filter((drop) => !drop.isEssence && !drop.isRare);
@@ -460,7 +450,8 @@ class AlchemyProfitDisplay {
             let normalDropsRevenue = 0;
 
             for (const drop of normalDrops) {
-                const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
+                const itemDetails = dataManager.getItemDetails(drop.itemHrid);
+                const itemName = itemDetails?.name || drop.itemHrid;
                 const decimals = 2; // Always use 2 decimals
                 const dropRatePct = formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
 
@@ -483,7 +474,7 @@ class AlchemyProfitDisplay {
 
             const normalDropsSection = this.createTrackedCollapsible(
                 '',
-                t('Normal Drops: {0}/hr', formatLargeNumber(Math.round(normalDropsRevenue))),
+                `Normal Drops: ${formatLargeNumber(Math.round(normalDropsRevenue))}/hr (${normalDrops.length} item${normalDrops.length !== 1 ? 's' : ''})`,
                 null,
                 normalDropsContent,
                 false,
@@ -498,7 +489,8 @@ class AlchemyProfitDisplay {
             let essenceRevenue = 0;
 
             for (const drop of essenceDrops) {
-                const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
+                const itemDetails = dataManager.getItemDetails(drop.itemHrid);
+                const itemName = itemDetails?.name || drop.itemHrid;
                 const decimals = 2; // Always use 2 decimals
                 const dropRatePct = formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
 
@@ -512,7 +504,7 @@ class AlchemyProfitDisplay {
 
             const essenceSection = this.createTrackedCollapsible(
                 '',
-                t('Essence Drops: {0}/hr', formatLargeNumber(Math.round(essenceRevenue))),
+                `Essence Drops: ${formatLargeNumber(Math.round(essenceRevenue))}/hr (${essenceDrops.length} item${essenceDrops.length !== 1 ? 's' : ''})`,
                 null,
                 essenceContent,
                 false,
@@ -527,7 +519,8 @@ class AlchemyProfitDisplay {
             let rareRevenue = 0;
 
             for (const drop of rareDrops) {
-                const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
+                const itemDetails = dataManager.getItemDetails(drop.itemHrid);
+                const itemName = itemDetails?.name || drop.itemHrid;
                 const decimals = drop.dropsPerHour < 1 ? 2 : 1;
                 const baseDropRatePct = formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
                 const effectiveDropRatePct = formatPercentage(
@@ -553,7 +546,7 @@ class AlchemyProfitDisplay {
 
             const rareSection = this.createTrackedCollapsible(
                 '',
-                t('Rare Drops: {0}/hr', formatLargeNumber(Math.round(rareRevenue))),
+                `Rare Drops: ${formatLargeNumber(Math.round(rareRevenue))}/hr (${rareDrops.length} item${rareDrops.length !== 1 ? 's' : ''})`,
                 null,
                 rareContent,
                 false,
@@ -564,13 +557,14 @@ class AlchemyProfitDisplay {
 
         // Costs Section
         const costsDiv = document.createElement('div');
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: var(--text-color-primary, #fff); margin-top: 12px; margin-bottom: 4px;">${t('Costs: {0}/hr', formatLargeNumber(costs))}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: var(--text-color-primary, #fff); margin-top: 12px; margin-bottom: 4px;">Costs: ${formatLargeNumber(costs)}/hr</div>`;
 
         // Material Costs subsection (consumed on ALL attempts)
         if (profitData.requirementCosts && profitData.requirementCosts.length > 0) {
             const materialCostsContent = document.createElement('div');
             for (const material of profitData.requirementCosts) {
-                const itemName = itemNameTranslator.getDisplayName(material.itemHrid);
+                const itemDetails = dataManager.getItemDetails(material.itemHrid);
+                const itemName = itemDetails?.name || material.itemHrid;
                 const amountPerHour = material.count * profitData.actionsPerHour;
 
                 const line = document.createElement('div');
@@ -598,7 +592,7 @@ class AlchemyProfitDisplay {
 
             const materialCostsSection = this.createTrackedCollapsible(
                 '',
-                t('Material Costs: {0}/hr', formatLargeNumber(Math.round(profitData.materialCostPerHour))),
+                `Material Costs: ${formatLargeNumber(Math.round(profitData.materialCostPerHour))}/hr (${profitData.requirementCosts.length} material${profitData.requirementCosts.length !== 1 ? 's' : ''})`,
                 null,
                 materialCostsContent,
                 false,
@@ -610,7 +604,8 @@ class AlchemyProfitDisplay {
         // Catalyst Cost subsection (consumed only on success)
         if (profitData.catalystCost && profitData.catalystCost.itemHrid) {
             const catalystContent = document.createElement('div');
-            const itemName = itemNameTranslator.getDisplayName(profitData.catalystCost.itemHrid);
+            const itemDetails = dataManager.getItemDetails(profitData.catalystCost.itemHrid);
+            const itemName = itemDetails?.name || profitData.catalystCost.itemHrid;
 
             // Calculate catalysts per hour (only consumed on success)
             const catalystsPerHour = profitData.actionsPerHour * profitData.successRate;
@@ -628,7 +623,7 @@ class AlchemyProfitDisplay {
 
             const catalystSection = this.createTrackedCollapsible(
                 '',
-                t('Catalyst Cost: {0}/hr', formatLargeNumber(Math.round(profitData.catalystCost.costPerHour))),
+                `Catalyst Cost: ${formatLargeNumber(Math.round(profitData.catalystCost.costPerHour))}/hr`,
                 null,
                 catalystContent,
                 false,
@@ -641,7 +636,8 @@ class AlchemyProfitDisplay {
         if (profitData.consumableCosts && profitData.consumableCosts.length > 0) {
             const drinkCostsContent = document.createElement('div');
             for (const drink of profitData.consumableCosts) {
-                const itemName = itemNameTranslator.getDisplayName(drink.itemHrid);
+                const itemDetails = dataManager.getItemDetails(drink.itemHrid);
+                const itemName = itemDetails?.name || drink.itemHrid;
 
                 // Format drinks per hour
                 const formattedDrinkAmount =
@@ -658,7 +654,7 @@ class AlchemyProfitDisplay {
             const drinkCount = profitData.consumableCosts.length;
             const drinkCostsSection = this.createTrackedCollapsible(
                 '',
-                t('Drink Costs: {0}/hr', formatLargeNumber(Math.round(profitData.totalTeaCostPerHour))),
+                `Drink Costs: ${formatLargeNumber(Math.round(profitData.totalTeaCostPerHour))}/hr (${drinkCount} drink${drinkCount !== 1 ? 's' : ''})`,
                 null,
                 drinkCostsContent,
                 false,
@@ -676,7 +672,7 @@ class AlchemyProfitDisplay {
         // Main modifiers header
         const modifiersHeader = document.createElement('div');
         modifiersHeader.style.cssText = 'font-weight: 500; color: var(--text-color-primary, #fff); margin-bottom: 4px;';
-        modifiersHeader.textContent = t('Modifiers:');
+        modifiersHeader.textContent = 'Modifiers:';
         modifiersDiv.appendChild(modifiersHeader);
 
         // Success Rate breakdown
@@ -687,20 +683,20 @@ class AlchemyProfitDisplay {
             // Base success rate (from player level vs recipe requirement)
             const line = document.createElement('div');
             line.style.marginLeft = '8px';
-            line.textContent = `• ${t('Base Success Rate')}: ${formatPercentage(successBreakdown.base, 1)}`;
+            line.textContent = `• Base Success Rate: ${formatPercentage(successBreakdown.base, 1)}`;
             successContent.appendChild(line);
 
             // Tea bonus (from Catalytic Tea)
             if (successBreakdown.tea > 0) {
                 const teaLine = document.createElement('div');
                 teaLine.style.marginLeft = '8px';
-                teaLine.textContent = `• ${t('Tea Bonus')}: +${formatPercentage(successBreakdown.tea, 1)} (multiplicative)`;
+                teaLine.textContent = `• Tea Bonus: +${formatPercentage(successBreakdown.tea, 1)} (multiplicative)`;
                 successContent.appendChild(teaLine);
             }
 
             const successSection = this.createTrackedCollapsible(
                 '',
-                t('Success Rate: {0}', formatPercentage(profitData.successRate, 1)),
+                `Success Rate: ${formatPercentage(profitData.successRate, 1)}`,
                 null,
                 successContent,
                 false,
@@ -711,7 +707,7 @@ class AlchemyProfitDisplay {
             // Fallback if breakdown not available
             const successRateLine = document.createElement('div');
             successRateLine.style.marginLeft = '8px';
-            successRateLine.textContent = `• ${t('Success Rate')}: ${formatPercentage(profitData.successRate, 1)}`;
+            successRateLine.textContent = `• Success Rate: ${formatPercentage(profitData.successRate, 1)}`;
             modifiersDiv.appendChild(successRateLine);
         }
 
@@ -723,48 +719,48 @@ class AlchemyProfitDisplay {
             if (effBreakdown.levelEfficiency > 0) {
                 const line = document.createElement('div');
                 line.style.marginLeft = '8px';
-                line.textContent = `• ${t('Level Bonus')}: +${effBreakdown.levelEfficiency.toFixed(2)}%`;
+                line.textContent = `• Level Bonus: +${effBreakdown.levelEfficiency.toFixed(2)}%`;
                 effContent.appendChild(line);
             }
 
             if (effBreakdown.houseEfficiency > 0) {
                 const line = document.createElement('div');
                 line.style.marginLeft = '8px';
-                line.textContent = `• ${t('House Bonus')}: +${effBreakdown.houseEfficiency.toFixed(2)}%`;
+                line.textContent = `• House Bonus: +${effBreakdown.houseEfficiency.toFixed(2)}%`;
                 effContent.appendChild(line);
             }
 
             if (effBreakdown.teaEfficiency > 0) {
                 const line = document.createElement('div');
                 line.style.marginLeft = '8px';
-                line.textContent = `• ${t('Tea Bonus')}: +${effBreakdown.teaEfficiency.toFixed(2)}%`;
+                line.textContent = `• Tea Bonus: +${effBreakdown.teaEfficiency.toFixed(2)}%`;
                 effContent.appendChild(line);
             }
 
             if (effBreakdown.equipmentEfficiency > 0) {
                 const line = document.createElement('div');
                 line.style.marginLeft = '8px';
-                line.textContent = `• ${t('Equipment Bonus')}: +${effBreakdown.equipmentEfficiency.toFixed(2)}%`;
+                line.textContent = `• Equipment Bonus: +${effBreakdown.equipmentEfficiency.toFixed(2)}%`;
                 effContent.appendChild(line);
             }
 
             if (effBreakdown.communityEfficiency > 0) {
                 const line = document.createElement('div');
                 line.style.marginLeft = '8px';
-                line.textContent = `• ${t('Community Buff')}: +${effBreakdown.communityEfficiency.toFixed(2)}%`;
+                line.textContent = `• Community Buff: +${effBreakdown.communityEfficiency.toFixed(2)}%`;
                 effContent.appendChild(line);
             }
 
             if (effBreakdown.achievementEfficiency > 0) {
                 const line = document.createElement('div');
                 line.style.marginLeft = '8px';
-                line.textContent = `• ${t('Achievement Bonus')}: +${effBreakdown.achievementEfficiency.toFixed(2)}%`;
+                line.textContent = `• Achievement Bonus: +${effBreakdown.achievementEfficiency.toFixed(2)}%`;
                 effContent.appendChild(line);
             }
 
             const effSection = this.createTrackedCollapsible(
                 '',
-                t('Efficiency: +{0}', formatPercentage(profitData.efficiency, 1)),
+                `Efficiency: +${formatPercentage(profitData.efficiency, 1)}`,
                 null,
                 effContent,
                 false,
@@ -798,7 +794,7 @@ class AlchemyProfitDisplay {
 
                 const speedSection = this.createTrackedCollapsible(
                     '',
-                    t('Action Speed: +{0}', formatPercentage(actionSpeed, 1)),
+                    `Action Speed: +${formatPercentage(actionSpeed, 1)}`,
                     null,
                     speedContent,
                     false,
@@ -838,7 +834,7 @@ class AlchemyProfitDisplay {
 
                 const rareSection = this.createTrackedCollapsible(
                     '',
-                    t('Rare Find: +{0}%', rareBreakdown.total.toFixed(2)),
+                    `Rare Find: +${rareBreakdown.total.toFixed(2)}%`,
                     null,
                     rareContent,
                     false,
@@ -864,7 +860,7 @@ class AlchemyProfitDisplay {
 
                 const essenceSection = this.createTrackedCollapsible(
                     '',
-                    t('Essence Find: +{0}%', essenceBreakdown.total.toFixed(2)),
+                    `Essence Find: +${essenceBreakdown.total.toFixed(2)}%`,
                     null,
                     essenceContent,
                     false,
@@ -893,11 +889,7 @@ class AlchemyProfitDisplay {
             color: ${profitColor};
             margin-bottom: 8px;
         `;
-        netProfitLine.textContent = t(
-            'Net Profit: {0}/hr, {1}/day',
-            formatLargeNumber(profit),
-            formatLargeNumber(profitPerDay)
-        );
+        netProfitLine.textContent = `Net Profit: ${formatLargeNumber(profit)}/hr, ${formatLargeNumber(profitPerDay)}/day`;
         topLevelContent.appendChild(netProfitLine);
 
         // Add pricing mode label
@@ -910,12 +902,12 @@ class AlchemyProfitDisplay {
             color: #888;
             font-size: 0.85em;
         `;
-        modeDiv.textContent = t('Pricing Mode: {0}', modeLabel);
+        modeDiv.textContent = `Pricing Mode: ${modeLabel}`;
         topLevelContent.appendChild(modeDiv);
 
         const detailedBreakdownSection = this.createTrackedCollapsible(
             '📊',
-            t('Detailed Breakdown'),
+            'Detailed Breakdown',
             null,
             detailsContent,
             false,
@@ -925,14 +917,7 @@ class AlchemyProfitDisplay {
         topLevelContent.appendChild(detailedBreakdownSection);
 
         // Create main profit section
-        const profitSection = this.createTrackedCollapsible(
-            '💰',
-            t('Profitability'),
-            summary,
-            topLevelContent,
-            false,
-            0
-        );
+        const profitSection = this.createTrackedCollapsible('💰', 'Profitability', summary, topLevelContent, false, 0);
         profitSection.id = 'mwi-alchemy-profit';
         profitSection.classList.add('mwi-alchemy-profit');
         profitSection.setAttribute('data-mwi-profit-display', 'true');
@@ -1009,9 +994,9 @@ class AlchemyProfitDisplay {
         if (!gameData || !itemHrid) return 0;
 
         const itemDetails = gameData.itemDetailMap?.[itemHrid];
-        if (!itemDetails || !itemDetails.itemLevel) return 0;
+        if (!itemDetails) return 0;
 
-        const baseXP = this.getAlchemyBaseXP(actionType, itemDetails.itemLevel);
+        const baseXP = this.getAlchemyBaseXP(actionType, itemDetails.itemLevel || 0);
         if (baseXP === 0) return 0;
 
         // Calculate wisdom multiplier
@@ -1121,7 +1106,7 @@ class AlchemyProfitDisplay {
                 const inputValue = inputField.value;
 
                 if (inputValue === '∞') {
-                    totalTimeLine.textContent = t('Total time: ∞');
+                    totalTimeLine.textContent = 'Total time: ∞';
                     return;
                 }
 
@@ -1129,9 +1114,9 @@ class AlchemyProfitDisplay {
                 if (repeatCount > 0) {
                     const baseActionsNeeded = Math.ceil(repeatCount / efficiencyMultiplier);
                     const totalSeconds = baseActionsNeeded * actionTime;
-                    totalTimeLine.textContent = `Total time: ${timeReadableZh(totalSeconds)}`;
+                    totalTimeLine.textContent = `Total time: ${timeReadable(totalSeconds)}`;
                 } else {
-                    totalTimeLine.textContent = t('Total time: 0s');
+                    totalTimeLine.textContent = 'Total time: 0s';
                 }
             };
 
@@ -1158,7 +1143,7 @@ class AlchemyProfitDisplay {
                 if (repeatCount > 0) {
                     const baseActionsNeeded = Math.ceil(repeatCount / efficiencyMultiplier);
                     const totalSeconds = baseActionsNeeded * actionTime;
-                    return `${effectiveActionsPerHour}/hr | Total time: ${timeReadableZh(totalSeconds)}`;
+                    return `${effectiveActionsPerHour}/hr | Total time: ${timeReadable(totalSeconds)}`;
                 }
                 return `${effectiveActionsPerHour}/hr | Total time: 0s`;
             };
@@ -1313,11 +1298,13 @@ class AlchemyProfitDisplay {
                 `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">To Level ${nextLevel}:</span>`
             );
             lines.push(`  Actions: ${formatWithSeparator(actionsNeeded)}`);
-            lines.push(`  Time: ${timeReadableZh(timeNeeded)}`);
+            lines.push(`  Time: ${timeReadable(timeNeeded)}`);
 
             lines.push('');
 
             // Target level calculator
+            const savedTarget = this._alchemyTargetLevel;
+            const initialTargetLevel = savedTarget && savedTarget > currentLevel ? savedTarget : nextLevel;
             lines.push(
                 `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">Target Level Calculator:</span>`
             );
@@ -1326,7 +1313,7 @@ class AlchemyProfitDisplay {
                 <input
                     type="number"
                     id="mwi-alchemy-target-level-input"
-                    value="${nextLevel}"
+                    value="${initialTargetLevel}"
                     min="${nextLevel}"
                     max="200"
                     style="
@@ -1342,7 +1329,7 @@ class AlchemyProfitDisplay {
                 <span>:</span>
             </div>`);
             lines.push(`<div id="mwi-alchemy-target-level-result" style="margin-top: 4px; margin-left: 8px;">
-                ${formatWithSeparator(actionsNeeded)} actions | ${timeReadableZh(timeNeeded)}
+                ${formatWithSeparator(actionsNeeded)} actions | ${timeReadable(timeNeeded)}
             </div>`);
 
             lines.push('');
@@ -1359,6 +1346,7 @@ class AlchemyProfitDisplay {
 
             const updateTargetLevel = () => {
                 const targetLevelValue = parseInt(targetLevelInput.value);
+                this._alchemyTargetLevel = targetLevelValue;
                 if (targetLevelValue > currentLevel && targetLevelValue <= 200) {
                     const result = calculateMultiLevelProgress(
                         currentLevel,
@@ -1369,10 +1357,10 @@ class AlchemyProfitDisplay {
                         xpPerAction,
                         levelExperienceTable
                     );
-                    targetLevelResult.innerHTML = `${formatWithSeparator(result.actionsNeeded)} actions | ${timeReadableZh(result.timeNeeded)}`;
+                    targetLevelResult.innerHTML = `${formatWithSeparator(result.actionsNeeded)} actions | ${timeReadable(result.timeNeeded)}`;
                     targetLevelResult.style.color = `var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY})`;
                 } else {
-                    targetLevelResult.textContent = t('Invalid level');
+                    targetLevelResult.textContent = 'Invalid level';
                     targetLevelResult.style.color = 'var(--color-error, #ff4444)';
                 }
             };
@@ -1380,8 +1368,12 @@ class AlchemyProfitDisplay {
             targetLevelInput.addEventListener('input', updateTargetLevel);
             targetLevelInput.addEventListener('change', updateTargetLevel);
 
+            if (initialTargetLevel !== nextLevel) {
+                updateTargetLevel();
+            }
+
             // Create summary for collapsed view
-            const summary = `${timeReadableZh(timeNeeded)} to Level ${nextLevel}`;
+            const summary = `${timeReadable(timeNeeded)} to Level ${nextLevel}`;
 
             return this.createTrackedCollapsible('📈', 'Level Progress', summary, content, false);
         } catch (error) {

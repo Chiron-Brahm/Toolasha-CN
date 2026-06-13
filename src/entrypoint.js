@@ -96,17 +96,17 @@ function registerFeatures() {
             async: false,
         },
         {
-            key: 'listingPriceDisplay',
-            name: 'Listing Price Display',
-            category: 'Market',
-            module: Market.listingPriceDisplay,
-            async: false,
-        },
-        {
             key: 'estimatedListingAge',
             name: 'Estimated Listing Age',
             category: 'Market',
             module: Market.estimatedListingAge,
+            async: true,
+        },
+        {
+            key: 'listingPriceDisplay',
+            name: 'Listing Price Display',
+            category: 'Market',
+            module: Market.listingPriceDisplay,
             async: false,
         },
         {
@@ -657,6 +657,21 @@ function registerFeatures() {
             async: false,
         },
         {
+            key: 'guildActivityCalculator',
+            name: 'Guild Activity Calculator',
+            category: 'Guild',
+            module: UI.guildActivityCalculator,
+            async: false,
+        },
+        {
+            key: 'guildActivityDisplay',
+            name: 'Guild Activity Display',
+            category: 'Guild',
+            module: UI.guildActivityDisplay,
+            async: false,
+            customCheck: () => config.getSetting('guildActivityCalculator'),
+        },
+        {
             key: 'emptyQueueNotification',
             name: 'Empty Queue Notification',
             category: 'Notifications',
@@ -821,6 +836,8 @@ if (isCombatSimulatorPage()) {
 
     // Expose minimal user-facing API
     const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
+    targetWindow.Toolasha.version = '2.63.0';
 
     // Feature toggle API (for users to manage settings via console)
     targetWindow.Toolasha.features = {

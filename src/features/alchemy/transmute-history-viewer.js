@@ -4,13 +4,11 @@
  * Injected as a tab in the alchemy panel tab bar.
  */
 
-import { t } from '../../core/i18n.js';
 import config from '../../core/config.js';
+import dataManager from '../../core/data-manager.js';
 import { transmuteHistoryTracker } from './transmute-history-tracker.js';
-import { itemNameTranslator } from '../../utils/item-name-translator.js';
-import { formatKMB } from '../../utils/formatters.js';
+import { formatKMB, formatDateTime } from '../../utils/formatters.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
-import { isAlchemyPanel, getAlchemyTab } from '../../utils/game-locale.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 
 class TransmuteHistoryViewer {
@@ -97,14 +95,19 @@ class TransmuteHistoryViewer {
             const tablist = document.querySelector('[role="tablist"]');
             if (!tablist) return;
 
-            // Verify this is the alchemy tablist
-            if (!isAlchemyPanel(tablist)) return;
+            // Verify this is the alchemy tablist by checking for "Transmute" tab
+            const hasTransmute = Array.from(tablist.children).some(
+                (btn) => btn.textContent.includes('Transmute') && !btn.dataset.mwiTransmuteHistoryTab
+            );
+            if (!hasTransmute) return;
 
             // Already injected?
             if (tablist.querySelector('[data-mwi-transmute-history-tab="true"]')) return;
 
             // Clone an existing tab for structure
-            const referenceTab = getAlchemyTab(tablist, 1);
+            const referenceTab = Array.from(tablist.children).find(
+                (btn) => btn.textContent.includes('Transmute') && !btn.dataset.mwiTransmuteHistoryTab
+            );
             if (!referenceTab) return;
 
             const tab = referenceTab.cloneNode(true);
@@ -119,10 +122,10 @@ class TransmuteHistoryViewer {
                 // Replace first text node (the label) while keeping badge span
                 const badgeSpan = badge.querySelector('.MuiBadge-badge');
                 badge.textContent = '';
-                badge.appendChild(document.createTextNode(t('Transmute History')));
+                badge.appendChild(document.createTextNode('Transmute History'));
                 if (badgeSpan) badge.appendChild(badgeSpan);
             } else {
-                tab.textContent = t('Transmute History');
+                tab.textContent = 'Transmute History';
             }
 
             tab.addEventListener('click', (e) => {
@@ -222,7 +225,7 @@ class TransmuteHistoryViewer {
         `;
 
         const title = document.createElement('h2');
-        title.textContent = t('Transmute History');
+        title.textContent = 'Transmute History';
         title.style.cssText = 'margin: 0; color: #fff;';
 
         const closeBtn = document.createElement('button');
@@ -406,11 +409,11 @@ class TransmuteHistoryViewer {
         headerRow.style.background = '#1a1a1a';
 
         const columns = [
-            { key: 'startTime', label: t('Session Start'), filterable: true },
-            { key: 'inputItemHrid', label: t('Input Item'), filterable: true },
-            { key: 'totalAttempts', label: t('Attempts'), filterable: false },
-            { key: 'totalSuccesses', label: t('Successes'), filterable: false },
-            { key: 'results', label: t('Results'), filterable: true },
+            { key: 'startTime', label: 'Session Start', filterable: true },
+            { key: 'inputItemHrid', label: 'Input Item', filterable: true },
+            { key: 'totalAttempts', label: 'Attempts', filterable: false },
+            { key: 'totalSuccesses', label: 'Successes', filterable: false },
+            { key: 'results', label: 'Results', filterable: true },
             { key: '_delete', label: '', filterable: false },
         ];
 
@@ -487,8 +490,8 @@ class TransmuteHistoryViewer {
             cell.colSpan = columns.length;
             cell.textContent =
                 this.sessions.length === 0
-                    ? t('No transmute history recorded yet.')
-                    : t('No sessions match the current filters.');
+                    ? 'No transmute history recorded yet.'
+                    : 'No sessions match the current filters.';
             cell.style.cssText = 'padding: 20px; text-align: center; color: #888;';
             row.appendChild(cell);
             tbody.appendChild(row);
@@ -502,7 +505,7 @@ class TransmuteHistoryViewer {
 
                 // Session Start
                 const dateCell = document.createElement('td');
-                dateCell.textContent = new Date(session.startTime).toLocaleString();
+                dateCell.textContent = formatDateTime(new Date(session.startTime));
                 dateCell.style.padding = '6px 10px';
                 row.appendChild(dateCell);
 
@@ -524,7 +527,7 @@ class TransmuteHistoryViewer {
                 // Successes
                 const successCell = document.createElement('td');
                 const failures = session.totalAttempts - session.totalSuccesses;
-                successCell.textContent = t('{0} ({1} failed)', session.totalSuccesses, failures);
+                successCell.textContent = `${session.totalSuccesses} (${failures} failed)`;
                 successCell.style.cssText = `
                     padding: 6px 10px;
                     color: ${failures > 0 ? '#fbbf24' : '#4ade80'};
@@ -542,7 +545,7 @@ class TransmuteHistoryViewer {
                 deleteCell.style.cssText = 'padding: 6px 4px; text-align: center;';
                 const deleteBtn = document.createElement('button');
                 deleteBtn.textContent = '✕';
-                deleteBtn.title = t('Delete this session');
+                deleteBtn.title = 'Delete this session';
                 deleteBtn.style.cssText = `
                     background: none; border: none; color: #dc2626;
                     cursor: pointer; font-size: 14px; padding: 2px 6px;
@@ -603,12 +606,12 @@ class TransmuteHistoryViewer {
             const name = this.getItemName(itemHrid);
 
             if (result.isSelfReturn) {
-                text.textContent = t('{0} x{1} (self-return)', name, result.count);
+                text.textContent = `${name} x${result.count} (self-return)`;
                 text.style.color = '#888';
             } else {
                 const total = formatKMB(result.totalValue || 0, 1);
                 const each = formatKMB(result.priceEach || 0, 1);
-                text.textContent = t('{0} x{1} = {2} ({3} each)', name, result.count, total, each);
+                text.textContent = `${name} x${result.count} = ${total} (${each} each)`;
             }
 
             line.appendChild(text);
@@ -626,7 +629,7 @@ class TransmuteHistoryViewer {
         // Stats
         const stats = document.createElement('span');
         stats.style.cssText = 'color: #aaa; font-size: 14px;';
-        stats.textContent = t('{0} sessions', this.filteredSessions.length);
+        stats.textContent = `${this.filteredSessions.length} session${this.filteredSessions.length !== 1 ? 's' : ''}`;
         controls.appendChild(stats);
 
         const rightGroup = document.createElement('div');
@@ -635,7 +638,7 @@ class TransmuteHistoryViewer {
         // Clear All Filters button (only when filters active)
         if (this.hasAnyFilter()) {
             const clearFiltersBtn = document.createElement('button');
-            clearFiltersBtn.textContent = t('Clear All Filters');
+            clearFiltersBtn.textContent = 'Clear All Filters';
             clearFiltersBtn.style.cssText = `
                 padding: 6px 12px; background: #e67e22; color: white;
                 border: none; border-radius: 4px; cursor: pointer;
@@ -646,7 +649,7 @@ class TransmuteHistoryViewer {
 
         // Export button
         const exportBtn = document.createElement('button');
-        exportBtn.textContent = t('Export');
+        exportBtn.textContent = 'Export';
         exportBtn.style.cssText = `
             padding: 6px 12px; background: #2563eb; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -656,7 +659,7 @@ class TransmuteHistoryViewer {
 
         // Clear History button
         const clearBtn = document.createElement('button');
-        clearBtn.textContent = t('Clear History');
+        clearBtn.textContent = 'Clear History';
         clearBtn.style.cssText = `
             padding: 6px 12px; background: #dc2626; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -678,10 +681,10 @@ class TransmuteHistoryViewer {
 
         if (this.filters.dateFrom || this.filters.dateTo) {
             const parts = [];
-            if (this.filters.dateFrom) parts.push(this.filters.dateFrom.toLocaleDateString());
-            if (this.filters.dateTo) parts.push(this.filters.dateTo.toLocaleDateString());
+            if (this.filters.dateFrom) parts.push(formatDateTime(this.filters.dateFrom, { includeTime: false }));
+            if (this.filters.dateTo) parts.push(formatDateTime(this.filters.dateTo, { includeTime: false }));
             badges.push({
-                label: t('Date: {0}', parts.join(' - ')),
+                label: `Date: ${parts.join(' - ')}`,
                 onRemove: () => {
                     this.filters.dateFrom = null;
                     this.filters.dateTo = null;
@@ -695,9 +698,9 @@ class TransmuteHistoryViewer {
             const label =
                 this.filters.selectedInputItems.length === 1
                     ? this.getItemName(this.filters.selectedInputItems[0])
-                    : t('{0} input items', this.filters.selectedInputItems.length);
+                    : `${this.filters.selectedInputItems.length} input items`;
             badges.push({
-                label: t('Input: {0}', label),
+                label: `Input: ${label}`,
                 icon: this.filters.selectedInputItems[0],
                 onRemove: () => {
                     this.filters.selectedInputItems = [];
@@ -709,7 +712,7 @@ class TransmuteHistoryViewer {
 
         if (this.filters.resultsSearch.trim()) {
             badges.push({
-                label: t('Results: "{0}"', this.filters.resultsSearch.trim()),
+                label: `Results: "${this.filters.resultsSearch.trim()}"`,
                 onRemove: () => {
                     this.filters.resultsSearch = '';
                     this.applyFilters();
@@ -759,7 +762,7 @@ class TransmuteHistoryViewer {
         leftSide.style.cssText = 'display: flex; gap: 8px; align-items: center; color: #aaa;';
 
         const label = document.createElement('span');
-        label.textContent = t('Rows per page:');
+        label.textContent = 'Rows per page:';
 
         const rowsInput = document.createElement('input');
         rowsInput.type = 'number';
@@ -795,7 +798,7 @@ class TransmuteHistoryViewer {
         });
 
         showAllLabel.appendChild(showAllCheckbox);
-        showAllLabel.appendChild(document.createTextNode(t('Show All')));
+        showAllLabel.appendChild(document.createTextNode('Show All'));
 
         leftSide.appendChild(label);
         leftSide.appendChild(rowsInput);
@@ -825,7 +828,7 @@ class TransmuteHistoryViewer {
             });
 
             const pageInfo = document.createElement('span');
-            pageInfo.textContent = t('Page {0} of {1}', this.currentPage, totalPages || 1);
+            pageInfo.textContent = `Page ${this.currentPage} of ${totalPages || 1}`;
 
             const nextBtn = document.createElement('button');
             nextBtn.textContent = '▶';
@@ -849,7 +852,7 @@ class TransmuteHistoryViewer {
             rightSide.appendChild(nextBtn);
         } else {
             const info = document.createElement('span');
-            info.textContent = t('Showing all {0} sessions', this.filteredSessions.length);
+            info.textContent = `Showing all ${this.filteredSessions.length} sessions`;
             rightSide.appendChild(info);
         }
 
@@ -928,7 +931,7 @@ class TransmuteHistoryViewer {
      * @returns {HTMLElement}
      */
     createDateFilterPopup() {
-        const popup = this.createPopupBase(t('Filter by Date'));
+        const popup = this.createPopupBase('Filter by Date');
 
         // Compute available range
         if (!this.cachedDateRange) {
@@ -951,22 +954,18 @@ class TransmuteHistoryViewer {
                 color: #aaa; font-size: 11px; margin-bottom: 10px;
                 padding: 6px; background: #1a1a1a; border-radius: 3px;
             `;
-            rangeInfo.textContent = t(
-                'Available: {0} - {1}',
-                minDate.toLocaleDateString(),
-                maxDate.toLocaleDateString()
-            );
+            rangeInfo.textContent = `Available: ${formatDateTime(minDate, { includeTime: false })} - ${formatDateTime(maxDate, { includeTime: false })}`;
             popup.appendChild(rangeInfo);
         }
 
         const fromInput = this.createDateInput(
-            t('From:'),
+            'From:',
             this.filters.dateFrom ? this.filters.dateFrom.toISOString().split('T')[0] : '',
             minDate,
             maxDate
         );
         const toInput = this.createDateInput(
-            t('To:'),
+            'To:',
             this.filters.dateTo ? this.filters.dateTo.toISOString().split('T')[0] : '',
             minDate,
             maxDate
@@ -1003,7 +1002,7 @@ class TransmuteHistoryViewer {
      * @returns {HTMLElement}
      */
     createInputItemFilterPopup() {
-        const popup = this.createPopupBase(t('Filter by Input Item'));
+        const popup = this.createPopupBase('Filter by Input Item');
         popup.style.minWidth = '220px';
 
         // Gather unique input items from all sessions
@@ -1021,7 +1020,7 @@ class TransmuteHistoryViewer {
         // Search box
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = t('Search items...');
+        searchInput.placeholder = 'Search items...';
         searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 8px;
             background: #1a1a1a; border: 1px solid #555;
@@ -1093,12 +1092,12 @@ class TransmuteHistoryViewer {
      * @returns {HTMLElement}
      */
     createResultsFilterPopup() {
-        const popup = this.createPopupBase(t('Filter by Result Item'));
+        const popup = this.createPopupBase('Filter by Result Item');
         popup.style.minWidth = '220px';
 
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = t('Item name...');
+        searchInput.placeholder = 'Item name...';
         searchInput.value = this.filters.resultsSearch;
         searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 10px;
@@ -1187,7 +1186,7 @@ class TransmuteHistoryViewer {
         row.style.cssText = 'display: flex; gap: 8px; margin-top: 10px;';
 
         const applyBtn = document.createElement('button');
-        applyBtn.textContent = t('Apply');
+        applyBtn.textContent = 'Apply';
         applyBtn.style.cssText = `
             flex: 1; padding: 6px; background: #4a90e2; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -1195,7 +1194,7 @@ class TransmuteHistoryViewer {
         applyBtn.addEventListener('click', onApply);
 
         const clearBtn = document.createElement('button');
-        clearBtn.textContent = t('Clear');
+        clearBtn.textContent = 'Clear';
         clearBtn.style.cssText = `
             flex: 1; padding: 6px; background: #666; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -1254,7 +1253,8 @@ class TransmuteHistoryViewer {
         if (this.itemNameCache.has(itemHrid)) {
             return this.itemNameCache.get(itemHrid);
         }
-        const name = itemNameTranslator.getDisplayName(itemHrid);
+        const details = dataManager.getItemDetails(itemHrid);
+        const name = details?.name || itemHrid.split('/').pop().replace(/_/g, ' ');
         this.itemNameCache.set(itemHrid, name);
         return name;
     }
@@ -1304,7 +1304,7 @@ class TransmuteHistoryViewer {
         const headers = ['Session Start', 'Input Item', 'Attempts', 'Successes', 'Failures', 'Results'];
 
         const rows = this.sessions.map((session) => {
-            const start = new Date(session.startTime).toLocaleString();
+            const start = formatDateTime(new Date(session.startTime));
             const inputName = this.getItemName(session.inputItemHrid);
             const failures = session.totalAttempts - session.totalSuccesses;
 
@@ -1347,10 +1347,7 @@ class TransmuteHistoryViewer {
      */
     async clearHistory() {
         const confirmed = confirm(
-            t(
-                '⚠️ This will permanently delete ALL transmute history ({0} sessions).\nThis cannot be undone.\n\nAre you sure?',
-                this.sessions.length
-            )
+            `⚠️ This will permanently delete ALL transmute history (${this.sessions.length} sessions).\nThis cannot be undone.\n\nAre you sure?`
         );
         if (!confirmed) return;
 
@@ -1358,12 +1355,12 @@ class TransmuteHistoryViewer {
             await transmuteHistoryTracker.clearHistory();
             this.sessions = [];
             this.filteredSessions = [];
-            alert(t('Transmute history cleared.'));
+            alert('Transmute history cleared.');
             this.applyFilters();
             this.renderTable();
         } catch (error) {
             console.error('[TransmuteHistoryViewer] Failed to clear history:', error);
-            alert(t('Failed to clear history: {0}', error.message));
+            alert(`Failed to clear history: ${error.message}`);
         }
     }
 }

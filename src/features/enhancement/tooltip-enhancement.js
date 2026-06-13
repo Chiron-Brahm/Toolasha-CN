@@ -13,7 +13,7 @@ import { calculateEnhancement } from '../../utils/enhancement-calculator.js';
 import config from '../../core/config.js';
 const toolashaConfig = config;
 import dataManager from '../../core/data-manager.js';
-import { formatLargeNumber, numberFormatter, formatKMB } from '../../utils/formatters.js';
+import { formatLargeNumber, numberFormatter, formatKMB, isAbbreviationEnabled } from '../../utils/formatters.js';
 import { getItemPrice, getItemPrices } from '../../utils/market-data.js';
 import { parseArtisanBonus, getDrinkConcentration } from '../../utils/tea-parser.js';
 import { t } from '../../core/i18n.js';
@@ -1028,10 +1028,10 @@ export function buildEnhancementTooltipHTML(enhancementData) {
     }
 
     if (xpPerHour !== null && xpPerHour > 0) {
-        html += '<div style="margin-top: 4px;">XP/hr: ' + xpPerHour.toLocaleString() + '</div>';
+        html += '<div style="margin-top: 4px;">XP/hr: ' + formatLargeNumber(xpPerHour) + '</div>';
     }
     if (totalExpectedXP !== null && totalExpectedXP > 0) {
-        html += '<div>Total XP: ~' + totalExpectedXP.toLocaleString() + '</div>';
+        html += '<div>Total XP: ~' + formatLargeNumber(totalExpectedXP) + '</div>';
     }
 
     html += '</div>'; // Close margin-left div
@@ -1057,7 +1057,7 @@ export function buildEnhancementMilestonesHTML(itemHrid, enhancementConfig) {
     if (!itemDetails?.enhancementCosts?.length) return '';
 
     const showPrices = config.getSetting('itemTooltip_prices');
-    const useKMB = config.getSetting('formatting_useKMBFormat');
+    const useKMB = isAbbreviationEnabled();
     const fmt = (n) => (n != null && n > 0 ? (useKMB ? formatLargeNumber(n, 0) : numberFormatter(Math.round(n))) : '—');
     const fmtCost = (n) =>
         n != null && n > 0 ? (useKMB ? formatLargeNumber(n, 1) : numberFormatter(Math.round(n))) : '—';

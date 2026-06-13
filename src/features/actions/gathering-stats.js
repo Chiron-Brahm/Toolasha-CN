@@ -5,7 +5,6 @@
  * (foraging, woodcutting, milking)
  */
 
-import { t } from '../../core/i18n.js';
 import dataManager from '../../core/data-manager.js';
 import domObserver from '../../core/dom-observer.js';
 import config from '../../core/config.js';
@@ -30,6 +29,7 @@ class GatheringStats {
         this.consumablesUpdatedDebounceTimer = null; // Debounce timer for consumables_updated events
         this.indicatorUpdateDebounceTimer = null; // Debounce timer for indicator rendering
         this.DEBOUNCE_DELAY = 300; // 300ms debounce for event handlers
+        this.resizeObserver = null;
     }
 
     /**
@@ -140,6 +140,10 @@ class GatheringStats {
             });
             // Register with shared sort manager
             actionPanelSort.registerPanel(actionPanel, actionHrid);
+            if (existingDisplay) {
+                this.scheduleStatsLayoutSync(actionPanel, existingDisplay);
+                this.getResizeObserver().observe(existingDisplay);
+            }
             // Trigger sort
             actionPanelSort.triggerSort();
             return;
@@ -153,7 +157,7 @@ class GatheringStats {
             top: 100%;
             left: 0;
             right: 0;
-            font-size: 0.55em;
+            font-size: 11px;
             padding: 4px 8px;
             text-align: center;
             background: rgba(0, 0, 0, 0.7);
@@ -173,12 +177,8 @@ class GatheringStats {
         // Append directly to action panel with absolute positioning
         actionPanel.appendChild(display);
 
-        // Set marginBottom to the bar's actual rendered height so the grid row
-        // reserves exactly the right amount of space below the tile.
-        requestAnimationFrame(() => {
-            const h = display.offsetHeight;
-            if (h > 0) actionPanel.style.marginBottom = `${h}px`;
-        });
+        this.scheduleStatsLayoutSync(actionPanel, display);
+        this.getResizeObserver().observe(display);
 
         // Store reference
         this.actionElements.set(actionPanel, {
@@ -314,6 +314,8 @@ class GatheringStats {
 
         // Trigger sort via shared manager
         actionPanelSort.triggerSort();
+
+        this.syncAllStatsLayouts();
     }
 
     /**
@@ -331,6 +333,8 @@ class GatheringStats {
      */
     addBestActionIndicators() {
         let bestProfit = null;
+        let bestProfitExp = null;
+        let bestProfitHrid = null;
         let bestExp = null;
         let bestOverall = null;
         let bestProfitPanels = [];
@@ -349,6 +353,8 @@ class GatheringStats {
             if (!hasMissingPrices && profitPerHour !== null) {
                 if (bestProfit === null || profitPerHour > bestProfit) {
                     bestProfit = profitPerHour;
+                    bestProfitExp = expPerHour;
+                    bestProfitHrid = data.actionHrid;
                     bestProfitPanels = [actionPanel];
                 } else if (profitPerHour === bestProfit) {
                     bestProfitPanels.push(actionPanel);
@@ -364,20 +370,41 @@ class GatheringStats {
                     bestExpPanels.push(actionPanel);
                 }
             }
+        }
 
-            // Find best overall (profit × exp product)
-            if (!hasMissingPrices && profitPerHour !== null && expPerHour !== null && expPerHour > 0) {
-                const overallValue = profitPerHour * expPerHour;
-                if (bestOverall === null || overallValue > bestOverall) {
-                    bestOverall = overallValue;
-                    bestOverallPanels = [actionPanel];
-                } else if (overallValue === bestOverall) {
-                    bestOverallPanels.push(actionPanel);
-                }
+        // Second pass: compute gold-neutral effective XP/hr and find best overall
+        for (const [actionPanel, data] of this.actionElements.entries()) {
+            if (!document.body.contains(actionPanel) || !data.displayElement) {
+                continue;
+            }
+
+            const { profitPerHour, expPerHour, hasMissingPrices } = data;
+            if (hasMissingPrices || profitPerHour === null || expPerHour === null || expPerHour <= 0) {
+                continue;
+            }
+
+            let effectiveXp;
+            if (profitPerHour >= 0) {
+                effectiveXp = expPerHour;
+            } else if (bestProfit > 0) {
+                const loss = Math.abs(profitPerHour);
+                const recoveryRatio = loss / bestProfit;
+                effectiveXp = (expPerHour + recoveryRatio * (bestProfitExp || 0)) / (1 + recoveryRatio);
+            } else {
+                continue;
+            }
+
+            data.effectiveXpPerHour = effectiveXp;
+
+            if (bestOverall === null || effectiveXp > bestOverall) {
+                bestOverall = effectiveXp;
+                bestOverallPanels = [actionPanel];
+            } else if (effectiveXp === bestOverall) {
+                bestOverallPanels.push(actionPanel);
             }
         }
 
-        // Second pass: update emoji indicators in-place on existing spans.
+        // Third pass: update emoji indicators and effective XP display in-place.
         // Avoids rewriting innerHTML (which would cause a flash + re-size).
         const EMOJIS = [' 💰', ' 🧠', ' 🏆'];
         const stripEmoji = (text) => {
@@ -385,6 +412,10 @@ class GatheringStats {
             for (const e of EMOJIS) t = t.replace(e, '');
             return t;
         };
+
+        const bestProfitName = bestProfitHrid
+            ? dataManager.getActionDetails(bestProfitHrid)?.name || bestProfitHrid
+            : null;
 
         for (const [actionPanel, data] of this.actionElements.entries()) {
             if (!document.body.contains(actionPanel) || !data.displayElement) {
@@ -407,7 +438,22 @@ class GatheringStats {
 
             const overallSpan = data.displayElement.querySelector('[data-stat="overall"]');
             if (overallSpan) {
-                overallSpan.textContent = stripEmoji(overallSpan.textContent) + (isBestOverall ? ' 🏆' : '');
+                const effXp = data.effectiveXpPerHour;
+                const label = effXp != null ? `Eff. XP/hr: ${formatKMB(effXp)}` : stripEmoji(overallSpan.textContent);
+                overallSpan.textContent = label + (isBestOverall ? ' 🏆' : '');
+
+                if (data.profitPerHour < 0 && bestProfit > 0 && effXp != null) {
+                    const loss = Math.abs(data.profitPerHour);
+                    const ratio = loss / bestProfit;
+                    overallSpan.title =
+                        `Gold-neutral XP rate\n` +
+                        `This action: ${formatKMB(data.expPerHour)} XP/hr, -${formatKMB(loss)}/hr\n` +
+                        `Recovery: ${bestProfitName} (+${formatKMB(bestProfit)}/hr, ${formatKMB(bestProfitExp || 0)} XP/hr)\n` +
+                        `Ratio: ${ratio.toFixed(2)}hr recovery per 1hr action\n` +
+                        `Blended: (${formatKMB(data.expPerHour)} + ${ratio.toFixed(2)} × ${formatKMB(bestProfitExp || 0)}) / ${(1 + ratio).toFixed(2)} = ${formatKMB(effXp)}`;
+                } else {
+                    overallSpan.title = '';
+                }
             }
 
             // Re-fit font sizes now that emoji may have changed span widths.
@@ -430,25 +476,23 @@ class GatheringStats {
             const profitColor = profitPerHour >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
             const profitSign = profitPerHour >= 0 ? '' : '-';
             html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-            html += `<span data-stat="profit" style="color: ${profitColor};">${t('Profit/hr: {0}', `${profitSign}${formatKMB(Math.abs(profitPerHour))}`)}</span></div>`;
+            html += `<span data-stat="profit" style="color: ${profitColor};">Profit/hr: ${profitSign}${formatKMB(Math.abs(profitPerHour))}</span></div>`;
         }
 
         if (showExp && expPerHour !== null && expPerHour > 0) {
             html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-            html += `<span data-stat="exp" style="color: #fff;">${t('Exp/hr: {0}', formatKMB(expPerHour))}</span></div>`;
+            html += `<span data-stat="exp" style="color: #fff;">Exp/hr: ${formatKMB(expPerHour)}</span></div>`;
         }
 
         if (showProfit && showExp && profitPerHour !== null && expPerHour !== null && expPerHour > 0) {
-            const coinsPerXp = profitPerHour / expPerHour;
-            const efficiencyColor = coinsPerXp >= 0 ? config.COLOR_INFO : config.COLOR_WARNING;
-            const efficiencySign = coinsPerXp >= 0 ? '' : '-';
             html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-            html += `<span data-stat="overall" style="color: ${efficiencyColor};">${t('Profit/XP: {0}', `${efficiencySign}${formatKMB(Math.abs(coinsPerXp))}`)}</span></div>`;
+            html += `<span data-stat="overall" style="color: #fff;">Eff. XP/hr: ${formatKMB(expPerHour)}</span></div>`;
         }
 
         data.displayElement.innerHTML = html;
         if (!html) {
             data.displayElement.style.display = 'none';
+            this.syncStatsLayout(actionPanel, data.displayElement);
             return;
         }
         data.displayElement.style.display = 'block';
@@ -512,10 +556,64 @@ class GatheringStats {
             // Reveal now that sizing is complete.
             displayElement.style.visibility = '';
 
-            // Keep marginBottom in sync with the bar's actual rendered height.
-            const h = displayElement.offsetHeight;
-            if (h > 0) actionPanel.style.marginBottom = `${h}px`;
+            this.syncStatsLayout(actionPanel, displayElement);
+            this.scheduleStatsLayoutSync(actionPanel, displayElement);
         });
+    }
+
+    getResizeObserver() {
+        if (!this.resizeObserver) {
+            this.resizeObserver = new ResizeObserver((entries) => {
+                for (const entry of entries) {
+                    const displayElement = entry.target;
+                    const actionPanel = displayElement.parentElement;
+                    if (actionPanel) {
+                        this.syncStatsLayout(actionPanel, displayElement);
+                        this.scheduleStatsLayoutSync(actionPanel, displayElement);
+                    }
+                }
+            });
+        }
+        return this.resizeObserver;
+    }
+
+    syncStatsLayout(actionPanel, displayElement) {
+        if (!actionPanel || !displayElement) return;
+        if (!document.body.contains(actionPanel) || !document.body.contains(displayElement)) return;
+
+        actionPanel.style.alignSelf = 'flex-start';
+        actionPanel.style.overflow = 'visible';
+
+        if (actionPanel.style.position !== 'relative' && actionPanel.style.position !== 'absolute') {
+            actionPanel.style.position = 'relative';
+        }
+
+        if (displayElement.style.display === 'none') {
+            actionPanel.style.marginBottom = '';
+            return;
+        }
+
+        const height = Math.ceil(displayElement.getBoundingClientRect().height || displayElement.offsetHeight || 0);
+
+        if (height > 0) {
+            actionPanel.style.marginBottom = `${height}px`;
+        }
+    }
+
+    scheduleStatsLayoutSync(actionPanel, displayElement) {
+        requestAnimationFrame(() => {
+            this.syncStatsLayout(actionPanel, displayElement);
+            requestAnimationFrame(() => {
+                this.syncStatsLayout(actionPanel, displayElement);
+            });
+        });
+    }
+
+    syncAllStatsLayouts() {
+        for (const [actionPanel, data] of this.actionElements.entries()) {
+            if (!document.body.contains(actionPanel) || !data.displayElement) continue;
+            this.scheduleStatsLayoutSync(actionPanel, data.displayElement);
+        }
     }
 
     /**
@@ -524,6 +622,12 @@ class GatheringStats {
     clearAllReferences() {
         clearTimeout(this.indicatorUpdateDebounceTimer);
         this.indicatorUpdateDebounceTimer = null;
+
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
+        }
+
         // CRITICAL: Remove injected DOM elements BEFORE clearing Maps
         // This prevents detached SVG elements from accumulating
         // Note: .remove() is safe to call even if element is already detached

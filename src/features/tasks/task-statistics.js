@@ -4,14 +4,13 @@
  * Shows task overflow time, expected rewards, and completion estimates
  */
 
-import { t } from '../../core/i18n.js';
 import config from '../../core/config.js';
 import dataManager from '../../core/data-manager.js';
 import domObserver from '../../core/dom-observer.js';
 import marketAPI from '../../api/marketplace.js';
 import { calculateTaskProfit, calculateTaskTokenValue, calculateTaskRewardValue } from './task-profit-calculator.js';
 import { calculateTaskCompletionSeconds } from './task-profit-display.js';
-import { timeReadableZh, formatKMB } from '../../utils/formatters.js';
+import { timeReadable, formatKMB, formatDateTime } from '../../utils/formatters.js';
 import { TOOLASHA } from '../../utils/selectors.js';
 
 class TaskStatistics {
@@ -83,7 +82,7 @@ class TaskStatistics {
         // Create button matching MUI tab styling
         const button = document.createElement('div');
         button.className = 'MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1q2h7u5 toolasha-task-stats-btn';
-        button.textContent = t('Statistics');
+        button.textContent = 'Statistics';
         button.style.cursor = 'pointer';
         button.onclick = () => this.showPopup();
 
@@ -377,7 +376,7 @@ class TaskStatistics {
         `;
 
         const title = document.createElement('h2');
-        title.textContent = t('Task Statistics');
+        title.textContent = 'Task Statistics';
         title.style.cssText = `margin: 0; color: ${textColor}; font-size: 24px;`;
 
         const closeButton = document.createElement('button');
@@ -481,29 +480,27 @@ class TaskStatistics {
      * @returns {HTMLElement} Section element
      */
     createOverflowSection(overflow, textColor) {
-        const section = this.createSection(t('Task Slots'));
+        const section = this.createSection('Task Slots');
 
         if (overflow.error) {
-            section.appendChild(this.createRow(t('Status'), overflow.error, config.COLOR_LOSS));
+            section.appendChild(this.createRow('Status', overflow.error, config.COLOR_LOSS));
             return section;
         }
 
+        section.appendChild(this.createRow('Slots Used', `${overflow.usedSlots} / ${overflow.taskSlotCap}`, textColor));
+        section.appendChild(this.createRow('Available', `${overflow.availableSlots}`, textColor));
         section.appendChild(
-            this.createRow(t('Slots Used'), `${overflow.usedSlots} / ${overflow.taskSlotCap}`, textColor)
-        );
-        section.appendChild(this.createRow(t('Available'), `${overflow.availableSlots}`, textColor));
-        section.appendChild(
-            this.createRow(t('Cooldown'), `${overflow.taskCooldownHours}h per task`, config.COLOR_TEXT_SECONDARY)
+            this.createRow('Cooldown', `${overflow.taskCooldownHours}h per task`, config.COLOR_TEXT_SECONDARY)
         );
 
         // Overflow time
         if (overflow.isOverflowing) {
-            section.appendChild(this.createRow(t('Status'), t('Tasks full!'), config.COLOR_LOSS));
+            section.appendChild(this.createRow('Status', 'Tasks full!', config.COLOR_LOSS));
         } else {
-            const overflowTimeStr = timeReadableZh(overflow.msUntilOverflow / 1000);
-            const overflowDateStr = overflow.overflowDate.toLocaleString();
-            section.appendChild(this.createRow(t('Full in'), overflowTimeStr, config.COLOR_INFO));
-            section.appendChild(this.createRow(t('Full at'), overflowDateStr, config.COLOR_TEXT_SECONDARY));
+            const overflowTimeStr = timeReadable(overflow.msUntilOverflow / 1000);
+            const overflowDateStr = formatDateTime(overflow.overflowDate);
+            section.appendChild(this.createRow('Full in', overflowTimeStr, config.COLOR_INFO));
+            section.appendChild(this.createRow('Full at', overflowDateStr, config.COLOR_TEXT_SECONDARY));
         }
 
         return section;
@@ -516,24 +513,24 @@ class TaskStatistics {
      * @returns {HTMLElement} Section element
      */
     createRewardsSection(rewards, textColor) {
-        const section = this.createSection(t('Expected Rewards'));
+        const section = this.createSection('Expected Rewards');
 
-        section.appendChild(this.createRow(t('Total Coins'), formatKMB(rewards.totalCoins), config.COLOR_GOLD));
-        section.appendChild(this.createRow(t('Total Task Tokens'), String(rewards.totalTokens), textColor));
+        section.appendChild(this.createRow('Total Coins', formatKMB(rewards.totalCoins), config.COLOR_GOLD));
+        section.appendChild(this.createRow('Total Task Tokens', String(rewards.totalTokens), textColor));
 
         if (!rewards.rewardValue.error) {
             const tokenValueStr = `${formatKMB(Math.round(rewards.rewardValue.breakdown.tokenValue))} each`;
-            section.appendChild(this.createRow(t('Token Value'), tokenValueStr, config.COLOR_TEXT_SECONDARY));
+            section.appendChild(this.createRow('Token Value', tokenValueStr, config.COLOR_TEXT_SECONDARY));
             section.appendChild(
                 this.createRow(
-                    t('Tokens Value'),
+                    'Tokens Value',
                     formatKMB(Math.round(rewards.rewardValue.taskTokens)),
                     config.COLOR_PROFIT
                 )
             );
             section.appendChild(
                 this.createRow(
-                    t("Purple's Gift"),
+                    "Purple's Gift",
                     formatKMB(Math.round(rewards.rewardValue.purpleGift)),
                     config.COLOR_ESSENCE
                 )
@@ -546,13 +543,13 @@ class TaskStatistics {
 
             section.appendChild(
                 this.createRow(
-                    t('Total Reward Value'),
+                    'Total Reward Value',
                     formatKMB(Math.round(rewards.rewardValue.total)),
                     config.COLOR_ACCENT
                 )
             );
         } else {
-            section.appendChild(this.createRow(t('Token Value'), t('Loading...'), config.COLOR_TEXT_SECONDARY));
+            section.appendChild(this.createRow('Token Value', 'Loading...', config.COLOR_TEXT_SECONDARY));
         }
 
         return section;
@@ -564,14 +561,14 @@ class TaskStatistics {
      * @returns {HTMLElement} Section element
      */
     createActionProfitSection(rewards) {
-        const section = this.createSection(t('Action Profit'));
+        const section = this.createSection('Action Profit');
 
         for (const detail of rewards.taskDetails) {
             const profitStr = detail.isCombat
-                ? t('N/A (combat)')
+                ? 'N/A (combat)'
                 : detail.actionProfit !== null
                   ? formatKMB(Math.round(detail.actionProfit))
-                  : t('N/A');
+                  : 'N/A';
 
             const profitColor = detail.isCombat
                 ? config.COLOR_TEXT_SECONDARY
@@ -589,8 +586,7 @@ class TaskStatistics {
         separator.style.cssText = 'border-top: 1px solid #3a3a3a; margin: 6px 0;';
         section.appendChild(separator);
 
-        const totalStr =
-            rewards.totalActionProfit !== null ? formatKMB(Math.round(rewards.totalActionProfit)) : t('N/A');
+        const totalStr = rewards.totalActionProfit !== null ? formatKMB(Math.round(rewards.totalActionProfit)) : 'N/A';
         const totalColor =
             rewards.totalActionProfit !== null && rewards.totalActionProfit >= 0
                 ? config.COLOR_PROFIT
@@ -598,7 +594,7 @@ class TaskStatistics {
                   ? config.COLOR_LOSS
                   : config.COLOR_TEXT_SECONDARY;
 
-        section.appendChild(this.createRow(t('Total Action Profit'), totalStr, totalColor));
+        section.appendChild(this.createRow('Total Action Profit', totalStr, totalColor));
 
         // Combined total
         const separator2 = document.createElement('div');
@@ -606,7 +602,7 @@ class TaskStatistics {
         section.appendChild(separator2);
 
         section.appendChild(
-            this.createRow(t('Combined Total'), formatKMB(Math.round(rewards.combinedTotal)), config.COLOR_ACCENT)
+            this.createRow('Combined Total', formatKMB(Math.round(rewards.combinedTotal)), config.COLOR_ACCENT)
         );
 
         return section;
@@ -619,14 +615,14 @@ class TaskStatistics {
      * @returns {HTMLElement} Section element
      */
     createCompletionTimeSection(rewards, textColor) {
-        const section = this.createSection(t('Completion Time'));
+        const section = this.createSection('Completion Time');
 
         for (const detail of rewards.taskDetails) {
             const timeStr = detail.isCombat
-                ? t('N/A (combat)')
+                ? 'N/A (combat)'
                 : detail.completionSeconds !== null
-                  ? timeReadableZh(detail.completionSeconds)
-                  : t('N/A');
+                  ? timeReadable(detail.completionSeconds)
+                  : 'N/A';
 
             const progressStr = detail.currentCount > 0 ? ` (${detail.currentCount}/${detail.goalCount})` : '';
 
@@ -645,9 +641,9 @@ class TaskStatistics {
         section.appendChild(separator);
 
         const totalTimeStr =
-            rewards.totalCompletionSeconds !== null ? timeReadableZh(rewards.totalCompletionSeconds) : t('N/A');
+            rewards.totalCompletionSeconds !== null ? timeReadable(rewards.totalCompletionSeconds) : 'N/A';
 
-        section.appendChild(this.createRow(t('Total (non-combat)'), totalTimeStr, config.COLOR_INFO));
+        section.appendChild(this.createRow('Total (non-combat)', totalTimeStr, config.COLOR_INFO));
 
         return section;
     }
