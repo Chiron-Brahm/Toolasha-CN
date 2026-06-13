@@ -1,11 +1,11 @@
 /**
  * Toolasha Combat Library
  * Combat, abilities, and combat stats features
- * Version: 2.59.10
+ * Version: 2.58.6
  * License: CC-BY-NC-SA-4.0
  */
 
-(function (config, dataManager, domObserver, storage, webSocketHook, i18n_js, timerRegistry_js, domObserverHelpers_js, marketAPI, formatters_js, expectedValueCalculator, reactInput_js, profitHelpers_js, marketData_js, enhancementCalculator_js, enhancementConfig_js, teaParser_js, abilityCostCalculator_js, equipmentParser_js, dom, houseCostCalculator_js) {
+(function (config, dataManager, domObserver, storage, webSocketHook, timerRegistry_js, domObserverHelpers_js, formatters_js, marketAPI, expectedValueCalculator, reactInput_js, profitHelpers_js, marketData_js, enhancementCalculator_js, enhancementConfig_js, teaParser_js, abilityCostCalculator_js, equipmentParser_js, dom, houseCostCalculator_js) {
     'use strict';
 
     /**
@@ -1228,6 +1228,46 @@
     };
 
     /**
+     * Internationalization (i18n) Module
+     * Lightweight translation layer with English-as-key fallback.
+     *
+     * Usage:
+     *   import { t, registerLocale } from '../core/i18n.js';
+     *   t('Market Prices in Tooltips')  →  '市场价格提示' (if translated)
+     *   t('Market Prices in Tooltips')  →  'Market Prices in Tooltips' (fallback)
+     *   t('Cost: {0}/hr', '100K')       →  '花费: 100K/时'
+     */
+
+    /** @type {Record<string, string>} */
+    const translations = {};
+
+    /**
+     * Translate a string. Returns the Chinese translation if available, otherwise the English key itself.
+     * Supports positional interpolation with {0}, {1}, etc.
+     *
+     * @param {string} str - English key string
+     * @param {...(string|number)} args - Positional arguments for interpolation
+     * @returns {string} Translated or fallback string
+     *
+     * @example
+     *   t('Hello')                          // '你好'
+     *   t('Unknown key')                    // 'Unknown key' (fallback)
+     *   t('Profit: {0}/hr', '12.3K')        // '利润: 12.3K/时'
+     */
+    function t(str, ...args) {
+        const translated = translations[str] !== undefined ? translations[str] : str;
+
+        if (args.length === 0) {
+            return translated;
+        }
+
+        return translated.replace(/\{(\d+)\}/g, (_, index) => {
+            const arg = args[parseInt(index, 10)];
+            return arg !== undefined ? String(arg) : `{${index}}`;
+        });
+    }
+
+    /**
      * Scroll Simulator UI
      * - Injects "Scroll Simulation" button into the LoadoutsPanel nav buttons row
      *   (between "View All Loadouts" and "Delete Loadout")
@@ -1375,8 +1415,8 @@
 
             const title = document.createElement('span');
             title.style.cssText = `font-size: 0.9rem; font-weight: 600; color: ${config.COLOR_ACCENT};`;
-            const contextLabel = this.loadoutName ? this.loadoutName : i18n_js.t('Scroll Defaults');
-            title.textContent = `${i18n_js.t('Scroll Simulation')} — ${contextLabel}`;
+            const contextLabel = this.loadoutName ? this.loadoutName : t('Scroll Defaults');
+            title.textContent = `${t('Scroll Simulation')} — ${contextLabel}`;
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '×';
@@ -1426,8 +1466,8 @@
             line-height: 1.4;
         `;
             note.textContent = this.loadoutName
-                ? i18n_js.t('These scrolls override the defaults when this loadout is active for a skill.')
-                : i18n_js.t('Applied when no loadout matches the current skill (or loadout snapshots are disabled).');
+                ? t('These scrolls override the defaults when this loadout is active for a skill.')
+                : t('Applied when no loadout matches the current skill (or loadout snapshots are disabled).');
             body.appendChild(note);
 
             // Scroll rows
@@ -1546,6 +1586,7 @@
 
     function injectButton(navButtons) {
         if (document.getElementById(BUTTON_ID)) return;
+        if (!config.getSetting('simulateScrollEffects')) return;
 
         const loadoutName = getLoadoutName(navButtons);
 
@@ -1555,7 +1596,7 @@
 
         const button = document.createElement('button');
         button.id = BUTTON_ID;
-        button.textContent = i18n_js.t('Scroll Simulation');
+        button.textContent = t('Scroll Simulation');
         button.className = 'Button_button__1Fe9z';
         button.style.cssText = `white-space: nowrap;`;
         button.addEventListener('click', () => popup.open(loadoutName));
@@ -1577,6 +1618,13 @@
             const navButtons = panel?.querySelector('[class*="LoadoutsPanel_navButtons"]');
             if (navButtons) injectButton(navButtons);
         });
+
+        config.onSettingChange('simulateScrollEffects', (enabled) => {
+            if (!enabled) {
+                document.getElementById(BUTTON_ID)?.remove();
+                popup.close();
+            }
+        });
     }
 
     /**
@@ -1592,7 +1640,7 @@
     }
 
     var scrollSimulatorUI = {
-        name: i18n_js.t('Scroll Simulator UI'),
+        name: t('Scroll Simulator UI'),
         initialize: initialize$2,
         openDefaultsPopup,
         disable: disable$1,
@@ -2462,8 +2510,8 @@
                             continue; // Skip player messages
                         }
 
-                        // Look for "Battle started:" messages (English or Chinese)
-                        if (text.includes('Battle started:') || text.includes('战斗开始：')) {
+                        // Look for "Battle started:" messages
+                        if (text.includes('Battle started:')) {
                             // Try to extract timestamp
                             // Try to extract timestamp from message display format: [MM/DD HH:MM:SS AM/PM] or [DD-M HH:MM:SS]
                             const timestampMatch = text.match(
@@ -2504,8 +2552,8 @@
                             }
                         }
 
-                        // Look for "Key counts:" messages (English or Chinese)
-                        if (text.includes('Key counts:') || text.includes('钥匙数量：')) {
+                        // Look for "Key counts:" messages
+                        if (text.includes('Key counts:')) {
                             // Parse the message
                             const keyCountsMap = this.parseKeyCountsFromMessage(text);
 
@@ -3182,7 +3230,7 @@
 
                     // Get dungeon name from HRID
                     const dungeonInfo = dungeonTrackerStorage.getDungeonInfo(completedRunData.dungeonHrid);
-                    const dungeonName = dungeonInfo ? dungeonInfo.name : i18n_js.t('Unknown');
+                    const dungeonName = dungeonInfo ? dungeonInfo.name : t('Unknown');
 
                     // Build run object in unified format
                     const runToSave = {
@@ -3273,7 +3321,7 @@
                 dungeonHrid: this.currentRun.dungeonHrid,
                 dungeonName: this.currentRun.dungeonHrid
                     ? dungeonTrackerStorage.getDungeonInfo(this.currentRun.dungeonHrid)?.name
-                    : i18n_js.t('Unknown'),
+                    : t('Unknown'),
                 tier: this.currentRun.tier,
                 currentWave: this.currentRun.currentWave, // Already 1-indexed from new_battle message
                 maxWaves: this.currentRun.maxWaves,
@@ -3462,8 +3510,8 @@
                     const now = new Date();
                     const timestamp = new Date(now.getFullYear(), month - 1, day, hour, min, sec, 0);
 
-                    // Extract "Battle started:" messages (English or Chinese)
-                    if (text.includes('Battle started:') || text.includes('战斗开始：')) {
+                    // Extract "Battle started:" messages
+                    if (text.includes('Battle started:')) {
                         const dungeonName = text.split('Battle started:')[1]?.split(']')[0]?.trim();
                         if (dungeonName) {
                             events.push({
@@ -3473,8 +3521,8 @@
                             });
                         }
                     }
-                    // Extract "Key counts:" messages (English or Chinese)
-                    else if (text.includes('Key counts:') || text.includes('钥匙数量：')) {
+                    // Extract "Key counts:" messages
+                    else if (text.includes('Key counts:')) {
                         // Parse team composition from key counts
                         const keyCountsMap = this.parseKeyCountsFromMessage(text);
                         const playerNames = Object.keys(keyCountsMap).sort();
@@ -3488,15 +3536,15 @@
                             });
                         }
                     }
-                    // Extract "Party failed" messages (English or Chinese)
-                    else if (text.match(/Party failed on wave \d+/) || text.match(/队伍在第\d+波失败/)) {
+                    // Extract "Party failed" messages
+                    else if (text.match(/Party failed on wave \d+/)) {
                         events.push({
                             type: 'fail',
                             timestamp,
                         });
                     }
-                    // Extract "Battle ended:" messages (fled/canceled, English or Chinese)
-                    else if (text.includes('Battle ended:') || text.includes('战斗结束：')) {
+                    // Extract "Battle ended:" messages (fled/canceled)
+                    else if (text.includes('Battle ended:')) {
                         const dungeonName = text.split('Battle ended:')[1]?.split(']')[0]?.trim();
                         events.push({
                             type: 'cancel',
@@ -3541,7 +3589,7 @@
                             .find((e) => e.type === 'battle_start');
 
                         // Use battle_ended if available, otherwise fall back to battle_start
-                        const dungeonName = battleEnded?.dungeonName || battleStart?.dungeonName || i18n_js.t('Unknown');
+                        const dungeonName = battleEnded?.dungeonName || battleStart?.dungeonName || t('Unknown');
 
                         // Get team key
                         const teamKey = dungeonTrackerStorage.getTeamKey(event.team);
@@ -4170,8 +4218,8 @@
                 const text = node.textContent.trim();
 
                 // Check message relevance FIRST before parsing timestamp
-                // Battle started message (English or Chinese)
-                if (text.includes('Battle started:') || text.includes('战斗开始：')) {
+                // Battle started message
+                if (text.includes('Battle started:')) {
                     const timestamp = this.getTimestampFromMessage(node);
                     if (!timestamp) {
                         console.warn('[Dungeon Tracker Debug] Battle started message has no timestamp:', text);
@@ -4193,8 +4241,8 @@
                     // Do NOT mark battle_start as processed — it must persist across passes
                     // as a session boundary for the forward-scan pairing logic.
                 }
-                // Key counts message (English or Chinese, warn if timestamp fails)
-                else if (text.includes('Key counts:') || text.includes('钥匙数量：')) {
+                // Key counts message (warn if timestamp fails - these should always have timestamps)
+                else if (text.includes('Key counts:')) {
                     const timestamp = this.getTimestampFromMessage(node, true);
                     if (!timestamp) continue;
 
@@ -4208,8 +4256,8 @@
                         msg: node,
                     });
                 }
-                // Party failed message (English or Chinese)
-                else if (text.match(/Party failed on wave \d+/) || text.match(/队伍在第\d+波失败/)) {
+                // Party failed message
+                else if (text.match(/Party failed on wave \d+/)) {
                     const timestamp = this.getTimestampFromMessage(node);
                     if (!timestamp) continue;
 
@@ -4220,8 +4268,8 @@
                     });
                     // Do NOT mark fail as processed — must persist as session context.
                 }
-                // Battle ended (canceled/fled, English or Chinese)
-                else if (text.includes('Battle ended:') || text.includes('战斗结束：')) {
+                // Battle ended (canceled/fled)
+                else if (text.includes('Battle ended:')) {
                     const timestamp = this.getTimestampFromMessage(node);
                     if (!timestamp) continue;
 
@@ -4640,7 +4688,7 @@
 
             // Prepare data
             // Label runs oldest to newest (Run 1 = oldest, Run N = most recent)
-            const labels = filteredRuns.map((_, i) => `${i18n_js.t('Run ')}${i + 1}`);
+            const labels = filteredRuns.map((_, i) => `${t('Run ')}${i + 1}`);
             const durations = filteredRuns.map((r) => (r.duration || r.totalTime || 0) / 60000); // Convert to minutes
 
             // Calculate stats
@@ -4651,7 +4699,7 @@
             // Create datasets
             const datasets = [
                 {
-                    label: i18n_js.t('Run Times'),
+                    label: t('Run Times'),
                     data: durations,
                     borderColor: 'rgb(75, 192, 192)',
                     backgroundColor: 'rgba(75, 192, 192, 0.2)',
@@ -4662,7 +4710,7 @@
                     fill: false,
                 },
                 {
-                    label: i18n_js.t('Average'),
+                    label: t('Average'),
                     data: new Array(durations.length).fill(avgDuration),
                     borderColor: 'rgb(255, 159, 64)',
                     borderWidth: 2,
@@ -4672,7 +4720,7 @@
                     fill: false,
                 },
                 {
-                    label: i18n_js.t('Fastest'),
+                    label: t('Fastest'),
                     data: new Array(durations.length).fill(fastestDuration),
                     borderColor: 'rgb(75, 192, 75)',
                     borderWidth: 2,
@@ -4682,7 +4730,7 @@
                     fill: false,
                 },
                 {
-                    label: i18n_js.t('Slowest'),
+                    label: t('Slowest'),
                     data: new Array(durations.length).fill(slowestDuration),
                     borderColor: 'rgb(255, 99, 132)',
                     borderWidth: 2,
@@ -4742,7 +4790,7 @@
                                     const value = context.parsed.y;
                                     const minutes = Math.floor(value);
                                     const seconds = Math.floor((value - minutes) * 60);
-                                    return `${label}: ${minutes}${i18n_js.t('m')} ${seconds}${i18n_js.t('s')}`;
+                                    return `${label}: ${minutes}${t('m')} ${seconds}${t('s')}`;
                                 },
                             },
                         },
@@ -4751,7 +4799,7 @@
                         x: {
                             title: {
                                 display: true,
-                                text: i18n_js.t('Run Number'),
+                                text: t('Run Number'),
                                 color: '#ccc',
                             },
                             ticks: {
@@ -4764,7 +4812,7 @@
                         y: {
                             title: {
                                 display: true,
-                                text: i18n_js.t('Duration (minutes)'),
+                                text: t('Duration (minutes)'),
                                 color: '#ccc',
                             },
                             ticks: {
@@ -4821,7 +4869,7 @@
         `;
 
             const title = document.createElement('h3');
-            title.textContent = `📊 ${i18n_js.t('Dungeon Run Chart')}`;
+            title.textContent = `📊 ${t('Dungeon Run Chart')}`;
             title.style.cssText = 'color: #ccc; margin: 0; font-size: 18px;';
 
             const closeBtn = document.createElement('button');
@@ -4905,7 +4953,7 @@
 
             // Prepare data (same as main chart)
             // Label runs in reverse chronological order to match list (newest = Run 1, oldest = Run N)
-            const labels = filteredRuns.map((_, i) => `${i18n_js.t('Run ')}${filteredRuns.length - i}`);
+            const labels = filteredRuns.map((_, i) => `${t('Run ')}${filteredRuns.length - i}`);
             const durations = filteredRuns.map((r) => (r.duration || r.totalTime || 0) / 60000);
 
             const avgDuration = durations.reduce((a, b) => a + b, 0) / durations.length;
@@ -4914,7 +4962,7 @@
 
             const datasets = [
                 {
-                    label: i18n_js.t('Run Times'),
+                    label: t('Run Times'),
                     data: durations,
                     borderColor: 'rgb(75, 192, 192)',
                     backgroundColor: 'rgba(75, 192, 192, 0.2)',
@@ -4925,7 +4973,7 @@
                     fill: false,
                 },
                 {
-                    label: i18n_js.t('Average'),
+                    label: t('Average'),
                     data: new Array(durations.length).fill(avgDuration),
                     borderColor: 'rgb(255, 159, 64)',
                     borderWidth: 2,
@@ -4935,7 +4983,7 @@
                     fill: false,
                 },
                 {
-                    label: i18n_js.t('Fastest'),
+                    label: t('Fastest'),
                     data: new Array(durations.length).fill(fastestDuration),
                     borderColor: 'rgb(75, 192, 75)',
                     borderWidth: 2,
@@ -4945,7 +4993,7 @@
                     fill: false,
                 },
                 {
-                    label: i18n_js.t('Slowest'),
+                    label: t('Slowest'),
                     data: new Array(durations.length).fill(slowestDuration),
                     borderColor: 'rgb(255, 99, 132)',
                     borderWidth: 2,
@@ -4999,7 +5047,7 @@
                                     const value = context.parsed.y;
                                     const minutes = Math.floor(value);
                                     const seconds = Math.floor((value - minutes) * 60);
-                                    return `${label}: ${minutes}${i18n_js.t('m')} ${seconds}${i18n_js.t('s')}`;
+                                    return `${label}: ${minutes}${t('m')} ${seconds}${t('s')}`;
                                 },
                             },
                         },
@@ -5008,7 +5056,7 @@
                         x: {
                             title: {
                                 display: true,
-                                text: i18n_js.t('Run Number'),
+                                text: t('Run Number'),
                                 color: '#ccc',
                                 font: {
                                     size: 14,
@@ -5024,7 +5072,7 @@
                         y: {
                             title: {
                                 display: true,
-                                text: i18n_js.t('Duration (minutes)'),
+                                text: t('Duration (minutes)'),
                                 color: '#ccc',
                                 font: {
                                     size: 14,
@@ -5069,7 +5117,7 @@
                 if (!groups[key]) {
                     groups[key] = {
                         key: key,
-                        label: key === 'Solo' ? i18n_js.t('Solo Runs') : key,
+                        label: key === 'Solo' ? 'Solo Runs' : key,
                         runs: [],
                     };
                 }
@@ -5092,7 +5140,7 @@
             const groups = {};
 
             for (const run of runs) {
-                const key = run.dungeonName || i18n_js.t('Unknown');
+                const key = run.dungeonName || 'Unknown';
                 if (!groups[key]) {
                     groups[key] = {
                         key: key,
@@ -5149,7 +5197,8 @@
                 const allRuns = await dungeonTrackerStorage.getAllRuns();
 
                 if (allRuns.length === 0) {
-                    runList.innerHTML = `<div style="color: #888; font-style: italic; text-align: center; padding: 8px;">${i18n_js.t('No runs yet')}</div>`;
+                    runList.innerHTML =
+                        '<div style="color: #888; font-style: italic; text-align: center; padding: 8px;">No runs yet</div>';
                     // Update filter dropdowns with empty options
                     this.updateFilterDropdowns(container, [], []);
                     return;
@@ -5165,7 +5214,8 @@
                 }
 
                 if (filteredRuns.length === 0) {
-                    runList.innerHTML = `<div style="color: #888; font-style: italic; text-align: center; padding: 8px;">${i18n_js.t('No runs match filters')}</div>`;
+                    runList.innerHTML =
+                        '<div style="color: #888; font-style: italic; text-align: center; padding: 8px;">No runs match filters</div>';
                     return;
                 }
 
@@ -5182,7 +5232,8 @@
                 this.updateFilterDropdowns(container, dungeons, teams);
             } catch (error) {
                 console.error('[Dungeon Tracker UI History] Update error:', error);
-                runList.innerHTML = `<div style="color: #ff6b6b; text-align: center; padding: 8px;">${i18n_js.t('Error loading run history')}</div>`;
+                runList.innerHTML =
+                    '<div style="color: #ff6b6b; text-align: center; padding: 8px;">Error loading run history</div>';
             }
         }
 
@@ -5198,7 +5249,7 @@
             if (dungeonFilter) {
                 const currentValue = dungeonFilter.value;
                 dungeonFilter.innerHTML =
-                    `<option value="all">${i18n_js.t('All Dungeons')}</option>` +
+                    '<option value="all">All Dungeons</option>' +
                     dungeons.map((dungeon) => `<option value="${dungeon}">${dungeon}</option>`).join('');
                 // Restore selection if still valid
                 if (dungeons.includes(currentValue)) {
@@ -5213,7 +5264,7 @@
             if (teamFilter) {
                 const currentValue = teamFilter.value;
                 teamFilter.innerHTML =
-                    `<option value="all">${i18n_js.t('All Teams')}</option>` +
+                    '<option value="all">All Teams</option>' +
                     teams.map((team) => `<option value="${team}">${team}</option>`).join('');
                 // Restore selection if still valid
                 if (teams.includes(currentValue)) {
@@ -5261,7 +5312,7 @@
                                 ${group.label}
                             </div>
                             <div style="font-size: 10px; color: #aaa;">
-                                ${i18n_js.t('Runs: {0} | Avg: {1} | Best: {2} | Worst: {3}', group.stats.totalRuns, avgTime, bestTime, worstTime)}
+                                Runs: ${group.stats.totalRuns} | Avg: ${avgTime} | Best: ${bestTime} | Worst: ${worstTime}
                             </div>
                         </div>
                         <span class="mwi-dt-group-toggle" style="color: #aaa; font-size: 10px;">${toggleIcon}</span>
@@ -5328,8 +5379,8 @@
                 const runNumber = runs.length - index;
                 const timeStr = this.formatTime(run.duration);
                 const dateObj = new Date(run.timestamp);
-                const dateTime = dateObj.toLocaleString();
-                const dungeonLabel = run.dungeonName || i18n_js.t('Unknown');
+                const dateTime = formatters_js.formatDateTime(dateObj);
+                const dungeonLabel = run.dungeonName || 'Unknown';
 
                 html += `
                 <div style="
@@ -5354,7 +5405,7 @@
                         padding: 1px 4px;
                         border-radius: 2px;
                         font-weight: bold;
-                    " title="${i18n_js.t('Delete this run')}">✕</button>
+                    " title="Delete this run">✕</button>
                 </div>
             `;
             });
@@ -5568,11 +5619,11 @@
             if (!clearBtn) return;
 
             clearBtn.addEventListener('click', async () => {
-                if (confirm(i18n_js.t('Delete ALL run history data?\n\nThis cannot be undone!'))) {
+                if (confirm(t('Delete ALL run history data?\n\nThis cannot be undone!'))) {
                     try {
                         // Clear unified storage completely
                         await storage.setJSON('allRuns', [], 'unifiedRuns', true);
-                        alert(i18n_js.t('All run history cleared.'));
+                        alert(t('All run history cleared.'));
 
                         // Refresh both history and chart display
                         if (this.callbacks.onUpdateHistory) await this.callbacks.onUpdateHistory();
@@ -5582,7 +5633,7 @@
                         await dungeonTrackerChatAnnotations.refreshRunCounts();
                     } catch (error) {
                         console.error('[Dungeon Tracker UI Interactions] Clear all history error:', error);
-                        alert(i18n_js.t('Failed to clear run history. Check console for details.'));
+                        alert(t('Failed to clear run history. Check console for details.'));
                     }
                 }
             });
@@ -5625,7 +5676,7 @@
 
             backfillBtn.addEventListener('click', async () => {
                 // Change button text to show loading
-                backfillBtn.textContent = i18n_js.t('⟳ Processing...');
+                backfillBtn.textContent = t('⟳ Processing...');
                 backfillBtn.disabled = true;
 
                 try {
@@ -5635,10 +5686,10 @@
                     // Show result message
                     if (result.runsAdded > 0) {
                         alert(
-                            i18n_js.t('Backfill complete!\n\nRuns added: {0}\nTeams: {1}', result.runsAdded, result.teams.length)
+                            t('Backfill complete!\n\nRuns added: {0}\nTeams: {1}', result.runsAdded, result.teams.length)
                         );
                     } else {
-                        alert(i18n_js.t('No new runs found to backfill.'));
+                        alert(t('No new runs found to backfill.'));
                     }
 
                     // Refresh both history and chart display
@@ -5649,10 +5700,10 @@
                     await dungeonTrackerChatAnnotations.refreshRunCounts();
                 } catch (error) {
                     console.error('[Dungeon Tracker UI Interactions] Backfill error:', error);
-                    alert(i18n_js.t('Backfill failed. Check console for details.'));
+                    alert(t('Backfill failed. Check console for details.'));
                 } finally {
                     // Reset button
-                    backfillBtn.textContent = i18n_js.t('⟳ Backfill');
+                    backfillBtn.textContent = t('⟳ Backfill');
                     backfillBtn.disabled = false;
                 }
             });
@@ -5878,7 +5929,7 @@
             this.state.save();
 
             // Show brief notification
-            this.showNotification(i18n_js.t('Dungeon Tracker position reset'));
+            this.showNotification(t('Dungeon Tracker position reset'));
         }
 
         /**
@@ -6052,18 +6103,18 @@
                 ">
                     <div style="flex: 1;">
                         <span id="mwi-dt-dungeon-name" style="font-weight: bold; font-size: 14px; color: #4a9eff;">
-                            ${i18n_js.t('Loading...')}
+                            ${t('Loading...')}
                         </span>
                     </div>
                     <div style="flex: 0; padding: 0 10px; white-space: nowrap;">
-                        <span id="mwi-dt-time-label" style="font-size: 12px; color: #aaa;" title="${i18n_js.t('Time since dungeon started')}">${i18n_js.t('Elapsed: ')}</span>
+                        <span id="mwi-dt-time-label" style="font-size: 12px; color: #aaa;" title="${t('Time since dungeon started')}">${t('Elapsed: ')}</span>
                         <span id="mwi-dt-current-time" style="font-size: 13px; color: #fff; font-weight: bold;">
                             00:00
                         </span>
                     </div>
                     <div style="flex: 1; display: flex; gap: 8px; align-items: center; justify-content: flex-end;">
                         <span id="mwi-dt-wave-counter" style="font-size: 13px; color: #aaa;">
-                            ${i18n_js.t('Wave')} 1/50
+                            ${t('Wave')} 1/50
                         </span>
                         <button id="mwi-dt-collapse-btn" style="
                             background: none;
@@ -6073,7 +6124,7 @@
                             font-size: 16px;
                             padding: 0 4px;
                             line-height: 1;
-                        " title="${i18n_js.t('Collapse/Expand')}">▼</button>
+                        " title="${t('Collapse/Expand')}">▼</button>
                     </div>
                 </div>
 
@@ -6087,13 +6138,13 @@
                     color: #ccc;
                     gap: 12px;
                 ">
-                    <span>${i18n_js.t('Last Run:')} <span id="mwi-dt-header-last" style="color: #fff; font-weight: bold;">--:--</span></span>
+                    <span>${t('Last Run:')} <span id="mwi-dt-header-last" style="color: #fff; font-weight: bold;">--:--</span></span>
                     <span>|</span>
-                    <span>${i18n_js.t('Avg Run:')} <span id="mwi-dt-header-avg" style="color: #fff; font-weight: bold;">--:--</span></span>
+                    <span>${t('Avg Run:')} <span id="mwi-dt-header-avg" style="color: #fff; font-weight: bold;">--:--</span></span>
                     <span>|</span>
-                    <span>${i18n_js.t('Runs:')} <span id="mwi-dt-header-runs" style="color: #fff; font-weight: bold;">0</span></span>
+                    <span>${t('Runs:')} <span id="mwi-dt-header-runs" style="color: #fff; font-weight: bold;">0</span></span>
                     <span>|</span>
-                    <span>${i18n_js.t('Keys:')} <span id="mwi-dt-header-keys" style="color: #fff; font-weight: bold;">0</span></span>
+                    <span>${t('Keys:')} <span id="mwi-dt-header-keys" style="color: #fff; font-weight: bold;">0</span></span>
                 </div>
             </div>
 
@@ -6126,19 +6177,19 @@
                 <!-- Run-level stats (2x2 grid) -->
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 11px; color: #ccc; padding-top: 4px; border-top: 1px solid #444;">
                     <div style="text-align: center;">
-                        <div style="color: #aaa; font-size: 10px;">${i18n_js.t('Avg Run')}</div>
+                        <div style="color: #aaa; font-size: 10px;">${t('Avg Run')}</div>
                         <div id="mwi-dt-avg-time" style="color: #fff; font-weight: bold;">--:--</div>
                     </div>
                     <div style="text-align: center;">
-                        <div style="color: #aaa; font-size: 10px;">${i18n_js.t('Last Run')}</div>
+                        <div style="color: #aaa; font-size: 10px;">${t('Last Run')}</div>
                         <div id="mwi-dt-last-time" style="color: #fff; font-weight: bold;">--:--</div>
                     </div>
                     <div style="text-align: center;">
-                        <div style="color: #aaa; font-size: 10px;">${i18n_js.t('Fastest Run')}</div>
+                        <div style="color: #aaa; font-size: 10px;">${t('Fastest Run')}</div>
                         <div id="mwi-dt-fastest-time" style="color: #5fda5f; font-weight: bold;">--:--</div>
                     </div>
                     <div style="text-align: center;">
-                        <div style="color: #aaa; font-size: 10px;">${i18n_js.t('Slowest Run')}</div>
+                        <div style="color: #aaa; font-size: 10px;">${t('Slowest Run')}</div>
                         <div id="mwi-dt-slowest-time" style="color: #ff6b6b; font-weight: bold;">--:--</div>
                     </div>
                 </div>
@@ -6154,7 +6205,7 @@
                         font-size: 12px;
                         color: #ccc;
                     ">
-                        <span>${i18n_js.t('Keys:')} <span id="mwi-dt-character-name">${i18n_js.t('Loading...')}</span> (<span id="mwi-dt-self-keys">0</span>)</span>
+                        <span>${t('Keys:')} <span id="mwi-dt-character-name">${t('Loading...')}</span> (<span id="mwi-dt-self-keys">0</span>)</span>
                         <span id="mwi-dt-keys-toggle" style="font-size: 10px;">▼</span>
                     </div>
                     <div id="mwi-dt-keys-list" style="
@@ -6177,7 +6228,7 @@
                         padding: 4px 0;
                         margin-bottom: 8px;
                     ">
-                        <span style="font-size: 12px; font-weight: bold; color: #ccc;">${i18n_js.t('Run History')} <span id="mwi-dt-run-history-toggle" style="font-size: 10px;">▼</span></span>
+                        <span style="font-size: 12px; font-weight: bold; color: #ccc;">${t('Run History')} <span id="mwi-dt-run-history-toggle" style="font-size: 10px;">▼</span></span>
                         <div style="display: flex; gap: 4px;">
                             <button id="mwi-dt-backfill-btn" style="
                                 background: none;
@@ -6188,7 +6239,7 @@
                                 padding: 2px 8px;
                                 border-radius: 3px;
                                 font-weight: bold;
-                            " title="${i18n_js.t('Scan party chat and import historical runs')}">⟳ ${i18n_js.t('Backfill')}</button>
+                            " title="${t('Scan party chat and import historical runs')}">⟳ ${t('Backfill')}</button>
                             <button id="mwi-dt-clear-all" style="
                                 background: none;
                                 border: 1px solid #ff6b6b;
@@ -6198,7 +6249,7 @@
                                 padding: 2px 8px;
                                 border-radius: 3px;
                                 font-weight: bold;
-                            " title="${i18n_js.t('Clear all runs')}">✕ ${i18n_js.t('Clear')}</button>
+                            " title="${t('Clear all runs')}">✕ ${t('Clear')}</button>
                         </div>
                     </div>
 
@@ -6212,7 +6263,7 @@
                         margin-bottom: 8px;
                     ">
                         <div style="margin-bottom: 6px;">
-                            <label style="margin-right: 6px;">${i18n_js.t('Group by:')}</label>
+                            <label style="margin-right: 6px;">${t('Group by:')}</label>
                             <select id="mwi-dt-group-by" style="
                                 background: #333;
                                 color: #fff;
@@ -6221,13 +6272,13 @@
                                 padding: 2px 4px;
                                 font-size: 11px;
                             ">
-                                <option value="team">${i18n_js.t('Team')}</option>
-                                <option value="dungeon">${i18n_js.t('Dungeon')}</option>
+                                <option value="team">${t('Team')}</option>
+                                <option value="dungeon">${t('Dungeon')}</option>
                             </select>
                         </div>
                         <div style="display: flex; gap: 12px;">
                             <div>
-                                <label style="margin-right: 6px;">${i18n_js.t('Dungeon:')}</label>
+                                <label style="margin-right: 6px;">${t('Dungeon:')}</label>
                                 <select id="mwi-dt-filter-dungeon" style="
                                     background: #333;
                                     color: #fff;
@@ -6237,11 +6288,11 @@
                                     font-size: 11px;
                                     min-width: 100px;
                                 ">
-                                    <option value="all">${i18n_js.t('All Dungeons')}</option>
+                                    <option value="all">${t('All Dungeons')}</option>
                                 </select>
                             </div>
                             <div>
-                                <label style="margin-right: 6px;">${i18n_js.t('Team:')}</label>
+                                <label style="margin-right: 6px;">${t('Team:')}</label>
                                 <select id="mwi-dt-filter-team" style="
                                     background: #333;
                                     color: #fff;
@@ -6251,7 +6302,7 @@
                                     font-size: 11px;
                                     min-width: 100px;
                                 ">
-                                    <option value="all">${i18n_js.t('All Teams')}</option>
+                                    <option value="all">${t('All Teams')}</option>
                                 </select>
                             </div>
                         </div>
@@ -6265,7 +6316,7 @@
                         color: #ccc;
                     ">
                         <!-- Run list populated dynamically -->
-                        <div style="color: #888; font-style: italic; text-align: center; padding: 8px;">${i18n_js.t('No runs yet')}</div>
+                        <div style="color: #888; font-style: italic; text-align: center; padding: 8px;">${t('No runs yet')}</div>
                     </div>
                 </div>
 
@@ -6279,7 +6330,7 @@
                         padding: 4px 0;
                         margin-bottom: 8px;
                     ">
-                        <span style="font-size: 12px; font-weight: bold; color: #ccc;">📊 ${i18n_js.t('Run Chart')} <span id="mwi-dt-chart-toggle" style="font-size: 10px;">▼</span></span>
+                        <span style="font-size: 12px; font-weight: bold; color: #ccc;">📊 ${t('Run Chart')} <span id="mwi-dt-chart-toggle" style="font-size: 10px;">▼</span></span>
                         <button id="mwi-dt-chart-popout-btn" style="
                             background: none;
                             border: 1px solid #4a9eff;
@@ -6289,7 +6340,7 @@
                             padding: 2px 8px;
                             border-radius: 3px;
                             font-weight: bold;
-                        " title="${i18n_js.t('Pop out chart')}">⇱ ${i18n_js.t('Pop-out')}</button>
+                        " title="${t('Pop out chart')}">⇱ ${t('Pop-out')}</button>
                     </div>
                     <div id="mwi-dt-chart-container" style="
                         display: block;
@@ -6335,14 +6386,14 @@
                 if (run.dungeonName && run.tier !== null) {
                     dungeonName.textContent = `${run.dungeonName} (T${run.tier})`;
                 } else {
-                    dungeonName.textContent = i18n_js.t('Dungeon Loading...');
+                    dungeonName.textContent = t('Dungeon Loading...');
                 }
             }
 
             // Update wave counter
             const waveCounter = this.container.querySelector('#mwi-dt-wave-counter');
             if (waveCounter && run.maxWaves) {
-                waveCounter.textContent = `${i18n_js.t('Wave')} ${run.currentWave}/${run.maxWaves}`;
+                waveCounter.textContent = `${t('Wave')} ${run.currentWave}/${run.maxWaves}`;
             }
 
             // Update current elapsed time
@@ -6355,11 +6406,11 @@
             const timeLabel = this.container.querySelector('#mwi-dt-time-label');
             if (timeLabel) {
                 if (run.hibernationDetected) {
-                    timeLabel.textContent = i18n_js.t('Chat: ');
-                    timeLabel.title = i18n_js.t('Using party chat timestamps (computer sleep detected)');
+                    timeLabel.textContent = t('Chat: ');
+                    timeLabel.title = t('Using party chat timestamps (computer sleep detected)');
                 } else {
-                    timeLabel.textContent = i18n_js.t('Elapsed: ');
-                    timeLabel.title = i18n_js.t('Time since dungeon started');
+                    timeLabel.textContent = t('Elapsed: ');
+                    timeLabel.title = t('Time since dungeon started');
                 }
             }
 
@@ -6423,7 +6474,7 @@
             }
 
             if (!characterName) {
-                characterName = i18n_js.t('You'); // Final fallback
+                characterName = t('You'); // Final fallback
             }
 
             // Update character name in Keys section
@@ -6513,7 +6564,7 @@
             if (playerNames.length === 0) {
                 keysList.innerHTML =
                     '<div style="color: #888; font-style: italic; text-align: center; padding: 8px;">' +
-                    i18n_js.t('No key data yet') +
+                    t('No key data yet') +
                     '</div>';
                 return;
             }
@@ -6810,9 +6861,8 @@
                 const combatInfoElement = document.querySelector('[class*="BattlePanel_combatInfo"]');
 
                 if (combatInfoElement) {
-                    // Use locale-agnostic regex: matches duration (d/h/m/s), battles count, deaths count
                     const matches = combatInfoElement.innerHTML.match(
-                        /(?:(\d+)d\s*)?(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s).*?(\d+).*?(\d+)/
+                        /Combat Duration: (?:(\d+)d\s*)?(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s).*?Battles: (\d+).*?Deaths: (\d+)/
                     );
 
                     if (matches) {
@@ -6829,7 +6879,7 @@
 
                         elem.insertAdjacentHTML(
                             'beforeend',
-                            `<div id="mwi-combat-encounters" style="color: ${textColor};">${i18n_js.t('Encounters/hour:')} ${encountersPerHour}</div>`
+                            `<div id="mwi-combat-encounters" style="color: ${textColor};">${t('Encounters/hour:')} ${encountersPerHour}</div>`
                         );
                     }
                 }
@@ -6839,7 +6889,7 @@
                     .querySelector('div#mwi-combat-encounters')
                     ?.insertAdjacentHTML(
                         'afterend',
-                        `<div id="mwi-combat-revenue" style="color: ${textColor};">${i18n_js.t('Total revenue:')} ${formatters_js.formatLargeNumber(Math.round(totalPriceAsk))} / ${formatters_js.formatLargeNumber(Math.round(totalPriceBid))}</div>`
+                        `<div id="mwi-combat-revenue" style="color: ${textColor};">${t('Total revenue:')} ${formatters_js.formatLargeNumber(Math.round(totalPriceAsk))} / ${formatters_js.formatLargeNumber(Math.round(totalPriceBid))}</div>`
                     );
 
                 // Per-hour revenue
@@ -6851,7 +6901,7 @@
                         .querySelector('div#mwi-combat-revenue')
                         ?.insertAdjacentHTML(
                             'afterend',
-                            `<div id="mwi-combat-revenue-hour" style="color: ${textColor};">${i18n_js.t('Revenue/hour:')} ${formatters_js.formatLargeNumber(Math.round(revenuePerHourAsk))} / ${formatters_js.formatLargeNumber(Math.round(revenuePerHourBid))}</div>`
+                            `<div id="mwi-combat-revenue-hour" style="color: ${textColor};">${t('Revenue/hour:')} ${formatters_js.formatLargeNumber(Math.round(revenuePerHourAsk))} / ${formatters_js.formatLargeNumber(Math.round(revenuePerHourBid))}</div>`
                         );
 
                     // Per-day revenue
@@ -6859,7 +6909,7 @@
                         .querySelector('div#mwi-combat-revenue-hour')
                         ?.insertAdjacentHTML(
                             'afterend',
-                            `<div id="mwi-combat-revenue-day" style="color: ${textColor};">${i18n_js.t('Revenue/day:')} ${formatters_js.formatLargeNumber(Math.round(revenuePerHourAsk * 24))} / ${formatters_js.formatLargeNumber(Math.round(revenuePerHourBid * 24))}</div>`
+                            `<div id="mwi-combat-revenue-day" style="color: ${textColor};">${t('Revenue/day:')} ${formatters_js.formatLargeNumber(Math.round(revenuePerHourAsk * 24))} / ${formatters_js.formatLargeNumber(Math.round(revenuePerHourBid * 24))}</div>`
                         );
                 }
 
@@ -6868,7 +6918,7 @@
                     .querySelector('div#mwi-combat-revenue-day')
                     ?.insertAdjacentHTML(
                         'afterend',
-                        `<div id="mwi-combat-total-exp" style="color: ${textColor};">${i18n_js.t('Total exp:')} ${formatters_js.formatLargeNumber(Math.round(totalSkillsExp))}</div>`
+                        `<div id="mwi-combat-total-exp" style="color: ${textColor};">${t('Total exp:')} ${formatters_js.formatLargeNumber(Math.round(totalSkillsExp))}</div>`
                     );
 
                 // Per-hour experience breakdowns
@@ -6880,18 +6930,18 @@
                         .querySelector('div#mwi-combat-total-exp')
                         ?.insertAdjacentHTML(
                             'afterend',
-                            `<div id="mwi-combat-total-exp-hour" style="color: ${textColor};">${i18n_js.t('Total exp/hour:')} ${formatters_js.formatLargeNumber(Math.round(totalExpPerHour))}</div>`
+                            `<div id="mwi-combat-total-exp-hour" style="color: ${textColor};">${t('Total exp/hour:')} ${formatters_js.formatLargeNumber(Math.round(totalExpPerHour))}</div>`
                         );
 
                     // Individual skill exp/hour
                     const skills = [
-                        { skillHrid: '/skills/attack', name: i18n_js.t('Attack') },
-                        { skillHrid: '/skills/magic', name: i18n_js.t('Magic') },
-                        { skillHrid: '/skills/ranged', name: i18n_js.t('Ranged') },
-                        { skillHrid: '/skills/defense', name: i18n_js.t('Defense') },
-                        { skillHrid: '/skills/melee', name: i18n_js.t('Melee') },
-                        { skillHrid: '/skills/intelligence', name: i18n_js.t('Intelligence') },
-                        { skillHrid: '/skills/stamina', name: i18n_js.t('Stamina') },
+                        { skillHrid: '/skills/attack', name: t('Attack') },
+                        { skillHrid: '/skills/magic', name: t('Magic') },
+                        { skillHrid: '/skills/ranged', name: t('Ranged') },
+                        { skillHrid: '/skills/defense', name: t('Defense') },
+                        { skillHrid: '/skills/melee', name: t('Melee') },
+                        { skillHrid: '/skills/intelligence', name: t('Intelligence') },
+                        { skillHrid: '/skills/stamina', name: t('Stamina') },
                     ];
 
                     let lastElement = document.querySelector('div#mwi-combat-total-exp-hour');
@@ -6904,7 +6954,7 @@
                                 const expPerHour = expGained / (battleDurationSec / 3600);
                                 lastElement.insertAdjacentHTML(
                                     'afterend',
-                                    `<div style="color: ${textColor};">${skill.name} ${i18n_js.t('exp/hour:')} ${formatters_js.formatLargeNumber(Math.round(expPerHour))}</div>`
+                                    `<div style="color: ${textColor};">${skill.name} ${t('exp/hour:')} ${formatters_js.formatLargeNumber(Math.round(expPerHour))}</div>`
                                 );
                                 // Update lastElement to the newly inserted div
                                 lastElement = lastElement.nextElementSibling;
@@ -6947,6 +6997,7 @@
      * Injects a battle/wave counter next to the action name in the top-left header panel.
      * - Regular zones: "Battle #N" — from battleId in new_battle message
      * - Dungeons: "Wave N · Battle #N" — wave from wave index, battle from battleId
+     * - Labyrinth: "Attempt #N" — from entryCount in labyrinth_updated room data
      *
      * Target: Header_actionName (inline with zone name, e.g. "Chimerical Den · Wave 5")
      * domObserver watches Header_actionName so the span is re-injected whenever
@@ -6962,10 +7013,13 @@
         constructor() {
             this.initialized = false;
             this.newBattleHandler = null;
+            this.labyrinthHandler = null;
             this.unregisterObserver = null;
             this.battleId = 0;
             this.currentWave = 0;
             this.isDungeon = false;
+            this.isLabyrinth = false;
+            this.labyrinthAttempt = 0;
         }
 
         initialize() {
@@ -6974,6 +7028,9 @@
 
             this.newBattleHandler = (data) => this._onNewBattle(data);
             webSocketHook.on('new_battle', this.newBattleHandler);
+
+            this.labyrinthHandler = (data) => this._onLabyrinthUpdated(data);
+            webSocketHook.on('labyrinth_updated', this.labyrinthHandler);
 
             this._onActionsUpdated = (data) => this._checkCombatEnded(data);
             dataManager.on('actions_updated', this._onActionsUpdated);
@@ -6986,7 +7043,7 @@
         }
 
         _checkCombatEnded(data) {
-            if (this.battleId === 0) return;
+            if (this.battleId === 0 && this.labyrinthAttempt === 0) return;
 
             const combatEnded = data.endCharacterActions?.some(
                 (a) => a.isDone && a.actionHrid?.startsWith('/actions/combat/')
@@ -7002,7 +7059,33 @@
                 this.battleId = 0;
                 this.currentWave = 0;
                 this.isDungeon = false;
+                this.isLabyrinth = false;
+                this.labyrinthAttempt = 0;
                 document.getElementById(COUNTER_ID)?.remove();
+            }
+        }
+
+        _onLabyrinthUpdated(data) {
+            const labyrinth = data.labyrinth;
+            if (!labyrinth?.isActive) return;
+
+            let pathCoords;
+            try {
+                pathCoords = JSON.parse(labyrinth.pathData || '[]');
+            } catch {
+                return;
+            }
+            if (!pathCoords.length) return;
+
+            const active = pathCoords[pathCoords.length - 1];
+            const room = labyrinth.roomData?.[active.y]?.[active.x];
+            if (!room || room.roomType !== '/labyrinth_room_types/combat') return;
+
+            const entryCount = room.entryCount || 0;
+            if (entryCount > 0) {
+                this.isLabyrinth = true;
+                this.labyrinthAttempt = entryCount;
+                this._injectOrUpdate();
             }
         }
 
@@ -7024,7 +7107,7 @@
         }
 
         _injectOrUpdate() {
-            if (this.battleId === 0) {
+            if (this.battleId === 0 && this.labyrinthAttempt === 0) {
                 document.getElementById(COUNTER_ID)?.remove();
                 return;
             }
@@ -7041,8 +7124,12 @@
                 nameRow.appendChild(el);
             }
 
-            if (this.isDungeon) {
+            if (this.isLabyrinth) {
+                el.textContent = `· Attempt #${this.labyrinthAttempt}`;
+            } else if (this.isDungeon) {
                 el.textContent = `· Wave ${this.currentWave} · Battle #${this.battleId}`;
+            } else {
+                el.textContent = `· Battle #${this.battleId}`;
             }
         }
 
@@ -7050,6 +7137,10 @@
             if (this.newBattleHandler) {
                 webSocketHook.off('new_battle', this.newBattleHandler);
                 this.newBattleHandler = null;
+            }
+            if (this.labyrinthHandler) {
+                webSocketHook.off('labyrinth_updated', this.labyrinthHandler);
+                this.labyrinthHandler = null;
             }
             if (this._onActionsUpdated) {
                 dataManager.off('actions_updated', this._onActionsUpdated);
@@ -7466,7 +7557,7 @@
          * @param {string|null} roomHrid - Room HRID (e.g. "/skills/milking" or "/monsters/...")
          */
         injectBadge(cell, bestLevel, roomHrid) {
-            let text = i18n_js.t('Best: {0}', bestLevel);
+            let text = t('Best: {0}', bestLevel);
             let tooltip = null;
 
             if (roomHrid && roomHrid.startsWith('/skills/')) {
@@ -7478,16 +7569,16 @@
                     if (offset > 0) {
                         text += ` (+${offset})`;
                         tooltip =
-                            i18n_js.t('Your level: {0}', charLevel) +
+                            t('Your level: {0}', charLevel) +
                             '\n' +
-                            i18n_js.t('Expert Tea Crate: +{0}', EXPERT_TEA_CRATE_BONUS) +
+                            t('Expert Tea Crate: +{0}', EXPERT_TEA_CRATE_BONUS) +
                             '\n' +
-                            i18n_js.t('Effective: {0}', effectiveLevel) +
+                            t('Effective: {0}', effectiveLevel) +
                             '\n' +
                             '\n' +
-                            i18n_js.t('Best: {0}', bestLevel) +
+                            t('Best: {0}', bestLevel) +
                             '\n' +
-                            i18n_js.t('Gap: +{0}', offset);
+                            t('Gap: +{0}', offset);
                     }
                 }
             }
@@ -7722,1221 +7813,6 @@
     }
 
     const labyrinthShopPrices = new LabyrinthShopPrices();
-
-    var itemNamesZh = {
-        Coin: '金币',
-        'Task Token': '任务代币',
-        'Labyrinth Token': '迷宫代币',
-        'Chimerical Token': '奇幻代币',
-        'Sinister Token': '阴森代币',
-        'Enchanted Token': '秘法代币',
-        'Pirate Token': '海盗代币',
-        Cowbell: '牛铃',
-        'Bag Of 10 Cowbells': '牛铃袋 (10个)',
-        "Purple's Gift": '小紫牛的礼物',
-        'Small Meteorite Cache': '小陨石舱',
-        'Medium Meteorite Cache': '中陨石舱',
-        'Large Meteorite Cache': '大陨石舱',
-        "Small Artisan's Crate": '小工匠匣',
-        "Medium Artisan's Crate": '中工匠匣',
-        "Large Artisan's Crate": '大工匠匣',
-        'Small Treasure Chest': '小宝箱',
-        'Medium Treasure Chest': '中宝箱',
-        'Large Treasure Chest': '大宝箱',
-        'Chimerical Chest': '奇幻宝箱',
-        'Sinister Chest': '阴森宝箱',
-        'Enchanted Chest': '秘法宝箱',
-        'Pirate Chest': '海盗宝箱',
-        "Purdora's Box (Skilling)": '紫多拉之盒（生活）',
-        "Purdora's Box (Combat)": '紫多拉之盒（战斗）',
-        'Scroll Of Gathering': '采集卷轴',
-        'Scroll Of Gourmet': '美食卷轴',
-        'Scroll Of Processing': '加工卷轴',
-        'Scroll Of Efficiency': '效率卷轴',
-        'Scroll Of Action Speed': '行动速度卷轴',
-        'Scroll Of Combat Drop': '战斗掉落卷轴',
-        'Scroll Of Attack Speed': '攻击速度卷轴',
-        'Scroll Of Cast Speed': '施法速度卷轴',
-        'Scroll Of Damage': '伤害卷轴',
-        'Scroll Of Critical Rate': '暴击率卷轴',
-        'Scroll Of Wisdom': '经验卷轴',
-        'Scroll Of Rare Find': '稀有发现卷轴',
-        'Blue Key Fragment': '蓝色钥匙碎片',
-        'Green Key Fragment': '绿色钥匙碎片',
-        'Purple Key Fragment': '紫色钥匙碎片',
-        'White Key Fragment': '白色钥匙碎片',
-        'Orange Key Fragment': '橙色钥匙碎片',
-        'Brown Key Fragment': '棕色钥匙碎片',
-        'Stone Key Fragment': '石头钥匙碎片',
-        'Dark Key Fragment': '黑暗钥匙碎片',
-        'Burning Key Fragment': '燃烧钥匙碎片',
-        Donut: '甜甜圈',
-        'Blueberry Donut': '蓝莓甜甜圈',
-        'Blackberry Donut': '黑莓甜甜圈',
-        'Strawberry Donut': '草莓甜甜圈',
-        'Mooberry Donut': '哞莓甜甜圈',
-        'Marsberry Donut': '火星莓甜甜圈',
-        'Spaceberry Donut': '太空莓甜甜圈',
-        Cupcake: '纸杯蛋糕',
-        'Blueberry Cake': '蓝莓蛋糕',
-        'Blackberry Cake': '黑莓蛋糕',
-        'Strawberry Cake': '草莓蛋糕',
-        'Mooberry Cake': '哞莓蛋糕',
-        'Marsberry Cake': '火星莓蛋糕',
-        'Spaceberry Cake': '太空莓蛋糕',
-        Gummy: '软糖',
-        'Apple Gummy': '苹果软糖',
-        'Orange Gummy': '橙子软糖',
-        'Plum Gummy': '李子软糖',
-        'Peach Gummy': '桃子软糖',
-        'Dragon Fruit Gummy': '火龙果软糖',
-        'Star Fruit Gummy': '杨桃软糖',
-        Yogurt: '酸奶',
-        'Apple Yogurt': '苹果酸奶',
-        'Orange Yogurt': '橙子酸奶',
-        'Plum Yogurt': '李子酸奶',
-        'Peach Yogurt': '桃子酸奶',
-        'Dragon Fruit Yogurt': '火龙果酸奶',
-        'Star Fruit Yogurt': '杨桃酸奶',
-        'Milking Tea': '挤奶茶',
-        'Foraging Tea': '采摘茶',
-        'Woodcutting Tea': '伐木茶',
-        'Cooking Tea': '烹饪茶',
-        'Brewing Tea': '冲泡茶',
-        'Alchemy Tea': '炼金茶',
-        'Enhancing Tea': '强化茶',
-        'Cheesesmithing Tea': '奶酪锻造茶',
-        'Crafting Tea': '制作茶',
-        'Tailoring Tea': '缝纫茶',
-        'Super Milking Tea': '超级挤奶茶',
-        'Super Foraging Tea': '超级采摘茶',
-        'Super Woodcutting Tea': '超级伐木茶',
-        'Super Cooking Tea': '超级烹饪茶',
-        'Super Brewing Tea': '超级冲泡茶',
-        'Super Alchemy Tea': '超级炼金茶',
-        'Super Enhancing Tea': '超级强化茶',
-        'Super Crafting Tea': '超级制作茶',
-        'Super Tailoring Tea': '超级缝纫茶',
-        'Ultra Milking Tea': '究极挤奶茶',
-        'Ultra Foraging Tea': '究极采摘茶',
-        'Ultra Woodcutting Tea': '究极伐木茶',
-        'Ultra Cooking Tea': '究极烹饪茶',
-        'Ultra Brewing Tea': '究极冲泡茶',
-        'Ultra Alchemy Tea': '究极炼金茶',
-        'Ultra Enhancing Tea': '究极强化茶',
-        'Ultra Crafting Tea': '究极制作茶',
-        'Ultra Tailoring Tea': '究极缝纫茶',
-        'Gathering Tea': '采集茶',
-        'Gourmet Tea': '美食茶',
-        'Wisdom Tea': '经验茶',
-        'Processing Tea': '加工茶',
-        'Efficiency Tea': '效率茶',
-        'Artisan Tea': '工匠茶',
-        'Catalytic Tea': '催化茶',
-        'Blessed Tea': '福气茶',
-        'Stamina Coffee': '耐力咖啡',
-        'Intelligence Coffee': '智力咖啡',
-        'Defense Coffee': '防御咖啡',
-        'Attack Coffee': '攻击咖啡',
-        'Melee Coffee': '近战咖啡',
-        'Ranged Coffee': '远程咖啡',
-        'Magic Coffee': '魔法咖啡',
-        'Super Stamina Coffee': '超级耐力咖啡',
-        'Super Intelligence Coffee': '超级智力咖啡',
-        'Super Defense Coffee': '超级防御咖啡',
-        'Super Attack Coffee': '超级攻击咖啡',
-        'Super Melee Coffee': '超级近战咖啡',
-        'Super Ranged Coffee': '超级远程咖啡',
-        'Super Magic Coffee': '超级魔法咖啡',
-        'Ultra Stamina Coffee': '究极耐力咖啡',
-        'Ultra Intelligence Coffee': '究极智力咖啡',
-        'Ultra Defense Coffee': '究极防御咖啡',
-        'Ultra Attack Coffee': '究极攻击咖啡',
-        'Ultra Melee Coffee': '究极近战咖啡',
-        'Ultra Ranged Coffee': '究极远程咖啡',
-        'Ultra Magic Coffee': '究极魔法咖啡',
-        'Wisdom Coffee': '经验咖啡',
-        'Lucky Coffee': '幸运咖啡',
-        'Swiftness Coffee': '迅捷咖啡',
-        'Channeling Coffee': '吟唱咖啡',
-        'Critical Coffee': '暴击咖啡',
-        Poke: '破胆之刺',
-        Impale: '透骨之刺',
-        Puncture: '破甲之刺',
-        'Penetrating Strike': '贯心之刺',
-        Scratch: '爪影斩',
-        Cleave: '分裂斩',
-        Maim: '血刃斩',
-        'Crippling Slash': '致残斩',
-        Smack: '重碾',
-        Sweep: '重扫',
-        'Stunning Blow': '重锤',
-        'Fracturing Impact': '碎裂冲击',
-        'Shield Bash': '盾击',
-        'Quick Shot': '快速射击',
-        'Aqua Arrow': '流水箭',
-        'Flame Arrow': '烈焰箭',
-        'Rain Of Arrows': '箭雨',
-        'Silencing Shot': '沉默之箭',
-        'Steady Shot': '稳定射击',
-        'Pestilent Shot': '疫病射击',
-        'Penetrating Shot': '贯穿射击',
-        'Water Strike': '流水冲击',
-        'Ice Spear': '冰枪术',
-        'Frost Surge': '冰霜爆裂',
-        'Mana Spring': '法力喷泉',
-        Entangle: '缠绕',
-        'Toxic Pollen': '剧毒粉尘',
-        "Nature's Veil": '自然菌幕',
-        'Life Drain': '生命吸取',
-        Fireball: '火球',
-        'Flame Blast': '熔岩爆裂',
-        Firestorm: '火焰风暴',
-        'Smoke Burst': '烟爆灭影',
-        'Minor Heal': '初级自愈术',
-        Heal: '自愈术',
-        'Quick Aid': '快速治疗术',
-        Rejuvenate: '群体治疗术',
-        Taunt: '嘲讽',
-        Provoke: '挑衅',
-        Toughness: '坚韧',
-        Elusiveness: '闪避',
-        Precision: '精确',
-        Berserk: '狂暴',
-        'Elemental Affinity': '元素增幅',
-        Frenzy: '狂速',
-        'Spike Shell': '尖刺防护',
-        Retribution: '惩戒',
-        Vampirism: '吸血',
-        Revive: '复活',
-        Insanity: '疯狂',
-        Invincible: '无敌',
-        'Speed Aura': '速度光环',
-        'Guardian Aura': '守护光环',
-        'Fierce Aura': '物理光环',
-        'Critical Aura': '暴击光环',
-        'Mystic Aura': '元素光环',
-        'Gobo Stabber': '哥布林长剑',
-        'Gobo Slasher': '哥布林关刀',
-        'Gobo Smasher': '哥布林狼牙棒',
-        'Spiked Bulwark': '尖刺重盾',
-        'Werewolf Slasher': '狼人关刀',
-        'Griffin Bulwark': '狮鹫重盾',
-        'Griffin Bulwark (R)': '狮鹫重盾（精）',
-        'Gobo Shooter': '哥布林弹弓',
-        'Vampiric Bow': '吸血弓',
-        'Cursed Bow': '咒怨之弓',
-        'Cursed Bow (R)': '咒怨之弓（精）',
-        'Gobo Boomstick': '哥布林火棍',
-        'Cheese Bulwark': '奶酪重盾',
-        'Verdant Bulwark': '翠绿重盾',
-        'Azure Bulwark': '蔚蓝重盾',
-        'Burble Bulwark': '深紫重盾',
-        'Crimson Bulwark': '绛红重盾',
-        'Rainbow Bulwark': '彩虹重盾',
-        'Holy Bulwark': '神圣重盾',
-        'Wooden Bow': '木弓',
-        'Birch Bow': '桦木弓',
-        'Cedar Bow': '雪松弓',
-        'Purpleheart Bow': '紫心弓',
-        'Ginkgo Bow': '银杏弓',
-        'Redwood Bow': '红杉弓',
-        'Arcane Bow': '神秘弓',
-        'Stalactite Spear': '石钟长枪',
-        'Granite Bludgeon': '花岗岩大棒',
-        'Furious Spear': '狂怒长枪',
-        'Furious Spear (R)': '狂怒长枪（精）',
-        'Regal Sword': '君王之剑',
-        'Regal Sword (R)': '君王之剑（精）',
-        'Chaotic Flail': '混沌连枷',
-        'Chaotic Flail (R)': '混沌连枷（精）',
-        'Soul Hunter Crossbow': '灵魂猎手弩',
-        'Sundering Crossbow': '裂空之弩',
-        'Sundering Crossbow (R)': '裂空之弩（精）',
-        'Frost Staff': '冰霜法杖',
-        'Infernal Battlestaff': '炼狱法杖',
-        'Jackalope Staff': '鹿角兔之杖',
-        'Rippling Trident': '涟漪三叉戟',
-        'Rippling Trident (R)': '涟漪三叉戟（精）',
-        'Blooming Trident': '绽放三叉戟',
-        'Blooming Trident (R)': '绽放三叉戟（精）',
-        'Blazing Trident': '炽焰三叉戟',
-        'Blazing Trident (R)': '炽焰三叉戟（精）',
-        'Cheese Sword': '奶酪剑',
-        'Verdant Sword': '翠绿剑',
-        'Azure Sword': '蔚蓝剑',
-        'Burble Sword': '深紫剑',
-        'Crimson Sword': '绛红剑',
-        'Rainbow Sword': '彩虹剑',
-        'Holy Sword': '神圣剑',
-        'Cheese Spear': '奶酪长枪',
-        'Verdant Spear': '翠绿长枪',
-        'Azure Spear': '蔚蓝长枪',
-        'Burble Spear': '深紫长枪',
-        'Crimson Spear': '绛红长枪',
-        'Rainbow Spear': '彩虹长枪',
-        'Holy Spear': '神圣长枪',
-        'Cheese Mace': '奶酪钉头锤',
-        'Verdant Mace': '翠绿钉头锤',
-        'Azure Mace': '蔚蓝钉头锤',
-        'Burble Mace': '深紫钉头锤',
-        'Crimson Mace': '绛红钉头锤',
-        'Rainbow Mace': '彩虹钉头锤',
-        'Holy Mace': '神圣钉头锤',
-        'Wooden Crossbow': '木弩',
-        'Birch Crossbow': '桦木弩',
-        'Cedar Crossbow': '雪松弩',
-        'Purpleheart Crossbow': '紫心弩',
-        'Ginkgo Crossbow': '银杏弩',
-        'Redwood Crossbow': '红杉弩',
-        'Arcane Crossbow': '神秘弩',
-        'Wooden Water Staff': '木制水法杖',
-        'Birch Water Staff': '桦木水法杖',
-        'Cedar Water Staff': '雪松水法杖',
-        'Purpleheart Water Staff': '紫心水法杖',
-        'Ginkgo Water Staff': '银杏水法杖',
-        'Redwood Water Staff': '红杉水法杖',
-        'Arcane Water Staff': '神秘水法杖',
-        'Wooden Nature Staff': '木制自然法杖',
-        'Birch Nature Staff': '桦木自然法杖',
-        'Cedar Nature Staff': '雪松自然法杖',
-        'Purpleheart Nature Staff': '紫心自然法杖',
-        'Ginkgo Nature Staff': '银杏自然法杖',
-        'Redwood Nature Staff': '红杉自然法杖',
-        'Arcane Nature Staff': '神秘自然法杖',
-        'Wooden Fire Staff': '木制火法杖',
-        'Birch Fire Staff': '桦木火法杖',
-        'Cedar Fire Staff': '雪松火法杖',
-        'Purpleheart Fire Staff': '紫心火法杖',
-        'Ginkgo Fire Staff': '银杏火法杖',
-        'Redwood Fire Staff': '红杉火法杖',
-        'Arcane Fire Staff': '神秘火法杖',
-        'Eye Watch': '掌上监工',
-        'Snake Fang Dirk': '蛇牙短剑',
-        'Vision Shield': '视觉盾',
-        'Gobo Defender': '哥布林防御者',
-        'Vampire Fang Dirk': '吸血鬼短剑',
-        "Knight's Aegis": '骑士盾',
-        "Knight's Aegis (R)": '骑士盾（精）',
-        'Treant Shield': '树人盾',
-        'Manticore Shield': '蝎狮盾',
-        'Tome Of Healing': '治疗之书',
-        'Tome Of The Elements': '元素之书',
-        'Watchful Relic': '警戒遗物',
-        "Bishop's Codex": '主教法典',
-        "Bishop's Codex (R)": '主教法典（精）',
-        'Cheese Buckler': '奶酪圆盾',
-        'Verdant Buckler': '翠绿圆盾',
-        'Azure Buckler': '蔚蓝圆盾',
-        'Burble Buckler': '深紫圆盾',
-        'Crimson Buckler': '绛红圆盾',
-        'Rainbow Buckler': '彩虹圆盾',
-        'Holy Buckler': '神圣圆盾',
-        'Wooden Shield': '木盾',
-        'Birch Shield': '桦木盾',
-        'Cedar Shield': '雪松盾',
-        'Purpleheart Shield': '紫心盾',
-        'Ginkgo Shield': '银杏盾',
-        'Redwood Shield': '红杉盾',
-        'Arcane Shield': '神秘盾',
-        'Gatherer Cape': '采集者披风',
-        'Gatherer Cape (R)': '采集者披风（精）',
-        'Artificer Cape': '工匠披风',
-        'Artificer Cape (R)': '工匠披风（精）',
-        'Culinary Cape': '厨师披风',
-        'Culinary Cape (R)': '厨师披风（精）',
-        'Chance Cape': '机缘披风',
-        'Chance Cape (R)': '机缘披风（精）',
-        'Sinister Cape': '阴森披风',
-        'Sinister Cape (R)': '阴森披风（精）',
-        'Chimerical Quiver': '奇幻箭袋',
-        'Chimerical Quiver (R)': '奇幻箭袋（精）',
-        'Enchanted Cloak': '秘法披风',
-        'Enchanted Cloak (R)': '秘法披风（精）',
-        'Red Culinary Hat': '红色厨师帽',
-        'Snail Shell Helmet': '蜗牛壳头盔',
-        'Vision Helmet': '视觉头盔',
-        'Fluffy Red Hat': '蓬松红帽子',
-        'Corsair Helmet': '掠夺者头盔',
-        'Corsair Helmet (R)': '掠夺者头盔（精）',
-        'Acrobatic Hood': '杂技师兜帽',
-        'Acrobatic Hood (R)': '杂技师兜帽（精）',
-        "Magician's Hat": '魔术师帽',
-        "Magician's Hat (R)": '魔术师帽（精）',
-        'Cheese Helmet': '奶酪头盔',
-        'Verdant Helmet': '翠绿头盔',
-        'Azure Helmet': '蔚蓝头盔',
-        'Burble Helmet': '深紫头盔',
-        'Crimson Helmet': '绛红头盔',
-        'Rainbow Helmet': '彩虹头盔',
-        'Holy Helmet': '神圣头盔',
-        'Rough Hood': '粗糙兜帽',
-        'Reptile Hood': '爬行动物兜帽',
-        'Gobo Hood': '哥布林兜帽',
-        'Beast Hood': '野兽兜帽',
-        'Umbral Hood': '暗影兜帽',
-        'Cotton Hat': '棉帽',
-        'Linen Hat': '亚麻帽',
-        'Bamboo Hat': '竹帽',
-        'Silk Hat': '丝帽',
-        'Radiant Hat': '光辉帽',
-        "Dairyhand's Top": '挤奶工上衣',
-        "Forager's Top": '采摘者上衣',
-        "Lumberjack's Top": '伐木工上衣',
-        "Cheesemaker's Top": '奶酪师上衣',
-        "Crafter's Top": '工匠上衣',
-        "Tailor's Top": '裁缝上衣',
-        "Chef's Top": '厨师上衣',
-        "Brewer's Top": '饮品师上衣',
-        "Alchemist's Top": '炼金师上衣',
-        "Enhancer's Top": '强化师上衣',
-        'Gator Vest': '鳄鱼马甲',
-        'Turtle Shell Body': '龟壳胸甲',
-        'Colossus Plate Body': '巨像胸甲',
-        'Demonic Plate Body': '恶魔胸甲',
-        'Anchorbound Plate Body': '锚定胸甲',
-        'Anchorbound Plate Body (R)': '锚定胸甲（精）',
-        'Maelstrom Plate Body': '怒涛胸甲',
-        'Maelstrom Plate Body (R)': '怒涛胸甲（精）',
-        'Marine Tunic': '海洋皮衣',
-        'Revenant Tunic': '亡灵皮衣',
-        'Griffin Tunic': '狮鹫皮衣',
-        'Kraken Tunic': '克拉肯皮衣',
-        'Kraken Tunic (R)': '克拉肯皮衣（精）',
-        'Icy Robe Top': '冰霜袍服',
-        'Flaming Robe Top': '烈焰袍服',
-        'Luna Robe Top': '月神袍服',
-        'Royal Water Robe Top': '皇家水系袍服',
-        'Royal Water Robe Top (R)': '皇家水系袍服（精）',
-        'Royal Nature Robe Top': '皇家自然系袍服',
-        'Royal Nature Robe Top (R)': '皇家自然系袍服（精）',
-        'Royal Fire Robe Top': '皇家火系袍服',
-        'Royal Fire Robe Top (R)': '皇家火系袍服（精）',
-        'Cheese Plate Body': '奶酪胸甲',
-        'Verdant Plate Body': '翠绿胸甲',
-        'Azure Plate Body': '蔚蓝胸甲',
-        'Burble Plate Body': '深紫胸甲',
-        'Crimson Plate Body': '绛红胸甲',
-        'Rainbow Plate Body': '彩虹胸甲',
-        'Holy Plate Body': '神圣胸甲',
-        'Rough Tunic': '粗糙皮衣',
-        'Reptile Tunic': '爬行动物皮衣',
-        'Gobo Tunic': '哥布林皮衣',
-        'Beast Tunic': '野兽皮衣',
-        'Umbral Tunic': '暗影皮衣',
-        'Cotton Robe Top': '棉袍服',
-        'Linen Robe Top': '亚麻袍服',
-        'Bamboo Robe Top': '竹袍服',
-        'Silk Robe Top': '丝绸袍服',
-        'Radiant Robe Top': '光辉袍服',
-        "Dairyhand's Bottoms": '挤奶工下装',
-        "Forager's Bottoms": '采摘者下装',
-        "Lumberjack's Bottoms": '伐木工下装',
-        "Cheesemaker's Bottoms": '奶酪师下装',
-        "Crafter's Bottoms": '工匠下装',
-        "Tailor's Bottoms": '裁缝下装',
-        "Chef's Bottoms": '厨师下装',
-        "Brewer's Bottoms": '饮品师下装',
-        "Alchemist's Bottoms": '炼金师下装',
-        "Enhancer's Bottoms": '强化师下装',
-        'Turtle Shell Legs': '龟壳腿甲',
-        'Colossus Plate Legs': '巨像腿甲',
-        'Demonic Plate Legs': '恶魔腿甲',
-        'Anchorbound Plate Legs': '锚定腿甲',
-        'Anchorbound Plate Legs (R)': '锚定腿甲（精）',
-        'Maelstrom Plate Legs': '怒涛腿甲',
-        'Maelstrom Plate Legs (R)': '怒涛腿甲（精）',
-        'Marine Chaps': '航海皮裤',
-        'Revenant Chaps': '亡灵皮裤',
-        'Griffin Chaps': '狮鹫皮裤',
-        'Kraken Chaps': '克拉肯皮裤',
-        'Kraken Chaps (R)': '克拉肯皮裤（精）',
-        'Icy Robe Bottoms': '冰霜袍裙',
-        'Flaming Robe Bottoms': '烈焰袍裙',
-        'Luna Robe Bottoms': '月神袍裙',
-        'Royal Water Robe Bottoms': '皇家水系袍裙',
-        'Royal Water Robe Bottoms (R)': '皇家水系袍裙（精）',
-        'Royal Nature Robe Bottoms': '皇家自然系袍裙',
-        'Royal Nature Robe Bottoms (R)': '皇家自然系袍裙（精）',
-        'Royal Fire Robe Bottoms': '皇家火系袍裙',
-        'Royal Fire Robe Bottoms (R)': '皇家火系袍裙（精）',
-        'Cheese Plate Legs': '奶酪腿甲',
-        'Verdant Plate Legs': '翠绿腿甲',
-        'Azure Plate Legs': '蔚蓝腿甲',
-        'Burble Plate Legs': '深紫腿甲',
-        'Crimson Plate Legs': '绛红腿甲',
-        'Rainbow Plate Legs': '彩虹腿甲',
-        'Holy Plate Legs': '神圣腿甲',
-        'Rough Chaps': '粗糙皮裤',
-        'Reptile Chaps': '爬行动物皮裤',
-        'Gobo Chaps': '哥布林皮裤',
-        'Beast Chaps': '野兽皮裤',
-        'Umbral Chaps': '暗影皮裤',
-        'Cotton Robe Bottoms': '棉袍裙',
-        'Linen Robe Bottoms': '亚麻袍裙',
-        'Bamboo Robe Bottoms': '竹袍裙',
-        'Silk Robe Bottoms': '丝绸袍裙',
-        'Radiant Robe Bottoms': '光辉袍裙',
-        'Enchanted Gloves': '附魔手套',
-        'Pincer Gloves': '蟹钳手套',
-        'Panda Gloves': '熊猫手套',
-        'Magnetic Gloves': '磁力手套',
-        'Dodocamel Gauntlets': '渡渡驼护手',
-        'Dodocamel Gauntlets (R)': '渡渡驼护手（精）',
-        'Sighted Bracers': '瞄准护腕',
-        'Marksman Bracers': '神射护腕',
-        'Marksman Bracers (R)': '神射护腕（精）',
-        'Chrono Gloves': '时空手套',
-        'Cheese Gauntlets': '奶酪护手',
-        'Verdant Gauntlets': '翠绿护手',
-        'Azure Gauntlets': '蔚蓝护手',
-        'Burble Gauntlets': '深紫护手',
-        'Crimson Gauntlets': '绛红护手',
-        'Rainbow Gauntlets': '彩虹护手',
-        'Holy Gauntlets': '神圣护手',
-        'Rough Bracers': '粗糙护腕',
-        'Reptile Bracers': '爬行动物护腕',
-        'Gobo Bracers': '哥布林护腕',
-        'Beast Bracers': '野兽护腕',
-        'Umbral Bracers': '暗影护腕',
-        'Cotton Gloves': '棉手套',
-        'Linen Gloves': '亚麻手套',
-        'Bamboo Gloves': '竹手套',
-        'Silk Gloves': '丝手套',
-        'Radiant Gloves': '光辉手套',
-        "Collector's Boots": '收藏家靴',
-        'Shoebill Shoes': '鲸头鹳鞋',
-        'Black Bear Shoes': '黑熊鞋',
-        'Grizzly Bear Shoes': '棕熊鞋',
-        'Polar Bear Shoes': '北极熊鞋',
-        'Pathbreaker Boots': '开路者靴',
-        'Pathbreaker Boots (R)': '开路者靴（精）',
-        'Centaur Boots': '半人马靴',
-        'Pathfinder Boots': '探路者靴',
-        'Pathfinder Boots (R)': '探路者靴（精）',
-        'Sorcerer Boots': '巫师靴',
-        'Pathseeker Boots': '寻路者靴',
-        'Pathseeker Boots (R)': '寻路者靴（精）',
-        'Cheese Boots': '奶酪靴',
-        'Verdant Boots': '翠绿靴',
-        'Azure Boots': '蔚蓝靴',
-        'Burble Boots': '深紫靴',
-        'Crimson Boots': '绛红靴',
-        'Rainbow Boots': '彩虹靴',
-        'Holy Boots': '神圣靴',
-        'Rough Boots': '粗糙靴',
-        'Reptile Boots': '爬行动物靴',
-        'Gobo Boots': '哥布林靴',
-        'Beast Boots': '野兽靴',
-        'Umbral Boots': '暗影靴',
-        'Cotton Boots': '棉靴',
-        'Linen Boots': '亚麻靴',
-        'Bamboo Boots': '竹靴',
-        'Silk Boots': '丝靴',
-        'Radiant Boots': '光辉靴',
-        'Small Pouch': '小袋子',
-        'Medium Pouch': '中袋子',
-        'Large Pouch': '大袋子',
-        'Giant Pouch': '巨大袋子',
-        'Gluttonous Pouch': '贪食之袋',
-        'Guzzling Pouch': '暴饮之囊',
-        'Necklace Of Efficiency': '效率项链',
-        'Fighter Necklace': '战士项链',
-        'Ranger Necklace': '射手项链',
-        'Wizard Necklace': '巫师项链',
-        'Necklace Of Wisdom': '经验项链',
-        'Necklace Of Speed': '速度项链',
-        "Philosopher's Necklace": '贤者项链',
-        'Earrings Of Gathering': '采集耳环',
-        'Earrings Of Essence Find': '精华发现耳环',
-        'Earrings Of Armor': '护甲耳环',
-        'Earrings Of Regeneration': '恢复耳环',
-        'Earrings Of Resistance': '抗性耳环',
-        'Earrings Of Rare Find': '稀有发现耳环',
-        'Earrings Of Critical Strike': '暴击耳环',
-        "Philosopher's Earrings": '贤者耳环',
-        'Ring Of Gathering': '采集戒指',
-        'Ring Of Essence Find': '精华发现戒指',
-        'Ring Of Armor': '护甲戒指',
-        'Ring Of Regeneration': '恢复戒指',
-        'Ring Of Resistance': '抗性戒指',
-        'Ring Of Rare Find': '稀有发现戒指',
-        'Ring Of Critical Strike': '暴击戒指',
-        "Philosopher's Ring": '贤者戒指',
-        'Trainee Milking Charm': '实习挤奶护符',
-        'Basic Milking Charm': '基础挤奶护符',
-        'Advanced Milking Charm': '高级挤奶护符',
-        'Expert Milking Charm': '专家挤奶护符',
-        'Master Milking Charm': '大师挤奶护符',
-        'Grandmaster Milking Charm': '宗师挤奶护符',
-        'Trainee Foraging Charm': '实习采摘护符',
-        'Basic Foraging Charm': '基础采摘护符',
-        'Advanced Foraging Charm': '高级采摘护符',
-        'Expert Foraging Charm': '专家采摘护符',
-        'Master Foraging Charm': '大师采摘护符',
-        'Grandmaster Foraging Charm': '宗师采摘护符',
-        'Trainee Woodcutting Charm': '实习伐木护符',
-        'Basic Woodcutting Charm': '基础伐木护符',
-        'Advanced Woodcutting Charm': '高级伐木护符',
-        'Expert Woodcutting Charm': '专家伐木护符',
-        'Master Woodcutting Charm': '大师伐木护符',
-        'Grandmaster Woodcutting Charm': '宗师伐木护符',
-        'Trainee Cheesesmithing Charm': '实习奶酪锻造护符',
-        'Basic Cheesesmithing Charm': '基础奶酪锻造护符',
-        'Advanced Cheesesmithing Charm': '高级奶酪锻造护符',
-        'Expert Cheesesmithing Charm': '专家奶酪锻造护符',
-        'Master Cheesesmithing Charm': '大师奶酪锻造护符',
-        'Grandmaster Cheesesmithing Charm': '宗师奶酪锻造护符',
-        'Trainee Crafting Charm': '实习制作护符',
-        'Basic Crafting Charm': '基础制作护符',
-        'Advanced Crafting Charm': '高级制作护符',
-        'Expert Crafting Charm': '专家制作护符',
-        'Master Crafting Charm': '大师制作护符',
-        'Grandmaster Crafting Charm': '宗师制作护符',
-        'Trainee Tailoring Charm': '实习缝纫护符',
-        'Basic Tailoring Charm': '基础缝纫护符',
-        'Advanced Tailoring Charm': '高级缝纫护符',
-        'Expert Tailoring Charm': '专家缝纫护符',
-        'Master Tailoring Charm': '大师缝纫护符',
-        'Grandmaster Tailoring Charm': '宗师缝纫护符',
-        'Trainee Cooking Charm': '实习烹饪护符',
-        'Basic Cooking Charm': '基础烹饪护符',
-        'Advanced Cooking Charm': '高级烹饪护符',
-        'Expert Cooking Charm': '专家烹饪护符',
-        'Master Cooking Charm': '大师烹饪护符',
-        'Grandmaster Cooking Charm': '宗师烹饪护符',
-        'Trainee Brewing Charm': '实习冲泡护符',
-        'Basic Brewing Charm': '基础冲泡护符',
-        'Advanced Brewing Charm': '高级冲泡护符',
-        'Expert Brewing Charm': '专家冲泡护符',
-        'Master Brewing Charm': '大师冲泡护符',
-        'Grandmaster Brewing Charm': '宗师冲泡护符',
-        'Trainee Alchemy Charm': '实习炼金护符',
-        'Basic Alchemy Charm': '基础炼金护符',
-        'Advanced Alchemy Charm': '高级炼金护符',
-        'Expert Alchemy Charm': '专家炼金护符',
-        'Master Alchemy Charm': '大师炼金护符',
-        'Grandmaster Alchemy Charm': '宗师炼金护符',
-        'Trainee Enhancing Charm': '实习强化护符',
-        'Basic Enhancing Charm': '基础强化护符',
-        'Advanced Enhancing Charm': '高级强化护符',
-        'Expert Enhancing Charm': '专家强化护符',
-        'Master Enhancing Charm': '大师强化护符',
-        'Grandmaster Enhancing Charm': '宗师强化护符',
-        'Trainee Stamina Charm': '实习耐力护符',
-        'Basic Stamina Charm': '基础耐力护符',
-        'Advanced Stamina Charm': '高级耐力护符',
-        'Expert Stamina Charm': '专家耐力护符',
-        'Master Stamina Charm': '大师耐力护符',
-        'Grandmaster Stamina Charm': '宗师耐力护符',
-        'Trainee Intelligence Charm': '实习智力护符',
-        'Basic Intelligence Charm': '基础智力护符',
-        'Advanced Intelligence Charm': '高级智力护符',
-        'Expert Intelligence Charm': '专家智力护符',
-        'Master Intelligence Charm': '大师智力护符',
-        'Grandmaster Intelligence Charm': '宗师智力护符',
-        'Trainee Attack Charm': '实习攻击护符',
-        'Basic Attack Charm': '基础攻击护符',
-        'Advanced Attack Charm': '高级攻击护符',
-        'Expert Attack Charm': '专家攻击护符',
-        'Master Attack Charm': '大师攻击护符',
-        'Grandmaster Attack Charm': '宗师攻击护符',
-        'Trainee Defense Charm': '实习防御护符',
-        'Basic Defense Charm': '基础防御护符',
-        'Advanced Defense Charm': '高级防御护符',
-        'Expert Defense Charm': '专家防御护符',
-        'Master Defense Charm': '大师防御护符',
-        'Grandmaster Defense Charm': '宗师防御护符',
-        'Trainee Melee Charm': '实习近战护符',
-        'Basic Melee Charm': '基础近战护符',
-        'Advanced Melee Charm': '高级近战护符',
-        'Expert Melee Charm': '专家近战护符',
-        'Master Melee Charm': '大师近战护符',
-        'Grandmaster Melee Charm': '宗师近战护符',
-        'Trainee Ranged Charm': '实习远程护符',
-        'Basic Ranged Charm': '基础远程护符',
-        'Advanced Ranged Charm': '高级远程护符',
-        'Expert Ranged Charm': '专家远程护符',
-        'Master Ranged Charm': '大师远程护符',
-        'Grandmaster Ranged Charm': '宗师远程护符',
-        'Trainee Magic Charm': '实习魔法护符',
-        'Basic Magic Charm': '基础魔法护符',
-        'Advanced Magic Charm': '高级魔法护符',
-        'Expert Magic Charm': '专家魔法护符',
-        'Master Magic Charm': '大师魔法护符',
-        'Grandmaster Magic Charm': '宗师魔法护符',
-        'Basic Task Badge': '基础任务徽章',
-        'Advanced Task Badge': '高级任务徽章',
-        'Expert Task Badge': '专家任务徽章',
-        'Celestial Brush': '星空刷子',
-        'Cheese Brush': '奶酪刷子',
-        'Verdant Brush': '翠绿刷子',
-        'Azure Brush': '蔚蓝刷子',
-        'Burble Brush': '深紫刷子',
-        'Crimson Brush': '绛红刷子',
-        'Rainbow Brush': '彩虹刷子',
-        'Holy Brush': '神圣刷子',
-        'Celestial Shears': '星空剪刀',
-        'Cheese Shears': '奶酪剪刀',
-        'Verdant Shears': '翠绿剪刀',
-        'Azure Shears': '蔚蓝剪刀',
-        'Burble Shears': '深紫剪刀',
-        'Crimson Shears': '绛红剪刀',
-        'Rainbow Shears': '彩虹剪刀',
-        'Holy Shears': '神圣剪刀',
-        'Celestial Hatchet': '星空斧头',
-        'Cheese Hatchet': '奶酪斧头',
-        'Verdant Hatchet': '翠绿斧头',
-        'Azure Hatchet': '蔚蓝斧头',
-        'Burble Hatchet': '深紫斧头',
-        'Crimson Hatchet': '绛红斧头',
-        'Rainbow Hatchet': '彩虹斧头',
-        'Holy Hatchet': '神圣斧头',
-        'Celestial Hammer': '星空锤子',
-        'Cheese Hammer': '奶酪锤子',
-        'Verdant Hammer': '翠绿锤子',
-        'Azure Hammer': '蔚蓝锤子',
-        'Burble Hammer': '深紫锤子',
-        'Crimson Hammer': '绛红锤子',
-        'Rainbow Hammer': '彩虹锤子',
-        'Holy Hammer': '神圣锤子',
-        'Celestial Chisel': '星空凿子',
-        'Cheese Chisel': '奶酪凿子',
-        'Verdant Chisel': '翠绿凿子',
-        'Azure Chisel': '蔚蓝凿子',
-        'Burble Chisel': '深紫凿子',
-        'Crimson Chisel': '绛红凿子',
-        'Rainbow Chisel': '彩虹凿子',
-        'Holy Chisel': '神圣凿子',
-        'Celestial Needle': '星空针',
-        'Cheese Needle': '奶酪针',
-        'Verdant Needle': '翠绿针',
-        'Azure Needle': '蔚蓝针',
-        'Burble Needle': '深紫针',
-        'Crimson Needle': '绛红针',
-        'Rainbow Needle': '彩虹针',
-        'Holy Needle': '神圣针',
-        'Celestial Spatula': '星空锅铲',
-        'Cheese Spatula': '奶酪锅铲',
-        'Verdant Spatula': '翠绿锅铲',
-        'Azure Spatula': '蔚蓝锅铲',
-        'Burble Spatula': '深紫锅铲',
-        'Crimson Spatula': '绛红锅铲',
-        'Rainbow Spatula': '彩虹锅铲',
-        'Holy Spatula': '神圣锅铲',
-        'Celestial Pot': '星空壶',
-        'Cheese Pot': '奶酪壶',
-        'Verdant Pot': '翠绿壶',
-        'Azure Pot': '蔚蓝壶',
-        'Burble Pot': '深紫壶',
-        'Crimson Pot': '绛红壶',
-        'Rainbow Pot': '彩虹壶',
-        'Holy Pot': '神圣壶',
-        'Celestial Alembic': '星空蒸馏器',
-        'Cheese Alembic': '奶酪蒸馏器',
-        'Verdant Alembic': '翠绿蒸馏器',
-        'Azure Alembic': '蔚蓝蒸馏器',
-        'Burble Alembic': '深紫蒸馏器',
-        'Crimson Alembic': '绛红蒸馏器',
-        'Rainbow Alembic': '彩虹蒸馏器',
-        'Holy Alembic': '神圣蒸馏器',
-        'Celestial Enhancer': '星空强化器',
-        'Cheese Enhancer': '奶酪强化器',
-        'Verdant Enhancer': '翠绿强化器',
-        'Azure Enhancer': '蔚蓝强化器',
-        'Burble Enhancer': '深紫强化器',
-        'Crimson Enhancer': '绛红强化器',
-        'Rainbow Enhancer': '彩虹强化器',
-        'Holy Enhancer': '神圣强化器',
-        Milk: '牛奶',
-        'Verdant Milk': '翠绿牛奶',
-        'Azure Milk': '蔚蓝牛奶',
-        'Burble Milk': '深紫牛奶',
-        'Crimson Milk': '绛红牛奶',
-        'Rainbow Milk': '彩虹牛奶',
-        'Holy Milk': '神圣牛奶',
-        Cheese: '奶酪',
-        'Verdant Cheese': '翠绿奶酪',
-        'Azure Cheese': '蔚蓝奶酪',
-        'Burble Cheese': '深紫奶酪',
-        'Crimson Cheese': '绛红奶酪',
-        'Rainbow Cheese': '彩虹奶酪',
-        'Holy Cheese': '神圣奶酪',
-        Log: '原木',
-        'Birch Log': '白桦原木',
-        'Cedar Log': '雪松原木',
-        'Purpleheart Log': '紫心原木',
-        'Ginkgo Log': '银杏原木',
-        'Redwood Log': '红杉原木',
-        'Arcane Log': '神秘原木',
-        Lumber: '木板',
-        'Birch Lumber': '白桦木板',
-        'Cedar Lumber': '雪松木板',
-        'Purpleheart Lumber': '紫心木板',
-        'Ginkgo Lumber': '银杏木板',
-        'Redwood Lumber': '红杉木板',
-        'Arcane Lumber': '神秘木板',
-        'Rough Hide': '粗糙兽皮',
-        'Reptile Hide': '爬行动物皮',
-        'Gobo Hide': '哥布林皮',
-        'Beast Hide': '野兽皮',
-        'Umbral Hide': '暗影皮',
-        'Rough Leather': '粗糙皮革',
-        'Reptile Leather': '爬行动物皮革',
-        'Gobo Leather': '哥布林皮革',
-        'Beast Leather': '野兽皮革',
-        'Umbral Leather': '暗影皮革',
-        Cotton: '棉花',
-        Flax: '亚麻',
-        'Bamboo Branch': '竹子',
-        Cocoon: '蚕茧',
-        'Radiant Fiber': '光辉纤维',
-        'Cotton Fabric': '棉花布料',
-        'Linen Fabric': '亚麻布料',
-        'Bamboo Fabric': '竹子布料',
-        'Silk Fabric': '丝绸',
-        'Radiant Fabric': '光辉布料',
-        Egg: '鸡蛋',
-        Wheat: '小麦',
-        Sugar: '糖',
-        Blueberry: '蓝莓',
-        Blackberry: '黑莓',
-        Strawberry: '草莓',
-        Mooberry: '哞莓',
-        Marsberry: '火星莓',
-        Spaceberry: '太空莓',
-        Apple: '苹果',
-        Orange: '橙子',
-        Plum: '李子',
-        Peach: '桃子',
-        'Dragon Fruit': '火龙果',
-        'Star Fruit': '杨桃',
-        'Arabica Coffee Bean': '低级咖啡豆',
-        'Robusta Coffee Bean': '中级咖啡豆',
-        'Liberica Coffee Bean': '高级咖啡豆',
-        'Excelsa Coffee Bean': '特级咖啡豆',
-        'Fieriosa Coffee Bean': '火山咖啡豆',
-        'Spacia Coffee Bean': '太空咖啡豆',
-        'Green Tea Leaf': '绿茶叶',
-        'Black Tea Leaf': '黑茶叶',
-        'Burble Tea Leaf': '紫茶叶',
-        'Moolong Tea Leaf': '哞龙茶叶',
-        'Red Tea Leaf': '红茶叶',
-        'Emp Tea Leaf': '虚空茶叶',
-        'Catalyst Of Coinification': '点金催化剂',
-        'Catalyst Of Decomposition': '分解催化剂',
-        'Catalyst Of Transmutation': '转化催化剂',
-        'Prime Catalyst': '至高催化剂',
-        'Snake Fang': '蛇牙',
-        'Shoebill Feather': '鲸头鹳羽毛',
-        'Snail Shell': '蜗牛壳',
-        'Crab Pincer': '蟹钳',
-        'Turtle Shell': '乌龟壳',
-        'Marine Scale': '海洋鳞片',
-        'Treant Bark': '树皮',
-        'Centaur Hoof': '半人马蹄',
-        'Luna Wing': '月神翼',
-        'Gobo Rag': '哥布林抹布',
-        Goggles: '护目镜',
-        'Magnifying Glass': '放大镜',
-        'Eye Of The Watcher': '观察者之眼',
-        'Icy Cloth': '冰霜织物',
-        'Flaming Cloth': '烈焰织物',
-        "Sorcerer's Sole": '魔法师鞋底',
-        'Chrono Sphere': '时空球',
-        'Frost Sphere': '冰霜球',
-        'Panda Fluff': '熊猫绒',
-        'Black Bear Fluff': '黑熊绒',
-        'Grizzly Bear Fluff': '棕熊绒',
-        'Polar Bear Fluff': '北极熊绒',
-        'Red Panda Fluff': '小熊猫绒',
-        Magnet: '磁铁',
-        'Stalactite Shard': '钟乳石碎片',
-        'Living Granite': '花岗岩',
-        'Colossus Core': '巨像核心',
-        'Vampire Fang': '吸血鬼之牙',
-        'Werewolf Claw': '狼人之爪',
-        'Revenant Anima': '亡者之魂',
-        'Soul Fragment': '灵魂碎片',
-        'Infernal Ember': '地狱余烬',
-        'Demonic Core': '恶魔核心',
-        'Griffin Leather': '狮鹫之皮',
-        'Manticore Sting': '蝎狮之刺',
-        'Jackalope Antler': '鹿角兔之角',
-        'Dodocamel Plume': '渡渡驼之翎',
-        'Griffin Talon': '狮鹫之爪',
-        'Chimerical Refinement Shard': '奇幻精炼碎片',
-        "Acrobat's Ribbon": '杂技师彩带',
-        "Magician's Cloth": '魔术师织物',
-        'Chaotic Chain': '混沌锁链',
-        'Cursed Ball': '诅咒之球',
-        'Sinister Refinement Shard': '阴森精炼碎片',
-        'Royal Cloth': '皇家织物',
-        "Knight's Ingot": '骑士之锭',
-        "Bishop's Scroll": '主教卷轴',
-        'Regal Jewel': '君王宝石',
-        'Sundering Jewel': '裂空宝石',
-        'Enchanted Refinement Shard': '秘法精炼碎片',
-        'Marksman Brooch': '神射胸针',
-        'Corsair Crest': '掠夺者徽章',
-        'Damaged Anchor': '破损船锚',
-        'Maelstrom Plating': '怒涛甲片',
-        'Kraken Leather': '克拉肯皮革',
-        'Kraken Fang': '克拉肯之牙',
-        'Pirate Refinement Shard': '海盗精炼碎片',
-        'Pathbreaker Lodestone': '开路者磁石',
-        'Pathfinder Lodestone': '探路者磁石',
-        'Pathseeker Lodestone': '寻路者磁石',
-        'Labyrinth Refinement Shard': '迷宫精炼碎片',
-        'Butter Of Proficiency': '精通之油',
-        'Thread Of Expertise': '专精之线',
-        'Branch Of Insight': '洞察之枝',
-        'Gluttonous Energy': '贪食能量',
-        'Guzzling Energy': '暴饮能量',
-        'Milking Essence': '挤奶精华',
-        'Foraging Essence': '采摘精华',
-        'Woodcutting Essence': '伐木精华',
-        'Cheesesmithing Essence': '奶酪锻造精华',
-        'Crafting Essence': '制作精华',
-        'Tailoring Essence': '缝纫精华',
-        'Cooking Essence': '烹饪精华',
-        'Brewing Essence': '冲泡精华',
-        'Alchemy Essence': '炼金精华',
-        'Enhancing Essence': '强化精华',
-        'Swamp Essence': '沼泽精华',
-        'Aqua Essence': '海洋精华',
-        'Jungle Essence': '丛林精华',
-        'Gobo Essence': '哥布林精华',
-        Eyessence: '眼精华',
-        'Sorcerer Essence': '法师精华',
-        'Bear Essence': '熊熊精华',
-        'Golem Essence': '魔像精华',
-        'Twilight Essence': '暮光精华',
-        'Abyssal Essence': '地狱精华',
-        'Chimerical Essence': '奇幻精华',
-        'Sinister Essence': '阴森精华',
-        'Enchanted Essence': '秘法精华',
-        'Pirate Essence': '海盗精华',
-        'Labyrinth Essence': '迷宫精华',
-        'Task Crystal': '任务水晶',
-        'Star Fragment': '星光碎片',
-        Pearl: '珍珠',
-        Amber: '琥珀',
-        Garnet: '石榴石',
-        Jade: '翡翠',
-        Amethyst: '紫水晶',
-        Moonstone: '月亮石',
-        Sunstone: '太阳石',
-        "Philosopher's Stone": '贤者之石',
-        'Crushed Pearl': '珍珠碎片',
-        'Crushed Amber': '琥珀碎片',
-        'Crushed Garnet': '石榴石碎片',
-        'Crushed Jade': '翡翠碎片',
-        'Crushed Amethyst': '紫水晶碎片',
-        'Crushed Moonstone': '月亮石碎片',
-        'Crushed Sunstone': '太阳石碎片',
-        "Crushed Philosopher's Stone": '贤者之石碎片',
-        'Shard Of Protection': '保护碎片',
-        'Mirror Of Protection': '保护之镜',
-        "Philosopher's Mirror": '贤者之镜',
-        'Basic Torch': '基础火把',
-        'Advanced Torch': '进阶火把',
-        'Expert Torch': '专家火把',
-        'Basic Shroud': '基础斗篷',
-        'Advanced Shroud': '进阶斗篷',
-        'Expert Shroud': '专家斗篷',
-        'Basic Beacon': '基础探照灯',
-        'Advanced Beacon': '进阶探照灯',
-        'Expert Beacon': '专家探照灯',
-        'Basic Food Crate': '基础食物箱',
-        'Advanced Food Crate': '进阶食物箱',
-        'Expert Food Crate': '专家食物箱',
-        'Basic Tea Crate': '基础茶叶箱',
-        'Advanced Tea Crate': '进阶茶叶箱',
-        'Expert Tea Crate': '专家茶叶箱',
-        'Basic Coffee Crate': '基础咖啡箱',
-        'Advanced Coffee Crate': '进阶咖啡箱',
-        'Expert Coffee Crate': '专家咖啡箱',
-    };
-
-    /**
-     * Auto-discovers Chinese item names from the game DOM and builds a
-     * Chinese → English mapping cached in IndexedDB. Provides a unified
-     * getDisplayName() returning Chinese when available, English otherwise.
-     */
-
-
-    const STORAGE_KEY = 'Toolasha_cnItemNames';
-    const CACHE_VERSION = 2;
-    const DEBOUNCE_DELAY = 5000;
-
-    const MUTATION_SELECTORS = [
-        '[class*="Item_name"]',
-        '[class*="Item_itemName"]',
-        '[class*="ItemTooltipText_name"]',
-        '[class*="Item_craftingItemName"]',
-        'svg[aria-label]',
-    ];
-
-    const ENHANCEMENT_STRIP_REGEX = /\s*\+\d+$/;
-    const CJK_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
-
-    class ItemNameTranslator {
-        constructor() {
-            this.cnNames = {};
-            this.isLoaded = false;
-            this._saveTimer = null;
-            this._dirty = false;
-            this._enToHrid = null;
-            this._hridToEn = null;
-            this._hridToEnSource = null;
-            this._observer = null;
-            this._observerStarted = false;
-        }
-
-        async load() {
-            if (this.isLoaded) return;
-            try {
-                const saved = await storage.get(STORAGE_KEY, 'settings');
-                if (
-                    saved &&
-                    typeof saved === 'object' &&
-                    saved._version === CACHE_VERSION &&
-                    Object.keys(saved).length > 1
-                ) {
-                    this.cnNames = saved;
-                }
-            } catch (_) {
-                /* ignore */
-            }
-            this.isLoaded = true;
-            this._importStaticMapping();
-        }
-
-        captureFromDOM(element, itemHrid) {
-            if (!element || !itemHrid) return;
-            const text = (element.textContent || element.getAttribute('aria-label') || '').trim();
-            if (!text || !CJK_REGEX.test(text)) return;
-            const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-            if (!baseName) return;
-            if (this.cnNames[itemHrid] === baseName) return;
-            this.cnNames[itemHrid] = baseName;
-            this._scheduleSave();
-        }
-
-        _importStaticMapping() {
-            const initData = dataManager.getInitClientData();
-            if (!initData?.itemDetailMap) return;
-            let count = 0;
-            for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                const cnName = itemNamesZh[item.name];
-                if (cnName && !this.cnNames[hrid]) {
-                    this.cnNames[hrid] = cnName;
-                    count++;
-                }
-            }
-            if (count > 0) this._scheduleSave();
-        }
-
-        _scheduleSave() {
-            if (!this.isLoaded) return;
-            this._dirty = true;
-            if (this._saveTimer) return;
-            this._saveTimer = setTimeout(async () => {
-                this._saveTimer = null;
-                if (!this._dirty) return;
-                this._dirty = false;
-                try {
-                    const data = { ...this.cnNames, _version: CACHE_VERSION };
-                    await storage.set(STORAGE_KEY, data, 'settings', true);
-                } catch (error) {
-                    console.warn('[ItemNameTranslator] Failed to save names:', error);
-                }
-            }, DEBOUNCE_DELAY);
-        }
-
-        flush() {
-            if (this._saveTimer) {
-                clearTimeout(this._saveTimer);
-                this._saveTimer = null;
-            }
-            if (this._dirty) {
-                this._dirty = false;
-                const data = { ...this.cnNames, _version: CACHE_VERSION };
-                storage.set(STORAGE_KEY, data, 'settings', true).catch(() => {});
-            }
-        }
-
-        _scanDomNow() {
-            for (const selector of MUTATION_SELECTORS) {
-                for (const el of document.querySelectorAll(selector)) {
-                    this._tryCaptureFromElement(el);
-                }
-            }
-        }
-
-        getDisplayName(itemHrid) {
-            if (!itemHrid) return '';
-            if (!this.isLoaded) this._lazyLoad();
-
-            const cached = this.cnNames[itemHrid];
-            if (cached) return cached;
-
-            const item = dataManager.getItemDetails(itemHrid);
-            const enName = item?.name;
-            if (!enName) return itemHrid;
-
-            const staticCn = itemNamesZh[enName];
-            if (staticCn) {
-                this.cnNames[itemHrid] = staticCn;
-                return staticCn;
-            }
-
-            return enName;
-        }
-
-        _lazyLoad() {
-            this.load().catch(() => {});
-        }
-
-        getHridFromChineseName(chineseName) {
-            if (!chineseName) return null;
-            const baseName = chineseName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-            for (const [hrid, cnName] of Object.entries(this.cnNames)) {
-                if (cnName === baseName) return hrid;
-            }
-            for (const [enName, cnName] of Object.entries(itemNamesZh)) {
-                if (cnName === baseName) {
-                    const initData = dataManager.getInitClientData();
-                    if (initData?.itemDetailMap) {
-                        for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                            if (item.name === enName) return hrid;
-                        }
-                    }
-                }
-            }
-            return null;
-        }
-
-        findHridFromDomName(chineseName) {
-            if (!chineseName) return null;
-            for (const [hrid, cnName] of Object.entries(this.cnNames)) {
-                if (cnName === chineseName) return hrid;
-            }
-            for (const [enName, cnName] of Object.entries(itemNamesZh)) {
-                if (cnName === chineseName) {
-                    const initData = dataManager.getInitClientData();
-                    if (initData?.itemDetailMap) {
-                        for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                            if (item.name === enName) return hrid;
-                        }
-                    }
-                }
-            }
-            const initData = dataManager.getInitClientData();
-            if (initData?.itemDetailMap) {
-                for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                    if (item.name === chineseName) return hrid;
-                }
-            }
-            return null;
-        }
-
-        _ensureHRIDMaps() {
-            if (this._hridToEn && this._enToHrid) return;
-            this._enToHrid = {};
-            this._hridToEn = {};
-            const initData = dataManager.getInitClientData();
-            if (!initData?.itemDetailMap) return;
-            for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                this._enToHrid[item.name] = hrid;
-                this._hridToEn[hrid] = item.name;
-            }
-        }
-
-        startObserver() {
-            if (this._observerStarted) return;
-            this._observerStarted = true;
-
-            const processNode = (node) => {
-                if (!node || node.nodeType !== 1) return;
-                for (const selector of MUTATION_SELECTORS) {
-                    if (node.matches(selector)) {
-                        this._tryCaptureFromElement(node);
-                        break;
-                    }
-                }
-                for (const selector of MUTATION_SELECTORS) {
-                    const children = node.querySelectorAll(selector);
-                    for (const child of children) {
-                        this._tryCaptureFromElement(child);
-                    }
-                }
-            };
-
-            for (const selector of MUTATION_SELECTORS) {
-                const elements = document.querySelectorAll(selector);
-                for (const el of elements) {
-                    this._tryCaptureFromElement(el);
-                }
-            }
-
-            this._observer = new MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    for (const node of mutation.addedNodes) {
-                        try {
-                            processNode(node);
-                        } catch (_) {
-                            // Skip errors from processing individual nodes
-                        }
-                    }
-                }
-            });
-
-            this._observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-            });
-        }
-
-        stopObserver() {
-            if (this._observer) {
-                this._observer.disconnect();
-                this._observer = null;
-            }
-            this._observerStarted = false;
-        }
-
-        _tryCaptureFromElement(el) {
-            if (!el) return;
-            const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
-            if (!text) return;
-
-            if (!CJK_REGEX.test(text)) return;
-
-            const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-            if (!baseName) return;
-
-            for (const [, cnName] of Object.entries(this.cnNames)) {
-                if (cnName === baseName) return;
-            }
-
-            const hrid = this.findHridFromDomName(baseName);
-            if (hrid) {
-                this.cnNames[hrid] = baseName;
-                this._scheduleSave();
-            } else {
-                // Log first 5 failures
-                if (!this._failCount) this._failCount = 0;
-                if (this._failCount < 5) {
-                    console.log('[ItemNameTranslator] CJK text found but no HRID match:', baseName);
-                    this._failCount++;
-                }
-            }
-        }
-    }
-
-    const itemNameTranslator = new ItemNameTranslator();
 
     /**
      * Combat Simulator Adapter
@@ -9921,9 +8797,10 @@
 
         for (const [keyHrid, count] of Object.entries(keyCounts)) {
             const unitCost = getBuyPrice(keyHrid);
+            const keyDetails = dataManager.getItemDetails(keyHrid);
             costs.push({
                 itemHrid: keyHrid,
-                name: itemNameTranslator.getDisplayName(keyHrid) || keyHrid.split('/').pop(),
+                name: keyDetails?.name || keyHrid.split('/').pop(),
                 count,
                 unitCost,
                 totalCost: count * unitCost,
@@ -9988,7 +8865,7 @@
             const perHour = (total / hours) * unitValue;
             revenuePerHour += perHour;
             if (unitValue > 0) {
-                const itemName = itemNameTranslator.getDisplayName(itemHrid);
+                const itemName = dataManager.getItemDetails(itemHrid)?.name || itemHrid.split('/').pop();
                 dropEntries.push({ name: itemName, countPerHour: total / hours, unitValue, totalValue: perHour });
             }
         }
@@ -10002,7 +8879,7 @@
             const perHour = (count / hours) * unitCost;
             costPerHour += perHour;
             if (unitCost > 0) {
-                const itemName = itemNameTranslator.getDisplayName(itemHrid);
+                const itemName = dataManager.getItemDetails(itemHrid)?.name || itemHrid.split('/').pop();
                 consumableEntries.push({ name: itemName, countPerHour: count / hours, unitCost, totalCost: perHour });
             }
         }
@@ -10656,6 +9533,7 @@
                 charData.communityActionTypeBuffsMap?.[actionTypeHrid],
                 charData.houseActionTypeBuffsMap?.[actionTypeHrid],
                 charData.achievementActionTypeBuffsMap?.[actionTypeHrid],
+                charData.mooPassActionTypeBuffsMap?.[actionTypeHrid],
             ];
 
             for (const buffs of buffSources) {
@@ -10923,12 +9801,56 @@
         }
 
         /**
-         * Get base combat level for a monster
+         * Get the player's effective combat level (used as base for skip threshold calculations).
+         * The game computes room level as: playerEffectiveCombatLevel + skipThreshold - 1.
          */
-        getBaseCombatLevel(monsterHrid) {
-            const gameData = dataManager.getInitClientData();
-            const monster = gameData?.combatMonsterDetailMap?.[monsterHrid];
-            return monster?.combatDetails?.combatLevel || 100;
+        getPlayerEffectiveCombatLevel() {
+            const combatLevel = dataManager.characterData?.combatUnit?.combatDetails?.combatLevel;
+            if (!combatLevel) return 100;
+
+            const baseCombatLevel = Math.floor(combatLevel);
+            const crateLevelBonus = this._getCrateCombatLevelBonus();
+            return baseCombatLevel + crateLevelBonus;
+        }
+
+        /**
+         * Sum combat level bonuses from equipped labyrinth crates.
+         * Looks for /buff_types/combat_level, /buff_types/action_level, and individual
+         * skill level types (averaged).
+         */
+        _getCrateCombatLevelBonus() {
+            const crateBuffs = this.getCrateBuffs();
+            if (crateBuffs.length === 0) return 0;
+
+            const skillLevelTypes = new Set([
+                '/buff_types/stamina_level',
+                '/buff_types/intelligence_level',
+                '/buff_types/attack_level',
+                '/buff_types/defense_level',
+                '/buff_types/melee_level',
+                '/buff_types/ranged_level',
+                '/buff_types/magic_level',
+            ]);
+
+            let directLevelBonus = 0;
+            let skillLevelSum = 0;
+            let skillLevelCount = 0;
+
+            for (const buff of crateBuffs) {
+                if (!buff?.typeHrid) continue;
+                const amount = (buff.flatBoost || 0) + (buff.ratioBoost || 0);
+                if (!Number.isFinite(amount) || amount === 0) continue;
+
+                if (buff.typeHrid === '/buff_types/combat_level' || buff.typeHrid === '/buff_types/action_level') {
+                    directLevelBonus += amount;
+                } else if (skillLevelTypes.has(buff.typeHrid)) {
+                    skillLevelSum += amount;
+                    skillLevelCount += 1;
+                }
+            }
+
+            const averagedSkillLevelBonus = skillLevelCount > 0 ? skillLevelSum / skillLevelCount : 0;
+            return Math.max(0, directLevelBonus + averagedSkillLevelBonus);
         }
 
         /**
@@ -10961,7 +9883,7 @@
 
         /**
          * Compute target room level for a combat room.
-         * Combat rooms use the monster's base combat level as the effective level base.
+         * Uses the player's effective combat level as the base (same as the game).
          */
         getCombatRoomLevel(monsterHrid) {
             if (this.roomData) {
@@ -10974,8 +9896,8 @@
             const skipThreshold = this.getCombatSkipThreshold(monsterHrid);
             if (skipThreshold <= 0) return 0;
 
-            const baseCombatLevel = this.getBaseCombatLevel(monsterHrid);
-            return Math.floor(baseCombatLevel + skipThreshold - 1);
+            const effectiveCombatLevel = this.getPlayerEffectiveCombatLevel();
+            return Math.floor(effectiveCombatLevel + skipThreshold - 1);
         }
 
         /**
@@ -11101,7 +10023,8 @@
                 const avgTime = totalTime / attempts;
 
                 const gameDataLocal = dataManager.getInitClientData();
-                const monsterName = itemNameTranslator.getDisplayName(monsterHrid);
+                const monsterDetail = gameDataLocal?.combatMonsterDetailMap?.[monsterHrid];
+                const monsterName = monsterDetail?.name || monsterHrid.replace('/monsters/', '').replace(/_/g, ' ');
 
                 const snapshot = loadoutSnapshot.snapshots[loadoutId];
                 const loadoutName = snapshot?.name || `Loadout #${loadoutId}`;
@@ -11175,14 +10098,14 @@
          * Async binary search for combat room recommended threshold
          */
         async findRecommendedThresholdCombat(monsterHrid, targetRate) {
-            const baseCombatLevel = this.getBaseCombatLevel(monsterHrid);
+            const effectiveCombatLevel = this.getPlayerEffectiveCombatLevel();
             let low = 0;
             let high = 300;
             let bestThreshold = 0;
 
             while (low <= high) {
                 const mid = Math.floor((low + high) / 2);
-                const roomLevel = Math.floor(baseCombatLevel + mid - 1);
+                const roomLevel = Math.floor(effectiveCombatLevel + mid - 1);
                 if (roomLevel <= 0) {
                     low = mid + 1;
                     continue;
@@ -11238,14 +10161,14 @@
                     const threshold = this.findRecommendedThreshold(roomHrid, targetRate);
                     this.recommendations.set(roomHrid, { threshold });
                 } else {
-                    if (button) button.textContent = i18n_js.t('Recommending... ({0}/{1})', completed + 1, totalRooms);
+                    if (button) button.textContent = t('Recommending... ({0}/{1})', completed + 1, totalRooms);
                     const threshold = await this.findRecommendedThresholdCombat(roomHrid, targetRate);
                     this.recommendations.set(roomHrid, { threshold });
                 }
                 completed++;
             }
 
-            if (button) button.textContent = i18n_js.t('Recommend');
+            if (button) button.textContent = t('Recommend');
             this.recommendRunning = false;
             this.injectRecommendationBadges();
         }
@@ -11271,9 +10194,9 @@
                 const badge = document.createElement('span');
                 badge.className = RECOMMEND_CLASS;
                 badge.style.cssText = 'font-size:0.7rem; margin-left:6px; white-space:nowrap; font-weight:bold;';
-                badge.textContent = i18n_js.t('Rec: +{0}', rec.threshold);
+                badge.textContent = t('Rec: +{0}', rec.threshold);
 
-                badge.title = i18n_js.t('Recommended skip threshold for ≥{0}% clear rate', this._recommendTargetPct);
+                badge.title = t('Recommended skip threshold for ≥{0}% clear rate', this._recommendTargetPct);
 
                 if (currentThreshold <= rec.threshold) {
                     badge.style.color = '#00c896';
@@ -11291,8 +10214,8 @@
          * Inject recommend controls (button + target input) into the automation panel
          */
         injectRecommendControls() {
-            const defaultRate = config.getSetting('labyrinthRecommendTargetRate') || 70;
-            const defaultHours = config.getSetting('labyrinthRecommendSimHours') || 1;
+            const defaultRate = config.getSettingValue('labyrinthRecommendTargetRate', 70);
+            const defaultHours = config.getSettingValue('labyrinthRecommendSimHours', 1);
 
             if (document.querySelector(`.${RECOMMEND_CONTROLS_CLASS}`)) {
                 const rateInput = document.getElementById('mwi-recommend-target-rate');
@@ -11316,7 +10239,7 @@
 
             const rateLabel = document.createElement('span');
             rateLabel.style.cssText = labelStyle;
-            rateLabel.textContent = i18n_js.t('Target Win %');
+            rateLabel.textContent = t('Target Win %');
 
             const rateInput = document.createElement('input');
             rateInput.type = 'number';
@@ -11332,7 +10255,7 @@
 
             const hoursLabel = document.createElement('span');
             hoursLabel.style.cssText = labelStyle;
-            hoursLabel.textContent = i18n_js.t('Sim Hours');
+            hoursLabel.textContent = t('Sim Hours');
 
             const hoursInput = document.createElement('input');
             hoursInput.type = 'number';
@@ -11347,7 +10270,7 @@
             });
 
             const button = document.createElement('button');
-            button.textContent = i18n_js.t('Recommend');
+            button.textContent = t('Recommend');
             button.style.cssText =
                 'padding:2px 10px; cursor:pointer; font-size:0.75rem; border-radius:4px; border:1px solid #555; background:#333; color:#ccc;';
             button.addEventListener('click', () => this.runRecommendations());
@@ -11464,7 +10387,7 @@
 
             const chancePct = (estimate.clearChance * 100).toFixed(1);
             if (estimate.isEnhancing) {
-                node.textContent = i18n_js.t(
+                node.textContent = t(
                     ' [Clear {0}% | +{1}/+{2} | {3} left]',
                     chancePct,
                     estimate.currentLevel,
@@ -11472,21 +10395,21 @@
                     estimate.attemptsLeft
                 );
             } else {
-                node.textContent = i18n_js.t(' [Clear {0}% | {1} left]', chancePct, estimate.attemptsLeft);
+                node.textContent = t(' [Clear {0}% | {1} left]', chancePct, estimate.attemptsLeft);
             }
 
             const tooltipLines = [
-                i18n_js.t(
+                t(
                     'Success: {0}% | Double: {1}%',
                     (estimate.successChance * 100).toFixed(1),
                     (estimate.doubleChance * 100).toFixed(1)
                 ),
-                i18n_js.t('Actions: {0}/{1}', estimate.actionCounter, estimate.totalAttempts),
+                t('Actions: {0}/{1}', estimate.actionCounter, estimate.totalAttempts),
             ];
             if (estimate.isEnhancing) {
-                tooltipLines.push(i18n_js.t('Enhance: +{0}/+{1}', estimate.currentLevel, estimate.targetLevel));
+                tooltipLines.push(t('Enhance: +{0}/+{1}', estimate.currentLevel, estimate.targetLevel));
             } else {
-                tooltipLines.push(i18n_js.t('Progress: {0}/{1}', estimate.currentWorkValue, estimate.targetWorkValue));
+                tooltipLines.push(t('Progress: {0}/{1}', estimate.currentWorkValue, estimate.targetWorkValue));
             }
             node.title = tooltipLines.join('\n');
         }
@@ -11593,7 +10516,7 @@
             badge.className = BADGE_CLASS;
             badge.style.cssText = 'font-size:0.7rem; margin-left:6px; white-space:nowrap; color:#999;';
             badge.textContent = '...';
-            badge.title = i18n_js.t('Simulating combat...');
+            badge.title = t('Simulating combat...');
             cell.appendChild(badge);
             return badge;
         }
@@ -11652,44 +10575,44 @@
 
             if (result.type === 'skilling') {
                 return [
-                    i18n_js.t('Success: {0} | Double: {1}', pct(result.successChance), pct(result.doubleChance)),
-                    i18n_js.t('Actions: {0} @ {1}s each', result.attempts, result.actionSeconds.toFixed(2)),
-                    i18n_js.t(
+                    t('Success: {0} | Double: {1}', pct(result.successChance), pct(result.doubleChance)),
+                    t('Actions: {0} @ {1}s each', result.attempts, result.actionSeconds.toFixed(2)),
+                    t(
                         'Work Power: {0} → Progress: {1}/{2} per success',
                         Math.floor(result.workPower),
                         result.progressPerSuccess,
                         result.targetProgress
                     ),
-                    i18n_js.t(
+                    t(
                         'Effective Level: {0} (base {1} + {2})',
                         Math.floor(result.effectiveLevel),
                         result.baseLevel,
                         Math.floor(result.effectiveLevel - result.baseLevel)
                     ),
-                    i18n_js.t('Room Level: {0} | XP/room: {1}', result.roomLevel, result.xpPerRoom),
+                    t('Room Level: {0} | XP/room: {1}', result.roomLevel, result.xpPerRoom),
                 ].join('\n');
             }
 
             if (result.type === 'enhancing') {
                 return [
-                    i18n_js.t('Success: {0} | Double: {1}', pct(result.successChance), pct(result.doubleChance)),
-                    i18n_js.t('Actions: {0} @ {1}s each', result.attempts, result.actionSeconds.toFixed(2)),
-                    i18n_js.t('Target: +{0} | Effective Level: {1}', result.targetLevel, Math.floor(result.effectiveLevel)),
-                    i18n_js.t('Room Level: {0}', result.roomLevel),
+                    t('Success: {0} | Double: {1}', pct(result.successChance), pct(result.doubleChance)),
+                    t('Actions: {0} @ {1}s each', result.attempts, result.actionSeconds.toFixed(2)),
+                    t('Target: +{0} | Effective Level: {1}', result.targetLevel, Math.floor(result.effectiveLevel)),
+                    t('Room Level: {0}', result.roomLevel),
                 ].join('\n');
             }
 
             if (result.type === 'combat') {
                 return [
-                    i18n_js.t('Win Rate: {0} | Avg Fight: {1}s', pct(result.winRate), Math.round(result.avgFightSeconds)),
-                    i18n_js.t('Monster: {0} | Room Level: {1}', result.monsterName, result.roomLevel),
-                    i18n_js.t('Loadout: "{0}"', result.loadoutName),
+                    t('Win Rate: {0} | Avg Fight: {1}s', pct(result.winRate), Math.round(result.avgFightSeconds)),
+                    t('Monster: {0} | Room Level: {1}', result.monsterName, result.roomLevel),
+                    t('Loadout: "{0}"', result.loadoutName),
                 ].join('\n');
             }
 
             const clearPct = Math.round(result.clearChance * 100);
             const timeText = this.formatTime(result.expectedSeconds);
-            return i18n_js.t('Clear: {0}% | Expected: {1} | Room level: {2}', clearPct, timeText, roomLevel);
+            return t('Clear: {0}% | Expected: {1} | Room level: {2}', clearPct, timeText, roomLevel);
         }
 
         getBadgeColor(clearChance) {
@@ -12291,7 +11214,7 @@
 
                 return {
                     exportObj: playerObj,
-                    playerIDs: [profile.characterName, i18n_js.t('Player 2'), i18n_js.t('Player 3'), i18n_js.t('Player 4'), i18n_js.t('Player 5')],
+                    playerIDs: [profile.characterName, t('Player 2'), t('Player 3'), t('Player 4'), t('Player 5')],
                     importedPlayerPositions: [true, false, false, false, false],
                     zone: '/actions/combat/fly',
                     isZoneDungeon: false,
@@ -12311,7 +11234,7 @@
 
             return {
                 exportObj,
-                playerIDs: [profile.characterName, i18n_js.t('Player 2'), i18n_js.t('Player 3'), i18n_js.t('Player 4'), i18n_js.t('Player 5')],
+                playerIDs: [profile.characterName, t('Player 2'), t('Player 3'), t('Player 4'), t('Player 5')],
                 importedPlayerPositions: [true, false, false, false, false],
                 zone: '/actions/combat/fly',
                 isZoneDungeon: false,
@@ -12326,7 +11249,7 @@
             exportObj[i] = BLANK;
         }
 
-        const playerIDs = [i18n_js.t('Player 1'), i18n_js.t('Player 2'), i18n_js.t('Player 3'), i18n_js.t('Player 4'), i18n_js.t('Player 5')];
+        const playerIDs = [t('Player 1'), t('Player 2'), t('Player 3'), t('Player 4'), t('Player 5')];
         const importedPlayerPositions = [false, false, false, false, false];
         let zone = '/actions/combat/fly';
         let isZoneDungeon = false;
@@ -12339,7 +11262,7 @@
 
         if (!hasParty) {
             exportObj[1] = JSON.stringify(constructSelfPlayer(characterObj, clientObj));
-            playerIDs[0] = characterObj.character?.name || i18n_js.t('Player 1');
+            playerIDs[0] = characterObj.character?.name || t('Player 1');
             importedPlayerPositions[0] = true;
 
             // Get current combat zone and tier
@@ -12375,7 +11298,7 @@
                                 '- profiles have:',
                                 profileList.map((p) => p.characterID)
                             );
-                            playerIDs[slotIndex - 1] = i18n_js.t('Open profile in game');
+                            playerIDs[slotIndex - 1] = t('Open profile in game');
                         }
                     }
                     slotIndex++;
@@ -12642,7 +11565,7 @@
             row.style.cssText = 'display: flex; justify-content: flex-end; margin-bottom: 4px; align-items: center;';
 
             const label = document.createElement('span');
-            label.textContent = `${i18n_js.t('{0} to level', skillData[skillName].displayName)} `;
+            label.textContent = `${t('{0} to level', skillData[skillName].displayName)} `;
             label.style.marginRight = '6px';
 
             const input = document.createElement('input');
@@ -12675,7 +11598,7 @@
         daysInput.style.cssText = 'width: 60px; padding: 2px 4px; margin-right: 6px;';
 
         const daysLabel = document.createElement('span');
-        daysLabel.textContent = i18n_js.t('days after');
+        daysLabel.textContent = t('days after');
 
         daysRow.appendChild(daysInput);
         daysRow.appendChild(daysLabel);
@@ -12779,24 +11702,24 @@
             const currentExp = skillData[activeSkill].currentExp;
             const expRate = expRates[activeSkill] || 0;
 
-            resultsHeader.textContent = i18n_js.t('{0} to level {1} takes:', skillData[activeSkill].displayName, targetLevel);
+            resultsHeader.textContent = t('{0} to level {1} takes:', skillData[activeSkill].displayName, targetLevel);
 
             if (expRate === 0) {
-                resultsContent.innerHTML = `<div>${i18n_js.t('No experience gain (not trained in simulation)')}</div>`;
+                resultsContent.innerHTML = `<div>${t('No experience gain (not trained in simulation)')}</div>`;
             } else if (targetLevel <= currentLevel) {
-                resultsContent.innerHTML = `<div>${i18n_js.t('Already achieved')}</div>`;
+                resultsContent.innerHTML = `<div>${t('Already achieved')}</div>`;
             } else {
                 const timeResult = calculateTimeToLevel(currentExp, targetLevel, expRate, levelExpTable);
                 if (timeResult) {
                     resultsContent.innerHTML = `<div>[${timeResult.readable}]</div>`;
                 } else {
-                    resultsContent.innerHTML = `<div>${i18n_js.t('Invalid target level')}</div>`;
+                    resultsContent.innerHTML = `<div>${t('Invalid target level')}</div>`;
                 }
             }
         } else {
             // Calculate levels after X days
             const days = Number(daysInput.value);
-            resultsHeader.textContent = i18n_js.t('After {0} days:', days);
+            resultsHeader.textContent = t('After {0} days:', days);
 
             const projected = calculateLevelsAfterDays(characterSkills, expRates, days, levelExpTable);
 
@@ -12806,14 +11729,14 @@
 
                 for (const skillName of skillOrder) {
                     if (projected[skillName]) {
-                        html += `<div>${i18n_js.t('{0} level {1} {2}%', capitalize(skillName), projected[skillName].level, projected[skillName].percentage)}</div>`;
+                        html += `<div>${t('{0} level {1} {2}%', capitalize(skillName), projected[skillName].level, projected[skillName].percentage)}</div>`;
                     }
                 }
 
-                html += `<div style="margin-top: 4px; font-weight: bold;">${i18n_js.t('Combat level: {0}', projected.combatLevel.toFixed(1))}</div>`;
+                html += `<div style="margin-top: 4px; font-weight: bold;">${t('Combat level: {0}', projected.combatLevel.toFixed(1))}</div>`;
                 resultsContent.innerHTML = html;
             } else {
-                resultsContent.innerHTML = `<div>${i18n_js.t('Unable to calculate projection')}</div>`;
+                resultsContent.innerHTML = `<div>${t('Unable to calculate projection')}</div>`;
             }
         }
     }
@@ -12960,7 +11883,7 @@
         const button = document.createElement('button');
         button.id = 'toolasha-import-button';
         // Include hidden text for JIGS compatibility (JIGS searches for "Import solo/group")
-        button.innerHTML = i18n_js.t('Import from Toolasha') + '<span style="display:none;">Import solo/group</span>';
+        button.innerHTML = t('Import from Toolasha') + '<span style="display:none;">Import solo/group</span>';
         button.style.backgroundColor = config.COLOR_ACCENT;
         button.style.color = 'white';
         button.style.padding = '10px 20px';
@@ -12999,16 +11922,16 @@
             const exportData = await constructExportObject();
 
             if (!exportData) {
-                button.textContent = i18n_js.t('Error: No character data');
+                button.textContent = t('Error: No character data');
                 button.style.backgroundColor = '#dc3545'; // Red
                 const resetTimeout = setTimeout(() => {
-                    button.innerHTML = i18n_js.t('Import from Toolasha') + '<span style="display:none;">Import solo/group</span>';
+                    button.innerHTML = t('Import from Toolasha') + '<span style="display:none;">Import solo/group</span>';
                     button.style.backgroundColor = config.COLOR_ACCENT;
                 }, 3000);
                 timerRegistry.registerTimeout(resetTimeout);
                 console.error('[Toolasha Combat Sim] No export data available');
                 alert(
-                    i18n_js.t(
+                    t(
                         'No character data found. Please:\n1. Refresh the game page\n2. Wait for it to fully load\n3. Try again'
                     )
                 );
@@ -13133,10 +12056,10 @@
                 }
 
                 // Update button status
-                button.textContent = '\u2713 ' + i18n_js.t('Imported');
+                button.textContent = '\u2713 ' + t('Imported');
                 button.style.backgroundColor = '#28a745'; // Green
                 const successResetTimeout = setTimeout(() => {
-                    button.innerHTML = i18n_js.t('Import from Toolasha') + '<span style="display:none;">Import solo/group</span>';
+                    button.innerHTML = t('Import from Toolasha') + '<span style="display:none;">Import solo/group</span>';
                     button.style.backgroundColor = config.COLOR_ACCENT;
                 }, 3000);
                 timerRegistry.registerTimeout(successResetTimeout);
@@ -13144,10 +12067,10 @@
             timerRegistry.registerTimeout(importTimeout);
         } catch (error) {
             console.error('[Toolasha Combat Sim] Import failed:', error);
-            button.textContent = i18n_js.t('Import Failed');
+            button.textContent = t('Import Failed');
             button.style.backgroundColor = '#dc3545'; // Red
             const failResetTimeout = setTimeout(() => {
-                button.innerHTML = i18n_js.t('Import from Toolasha') + '<span style="display:none;">Import solo/group</span>';
+                button.innerHTML = t('Import from Toolasha') + '<span style="display:none;">Import solo/group</span>';
                 button.style.backgroundColor = config.COLOR_ACCENT;
             }, 3000);
             timerRegistry.registerTimeout(failResetTimeout);
@@ -14281,6 +13204,1165 @@
         }
     }
 
+    var itemNamesZh = {
+      "Coin": "金币",
+      "Task Token": "任务代币",
+      "Labyrinth Token": "迷宫代币",
+      "Chimerical Token": "奇幻代币",
+      "Sinister Token": "阴森代币",
+      "Enchanted Token": "秘法代币",
+      "Pirate Token": "海盗代币",
+      "Cowbell": "牛铃",
+      "Bag Of 10 Cowbells": "牛铃袋 (10个)",
+      "Purple's Gift": "小紫牛的礼物",
+      "Small Meteorite Cache": "小陨石舱",
+      "Medium Meteorite Cache": "中陨石舱",
+      "Large Meteorite Cache": "大陨石舱",
+      "Small Artisan's Crate": "小工匠匣",
+      "Medium Artisan's Crate": "中工匠匣",
+      "Large Artisan's Crate": "大工匠匣",
+      "Small Treasure Chest": "小宝箱",
+      "Medium Treasure Chest": "中宝箱",
+      "Large Treasure Chest": "大宝箱",
+      "Chimerical Chest": "奇幻宝箱",
+      "Sinister Chest": "阴森宝箱",
+      "Enchanted Chest": "秘法宝箱",
+      "Pirate Chest": "海盗宝箱",
+      "Purdora's Box (Skilling)": "紫多拉之盒（生活）",
+      "Purdora's Box (Combat)": "紫多拉之盒（战斗）",
+      "Scroll Of Gathering": "采集卷轴",
+      "Scroll Of Gourmet": "美食卷轴",
+      "Scroll Of Processing": "加工卷轴",
+      "Scroll Of Efficiency": "效率卷轴",
+      "Scroll Of Action Speed": "行动速度卷轴",
+      "Scroll Of Combat Drop": "战斗掉落卷轴",
+      "Scroll Of Attack Speed": "攻击速度卷轴",
+      "Scroll Of Cast Speed": "施法速度卷轴",
+      "Scroll Of Damage": "伤害卷轴",
+      "Scroll Of Critical Rate": "暴击率卷轴",
+      "Scroll Of Wisdom": "经验卷轴",
+      "Scroll Of Rare Find": "稀有发现卷轴",
+      "Blue Key Fragment": "蓝色钥匙碎片",
+      "Green Key Fragment": "绿色钥匙碎片",
+      "Purple Key Fragment": "紫色钥匙碎片",
+      "White Key Fragment": "白色钥匙碎片",
+      "Orange Key Fragment": "橙色钥匙碎片",
+      "Brown Key Fragment": "棕色钥匙碎片",
+      "Stone Key Fragment": "石头钥匙碎片",
+      "Dark Key Fragment": "黑暗钥匙碎片",
+      "Burning Key Fragment": "燃烧钥匙碎片",
+      "Donut": "甜甜圈",
+      "Blueberry Donut": "蓝莓甜甜圈",
+      "Blackberry Donut": "黑莓甜甜圈",
+      "Strawberry Donut": "草莓甜甜圈",
+      "Mooberry Donut": "哞莓甜甜圈",
+      "Marsberry Donut": "火星莓甜甜圈",
+      "Spaceberry Donut": "太空莓甜甜圈",
+      "Cupcake": "纸杯蛋糕",
+      "Blueberry Cake": "蓝莓蛋糕",
+      "Blackberry Cake": "黑莓蛋糕",
+      "Strawberry Cake": "草莓蛋糕",
+      "Mooberry Cake": "哞莓蛋糕",
+      "Marsberry Cake": "火星莓蛋糕",
+      "Spaceberry Cake": "太空莓蛋糕",
+      "Gummy": "软糖",
+      "Apple Gummy": "苹果软糖",
+      "Orange Gummy": "橙子软糖",
+      "Plum Gummy": "李子软糖",
+      "Peach Gummy": "桃子软糖",
+      "Dragon Fruit Gummy": "火龙果软糖",
+      "Star Fruit Gummy": "杨桃软糖",
+      "Yogurt": "酸奶",
+      "Apple Yogurt": "苹果酸奶",
+      "Orange Yogurt": "橙子酸奶",
+      "Plum Yogurt": "李子酸奶",
+      "Peach Yogurt": "桃子酸奶",
+      "Dragon Fruit Yogurt": "火龙果酸奶",
+      "Star Fruit Yogurt": "杨桃酸奶",
+      "Milking Tea": "挤奶茶",
+      "Foraging Tea": "采摘茶",
+      "Woodcutting Tea": "伐木茶",
+      "Cooking Tea": "烹饪茶",
+      "Brewing Tea": "冲泡茶",
+      "Alchemy Tea": "炼金茶",
+      "Enhancing Tea": "强化茶",
+      "Cheesesmithing Tea": "奶酪锻造茶",
+      "Crafting Tea": "制作茶",
+      "Tailoring Tea": "缝纫茶",
+      "Super Milking Tea": "超级挤奶茶",
+      "Super Foraging Tea": "超级采摘茶",
+      "Super Woodcutting Tea": "超级伐木茶",
+      "Super Cooking Tea": "超级烹饪茶",
+      "Super Brewing Tea": "超级冲泡茶",
+      "Super Alchemy Tea": "超级炼金茶",
+      "Super Enhancing Tea": "超级强化茶",
+      "Super Crafting Tea": "超级制作茶",
+      "Super Tailoring Tea": "超级缝纫茶",
+      "Ultra Milking Tea": "究极挤奶茶",
+      "Ultra Foraging Tea": "究极采摘茶",
+      "Ultra Woodcutting Tea": "究极伐木茶",
+      "Ultra Cooking Tea": "究极烹饪茶",
+      "Ultra Brewing Tea": "究极冲泡茶",
+      "Ultra Alchemy Tea": "究极炼金茶",
+      "Ultra Enhancing Tea": "究极强化茶",
+      "Ultra Crafting Tea": "究极制作茶",
+      "Ultra Tailoring Tea": "究极缝纫茶",
+      "Gathering Tea": "采集茶",
+      "Gourmet Tea": "美食茶",
+      "Wisdom Tea": "经验茶",
+      "Processing Tea": "加工茶",
+      "Efficiency Tea": "效率茶",
+      "Artisan Tea": "工匠茶",
+      "Catalytic Tea": "催化茶",
+      "Blessed Tea": "福气茶",
+      "Stamina Coffee": "耐力咖啡",
+      "Intelligence Coffee": "智力咖啡",
+      "Defense Coffee": "防御咖啡",
+      "Attack Coffee": "攻击咖啡",
+      "Melee Coffee": "近战咖啡",
+      "Ranged Coffee": "远程咖啡",
+      "Magic Coffee": "魔法咖啡",
+      "Super Stamina Coffee": "超级耐力咖啡",
+      "Super Intelligence Coffee": "超级智力咖啡",
+      "Super Defense Coffee": "超级防御咖啡",
+      "Super Attack Coffee": "超级攻击咖啡",
+      "Super Melee Coffee": "超级近战咖啡",
+      "Super Ranged Coffee": "超级远程咖啡",
+      "Super Magic Coffee": "超级魔法咖啡",
+      "Ultra Stamina Coffee": "究极耐力咖啡",
+      "Ultra Intelligence Coffee": "究极智力咖啡",
+      "Ultra Defense Coffee": "究极防御咖啡",
+      "Ultra Attack Coffee": "究极攻击咖啡",
+      "Ultra Melee Coffee": "究极近战咖啡",
+      "Ultra Ranged Coffee": "究极远程咖啡",
+      "Ultra Magic Coffee": "究极魔法咖啡",
+      "Wisdom Coffee": "经验咖啡",
+      "Lucky Coffee": "幸运咖啡",
+      "Swiftness Coffee": "迅捷咖啡",
+      "Channeling Coffee": "吟唱咖啡",
+      "Critical Coffee": "暴击咖啡",
+      "Poke": "破胆之刺",
+      "Impale": "透骨之刺",
+      "Puncture": "破甲之刺",
+      "Penetrating Strike": "贯心之刺",
+      "Scratch": "爪影斩",
+      "Cleave": "分裂斩",
+      "Maim": "血刃斩",
+      "Crippling Slash": "致残斩",
+      "Smack": "重碾",
+      "Sweep": "重扫",
+      "Stunning Blow": "重锤",
+      "Fracturing Impact": "碎裂冲击",
+      "Shield Bash": "盾击",
+      "Quick Shot": "快速射击",
+      "Aqua Arrow": "流水箭",
+      "Flame Arrow": "烈焰箭",
+      "Rain Of Arrows": "箭雨",
+      "Silencing Shot": "沉默之箭",
+      "Steady Shot": "稳定射击",
+      "Pestilent Shot": "疫病射击",
+      "Penetrating Shot": "贯穿射击",
+      "Water Strike": "流水冲击",
+      "Ice Spear": "冰枪术",
+      "Frost Surge": "冰霜爆裂",
+      "Mana Spring": "法力喷泉",
+      "Entangle": "缠绕",
+      "Toxic Pollen": "剧毒粉尘",
+      "Nature's Veil": "自然菌幕",
+      "Life Drain": "生命吸取",
+      "Fireball": "火球",
+      "Flame Blast": "熔岩爆裂",
+      "Firestorm": "火焰风暴",
+      "Smoke Burst": "烟爆灭影",
+      "Minor Heal": "初级自愈术",
+      "Heal": "自愈术",
+      "Quick Aid": "快速治疗术",
+      "Rejuvenate": "群体治疗术",
+      "Taunt": "嘲讽",
+      "Provoke": "挑衅",
+      "Toughness": "坚韧",
+      "Elusiveness": "闪避",
+      "Precision": "精确",
+      "Berserk": "狂暴",
+      "Elemental Affinity": "元素增幅",
+      "Frenzy": "狂速",
+      "Spike Shell": "尖刺防护",
+      "Retribution": "惩戒",
+      "Vampirism": "吸血",
+      "Revive": "复活",
+      "Insanity": "疯狂",
+      "Invincible": "无敌",
+      "Speed Aura": "速度光环",
+      "Guardian Aura": "守护光环",
+      "Fierce Aura": "物理光环",
+      "Critical Aura": "暴击光环",
+      "Mystic Aura": "元素光环",
+      "Gobo Stabber": "哥布林长剑",
+      "Gobo Slasher": "哥布林关刀",
+      "Gobo Smasher": "哥布林狼牙棒",
+      "Spiked Bulwark": "尖刺重盾",
+      "Werewolf Slasher": "狼人关刀",
+      "Griffin Bulwark": "狮鹫重盾",
+      "Griffin Bulwark (R)": "狮鹫重盾（精）",
+      "Gobo Shooter": "哥布林弹弓",
+      "Vampiric Bow": "吸血弓",
+      "Cursed Bow": "咒怨之弓",
+      "Cursed Bow (R)": "咒怨之弓（精）",
+      "Gobo Boomstick": "哥布林火棍",
+      "Cheese Bulwark": "奶酪重盾",
+      "Verdant Bulwark": "翠绿重盾",
+      "Azure Bulwark": "蔚蓝重盾",
+      "Burble Bulwark": "深紫重盾",
+      "Crimson Bulwark": "绛红重盾",
+      "Rainbow Bulwark": "彩虹重盾",
+      "Holy Bulwark": "神圣重盾",
+      "Wooden Bow": "木弓",
+      "Birch Bow": "桦木弓",
+      "Cedar Bow": "雪松弓",
+      "Purpleheart Bow": "紫心弓",
+      "Ginkgo Bow": "银杏弓",
+      "Redwood Bow": "红杉弓",
+      "Arcane Bow": "神秘弓",
+      "Stalactite Spear": "石钟长枪",
+      "Granite Bludgeon": "花岗岩大棒",
+      "Furious Spear": "狂怒长枪",
+      "Furious Spear (R)": "狂怒长枪（精）",
+      "Regal Sword": "君王之剑",
+      "Regal Sword (R)": "君王之剑（精）",
+      "Chaotic Flail": "混沌连枷",
+      "Chaotic Flail (R)": "混沌连枷（精）",
+      "Soul Hunter Crossbow": "灵魂猎手弩",
+      "Sundering Crossbow": "裂空之弩",
+      "Sundering Crossbow (R)": "裂空之弩（精）",
+      "Frost Staff": "冰霜法杖",
+      "Infernal Battlestaff": "炼狱法杖",
+      "Jackalope Staff": "鹿角兔之杖",
+      "Rippling Trident": "涟漪三叉戟",
+      "Rippling Trident (R)": "涟漪三叉戟（精）",
+      "Blooming Trident": "绽放三叉戟",
+      "Blooming Trident (R)": "绽放三叉戟（精）",
+      "Blazing Trident": "炽焰三叉戟",
+      "Blazing Trident (R)": "炽焰三叉戟（精）",
+      "Cheese Sword": "奶酪剑",
+      "Verdant Sword": "翠绿剑",
+      "Azure Sword": "蔚蓝剑",
+      "Burble Sword": "深紫剑",
+      "Crimson Sword": "绛红剑",
+      "Rainbow Sword": "彩虹剑",
+      "Holy Sword": "神圣剑",
+      "Cheese Spear": "奶酪长枪",
+      "Verdant Spear": "翠绿长枪",
+      "Azure Spear": "蔚蓝长枪",
+      "Burble Spear": "深紫长枪",
+      "Crimson Spear": "绛红长枪",
+      "Rainbow Spear": "彩虹长枪",
+      "Holy Spear": "神圣长枪",
+      "Cheese Mace": "奶酪钉头锤",
+      "Verdant Mace": "翠绿钉头锤",
+      "Azure Mace": "蔚蓝钉头锤",
+      "Burble Mace": "深紫钉头锤",
+      "Crimson Mace": "绛红钉头锤",
+      "Rainbow Mace": "彩虹钉头锤",
+      "Holy Mace": "神圣钉头锤",
+      "Wooden Crossbow": "木弩",
+      "Birch Crossbow": "桦木弩",
+      "Cedar Crossbow": "雪松弩",
+      "Purpleheart Crossbow": "紫心弩",
+      "Ginkgo Crossbow": "银杏弩",
+      "Redwood Crossbow": "红杉弩",
+      "Arcane Crossbow": "神秘弩",
+      "Wooden Water Staff": "木制水法杖",
+      "Birch Water Staff": "桦木水法杖",
+      "Cedar Water Staff": "雪松水法杖",
+      "Purpleheart Water Staff": "紫心水法杖",
+      "Ginkgo Water Staff": "银杏水法杖",
+      "Redwood Water Staff": "红杉水法杖",
+      "Arcane Water Staff": "神秘水法杖",
+      "Wooden Nature Staff": "木制自然法杖",
+      "Birch Nature Staff": "桦木自然法杖",
+      "Cedar Nature Staff": "雪松自然法杖",
+      "Purpleheart Nature Staff": "紫心自然法杖",
+      "Ginkgo Nature Staff": "银杏自然法杖",
+      "Redwood Nature Staff": "红杉自然法杖",
+      "Arcane Nature Staff": "神秘自然法杖",
+      "Wooden Fire Staff": "木制火法杖",
+      "Birch Fire Staff": "桦木火法杖",
+      "Cedar Fire Staff": "雪松火法杖",
+      "Purpleheart Fire Staff": "紫心火法杖",
+      "Ginkgo Fire Staff": "银杏火法杖",
+      "Redwood Fire Staff": "红杉火法杖",
+      "Arcane Fire Staff": "神秘火法杖",
+      "Eye Watch": "掌上监工",
+      "Snake Fang Dirk": "蛇牙短剑",
+      "Vision Shield": "视觉盾",
+      "Gobo Defender": "哥布林防御者",
+      "Vampire Fang Dirk": "吸血鬼短剑",
+      "Knight's Aegis": "骑士盾",
+      "Knight's Aegis (R)": "骑士盾（精）",
+      "Treant Shield": "树人盾",
+      "Manticore Shield": "蝎狮盾",
+      "Tome Of Healing": "治疗之书",
+      "Tome Of The Elements": "元素之书",
+      "Watchful Relic": "警戒遗物",
+      "Bishop's Codex": "主教法典",
+      "Bishop's Codex (R)": "主教法典（精）",
+      "Cheese Buckler": "奶酪圆盾",
+      "Verdant Buckler": "翠绿圆盾",
+      "Azure Buckler": "蔚蓝圆盾",
+      "Burble Buckler": "深紫圆盾",
+      "Crimson Buckler": "绛红圆盾",
+      "Rainbow Buckler": "彩虹圆盾",
+      "Holy Buckler": "神圣圆盾",
+      "Wooden Shield": "木盾",
+      "Birch Shield": "桦木盾",
+      "Cedar Shield": "雪松盾",
+      "Purpleheart Shield": "紫心盾",
+      "Ginkgo Shield": "银杏盾",
+      "Redwood Shield": "红杉盾",
+      "Arcane Shield": "神秘盾",
+      "Gatherer Cape": "采集者披风",
+      "Gatherer Cape (R)": "采集者披风（精）",
+      "Artificer Cape": "工匠披风",
+      "Artificer Cape (R)": "工匠披风（精）",
+      "Culinary Cape": "厨师披风",
+      "Culinary Cape (R)": "厨师披风（精）",
+      "Chance Cape": "机缘披风",
+      "Chance Cape (R)": "机缘披风（精）",
+      "Sinister Cape": "阴森披风",
+      "Sinister Cape (R)": "阴森披风（精）",
+      "Chimerical Quiver": "奇幻箭袋",
+      "Chimerical Quiver (R)": "奇幻箭袋（精）",
+      "Enchanted Cloak": "秘法披风",
+      "Enchanted Cloak (R)": "秘法披风（精）",
+      "Red Culinary Hat": "红色厨师帽",
+      "Snail Shell Helmet": "蜗牛壳头盔",
+      "Vision Helmet": "视觉头盔",
+      "Fluffy Red Hat": "蓬松红帽子",
+      "Corsair Helmet": "掠夺者头盔",
+      "Corsair Helmet (R)": "掠夺者头盔（精）",
+      "Acrobatic Hood": "杂技师兜帽",
+      "Acrobatic Hood (R)": "杂技师兜帽（精）",
+      "Magician's Hat": "魔术师帽",
+      "Magician's Hat (R)": "魔术师帽（精）",
+      "Cheese Helmet": "奶酪头盔",
+      "Verdant Helmet": "翠绿头盔",
+      "Azure Helmet": "蔚蓝头盔",
+      "Burble Helmet": "深紫头盔",
+      "Crimson Helmet": "绛红头盔",
+      "Rainbow Helmet": "彩虹头盔",
+      "Holy Helmet": "神圣头盔",
+      "Rough Hood": "粗糙兜帽",
+      "Reptile Hood": "爬行动物兜帽",
+      "Gobo Hood": "哥布林兜帽",
+      "Beast Hood": "野兽兜帽",
+      "Umbral Hood": "暗影兜帽",
+      "Cotton Hat": "棉帽",
+      "Linen Hat": "亚麻帽",
+      "Bamboo Hat": "竹帽",
+      "Silk Hat": "丝帽",
+      "Radiant Hat": "光辉帽",
+      "Dairyhand's Top": "挤奶工上衣",
+      "Forager's Top": "采摘者上衣",
+      "Lumberjack's Top": "伐木工上衣",
+      "Cheesemaker's Top": "奶酪师上衣",
+      "Crafter's Top": "工匠上衣",
+      "Tailor's Top": "裁缝上衣",
+      "Chef's Top": "厨师上衣",
+      "Brewer's Top": "饮品师上衣",
+      "Alchemist's Top": "炼金师上衣",
+      "Enhancer's Top": "强化师上衣",
+      "Gator Vest": "鳄鱼马甲",
+      "Turtle Shell Body": "龟壳胸甲",
+      "Colossus Plate Body": "巨像胸甲",
+      "Demonic Plate Body": "恶魔胸甲",
+      "Anchorbound Plate Body": "锚定胸甲",
+      "Anchorbound Plate Body (R)": "锚定胸甲（精）",
+      "Maelstrom Plate Body": "怒涛胸甲",
+      "Maelstrom Plate Body (R)": "怒涛胸甲（精）",
+      "Marine Tunic": "海洋皮衣",
+      "Revenant Tunic": "亡灵皮衣",
+      "Griffin Tunic": "狮鹫皮衣",
+      "Kraken Tunic": "克拉肯皮衣",
+      "Kraken Tunic (R)": "克拉肯皮衣（精）",
+      "Icy Robe Top": "冰霜袍服",
+      "Flaming Robe Top": "烈焰袍服",
+      "Luna Robe Top": "月神袍服",
+      "Royal Water Robe Top": "皇家水系袍服",
+      "Royal Water Robe Top (R)": "皇家水系袍服（精）",
+      "Royal Nature Robe Top": "皇家自然系袍服",
+      "Royal Nature Robe Top (R)": "皇家自然系袍服（精）",
+      "Royal Fire Robe Top": "皇家火系袍服",
+      "Royal Fire Robe Top (R)": "皇家火系袍服（精）",
+      "Cheese Plate Body": "奶酪胸甲",
+      "Verdant Plate Body": "翠绿胸甲",
+      "Azure Plate Body": "蔚蓝胸甲",
+      "Burble Plate Body": "深紫胸甲",
+      "Crimson Plate Body": "绛红胸甲",
+      "Rainbow Plate Body": "彩虹胸甲",
+      "Holy Plate Body": "神圣胸甲",
+      "Rough Tunic": "粗糙皮衣",
+      "Reptile Tunic": "爬行动物皮衣",
+      "Gobo Tunic": "哥布林皮衣",
+      "Beast Tunic": "野兽皮衣",
+      "Umbral Tunic": "暗影皮衣",
+      "Cotton Robe Top": "棉袍服",
+      "Linen Robe Top": "亚麻袍服",
+      "Bamboo Robe Top": "竹袍服",
+      "Silk Robe Top": "丝绸袍服",
+      "Radiant Robe Top": "光辉袍服",
+      "Dairyhand's Bottoms": "挤奶工下装",
+      "Forager's Bottoms": "采摘者下装",
+      "Lumberjack's Bottoms": "伐木工下装",
+      "Cheesemaker's Bottoms": "奶酪师下装",
+      "Crafter's Bottoms": "工匠下装",
+      "Tailor's Bottoms": "裁缝下装",
+      "Chef's Bottoms": "厨师下装",
+      "Brewer's Bottoms": "饮品师下装",
+      "Alchemist's Bottoms": "炼金师下装",
+      "Enhancer's Bottoms": "强化师下装",
+      "Turtle Shell Legs": "龟壳腿甲",
+      "Colossus Plate Legs": "巨像腿甲",
+      "Demonic Plate Legs": "恶魔腿甲",
+      "Anchorbound Plate Legs": "锚定腿甲",
+      "Anchorbound Plate Legs (R)": "锚定腿甲（精）",
+      "Maelstrom Plate Legs": "怒涛腿甲",
+      "Maelstrom Plate Legs (R)": "怒涛腿甲（精）",
+      "Marine Chaps": "航海皮裤",
+      "Revenant Chaps": "亡灵皮裤",
+      "Griffin Chaps": "狮鹫皮裤",
+      "Kraken Chaps": "克拉肯皮裤",
+      "Kraken Chaps (R)": "克拉肯皮裤（精）",
+      "Icy Robe Bottoms": "冰霜袍裙",
+      "Flaming Robe Bottoms": "烈焰袍裙",
+      "Luna Robe Bottoms": "月神袍裙",
+      "Royal Water Robe Bottoms": "皇家水系袍裙",
+      "Royal Water Robe Bottoms (R)": "皇家水系袍裙（精）",
+      "Royal Nature Robe Bottoms": "皇家自然系袍裙",
+      "Royal Nature Robe Bottoms (R)": "皇家自然系袍裙（精）",
+      "Royal Fire Robe Bottoms": "皇家火系袍裙",
+      "Royal Fire Robe Bottoms (R)": "皇家火系袍裙（精）",
+      "Cheese Plate Legs": "奶酪腿甲",
+      "Verdant Plate Legs": "翠绿腿甲",
+      "Azure Plate Legs": "蔚蓝腿甲",
+      "Burble Plate Legs": "深紫腿甲",
+      "Crimson Plate Legs": "绛红腿甲",
+      "Rainbow Plate Legs": "彩虹腿甲",
+      "Holy Plate Legs": "神圣腿甲",
+      "Rough Chaps": "粗糙皮裤",
+      "Reptile Chaps": "爬行动物皮裤",
+      "Gobo Chaps": "哥布林皮裤",
+      "Beast Chaps": "野兽皮裤",
+      "Umbral Chaps": "暗影皮裤",
+      "Cotton Robe Bottoms": "棉袍裙",
+      "Linen Robe Bottoms": "亚麻袍裙",
+      "Bamboo Robe Bottoms": "竹袍裙",
+      "Silk Robe Bottoms": "丝绸袍裙",
+      "Radiant Robe Bottoms": "光辉袍裙",
+      "Enchanted Gloves": "附魔手套",
+      "Pincer Gloves": "蟹钳手套",
+      "Panda Gloves": "熊猫手套",
+      "Magnetic Gloves": "磁力手套",
+      "Dodocamel Gauntlets": "渡渡驼护手",
+      "Dodocamel Gauntlets (R)": "渡渡驼护手（精）",
+      "Sighted Bracers": "瞄准护腕",
+      "Marksman Bracers": "神射护腕",
+      "Marksman Bracers (R)": "神射护腕（精）",
+      "Chrono Gloves": "时空手套",
+      "Cheese Gauntlets": "奶酪护手",
+      "Verdant Gauntlets": "翠绿护手",
+      "Azure Gauntlets": "蔚蓝护手",
+      "Burble Gauntlets": "深紫护手",
+      "Crimson Gauntlets": "绛红护手",
+      "Rainbow Gauntlets": "彩虹护手",
+      "Holy Gauntlets": "神圣护手",
+      "Rough Bracers": "粗糙护腕",
+      "Reptile Bracers": "爬行动物护腕",
+      "Gobo Bracers": "哥布林护腕",
+      "Beast Bracers": "野兽护腕",
+      "Umbral Bracers": "暗影护腕",
+      "Cotton Gloves": "棉手套",
+      "Linen Gloves": "亚麻手套",
+      "Bamboo Gloves": "竹手套",
+      "Silk Gloves": "丝手套",
+      "Radiant Gloves": "光辉手套",
+      "Collector's Boots": "收藏家靴",
+      "Shoebill Shoes": "鲸头鹳鞋",
+      "Black Bear Shoes": "黑熊鞋",
+      "Grizzly Bear Shoes": "棕熊鞋",
+      "Polar Bear Shoes": "北极熊鞋",
+      "Pathbreaker Boots": "开路者靴",
+      "Pathbreaker Boots (R)": "开路者靴（精）",
+      "Centaur Boots": "半人马靴",
+      "Pathfinder Boots": "探路者靴",
+      "Pathfinder Boots (R)": "探路者靴（精）",
+      "Sorcerer Boots": "巫师靴",
+      "Pathseeker Boots": "寻路者靴",
+      "Pathseeker Boots (R)": "寻路者靴（精）",
+      "Cheese Boots": "奶酪靴",
+      "Verdant Boots": "翠绿靴",
+      "Azure Boots": "蔚蓝靴",
+      "Burble Boots": "深紫靴",
+      "Crimson Boots": "绛红靴",
+      "Rainbow Boots": "彩虹靴",
+      "Holy Boots": "神圣靴",
+      "Rough Boots": "粗糙靴",
+      "Reptile Boots": "爬行动物靴",
+      "Gobo Boots": "哥布林靴",
+      "Beast Boots": "野兽靴",
+      "Umbral Boots": "暗影靴",
+      "Cotton Boots": "棉靴",
+      "Linen Boots": "亚麻靴",
+      "Bamboo Boots": "竹靴",
+      "Silk Boots": "丝靴",
+      "Radiant Boots": "光辉靴",
+      "Small Pouch": "小袋子",
+      "Medium Pouch": "中袋子",
+      "Large Pouch": "大袋子",
+      "Giant Pouch": "巨大袋子",
+      "Gluttonous Pouch": "贪食之袋",
+      "Guzzling Pouch": "暴饮之囊",
+      "Necklace Of Efficiency": "效率项链",
+      "Fighter Necklace": "战士项链",
+      "Ranger Necklace": "射手项链",
+      "Wizard Necklace": "巫师项链",
+      "Necklace Of Wisdom": "经验项链",
+      "Necklace Of Speed": "速度项链",
+      "Philosopher's Necklace": "贤者项链",
+      "Earrings Of Gathering": "采集耳环",
+      "Earrings Of Essence Find": "精华发现耳环",
+      "Earrings Of Armor": "护甲耳环",
+      "Earrings Of Regeneration": "恢复耳环",
+      "Earrings Of Resistance": "抗性耳环",
+      "Earrings Of Rare Find": "稀有发现耳环",
+      "Earrings Of Critical Strike": "暴击耳环",
+      "Philosopher's Earrings": "贤者耳环",
+      "Ring Of Gathering": "采集戒指",
+      "Ring Of Essence Find": "精华发现戒指",
+      "Ring Of Armor": "护甲戒指",
+      "Ring Of Regeneration": "恢复戒指",
+      "Ring Of Resistance": "抗性戒指",
+      "Ring Of Rare Find": "稀有发现戒指",
+      "Ring Of Critical Strike": "暴击戒指",
+      "Philosopher's Ring": "贤者戒指",
+      "Trainee Milking Charm": "实习挤奶护符",
+      "Basic Milking Charm": "基础挤奶护符",
+      "Advanced Milking Charm": "高级挤奶护符",
+      "Expert Milking Charm": "专家挤奶护符",
+      "Master Milking Charm": "大师挤奶护符",
+      "Grandmaster Milking Charm": "宗师挤奶护符",
+      "Trainee Foraging Charm": "实习采摘护符",
+      "Basic Foraging Charm": "基础采摘护符",
+      "Advanced Foraging Charm": "高级采摘护符",
+      "Expert Foraging Charm": "专家采摘护符",
+      "Master Foraging Charm": "大师采摘护符",
+      "Grandmaster Foraging Charm": "宗师采摘护符",
+      "Trainee Woodcutting Charm": "实习伐木护符",
+      "Basic Woodcutting Charm": "基础伐木护符",
+      "Advanced Woodcutting Charm": "高级伐木护符",
+      "Expert Woodcutting Charm": "专家伐木护符",
+      "Master Woodcutting Charm": "大师伐木护符",
+      "Grandmaster Woodcutting Charm": "宗师伐木护符",
+      "Trainee Cheesesmithing Charm": "实习奶酪锻造护符",
+      "Basic Cheesesmithing Charm": "基础奶酪锻造护符",
+      "Advanced Cheesesmithing Charm": "高级奶酪锻造护符",
+      "Expert Cheesesmithing Charm": "专家奶酪锻造护符",
+      "Master Cheesesmithing Charm": "大师奶酪锻造护符",
+      "Grandmaster Cheesesmithing Charm": "宗师奶酪锻造护符",
+      "Trainee Crafting Charm": "实习制作护符",
+      "Basic Crafting Charm": "基础制作护符",
+      "Advanced Crafting Charm": "高级制作护符",
+      "Expert Crafting Charm": "专家制作护符",
+      "Master Crafting Charm": "大师制作护符",
+      "Grandmaster Crafting Charm": "宗师制作护符",
+      "Trainee Tailoring Charm": "实习缝纫护符",
+      "Basic Tailoring Charm": "基础缝纫护符",
+      "Advanced Tailoring Charm": "高级缝纫护符",
+      "Expert Tailoring Charm": "专家缝纫护符",
+      "Master Tailoring Charm": "大师缝纫护符",
+      "Grandmaster Tailoring Charm": "宗师缝纫护符",
+      "Trainee Cooking Charm": "实习烹饪护符",
+      "Basic Cooking Charm": "基础烹饪护符",
+      "Advanced Cooking Charm": "高级烹饪护符",
+      "Expert Cooking Charm": "专家烹饪护符",
+      "Master Cooking Charm": "大师烹饪护符",
+      "Grandmaster Cooking Charm": "宗师烹饪护符",
+      "Trainee Brewing Charm": "实习冲泡护符",
+      "Basic Brewing Charm": "基础冲泡护符",
+      "Advanced Brewing Charm": "高级冲泡护符",
+      "Expert Brewing Charm": "专家冲泡护符",
+      "Master Brewing Charm": "大师冲泡护符",
+      "Grandmaster Brewing Charm": "宗师冲泡护符",
+      "Trainee Alchemy Charm": "实习炼金护符",
+      "Basic Alchemy Charm": "基础炼金护符",
+      "Advanced Alchemy Charm": "高级炼金护符",
+      "Expert Alchemy Charm": "专家炼金护符",
+      "Master Alchemy Charm": "大师炼金护符",
+      "Grandmaster Alchemy Charm": "宗师炼金护符",
+      "Trainee Enhancing Charm": "实习强化护符",
+      "Basic Enhancing Charm": "基础强化护符",
+      "Advanced Enhancing Charm": "高级强化护符",
+      "Expert Enhancing Charm": "专家强化护符",
+      "Master Enhancing Charm": "大师强化护符",
+      "Grandmaster Enhancing Charm": "宗师强化护符",
+      "Trainee Stamina Charm": "实习耐力护符",
+      "Basic Stamina Charm": "基础耐力护符",
+      "Advanced Stamina Charm": "高级耐力护符",
+      "Expert Stamina Charm": "专家耐力护符",
+      "Master Stamina Charm": "大师耐力护符",
+      "Grandmaster Stamina Charm": "宗师耐力护符",
+      "Trainee Intelligence Charm": "实习智力护符",
+      "Basic Intelligence Charm": "基础智力护符",
+      "Advanced Intelligence Charm": "高级智力护符",
+      "Expert Intelligence Charm": "专家智力护符",
+      "Master Intelligence Charm": "大师智力护符",
+      "Grandmaster Intelligence Charm": "宗师智力护符",
+      "Trainee Attack Charm": "实习攻击护符",
+      "Basic Attack Charm": "基础攻击护符",
+      "Advanced Attack Charm": "高级攻击护符",
+      "Expert Attack Charm": "专家攻击护符",
+      "Master Attack Charm": "大师攻击护符",
+      "Grandmaster Attack Charm": "宗师攻击护符",
+      "Trainee Defense Charm": "实习防御护符",
+      "Basic Defense Charm": "基础防御护符",
+      "Advanced Defense Charm": "高级防御护符",
+      "Expert Defense Charm": "专家防御护符",
+      "Master Defense Charm": "大师防御护符",
+      "Grandmaster Defense Charm": "宗师防御护符",
+      "Trainee Melee Charm": "实习近战护符",
+      "Basic Melee Charm": "基础近战护符",
+      "Advanced Melee Charm": "高级近战护符",
+      "Expert Melee Charm": "专家近战护符",
+      "Master Melee Charm": "大师近战护符",
+      "Grandmaster Melee Charm": "宗师近战护符",
+      "Trainee Ranged Charm": "实习远程护符",
+      "Basic Ranged Charm": "基础远程护符",
+      "Advanced Ranged Charm": "高级远程护符",
+      "Expert Ranged Charm": "专家远程护符",
+      "Master Ranged Charm": "大师远程护符",
+      "Grandmaster Ranged Charm": "宗师远程护符",
+      "Trainee Magic Charm": "实习魔法护符",
+      "Basic Magic Charm": "基础魔法护符",
+      "Advanced Magic Charm": "高级魔法护符",
+      "Expert Magic Charm": "专家魔法护符",
+      "Master Magic Charm": "大师魔法护符",
+      "Grandmaster Magic Charm": "宗师魔法护符",
+      "Basic Task Badge": "基础任务徽章",
+      "Advanced Task Badge": "高级任务徽章",
+      "Expert Task Badge": "专家任务徽章",
+      "Celestial Brush": "星空刷子",
+      "Cheese Brush": "奶酪刷子",
+      "Verdant Brush": "翠绿刷子",
+      "Azure Brush": "蔚蓝刷子",
+      "Burble Brush": "深紫刷子",
+      "Crimson Brush": "绛红刷子",
+      "Rainbow Brush": "彩虹刷子",
+      "Holy Brush": "神圣刷子",
+      "Celestial Shears": "星空剪刀",
+      "Cheese Shears": "奶酪剪刀",
+      "Verdant Shears": "翠绿剪刀",
+      "Azure Shears": "蔚蓝剪刀",
+      "Burble Shears": "深紫剪刀",
+      "Crimson Shears": "绛红剪刀",
+      "Rainbow Shears": "彩虹剪刀",
+      "Holy Shears": "神圣剪刀",
+      "Celestial Hatchet": "星空斧头",
+      "Cheese Hatchet": "奶酪斧头",
+      "Verdant Hatchet": "翠绿斧头",
+      "Azure Hatchet": "蔚蓝斧头",
+      "Burble Hatchet": "深紫斧头",
+      "Crimson Hatchet": "绛红斧头",
+      "Rainbow Hatchet": "彩虹斧头",
+      "Holy Hatchet": "神圣斧头",
+      "Celestial Hammer": "星空锤子",
+      "Cheese Hammer": "奶酪锤子",
+      "Verdant Hammer": "翠绿锤子",
+      "Azure Hammer": "蔚蓝锤子",
+      "Burble Hammer": "深紫锤子",
+      "Crimson Hammer": "绛红锤子",
+      "Rainbow Hammer": "彩虹锤子",
+      "Holy Hammer": "神圣锤子",
+      "Celestial Chisel": "星空凿子",
+      "Cheese Chisel": "奶酪凿子",
+      "Verdant Chisel": "翠绿凿子",
+      "Azure Chisel": "蔚蓝凿子",
+      "Burble Chisel": "深紫凿子",
+      "Crimson Chisel": "绛红凿子",
+      "Rainbow Chisel": "彩虹凿子",
+      "Holy Chisel": "神圣凿子",
+      "Celestial Needle": "星空针",
+      "Cheese Needle": "奶酪针",
+      "Verdant Needle": "翠绿针",
+      "Azure Needle": "蔚蓝针",
+      "Burble Needle": "深紫针",
+      "Crimson Needle": "绛红针",
+      "Rainbow Needle": "彩虹针",
+      "Holy Needle": "神圣针",
+      "Celestial Spatula": "星空锅铲",
+      "Cheese Spatula": "奶酪锅铲",
+      "Verdant Spatula": "翠绿锅铲",
+      "Azure Spatula": "蔚蓝锅铲",
+      "Burble Spatula": "深紫锅铲",
+      "Crimson Spatula": "绛红锅铲",
+      "Rainbow Spatula": "彩虹锅铲",
+      "Holy Spatula": "神圣锅铲",
+      "Celestial Pot": "星空壶",
+      "Cheese Pot": "奶酪壶",
+      "Verdant Pot": "翠绿壶",
+      "Azure Pot": "蔚蓝壶",
+      "Burble Pot": "深紫壶",
+      "Crimson Pot": "绛红壶",
+      "Rainbow Pot": "彩虹壶",
+      "Holy Pot": "神圣壶",
+      "Celestial Alembic": "星空蒸馏器",
+      "Cheese Alembic": "奶酪蒸馏器",
+      "Verdant Alembic": "翠绿蒸馏器",
+      "Azure Alembic": "蔚蓝蒸馏器",
+      "Burble Alembic": "深紫蒸馏器",
+      "Crimson Alembic": "绛红蒸馏器",
+      "Rainbow Alembic": "彩虹蒸馏器",
+      "Holy Alembic": "神圣蒸馏器",
+      "Celestial Enhancer": "星空强化器",
+      "Cheese Enhancer": "奶酪强化器",
+      "Verdant Enhancer": "翠绿强化器",
+      "Azure Enhancer": "蔚蓝强化器",
+      "Burble Enhancer": "深紫强化器",
+      "Crimson Enhancer": "绛红强化器",
+      "Rainbow Enhancer": "彩虹强化器",
+      "Holy Enhancer": "神圣强化器",
+      "Milk": "牛奶",
+      "Verdant Milk": "翠绿牛奶",
+      "Azure Milk": "蔚蓝牛奶",
+      "Burble Milk": "深紫牛奶",
+      "Crimson Milk": "绛红牛奶",
+      "Rainbow Milk": "彩虹牛奶",
+      "Holy Milk": "神圣牛奶",
+      "Cheese": "奶酪",
+      "Verdant Cheese": "翠绿奶酪",
+      "Azure Cheese": "蔚蓝奶酪",
+      "Burble Cheese": "深紫奶酪",
+      "Crimson Cheese": "绛红奶酪",
+      "Rainbow Cheese": "彩虹奶酪",
+      "Holy Cheese": "神圣奶酪",
+      "Log": "原木",
+      "Birch Log": "白桦原木",
+      "Cedar Log": "雪松原木",
+      "Purpleheart Log": "紫心原木",
+      "Ginkgo Log": "银杏原木",
+      "Redwood Log": "红杉原木",
+      "Arcane Log": "神秘原木",
+      "Lumber": "木板",
+      "Birch Lumber": "白桦木板",
+      "Cedar Lumber": "雪松木板",
+      "Purpleheart Lumber": "紫心木板",
+      "Ginkgo Lumber": "银杏木板",
+      "Redwood Lumber": "红杉木板",
+      "Arcane Lumber": "神秘木板",
+      "Rough Hide": "粗糙兽皮",
+      "Reptile Hide": "爬行动物皮",
+      "Gobo Hide": "哥布林皮",
+      "Beast Hide": "野兽皮",
+      "Umbral Hide": "暗影皮",
+      "Rough Leather": "粗糙皮革",
+      "Reptile Leather": "爬行动物皮革",
+      "Gobo Leather": "哥布林皮革",
+      "Beast Leather": "野兽皮革",
+      "Umbral Leather": "暗影皮革",
+      "Cotton": "棉花",
+      "Flax": "亚麻",
+      "Bamboo Branch": "竹子",
+      "Cocoon": "蚕茧",
+      "Radiant Fiber": "光辉纤维",
+      "Cotton Fabric": "棉花布料",
+      "Linen Fabric": "亚麻布料",
+      "Bamboo Fabric": "竹子布料",
+      "Silk Fabric": "丝绸",
+      "Radiant Fabric": "光辉布料",
+      "Egg": "鸡蛋",
+      "Wheat": "小麦",
+      "Sugar": "糖",
+      "Blueberry": "蓝莓",
+      "Blackberry": "黑莓",
+      "Strawberry": "草莓",
+      "Mooberry": "哞莓",
+      "Marsberry": "火星莓",
+      "Spaceberry": "太空莓",
+      "Apple": "苹果",
+      "Orange": "橙子",
+      "Plum": "李子",
+      "Peach": "桃子",
+      "Dragon Fruit": "火龙果",
+      "Star Fruit": "杨桃",
+      "Arabica Coffee Bean": "低级咖啡豆",
+      "Robusta Coffee Bean": "中级咖啡豆",
+      "Liberica Coffee Bean": "高级咖啡豆",
+      "Excelsa Coffee Bean": "特级咖啡豆",
+      "Fieriosa Coffee Bean": "火山咖啡豆",
+      "Spacia Coffee Bean": "太空咖啡豆",
+      "Green Tea Leaf": "绿茶叶",
+      "Black Tea Leaf": "黑茶叶",
+      "Burble Tea Leaf": "紫茶叶",
+      "Moolong Tea Leaf": "哞龙茶叶",
+      "Red Tea Leaf": "红茶叶",
+      "Emp Tea Leaf": "虚空茶叶",
+      "Catalyst Of Coinification": "点金催化剂",
+      "Catalyst Of Decomposition": "分解催化剂",
+      "Catalyst Of Transmutation": "转化催化剂",
+      "Prime Catalyst": "至高催化剂",
+      "Snake Fang": "蛇牙",
+      "Shoebill Feather": "鲸头鹳羽毛",
+      "Snail Shell": "蜗牛壳",
+      "Crab Pincer": "蟹钳",
+      "Turtle Shell": "乌龟壳",
+      "Marine Scale": "海洋鳞片",
+      "Treant Bark": "树皮",
+      "Centaur Hoof": "半人马蹄",
+      "Luna Wing": "月神翼",
+      "Gobo Rag": "哥布林抹布",
+      "Goggles": "护目镜",
+      "Magnifying Glass": "放大镜",
+      "Eye Of The Watcher": "观察者之眼",
+      "Icy Cloth": "冰霜织物",
+      "Flaming Cloth": "烈焰织物",
+      "Sorcerer's Sole": "魔法师鞋底",
+      "Chrono Sphere": "时空球",
+      "Frost Sphere": "冰霜球",
+      "Panda Fluff": "熊猫绒",
+      "Black Bear Fluff": "黑熊绒",
+      "Grizzly Bear Fluff": "棕熊绒",
+      "Polar Bear Fluff": "北极熊绒",
+      "Red Panda Fluff": "小熊猫绒",
+      "Magnet": "磁铁",
+      "Stalactite Shard": "钟乳石碎片",
+      "Living Granite": "花岗岩",
+      "Colossus Core": "巨像核心",
+      "Vampire Fang": "吸血鬼之牙",
+      "Werewolf Claw": "狼人之爪",
+      "Revenant Anima": "亡者之魂",
+      "Soul Fragment": "灵魂碎片",
+      "Infernal Ember": "地狱余烬",
+      "Demonic Core": "恶魔核心",
+      "Griffin Leather": "狮鹫之皮",
+      "Manticore Sting": "蝎狮之刺",
+      "Jackalope Antler": "鹿角兔之角",
+      "Dodocamel Plume": "渡渡驼之翎",
+      "Griffin Talon": "狮鹫之爪",
+      "Chimerical Refinement Shard": "奇幻精炼碎片",
+      "Acrobat's Ribbon": "杂技师彩带",
+      "Magician's Cloth": "魔术师织物",
+      "Chaotic Chain": "混沌锁链",
+      "Cursed Ball": "诅咒之球",
+      "Sinister Refinement Shard": "阴森精炼碎片",
+      "Royal Cloth": "皇家织物",
+      "Knight's Ingot": "骑士之锭",
+      "Bishop's Scroll": "主教卷轴",
+      "Regal Jewel": "君王宝石",
+      "Sundering Jewel": "裂空宝石",
+      "Enchanted Refinement Shard": "秘法精炼碎片",
+      "Marksman Brooch": "神射胸针",
+      "Corsair Crest": "掠夺者徽章",
+      "Damaged Anchor": "破损船锚",
+      "Maelstrom Plating": "怒涛甲片",
+      "Kraken Leather": "克拉肯皮革",
+      "Kraken Fang": "克拉肯之牙",
+      "Pirate Refinement Shard": "海盗精炼碎片",
+      "Pathbreaker Lodestone": "开路者磁石",
+      "Pathfinder Lodestone": "探路者磁石",
+      "Pathseeker Lodestone": "寻路者磁石",
+      "Labyrinth Refinement Shard": "迷宫精炼碎片",
+      "Butter Of Proficiency": "精通之油",
+      "Thread Of Expertise": "专精之线",
+      "Branch Of Insight": "洞察之枝",
+      "Gluttonous Energy": "贪食能量",
+      "Guzzling Energy": "暴饮能量",
+      "Milking Essence": "挤奶精华",
+      "Foraging Essence": "采摘精华",
+      "Woodcutting Essence": "伐木精华",
+      "Cheesesmithing Essence": "奶酪锻造精华",
+      "Crafting Essence": "制作精华",
+      "Tailoring Essence": "缝纫精华",
+      "Cooking Essence": "烹饪精华",
+      "Brewing Essence": "冲泡精华",
+      "Alchemy Essence": "炼金精华",
+      "Enhancing Essence": "强化精华",
+      "Swamp Essence": "沼泽精华",
+      "Aqua Essence": "海洋精华",
+      "Jungle Essence": "丛林精华",
+      "Gobo Essence": "哥布林精华",
+      "Eyessence": "眼精华",
+      "Sorcerer Essence": "法师精华",
+      "Bear Essence": "熊熊精华",
+      "Golem Essence": "魔像精华",
+      "Twilight Essence": "暮光精华",
+      "Abyssal Essence": "地狱精华",
+      "Chimerical Essence": "奇幻精华",
+      "Sinister Essence": "阴森精华",
+      "Enchanted Essence": "秘法精华",
+      "Pirate Essence": "海盗精华",
+      "Labyrinth Essence": "迷宫精华",
+      "Task Crystal": "任务水晶",
+      "Star Fragment": "星光碎片",
+      "Pearl": "珍珠",
+      "Amber": "琥珀",
+      "Garnet": "石榴石",
+      "Jade": "翡翠",
+      "Amethyst": "紫水晶",
+      "Moonstone": "月亮石",
+      "Sunstone": "太阳石",
+      "Philosopher's Stone": "贤者之石",
+      "Crushed Pearl": "珍珠碎片",
+      "Crushed Amber": "琥珀碎片",
+      "Crushed Garnet": "石榴石碎片",
+      "Crushed Jade": "翡翠碎片",
+      "Crushed Amethyst": "紫水晶碎片",
+      "Crushed Moonstone": "月亮石碎片",
+      "Crushed Sunstone": "太阳石碎片",
+      "Crushed Philosopher's Stone": "贤者之石碎片",
+      "Shard Of Protection": "保护碎片",
+      "Mirror Of Protection": "保护之镜",
+      "Philosopher's Mirror": "贤者之镜",
+      "Basic Torch": "基础火把",
+      "Advanced Torch": "进阶火把",
+      "Expert Torch": "专家火把",
+      "Basic Shroud": "基础斗篷",
+      "Advanced Shroud": "进阶斗篷",
+      "Expert Shroud": "专家斗篷",
+      "Basic Beacon": "基础探照灯",
+      "Advanced Beacon": "进阶探照灯",
+      "Expert Beacon": "专家探照灯",
+      "Basic Food Crate": "基础食物箱",
+      "Advanced Food Crate": "进阶食物箱",
+      "Expert Food Crate": "专家食物箱",
+      "Basic Tea Crate": "基础茶叶箱",
+      "Advanced Tea Crate": "进阶茶叶箱",
+      "Expert Tea Crate": "专家茶叶箱",
+      "Basic Coffee Crate": "基础咖啡箱",
+      "Advanced Coffee Crate": "进阶咖啡箱",
+      "Expert Coffee Crate": "专家咖啡箱"
+    };
+
+    /**
+     * Auto-discovers Chinese item names from the game DOM and builds a
+     * Chinese → English mapping cached in IndexedDB. Provides a unified
+     * getDisplayName() returning Chinese when available, English otherwise.
+     */
+
+
+    const STORAGE_KEY = 'Toolasha_cnItemNames';
+    const CACHE_VERSION = 2;
+    const DEBOUNCE_DELAY = 5000;
+
+    const MUTATION_SELECTORS = [
+        '[class*="Item_name"]',
+        '[class*="Item_itemName"]',
+        '[class*="ItemTooltipText_name"]',
+        '[class*="Item_craftingItemName"]',
+        'svg[aria-label]',
+    ];
+
+    const ENHANCEMENT_STRIP_REGEX = /\s*\+\d+$/;
+    const CJK_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
+
+    class ItemNameTranslator {
+        constructor() {
+            this.cnNames = {};
+            this.isLoaded = false;
+            this._saveTimer = null;
+            this._dirty = false;
+            this._enToHrid = null;
+            this._hridToEn = null;
+            this._hridToEnSource = null;
+            this._observer = null;
+            this._observerStarted = false;
+        }
+
+        async load() {
+            if (this.isLoaded) return;
+            try {
+                const saved = await storage.get(STORAGE_KEY, 'settings');
+                if (saved && typeof saved === 'object' && saved._version === CACHE_VERSION && Object.keys(saved).length > 1) {
+                    this.cnNames = saved;
+                }
+            } catch { /* ignore */ }
+            this.isLoaded = true;
+
+            // Bulk import from static Chinese name mapping (Edible Tools translations)
+            if (Object.keys(this.cnNames).length <= 1) {
+                this._importStaticMapping();
+            }
+        }
+
+        captureFromDOM(element, itemHrid) {
+            if (!element || !itemHrid) return;
+            const text = (element.textContent || element.getAttribute('aria-label') || '').trim();
+            if (!text || !CJK_REGEX.test(text)) return;
+            const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+            if (!baseName) return;
+            if (this.cnNames[itemHrid] === baseName) return;
+            this.cnNames[itemHrid] = baseName;
+            this._scheduleSave();
+        }
+
+        _importStaticMapping() {
+            const initData = dataManager.getInitClientData();
+            if (!initData?.itemDetailMap) return;
+            let count = 0;
+            for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
+                const cnName = itemNamesZh[item.name];
+                if (cnName && !this.cnNames[hrid]) {
+                    this.cnNames[hrid] = cnName;
+                    count++;
+                }
+            }
+            if (count > 0) this._scheduleSave();
+        }
+
+        _scheduleSave() {
+            if (!this.isLoaded) return;
+            this._dirty = true;
+            if (this._saveTimer) return;
+            this._saveTimer = setTimeout(async () => {
+                this._saveTimer = null;
+                if (!this._dirty) return;
+                this._dirty = false;
+                try {
+                    const data = { ...this.cnNames, _version: CACHE_VERSION };
+                    await storage.set(STORAGE_KEY, data, 'settings', true);
+                } catch (error) {
+                    console.warn('[ItemNameTranslator] Failed to save names:', error);
+                }
+            }, DEBOUNCE_DELAY);
+        }
+
+        flush() {
+            if (this._saveTimer) {
+                clearTimeout(this._saveTimer);
+                this._saveTimer = null;
+            }
+            if (this._dirty) {
+                this._dirty = false;
+                const data = { ...this.cnNames, _version: CACHE_VERSION };
+                storage.set(STORAGE_KEY, data, 'settings', true).catch(() => {});
+            }
+        }
+
+        _scanDomNow() {
+            for (const selector of MUTATION_SELECTORS) {
+                for (const el of document.querySelectorAll(selector)) {
+                    this._tryCaptureFromElement(el);
+                }
+            }
+        }
+
+        getHridFromChineseName(chineseName) {
+            if (!chineseName) return null;
+            const baseName = chineseName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+            for (const [hrid, cnName] of Object.entries(this.cnNames)) {
+                if (cnName === baseName) return hrid;
+            }
+            return null;
+        }
+
+        startObserver() {
+            if (this._observerStarted) return;
+            this._observerStarted = true;
+            console.log('[ItemNameTranslator] Observer starting, selectors:', MUTATION_SELECTORS);
+
+            const processNode = (node) => {
+                if (!node || node.nodeType !== 1) return;
+                for (const selector of MUTATION_SELECTORS) {
+                    if (node.matches(selector)) {
+                        this._tryCaptureFromElement(node);
+                        break;
+                    }
+                }
+                for (const selector of MUTATION_SELECTORS) {
+                    const children = node.querySelectorAll(selector);
+                    for (const child of children) {
+                        this._tryCaptureFromElement(child);
+                    }
+                }
+            };
+
+            for (const selector of MUTATION_SELECTORS) {
+                const elements = document.querySelectorAll(selector);
+                for (const el of elements) {
+                    this._tryCaptureFromElement(el);
+                }
+            }
+
+            this._observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    for (const node of mutation.addedNodes) {
+                        try {
+                            processNode(node);
+                        } catch {
+                            // Skip errors from processing individual nodes
+                        }
+                    }
+                }
+            });
+
+            this._observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+            });
+        }
+
+        stopObserver() {
+            if (this._observer) {
+                this._observer.disconnect();
+                this._observer = null;
+            }
+            this._observerStarted = false;
+        }
+
+        _tryCaptureFromElement(el) {
+            if (!el) return;
+            const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
+            if (!text) return;
+
+            if (!CJK_REGEX.test(text)) return;
+
+            const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+            if (!baseName) return;
+
+            for (const [, cnName] of Object.entries(this.cnNames)) {
+                if (cnName === baseName) return;
+            }
+
+            const hrid = this.findHridFromDomName(baseName);
+            if (hrid) {
+                this.cnNames[hrid] = baseName;
+                this._scheduleSave();
+            } else {
+                // Log first 5 failures
+                if (!this._failCount) this._failCount = 0;
+                if (this._failCount < 5) {
+                    console.log('[ItemNameTranslator] CJK text found but no HRID match:', baseName);
+                    this._failCount++;
+                }
+            }
+        }
+
+        /**
+         * Get the display name for an item.
+         * Returns the Chinese name if cached, otherwise the English name from game data,
+         * and as a final fallback parses the HRID into a readable label.
+         * @param {string} itemHrid - Item HRID (e.g., '/items/essence')
+         * @returns {string} Display name
+         */
+        getDisplayName(itemHrid) {
+            const cnName = this.cnNames[itemHrid];
+            if (cnName) return cnName;
+            const enName = dataManager.getItemDetails(itemHrid)?.name;
+            if (enName) return enName;
+            return itemHrid.split('/').pop().replace(/_/g, ' ');
+        }
+
+    }
+
+    const itemNameTranslator = new ItemNameTranslator();
+
     /**
      * Enhancement Tooltip Module
      *
@@ -15156,8 +15238,12 @@
                 } else if (hasMagicStats === best.isMagic && level > best.itemLevel) {
                     best = { hrid: itemHrid, itemLevel: level, isMagic: hasMagicStats };
                 }
-            } else if (!best || level > best.itemLevel) {
-                best = { hrid: itemHrid, itemLevel: level };
+            } else {
+                const hasMagicStats = (stats.magicDamage || 0) > 0;
+                if (hasMagicStats) continue;
+                if (!best || level > best.itemLevel) {
+                    best = { hrid: itemHrid, itemLevel: level };
+                }
             }
         }
 
@@ -15178,7 +15264,8 @@
         gameData,
         mode = 'equipment',
         abilityTargetLevel = 0,
-        abilityLevelType = 'increment'
+        abilityLevelType = 'increment',
+        skipBackSlot = false
     ) {
         const candidates = [];
 
@@ -15195,6 +15282,7 @@
 
                 // Skip trinkets and items with no combat stats (tools, etc.)
                 if (slot === '/equipment_types/trinket') continue;
+                if (skipBackSlot && slot === '/equipment_types/back') continue;
                 if (!hasCombatStats(itemDetails)) continue;
 
                 // Enhancement upgrade: next breakpoint
@@ -15512,6 +15600,7 @@
             upgradeMode,
             abilityLevelType,
             abilityTargetLevel,
+            skipBackSlot,
         } = params;
         const { abortSignal } = options;
         const gameData = buildGameDataPayload();
@@ -15521,7 +15610,14 @@
         const playerHrid = playerDTO.hrid;
 
         // Generate candidates and compute costs
-        const candidates = generateCandidates(playerDTO, gameData, upgradeMode, abilityTargetLevel, abilityLevelType);
+        const candidates = generateCandidates(
+            playerDTO,
+            gameData,
+            upgradeMode,
+            abilityTargetLevel,
+            abilityLevelType,
+            skipBackSlot
+        );
         const candidatesWithCost = candidates.map((c) => ({
             ...c,
             cost: calculateUpgradeCost(c, gameData),
@@ -15861,6 +15957,7 @@
             upgradeMode,
             abilityLevelType,
             abilityTargetLevel,
+            skipBackSlot,
         } = params;
         const { abortSignal } = options;
         const gameData = buildGameDataPayload();
@@ -15872,7 +15969,14 @@
             Object.keys(gameData.actionDetailMap).find((k) => k.includes('/actions/combat/')) || '/actions/combat/fly';
 
         // Generate equipment candidates
-        const candidates = generateCandidates(playerDTO, gameData, upgradeMode, abilityTargetLevel, abilityLevelType);
+        const candidates = generateCandidates(
+            playerDTO,
+            gameData,
+            upgradeMode,
+            abilityTargetLevel,
+            abilityLevelType,
+            skipBackSlot
+        );
         const candidatesWithCost = candidates.map((c) => ({
             ...c,
             cost: calculateUpgradeCost(c, gameData),
@@ -16440,6 +16544,24 @@
         sinister_circus: '阴森马戏团',
         enchanted_fortress: '秘法要塞',
         pirate_cove: '海盗基地',
+        // House rooms
+        'Archery Range': '射箭场',
+        Armory: '军械库',
+        Brewery: '冲泡坊',
+        'Dairy Barn': '奶牛棚',
+        'Dining Room': '餐厅',
+        Dojo: '道场',
+        Forge: '锻造间',
+        Garden: '花园',
+        Gym: '健身房',
+        Kitchen: '厨房',
+        Laboratory: '实验室',
+        Library: '图书馆',
+        'Log Shed': '木棚',
+        'Mystical Study': '神秘研究室',
+        Observatory: '天文台',
+        'Sewing Parlor': '缝纫室',
+        Workshop: '工作间',
     };
 
     function getMonsterDisplayName(monsterHrid) {
@@ -16450,7 +16572,7 @@
     // Chinese zone name mapping (from game's official Chinese translation)
     const CN_ZONE_NAMES = {
         // Non-dungeon zones
-        Farmlands: '农田',
+        'Farmlands': '农田',
         'Autumn Fields': '秋田',
         'Quiet Valley': '幽谷',
         'Misty Marsh': '雾沼',
@@ -16484,24 +16606,6 @@
         'Undead Crypt': '亡灵地窖',
         'Vampire Mansion': '吸血鬼庄园',
         'Werewolf Den': '狼人洞穴',
-        // House rooms
-        'Archery Range': '射箭场',
-        Armory: '军械库',
-        Brewery: '冲泡坊',
-        'Dairy Barn': '奶牛棚',
-        'Dining Room': '餐厅',
-        Dojo: '道场',
-        Forge: '锻造间',
-        Garden: '花园',
-        Gym: '健身房',
-        Kitchen: '厨房',
-        Laboratory: '实验室',
-        Library: '图书馆',
-        'Log Shed': '木棚',
-        'Mystical Study': '神秘研究室',
-        Observatory: '天文台',
-        'Sewing Parlor': '缝纫室',
-        Workshop: '工作间',
     };
 
     function getZoneDisplayName(zone) {
@@ -16576,7 +16680,7 @@
                 if (!players.length) {
                     editorArea.innerHTML =
                         '<div style="color:#555; font-size:12px; text-align:center; padding:20px 0;">' +
-                        i18n_js.t('No character data available.') +
+                        t('No character data available.') +
                         '</div>';
                     return;
                 }
@@ -16600,7 +16704,7 @@
                 console.error('[SimEditor] Failed to init editor:', error);
                 editorArea.innerHTML =
                     '<div style="color:#f66; font-size:12px; text-align:center; padding:20px 0;">' +
-                    i18n_js.t('Failed to load character data.') +
+                    t('Failed to load character data.') +
                     '</div>';
             }
         }
@@ -16686,13 +16790,13 @@
             if (!dto && playerInfo.length === 0) {
                 editorArea.innerHTML = `
                 <div style="text-align:center; padding:20px 0;">
-                    <div style="color:#888; font-size:12px; margin-bottom:10px;">${i18n_js.t('No players loaded.')}</div>
+                    <div style="color:#888; font-size:12px; margin-bottom:10px;">${t('No players loaded.')}</div>
                     <button id="mwi-csim-import-btn" style="
                         background:${ACCENT_BTN_BG$2}; border:1px solid ${ACCENT_BTN_BORDER$2}; color:${ACCENT$2};
                         padding:5px 14px; border-radius:5px; font-size:12px; cursor:pointer;
-                        font-family:inherit; font-weight:600;">${i18n_js.t('+ Import Player')}</button>
+                        font-family:inherit; font-weight:600;">${t('+ Import Player')}</button>
                     <div id="mwi-csim-import-area" style="display:none; margin-top:10px; text-align:left;">
-                        <textarea id="mwi-csim-import-text" placeholder="${i18n_js.t('Paste Combat Sim Export JSON here...')}" style="
+                        <textarea id="mwi-csim-import-text" placeholder="${t('Paste Combat Sim Export JSON here...')}" style="
                             width:100%; height:60px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444;
                             border-radius:4px; padding:6px; font-size:11px; font-family:monospace; resize:vertical;
                             box-sizing:border-box;"></textarea>
@@ -16700,10 +16804,10 @@
                             <button id="mwi-csim-import-go" style="
                                 background:${ACCENT_BTN_BG$2}; border:1px solid ${ACCENT_BTN_BORDER$2}; color:${ACCENT$2};
                                 padding:3px 12px; border-radius:4px; font-size:11px; cursor:pointer; font-family:inherit;
-                                font-weight:600;">${i18n_js.t('Import')}</button>
+                                font-weight:600;">${t('Import')}</button>
                             <button id="mwi-csim-import-cancel" style="
                                 background:rgba(255,255,255,0.04); border:1px solid #333; color:#888;
-                                padding:3px 12px; border-radius:4px; font-size:11px; cursor:pointer; font-family:inherit;">${i18n_js.t('Cancel')}</button>
+                                padding:3px 12px; border-radius:4px; font-size:11px; cursor:pointer; font-family:inherit;">${t('Cancel')}</button>
                             <span id="mwi-csim-import-error" style="color:#f44; font-size:11px; align-self:center;"></span>
                         </div>
                     </div>
@@ -16723,12 +16827,12 @@
                         const text = editorArea.querySelector('#mwi-csim-import-text')?.value?.trim();
                         const errorEl = editorArea.querySelector('#mwi-csim-import-error');
                         if (!text) {
-                            if (errorEl) errorEl.textContent = i18n_js.t('Paste export data first.');
+                            if (errorEl) errorEl.textContent = t('Paste export data first.');
                             return;
                         }
                         const result = parseShykaiImport(text);
                         if (!result || !result.players.length) {
-                            if (errorEl) errorEl.textContent = i18n_js.t('Invalid format. Paste a Combat Sim Export JSON.');
+                            if (errorEl) errorEl.textContent = t('Invalid format. Paste a Combat Sim Export JSON.');
                             return;
                         }
                         this.importPlayers(result.players, result.names);
@@ -16763,7 +16867,7 @@
                     ${tabStyle}
                     padding:3px 8px; border-radius:5px; font-size:12px; cursor:pointer;
                     font-family:inherit; transition:all 0.1s; position:relative;
-                ">${name}<span data-remove-player="${hrid}" style="margin-left:4px; color:#f44; cursor:pointer; font-size:14px;" title="${i18n_js.t('Remove player')}">\u00d7</span></button>`;
+                ">${name}<span data-remove-player="${hrid}" style="margin-left:4px; color:#f44; cursor:pointer; font-size:14px;" title="${t('Remove player')}">\u00d7</span></button>`;
                 }
             } else if (playerInfo.length === 1) {
                 const { hrid, name } = playerInfo[0];
@@ -16771,17 +16875,17 @@
                 background:${ACCENT_BG$2}; border:1px solid ${ACCENT_BORDER$2}; color:${ACCENT$2}; font-weight:700;
                 padding:3px 8px; border-radius:5px; font-size:12px; cursor:pointer;
                 font-family:inherit; transition:all 0.1s; position:relative;
-            ">${name}<span data-remove-player="${hrid}" style="margin-left:4px; color:#f44; cursor:pointer; font-size:14px;" title="${i18n_js.t('Remove player')}">\u00d7</span></button>`;
+            ">${name}<span data-remove-player="${hrid}" style="margin-left:4px; color:#f44; cursor:pointer; font-size:14px;" title="${t('Remove player')}">\u00d7</span></button>`;
             }
             html += `<button id="mwi-csim-import-btn" style="
             background:rgba(255,255,255,0.04); border:1px solid #333; color:#888;
             padding:3px 8px; border-radius:5px; font-size:11px; cursor:pointer;
-            font-family:inherit;" title="Import players from Shykai export string">${i18n_js.t('+ Import')}</button>`;
+            font-family:inherit;" title="Import players from Shykai export string">${t('+ Import')}</button>`;
             html += '</div>';
 
             // Import paste area (hidden by default)
             html += `<div id="mwi-csim-import-area" style="display:none; margin-bottom:10px;">
-            <textarea id="mwi-csim-import-text" placeholder="${i18n_js.t('Paste Shykai export JSON here...')}" style="
+            <textarea id="mwi-csim-import-text" placeholder="${t('Paste Shykai export JSON here...')}" style="
                 width:100%; height:60px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444;
                 border-radius:4px; padding:6px; font-size:11px; font-family:monospace; resize:vertical;
                 box-sizing:border-box;"></textarea>
@@ -16789,10 +16893,10 @@
                 <button id="mwi-csim-import-go" style="
                     background:${ACCENT_BTN_BG$2}; border:1px solid ${ACCENT_BTN_BORDER$2}; color:${ACCENT$2};
                     padding:3px 12px; border-radius:4px; font-size:11px; cursor:pointer; font-family:inherit;
-                    font-weight:600;">${i18n_js.t('Import')}</button>
+                    font-weight:600;">${t('Import')}</button>
                 <button id="mwi-csim-import-cancel" style="
                     background:rgba(255,255,255,0.04); border:1px solid #333; color:#888;
-                    padding:3px 12px; border-radius:4px; font-size:11px; cursor:pointer; font-family:inherit;">${i18n_js.t('Cancel')}</button>
+                    padding:3px 12px; border-radius:4px; font-size:11px; cursor:pointer; font-family:inherit;">${t('Cancel')}</button>
                 <span id="mwi-csim-import-error" style="color:#f44; font-size:11px; align-self:center;"></span>
             </div>
         </div>`;
@@ -16815,11 +16919,11 @@
                 }
                 html += `<div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">`;
                 if (filteredSnapshots.length > 0) {
-                    html += `<label style="color:#888; font-size:11px; flex-shrink:0;">${i18n_js.t('Loadout')}</label>`;
+                    html += `<label style="color:#888; font-size:11px; flex-shrink:0;">${t('Loadout')}</label>`;
                     html += `<select id="mwi-csim-loadout-select" style="
                     flex:1; min-width:0; background:#1a1a2e; color:#e0e0e0; border:1px solid #444;
                     border-radius:4px; padding:2px 6px; font-size:12px; font-family:inherit;">`;
-                    html += `<option value=""${!this._selectedLoadoutName ? ' selected' : ''}>${i18n_js.t('— Current Gear —')}</option>`;
+                    html += `<option value=""${!this._selectedLoadoutName ? ' selected' : ''}>${t('— Current Gear —')}</option>`;
                     for (const snap of filteredSnapshots) {
                         const label = snap.name + (snap.actionTypeHrid ? '' : ' (All Skills)');
                         const selected = this._selectedLoadoutName === snap.name ? ' selected' : '';
@@ -16830,7 +16934,7 @@
                 html += `<button id="mwi-csim-reset" style="
                 margin-left:auto; background:rgba(255,255,255,0.04); border:1px solid #333; color:#aaa;
                 padding:2px 8px; border-radius:4px; font-size:11px; cursor:pointer;
-                font-family:inherit; flex-shrink:0;">${i18n_js.t('Reset to Current')}</button>`;
+                font-family:inherit; flex-shrink:0;">${t('Reset to Current')}</button>`;
                 html += '</div>';
             }
 
@@ -16870,26 +16974,26 @@
                 '/equipment_types/charm',
             ];
             const slotLabels = {
-                '/equipment_types/head': i18n_js.t('Head'),
-                '/equipment_types/body': i18n_js.t('Body'),
-                '/equipment_types/legs': i18n_js.t('Legs'),
-                '/equipment_types/feet': i18n_js.t('Feet'),
-                '/equipment_types/hands': i18n_js.t('Hands'),
-                '/equipment_types/main_hand': i18n_js.t('Main Hand'),
-                '/equipment_types/two_hand': i18n_js.t('Two Hand'),
-                '/equipment_types/off_hand': i18n_js.t('Off Hand'),
-                '/equipment_types/pouch': i18n_js.t('Pouch'),
-                '/equipment_types/back': i18n_js.t('Back'),
-                '/equipment_types/neck': i18n_js.t('Neck'),
-                '/equipment_types/earrings': i18n_js.t('Earrings'),
-                '/equipment_types/ring': i18n_js.t('Ring'),
-                '/equipment_types/charm': i18n_js.t('Charm'),
+                '/equipment_types/head': t('Head'),
+                '/equipment_types/body': t('Body'),
+                '/equipment_types/legs': t('Legs'),
+                '/equipment_types/feet': t('Feet'),
+                '/equipment_types/hands': t('Hands'),
+                '/equipment_types/main_hand': t('Main Hand'),
+                '/equipment_types/two_hand': t('Two Hand'),
+                '/equipment_types/off_hand': t('Off Hand'),
+                '/equipment_types/pouch': t('Pouch'),
+                '/equipment_types/back': t('Back'),
+                '/equipment_types/neck': t('Neck'),
+                '/equipment_types/earrings': t('Earrings'),
+                '/equipment_types/ring': t('Ring'),
+                '/equipment_types/charm': t('Charm'),
             };
 
             const equippedCount = slotOrder.filter((s) => dto.equipment[s]).length;
             let html = `<div style="margin-bottom:10px;">`;
             html += `<div style="color:${ACCENT$2}; font-weight:700; font-size:12px; margin-bottom:6px; cursor:pointer; user-select:none;" data-toggle="equip-section">`;
-            html += `<span data-arrow="equip-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ${i18n_js.t('Equipment')} (${equippedCount} ${i18n_js.t('items')})`;
+            html += `<span data-arrow="equip-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ${t('Equipment')} (${equippedCount} ${t('items')})`;
             html += '</div>';
             html += `<div id="mwi-csim-equip-section" style="display:none;">`;
 
@@ -16900,12 +17004,13 @@
                 if (!equip) {
                     html += `<div style="display:flex; align-items:center; gap:6px; padding:2px 0; font-size:12px;">`;
                     html += `<span style="color:#888; width:70px; flex-shrink:0;">${label}</span>`;
-                    html += `<span style="color:#555; flex:1; font-style:italic;">${i18n_js.t('Empty')}</span>`;
-                    html += `<button data-equipment-slot="${slotType}" style="background:rgba(255,255,255,0.06); border:1px solid #444; color:#aaa; padding:1px 6px; border-radius:3px; font-size:11px; cursor:pointer; font-family:inherit;">${i18n_js.t('add')}</button>`;
+                    html += `<span style="color:#555; flex:1; font-style:italic;">${t('Empty')}</span>`;
+                    html += `<button data-equipment-slot="${slotType}" style="background:rgba(255,255,255,0.06); border:1px solid #444; color:#aaa; padding:1px 6px; border-radius:3px; font-size:11px; cursor:pointer; font-family:inherit;">${t('add')}</button>`;
                     html += '</div>';
                     continue;
                 }
 
+                // eslint-disable-next-line no-unused-vars
                 itemDetailMap[equip.hrid];
                 const name = itemNameTranslator.getDisplayName(equip.hrid);
 
@@ -16917,7 +17022,7 @@
                 data-enhance-slot="${slotType}"
                 style="width:36px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444;
                 border-radius:3px; padding:1px 3px; font-size:12px; text-align:center;">`;
-                html += `<button data-equipment-slot="${slotType}" style="background:rgba(255,255,255,0.06); border:1px solid #444; color:#aaa; padding:1px 6px; border-radius:3px; font-size:11px; cursor:pointer; font-family:inherit;">${i18n_js.t('change')}</button>`;
+                html += `<button data-equipment-slot="${slotType}" style="background:rgba(255,255,255,0.06); border:1px solid #444; color:#aaa; padding:1px 6px; border-radius:3px; font-size:11px; cursor:pointer; font-family:inherit;">${t('change')}</button>`;
                 html += '</div>';
             }
 
@@ -16932,7 +17037,7 @@
 
             let html = `<div style="margin-bottom:10px;">`;
             html += `<div style="color:${ACCENT$2}; font-weight:700; font-size:12px; margin-bottom:6px; cursor:pointer; user-select:none;" data-toggle="ability-section">`;
-            html += `<span data-arrow="ability-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ${i18n_js.t('Abilities')} (${abilityCount} ${i18n_js.t('equipped')})`;
+            html += `<span data-arrow="ability-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ${t('Abilities')} (${abilityCount} ${t('equipped')})`;
             html += '</div>';
             html += `<div id="mwi-csim-ability-section" style="display:none;">`;
 
@@ -16941,13 +17046,13 @@
 
             for (let i = 0; i < slotCount; i++) {
                 const ability = dto.abilities[i];
-                const slotLabel = i === 0 ? i18n_js.t('Special') : `${i18n_js.t('Slot')} ${i}`;
+                const slotLabel = i === 0 ? t('Special') : `${t('Slot')} ${i}`;
 
                 if (!ability) {
                     html += `<div style="display:flex; align-items:center; gap:6px; padding:2px 0; font-size:12px;">`;
                     html += `<span style="color:#888; width:50px; flex-shrink:0;">${slotLabel}</span>`;
-                    html += `<span style="color:#555; flex:1; font-style:italic;">${i18n_js.t('Empty')}</span>`;
-                    html += `<button data-ability-slot="${i}" style="background:rgba(255,255,255,0.06); border:1px solid #444; color:#aaa; padding:1px 6px; border-radius:3px; font-size:11px; cursor:pointer; font-family:inherit;">${i18n_js.t('add')}</button>`;
+                    html += `<span style="color:#555; flex:1; font-style:italic;">${t('Empty')}</span>`;
+                    html += `<button data-ability-slot="${i}" style="background:rgba(255,255,255,0.06); border:1px solid #444; color:#aaa; padding:1px 6px; border-radius:3px; font-size:11px; cursor:pointer; font-family:inherit;">${t('add')}</button>`;
                     html += '</div>';
                     continue;
                 }
@@ -16964,7 +17069,7 @@
                 data-ability-idx="${i}"
                 style="width:42px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444;
                 border-radius:3px; padding:1px 3px; font-size:12px; text-align:center;">`;
-                html += `<button data-ability-slot="${i}" style="background:rgba(255,255,255,0.06); border:1px solid #444; color:#aaa; padding:1px 6px; border-radius:3px; font-size:11px; cursor:pointer; font-family:inherit;">${i18n_js.t('change')}</button>`;
+                html += `<button data-ability-slot="${i}" style="background:rgba(255,255,255,0.06); border:1px solid #444; color:#aaa; padding:1px 6px; border-radius:3px; font-size:11px; cursor:pointer; font-family:inherit;">${t('change')}</button>`;
                 html += '</div>';
             }
 
@@ -16974,6 +17079,7 @@
 
         /** @private */
         _renderConsumablesSection(dto, gameData) {
+            // eslint-disable-next-line no-unused-vars
             gameData?.itemDetailMap || {};
             const foodCount = dto.food.filter((f) => f).length;
             const drinkCount = dto.drinks.filter((d) => d).length;
@@ -16985,23 +17091,23 @@
                 '; font-weight:700; font-size:12px; margin-bottom:6px; cursor:pointer; user-select:none;" data-toggle="consumable-section">';
             html +=
                 '<span data-arrow="consumable-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ' +
-                i18n_js.t('Consumables') +
+                t('Consumables') +
                 ' (' +
                 foodCount +
                 ' ' +
-                i18n_js.t('food') +
+                t('food') +
                 ', ' +
                 drinkCount +
                 ' ' +
-                i18n_js.t('drinks') +
+                t('drinks') +
                 ')';
             html += '</div>';
             html += '<div id="mwi-csim-consumable-section" style="display:none;">';
 
-            html += '<div style="color:#888; font-size:11px; margin-bottom:3px;">' + i18n_js.t('Food') + '</div>';
+            html += '<div style="color:#888; font-size:11px; margin-bottom:3px;">' + t('Food') + '</div>';
             for (let i = 0; i < 3; i++) {
                 const item = dto.food[i];
-                const name = item ? itemNameTranslator.getDisplayName(item.hrid) : i18n_js.t('Empty');
+                const name = item ? itemNameTranslator.getDisplayName(item.hrid) : t('Empty');
                 const nameColor = item ? '#e0e0e0' : '#555';
                 html += '<div style="display:flex; align-items:center; gap:6px; padding:2px 0; font-size:12px;">';
                 html += '<span style="color:#666; width:16px; flex-shrink:0;">' + (i + 1) + '</span>';
@@ -17015,15 +17121,15 @@
                     '<button data-consumable-slot="food-' +
                     i +
                     '" style="background:rgba(255,255,255,0.06); border:1px solid #444; color:#aaa; padding:1px 6px; border-radius:3px; font-size:11px; cursor:pointer; font-family:inherit;">' +
-                    i18n_js.t('change') +
+                    t('change') +
                     '</button>';
                 html += '</div>';
             }
 
-            html += '<div style="color:#888; font-size:11px; margin-bottom:3px; margin-top:6px;">' + i18n_js.t('Drinks') + '</div>';
+            html += '<div style="color:#888; font-size:11px; margin-bottom:3px; margin-top:6px;">' + t('Drinks') + '</div>';
             for (let i = 0; i < 3; i++) {
                 const item = dto.drinks[i];
-                const name = item ? itemNameTranslator.getDisplayName(item.hrid) : i18n_js.t('Empty');
+                const name = item ? itemNameTranslator.getDisplayName(item.hrid) : t('Empty');
                 const nameColor = item ? '#e0e0e0' : '#555';
                 html += '<div style="display:flex; align-items:center; gap:6px; padding:2px 0; font-size:12px;">';
                 html += '<span style="color:#666; width:16px; flex-shrink:0;">' + (i + 1) + '</span>';
@@ -17037,7 +17143,7 @@
                     '<button data-consumable-slot="drinks-' +
                     i +
                     '" style="background:rgba(255,255,255,0.06); border:1px solid #444; color:#aaa; padding:1px 6px; border-radius:3px; font-size:11px; cursor:pointer; font-family:inherit;">' +
-                    i18n_js.t('change') +
+                    t('change') +
                     '</button>';
                 html += '</div>';
             }
@@ -17096,17 +17202,17 @@
                         const hp = item.consumableDetail.hitpointRestore || 0;
                         const mp = item.consumableDetail.manapointRestore || 0;
                         const dur = item.consumableDetail.recoveryDuration || 0;
-                        if (hp > 0 && dur > 0) categoryLabel = i18n_js.t('HP Over Time');
-                        else if (hp > 0) categoryLabel = i18n_js.t('HP Instant');
-                        else if (mp > 0 && dur > 0) categoryLabel = i18n_js.t('MP Over Time');
-                        else if (mp > 0) categoryLabel = i18n_js.t('MP Instant');
-                        else categoryLabel = i18n_js.t('Other');
+                        if (hp > 0 && dur > 0) categoryLabel = t('HP Over Time');
+                        else if (hp > 0) categoryLabel = t('HP Instant');
+                        else if (mp > 0 && dur > 0) categoryLabel = t('MP Over Time');
+                        else if (mp > 0) categoryLabel = t('MP Instant');
+                        else categoryLabel = t('Other');
                     } else {
                         const buffs = item.consumableDetail.buffs || [];
                         if (buffs.length > 0) {
                             const buffName = buffs[0].uniqueHrid?.split('/').pop()?.replace(/_/g, ' ') || 'buff';
                             categoryLabel = buffName.charAt(0).toUpperCase() + buffName.slice(1);
-                        } else categoryLabel = i18n_js.t('Other');
+                        } else categoryLabel = t('Other');
                     }
 
                     items.push({ hrid, name: item.name || hrid.split('/').pop(), conflict, itemLevel, categoryLabel });
@@ -17132,9 +17238,9 @@
                 'display:flex; justify-content:space-between; align-items:center; padding:8px 14px; border-bottom:1px solid rgba(74,158,255,0.3); flex-shrink:0;';
             header.innerHTML =
                 '<span style="font-weight:700; font-size:13px; color:#4a9eff;">' +
-                i18n_js.t('Select') +
+                t('Select') +
                 ' ' +
-                (isFood ? i18n_js.t('Food') : i18n_js.t('Drink')) +
+                (isFood ? t('Food') : t('Drink')) +
                 '</span>' +
                 '<button id="mwi-csim-picker-close" style="background:none; border:none; color:#aaa; font-size:20px; cursor:pointer; padding:0; line-height:1;">\u00d7</button>';
             popup.appendChild(header);
@@ -17143,7 +17249,7 @@
             searchDiv.style.cssText = 'padding:6px 14px; flex-shrink:0;';
             const searchInput = document.createElement('input');
             searchInput.type = 'search';
-            searchInput.placeholder = i18n_js.t('Search...');
+            searchInput.placeholder = t('Search...');
             searchInput.style.cssText =
                 'width:100%; padding:5px 8px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15);' +
                 'border-radius:6px; color:#e0e0e0; font-size:12px; font-family:inherit; outline:none;';
@@ -17167,7 +17273,7 @@
                 let html =
                     '<div data-pick-hrid="" style="display:flex; align-items:center; gap:8px; padding:4px; cursor:pointer; border-bottom:1px solid #1a1a2e; color:#888; font-style:italic;"' +
                     ' onmouseover="this.style.background=\'rgba(255,255,255,0.04)\'" onmouseout="this.style.background=\'\'">' +
-                    i18n_js.t('Empty (clear slot)') +
+                    t('Empty (clear slot)') +
                     '</div>';
 
                 let lastCategory = '';
@@ -17192,7 +17298,7 @@
                             '<div style="display:flex; align-items:center; gap:8px; padding:3px 4px; border-bottom:1px solid #1a1a2e; color:#555; cursor:default;">' +
                             item.name +
                             ' <span style="font-size:10px; color:#664;">(' +
-                            i18n_js.t('in use') +
+                            t('in use') +
                             ')</span>' +
                             lvlTag +
                             '</div>';
@@ -17275,11 +17381,11 @@
                 const reqSkill = primaryReq?.skillHrid?.split('/').pop() || '';
 
                 let categoryLabel;
-                if (reqSkill === 'attack') categoryLabel = i18n_js.t('Attack');
-                else if (reqSkill === 'defense') categoryLabel = i18n_js.t('Defense');
-                else if (reqSkill === 'ranged') categoryLabel = i18n_js.t('Ranged');
-                else if (reqSkill === 'magic') categoryLabel = i18n_js.t('Magic');
-                else categoryLabel = i18n_js.t('General');
+                if (reqSkill === 'attack') categoryLabel = t('Attack');
+                else if (reqSkill === 'defense') categoryLabel = t('Defense');
+                else if (reqSkill === 'ranged') categoryLabel = t('Ranged');
+                else if (reqSkill === 'magic') categoryLabel = t('Magic');
+                else categoryLabel = t('General');
 
                 items.push({
                     hrid,
@@ -17308,7 +17414,7 @@
             header.style.cssText =
                 'display:flex; justify-content:space-between; align-items:center; padding:8px 14px; border-bottom:1px solid rgba(74,158,255,0.3); flex-shrink:0;';
             header.innerHTML =
-                `<span style="font-weight:700; font-size:13px; color:${ACCENT$2};">${i18n_js.t('Select')} ${slotName}</span>` +
+                `<span style="font-weight:700; font-size:13px; color:${ACCENT$2};">${t('Select')} ${slotName}</span>` +
                 '<button id="mwi-csim-equip-picker-close" style="background:none; border:none; color:#aaa; font-size:20px; cursor:pointer; padding:0; line-height:1;">\u00d7</button>';
             popup.appendChild(header);
 
@@ -17316,7 +17422,7 @@
             searchDiv.style.cssText = 'padding:6px 14px; flex-shrink:0;';
             const searchInput = document.createElement('input');
             searchInput.type = 'search';
-            searchInput.placeholder = i18n_js.t('Search...');
+            searchInput.placeholder = t('Search...');
             searchInput.style.cssText =
                 'width:100%; padding:5px 8px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15);' +
                 'border-radius:6px; color:#e0e0e0; font-size:12px; font-family:inherit; outline:none;';
@@ -17336,7 +17442,7 @@
                 let html =
                     '<div data-pick-hrid="" style="display:flex; align-items:center; gap:8px; padding:4px; cursor:pointer; border-bottom:1px solid #1a1a2e; color:#888; font-style:italic;"' +
                     ' onmouseover="this.style.background=\'rgba(255,255,255,0.04)\'" onmouseout="this.style.background=\'\'">' +
-                    i18n_js.t('Empty (remove slot)') +
+                    t('Empty (remove slot)') +
                     '</div>';
 
                 let lastCategory = '';
@@ -17425,10 +17531,10 @@
                 const combatStyle = effects[0]?.combatStyleHrid?.split('/').pop() || '';
                 let categoryLabel;
                 if (combatStyle === 'stab' || combatStyle === 'slash' || combatStyle === 'smash')
-                    categoryLabel = i18n_js.t('Melee');
-                else if (combatStyle === 'ranged') categoryLabel = i18n_js.t('Ranged');
-                else if (combatStyle === 'magic') categoryLabel = i18n_js.t('Magic');
-                else categoryLabel = i18n_js.t('Other');
+                    categoryLabel = t('Melee');
+                else if (combatStyle === 'ranged') categoryLabel = t('Ranged');
+                else if (combatStyle === 'magic') categoryLabel = t('Magic');
+                else categoryLabel = t('Other');
 
                 items.push({
                     hrid,
@@ -17452,12 +17558,12 @@
                 'width:350px; max-height:400px; display:flex; flex-direction:column;' +
                 "font-family:'Segoe UI',sans-serif; color:#e0e0e0; font-size:13px; box-shadow:0 8px 24px rgba(0,0,0,0.6);";
 
-            const slotLabel = isSpecialSlot ? i18n_js.t('Special Ability') : `${i18n_js.t('Ability Slot')} ${slotIndex}`;
+            const slotLabel = isSpecialSlot ? t('Special Ability') : `${t('Ability Slot')} ${slotIndex}`;
             const header = document.createElement('div');
             header.style.cssText =
                 'display:flex; justify-content:space-between; align-items:center; padding:8px 14px; border-bottom:1px solid rgba(74,158,255,0.3); flex-shrink:0;';
             header.innerHTML =
-                `<span style="font-weight:700; font-size:13px; color:${ACCENT$2};">${i18n_js.t('Select')} ${slotLabel}</span>` +
+                `<span style="font-weight:700; font-size:13px; color:${ACCENT$2};">${t('Select')} ${slotLabel}</span>` +
                 '<button id="mwi-csim-ability-picker-close" style="background:none; border:none; color:#aaa; font-size:20px; cursor:pointer; padding:0; line-height:1;">\u00d7</button>';
             popup.appendChild(header);
 
@@ -17465,7 +17571,7 @@
             searchDiv.style.cssText = 'padding:6px 14px; flex-shrink:0;';
             const searchInput = document.createElement('input');
             searchInput.type = 'search';
-            searchInput.placeholder = i18n_js.t('Search...');
+            searchInput.placeholder = t('Search...');
             searchInput.style.cssText =
                 'width:100%; padding:5px 8px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15);' +
                 'border-radius:6px; color:#e0e0e0; font-size:12px; font-family:inherit; outline:none;';
@@ -17485,7 +17591,7 @@
                 let html =
                     '<div data-pick-hrid="" style="display:flex; align-items:center; gap:8px; padding:4px; cursor:pointer; border-bottom:1px solid #1a1a2e; color:#888; font-style:italic;"' +
                     ' onmouseover="this.style.background=\'rgba(255,255,255,0.04)\'" onmouseout="this.style.background=\'\'">' +
-                    i18n_js.t('Empty (clear slot)') +
+                    t('Empty (clear slot)') +
                     '</div>';
 
                 let lastCategory = '';
@@ -17500,7 +17606,7 @@
                             '<div style="display:flex; align-items:center; gap:8px; padding:3px 4px; border-bottom:1px solid #1a1a2e; color:#555; cursor:default;">' +
                             item.name +
                             ' <span style="font-size:10px; color:#664;">(' +
-                            i18n_js.t('in use') +
+                            t('in use') +
                             ')</span></div>';
                     } else {
                         const isCurrent = item.hrid === currentHrid;
@@ -17559,25 +17665,25 @@
         /** @private */
         _renderSkillLevelsSection(dto) {
             const combatSkills = [
-                { key: 'staminaLevel', label: i18n_js.t('Stamina') },
-                { key: 'intelligenceLevel', label: i18n_js.t('Intelligence') },
-                { key: 'attackLevel', label: i18n_js.t('Attack') },
-                { key: 'meleeLevel', label: i18n_js.t('Melee') },
-                { key: 'defenseLevel', label: i18n_js.t('Defense') },
-                { key: 'rangedLevel', label: i18n_js.t('Ranged') },
-                { key: 'magicLevel', label: i18n_js.t('Magic') },
+                { key: 'staminaLevel', label: t('Stamina') },
+                { key: 'intelligenceLevel', label: t('Intelligence') },
+                { key: 'attackLevel', label: t('Attack') },
+                { key: 'meleeLevel', label: t('Melee') },
+                { key: 'defenseLevel', label: t('Defense') },
+                { key: 'rangedLevel', label: t('Ranged') },
+                { key: 'magicLevel', label: t('Magic') },
             ];
             const skillingSkills = [
-                { key: 'woodcuttingLevel', label: i18n_js.t('Woodcutting') },
-                { key: 'foragingLevel', label: i18n_js.t('Foraging') },
-                { key: 'milkingLevel', label: i18n_js.t('Milking') },
-                { key: 'cookingLevel', label: i18n_js.t('Cooking') },
-                { key: 'brewingLevel', label: i18n_js.t('Brewing') },
-                { key: 'cheesesmithingLevel', label: i18n_js.t('Cheesesmithing') },
-                { key: 'craftingLevel', label: i18n_js.t('Crafting') },
-                { key: 'tailoringLevel', label: i18n_js.t('Tailoring') },
-                { key: 'alchemyLevel', label: i18n_js.t('Alchemy') },
-                { key: 'enhancingLevel', label: i18n_js.t('Enhancing') },
+                { key: 'woodcuttingLevel', label: t('Woodcutting') },
+                { key: 'foragingLevel', label: t('Foraging') },
+                { key: 'milkingLevel', label: t('Milking') },
+                { key: 'cookingLevel', label: t('Cooking') },
+                { key: 'brewingLevel', label: t('Brewing') },
+                { key: 'cheesesmithingLevel', label: t('Cheesesmithing') },
+                { key: 'craftingLevel', label: t('Crafting') },
+                { key: 'tailoringLevel', label: t('Tailoring') },
+                { key: 'alchemyLevel', label: t('Alchemy') },
+                { key: 'enhancingLevel', label: t('Enhancing') },
             ];
             const skills = this.skillingMode ? skillingSkills : combatSkills;
 
@@ -17585,7 +17691,7 @@
 
             let html = `<div style="margin-bottom:10px;">`;
             html += `<div style="color:${ACCENT$2}; font-weight:700; font-size:12px; margin-bottom:6px; cursor:pointer; user-select:none;" data-toggle="skill-section">`;
-            html += `<span data-arrow="skill-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ${i18n_js.t('Skill Levels')}`;
+            html += `<span data-arrow="skill-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ${t('Skill Levels')}`;
             html += `<span style="color:#888; font-weight:400; font-size:11px; margin-left:6px;">${summary}</span>`;
             html += '</div>';
             html += `<div id="mwi-csim-skill-section" style="display:none;">`;
@@ -17613,8 +17719,8 @@
 
             let html = `<div style="margin-bottom:10px;">`;
             html += `<div style="color:${ACCENT$2}; font-weight:700; font-size:12px; margin-bottom:6px; cursor:pointer; user-select:none;" data-toggle="house-section">`;
-            html += `<span data-arrow="house-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ${i18n_js.t('House Rooms')}`;
-            html += `<span style="color:#888; font-weight:400; font-size:11px; margin-left:6px;">${activeCount} ${i18n_js.t('active')}</span>`;
+            html += `<span data-arrow="house-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ${t('House Rooms')}`;
+            html += `<span style="color:#888; font-weight:400; font-size:11px; margin-left:6px;">${activeCount} ${t('active')}</span>`;
             html += '</div>';
             html += `<div id="mwi-csim-house-section" style="display:none;">`;
             html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 12px;">`;
@@ -17639,18 +17745,18 @@
         /** @private */
         _renderTokenUpgradesSection(dto) {
             const upgrades = [
-                { key: 'speed', label: i18n_js.t('Speed') },
-                { key: 'efficiency', label: i18n_js.t('Efficiency') },
-                { key: 'success', label: i18n_js.t('Success Rate') },
-                { key: 'doubleProgress', label: i18n_js.t('Double Progress') },
+                { key: 'speed', label: t('Speed') },
+                { key: 'efficiency', label: t('Efficiency') },
+                { key: 'success', label: t('Success Rate') },
+                { key: 'doubleProgress', label: t('Double Progress') },
             ];
             const tokens = dto.tokenUpgrades || {};
             const activeCount = upgrades.filter((u) => (tokens[u.key] || 0) > 0).length;
 
             let html = `<div style="margin-bottom:10px;">`;
             html += `<div style="color:${ACCENT$2}; font-weight:700; font-size:12px; margin-bottom:6px; cursor:pointer; user-select:none;" data-toggle="token-section">`;
-            html += `<span data-arrow="token-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ${i18n_js.t('Token Upgrades')}`;
-            html += `<span style="color:#888; font-weight:400; font-size:11px; margin-left:6px;">${activeCount} ${i18n_js.t('active')}</span>`;
+            html += `<span data-arrow="token-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ${t('Token Upgrades')}`;
+            html += `<span style="color:#888; font-weight:400; font-size:11px; margin-left:6px;">${activeCount} ${t('active')}</span>`;
             html += '</div>';
             html += `<div id="mwi-csim-token-section" style="display:none;">`;
             html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 12px;">`;
@@ -17673,18 +17779,18 @@
         /** @private */
         _renderCommunityBuffsSection(dto) {
             const buffs = [
-                { key: 'productionEfficiency', label: i18n_js.t('Prod. Efficiency') },
-                { key: 'enhancingSpeed', label: i18n_js.t('Enhancing Speed') },
-                { key: 'gatheringQuantity', label: i18n_js.t('Gathering Qty') },
-                { key: 'experience', label: i18n_js.t('Experience') },
+                { key: 'productionEfficiency', label: t('Prod. Efficiency') },
+                { key: 'enhancingSpeed', label: t('Enhancing Speed') },
+                { key: 'gatheringQuantity', label: t('Gathering Qty') },
+                { key: 'experience', label: t('Experience') },
             ];
             const levels = dto.communityBuffLevels || {};
             const activeCount = buffs.filter((b) => (levels[b.key] || 0) > 0).length;
 
             let html = `<div style="margin-bottom:10px;">`;
             html += `<div style="color:${ACCENT$2}; font-weight:700; font-size:12px; margin-bottom:6px; cursor:pointer; user-select:none;" data-toggle="community-section">`;
-            html += `<span data-arrow="community-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ${i18n_js.t('Community Buffs')}`;
-            html += `<span style="color:#888; font-weight:400; font-size:11px; margin-left:6px;">${activeCount} ${i18n_js.t('active')}</span>`;
+            html += `<span data-arrow="community-section" style="display:inline-block; width:14px; font-size:10px;">&#9654;</span> ${t('Community Buffs')}`;
+            html += `<span style="color:#888; font-weight:400; font-size:11px; margin-left:6px;">${activeCount} ${t('active')}</span>`;
             html += '</div>';
             html += `<div id="mwi-csim-community-section" style="display:none;">`;
             html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 12px;">`;
@@ -17878,12 +17984,12 @@
                     const text = editorArea.querySelector('#mwi-csim-import-text')?.value?.trim();
                     const errorEl = editorArea.querySelector('#mwi-csim-import-error');
                     if (!text) {
-                        if (errorEl) errorEl.textContent = i18n_js.t('Paste export data first.');
+                        if (errorEl) errorEl.textContent = t('Paste export data first.');
                         return;
                     }
                     const result = parseShykaiImport(text);
                     if (!result || !result.players.length) {
-                        if (errorEl) errorEl.textContent = i18n_js.t('Invalid format. Paste a Shykai export JSON.');
+                        if (errorEl) errorEl.textContent = t('Invalid format. Paste a Shykai export JSON.');
                         return;
                     }
                     this.importPlayers(result.players, result.names);
@@ -17926,7 +18032,7 @@
             const selfHrid = this._selfHrid || this._activeEditPlayer;
             const original = this._originalDTOs?.[selfHrid];
             const edited = this._editedDTOs?.[selfHrid];
-            if (!original || !edited) return this._selectedLoadoutName || i18n_js.t('Current Gear');
+            if (!original || !edited) return this._selectedLoadoutName || t('Current Gear');
 
             const gameData = buildGameDataPayload();
             const itemDetailMap = gameData?.itemDetailMap || {};
@@ -17935,20 +18041,20 @@
             const changes = [];
 
             const slotNames = {
-                '/equipment_types/head': i18n_js.t('Head'),
-                '/equipment_types/body': i18n_js.t('Body'),
-                '/equipment_types/legs': i18n_js.t('Legs'),
-                '/equipment_types/feet': i18n_js.t('Feet'),
-                '/equipment_types/hands': i18n_js.t('Hands'),
-                '/equipment_types/main_hand': i18n_js.t('Main Hand'),
-                '/equipment_types/two_hand': i18n_js.t('Two Hand'),
-                '/equipment_types/off_hand': i18n_js.t('Off Hand'),
-                '/equipment_types/pouch': i18n_js.t('Pouch'),
-                '/equipment_types/back': i18n_js.t('Back'),
-                '/equipment_types/neck': i18n_js.t('Neck'),
-                '/equipment_types/earrings': i18n_js.t('Earrings'),
-                '/equipment_types/ring': i18n_js.t('Ring'),
-                '/equipment_types/charm': i18n_js.t('Charm'),
+                '/equipment_types/head': t('Head'),
+                '/equipment_types/body': t('Body'),
+                '/equipment_types/legs': t('Legs'),
+                '/equipment_types/feet': t('Feet'),
+                '/equipment_types/hands': t('Hands'),
+                '/equipment_types/main_hand': t('Main Hand'),
+                '/equipment_types/two_hand': t('Two Hand'),
+                '/equipment_types/off_hand': t('Off Hand'),
+                '/equipment_types/pouch': t('Pouch'),
+                '/equipment_types/back': t('Back'),
+                '/equipment_types/neck': t('Neck'),
+                '/equipment_types/earrings': t('Earrings'),
+                '/equipment_types/ring': t('Ring'),
+                '/equipment_types/charm': t('Charm'),
             };
 
             for (const slot of Object.keys(slotNames)) {
@@ -17958,9 +18064,9 @@
 
                 if (origEquip?.hrid !== editEquip?.hrid) {
                     const origName =
-                        itemDetailMap[origEquip?.hrid]?.name || origEquip?.hrid?.split('/').pop() || i18n_js.t('Empty');
+                        itemDetailMap[origEquip?.hrid]?.name || origEquip?.hrid?.split('/').pop() || t('Empty');
                     const editName =
-                        itemDetailMap[editEquip?.hrid]?.name || editEquip?.hrid?.split('/').pop() || i18n_js.t('Empty');
+                        itemDetailMap[editEquip?.hrid]?.name || editEquip?.hrid?.split('/').pop() || t('Empty');
                     changes.push(`${origName} \u2192 ${editName}`);
                 } else if (origEquip?.enhancementLevel !== editEquip?.enhancementLevel) {
                     const label = slotNames[slot];
@@ -17974,8 +18080,8 @@
                 if (!origAb && !editAb) continue;
 
                 if (origAb?.hrid !== editAb?.hrid) {
-                    const origName = abilityDetailMap[origAb?.hrid]?.name || origAb?.hrid?.split('/').pop() || i18n_js.t('None');
-                    const editName = abilityDetailMap[editAb?.hrid]?.name || editAb?.hrid?.split('/').pop() || i18n_js.t('None');
+                    const origName = abilityDetailMap[origAb?.hrid]?.name || origAb?.hrid?.split('/').pop() || t('None');
+                    const editName = abilityDetailMap[editAb?.hrid]?.name || editAb?.hrid?.split('/').pop() || t('None');
                     changes.push(`${origName} \u2192 ${editName}`);
                 } else if (origAb && editAb && origAb.level !== editAb.level) {
                     const name = abilityDetailMap[editAb.hrid]?.name || editAb.hrid.split('/').pop();
@@ -17984,23 +18090,23 @@
             }
 
             const skillLabels = {
-                staminaLevel: i18n_js.t('Stamina'),
-                intelligenceLevel: i18n_js.t('Intelligence'),
-                attackLevel: i18n_js.t('Attack'),
-                meleeLevel: i18n_js.t('Melee'),
-                defenseLevel: i18n_js.t('Defense'),
-                rangedLevel: i18n_js.t('Ranged'),
-                magicLevel: i18n_js.t('Magic'),
-                woodcuttingLevel: i18n_js.t('Woodcutting'),
-                foragingLevel: i18n_js.t('Foraging'),
-                milkingLevel: i18n_js.t('Milking'),
-                cookingLevel: i18n_js.t('Cooking'),
-                brewingLevel: i18n_js.t('Brewing'),
-                cheesesmithingLevel: i18n_js.t('Cheesesmithing'),
-                craftingLevel: i18n_js.t('Crafting'),
-                tailoringLevel: i18n_js.t('Tailoring'),
-                alchemyLevel: i18n_js.t('Alchemy'),
-                enhancingLevel: i18n_js.t('Enhancing'),
+                staminaLevel: t('Stamina'),
+                intelligenceLevel: t('Intelligence'),
+                attackLevel: t('Attack'),
+                meleeLevel: t('Melee'),
+                defenseLevel: t('Defense'),
+                rangedLevel: t('Ranged'),
+                magicLevel: t('Magic'),
+                woodcuttingLevel: t('Woodcutting'),
+                foragingLevel: t('Foraging'),
+                milkingLevel: t('Milking'),
+                cookingLevel: t('Cooking'),
+                brewingLevel: t('Brewing'),
+                cheesesmithingLevel: t('Cheesesmithing'),
+                craftingLevel: t('Crafting'),
+                tailoringLevel: t('Tailoring'),
+                alchemyLevel: t('Alchemy'),
+                enhancingLevel: t('Enhancing'),
             };
             for (const [key, label] of Object.entries(skillLabels)) {
                 if (original[key] !== edited[key]) {
@@ -18008,38 +18114,38 @@
                 }
             }
 
-            const slotLabels = { food: i18n_js.t('Food'), drinks: i18n_js.t('Drink') };
+            const slotLabels = { food: t('Food'), drinks: t('Drink') };
             for (const [slotType, prefix] of Object.entries(slotLabels)) {
                 for (let i = 0; i < 3; i++) {
                     const origHrid = original[slotType]?.[i]?.hrid;
                     const editHrid = edited[slotType]?.[i]?.hrid;
                     if (origHrid !== editHrid) {
-                        const origName = origHrid ? itemDetailMap[origHrid]?.name || origHrid.split('/').pop() : i18n_js.t('Empty');
-                        const editName = editHrid ? itemDetailMap[editHrid]?.name || editHrid.split('/').pop() : i18n_js.t('Empty');
+                        const origName = origHrid ? itemDetailMap[origHrid]?.name || origHrid.split('/').pop() : t('Empty');
+                        const editName = editHrid ? itemDetailMap[editHrid]?.name || editHrid.split('/').pop() : t('Empty');
                         changes.push(`${prefix} ${i + 1}: ${origName}\u2192${editName}`);
                     }
                 }
             }
 
             const tokenLabels = {
-                speed: i18n_js.t('Speed'),
-                efficiency: i18n_js.t('Efficiency'),
-                success: i18n_js.t('Success'),
-                doubleProgress: i18n_js.t('DblProg'),
+                speed: t('Speed'),
+                efficiency: t('Efficiency'),
+                success: t('Success'),
+                doubleProgress: t('DblProg'),
             };
             for (const [key, label] of Object.entries(tokenLabels)) {
                 const origVal = original.tokenUpgrades?.[key] || 0;
                 const editVal = edited.tokenUpgrades?.[key] || 0;
                 if (origVal !== editVal) {
-                    changes.push(`${i18n_js.t('Token')} ${label} ${origVal}\u2192${editVal}`);
+                    changes.push(`${t('Token')} ${label} ${origVal}\u2192${editVal}`);
                 }
             }
 
             const cbLabels = {
-                productionEfficiency: i18n_js.t('ProdEff'),
-                enhancingSpeed: i18n_js.t('EnhSpd'),
-                gatheringQuantity: i18n_js.t('GathQty'),
-                experience: i18n_js.t('Exp'),
+                productionEfficiency: t('ProdEff'),
+                enhancingSpeed: t('EnhSpd'),
+                gatheringQuantity: t('GathQty'),
+                experience: t('Exp'),
             };
             for (const [key, label] of Object.entries(cbLabels)) {
                 const origVal = original.communityBuffLevels?.[key] || 0;
@@ -18050,7 +18156,7 @@
             }
 
             const loadoutPrefix = this._selectedLoadoutName || '';
-            if (changes.length === 0) return loadoutPrefix || i18n_js.t('Current Gear');
+            if (changes.length === 0) return loadoutPrefix || t('Current Gear');
             const changesStr = changes.join(', ');
             return loadoutPrefix ? loadoutPrefix + ': ' + changesStr : changesStr;
         }
@@ -18169,7 +18275,7 @@
             flex-shrink: 0;
         `;
             header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:${ACCENT$1};">${i18n_js.t('Combat Simulator')}</span>
+            <span style="font-weight:700; font-size:14px; color:${ACCENT$1};">${t('Combat Simulator')}</span>
             <button id="mwi-csim-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">×</button>
@@ -18201,10 +18307,10 @@
             border-bottom: 2px solid ${active ? ACCENT$1 : 'transparent'};
         `;
             tabBar.innerHTML = `
-            <button id="mwi-csim-tab-configure" style="${tabStyle(true)}">${i18n_js.t('Configure')}</button>
-            <button id="mwi-csim-tab-results" style="${tabStyle(false)}">${i18n_js.t('Results')}</button>
-            <button id="mwi-csim-tab-seek" style="${tabStyle(false)}">${i18n_js.t('Seek')}</button>
-            <button id="mwi-csim-tab-upgrade" style="${tabStyle(false)}">${i18n_js.t('Upgrade')}</button>
+            <button id="mwi-csim-tab-configure" style="${tabStyle(true)}">${t('Configure')}</button>
+            <button id="mwi-csim-tab-results" style="${tabStyle(false)}">${t('Results')}</button>
+            <button id="mwi-csim-tab-seek" style="${tabStyle(false)}">${t('Seek')}</button>
+            <button id="mwi-csim-tab-upgrade" style="${tabStyle(false)}">${t('Upgrade')}</button>
         `;
 
             // Configure tab content
@@ -18230,12 +18336,12 @@
                 'width:60px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444; border-radius:4px; padding:3px 6px; font-size:12px; text-align:center;';
 
             controls.innerHTML = `
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Zone')}</label>
+            <label style="color:#888; font-size:12px;">${t('Zone')}</label>
             <select id="mwi-csim-zone" style="${selectStyle}"></select>
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Tier')}</label>
+            <label style="color:#888; font-size:12px;">${t('Tier')}</label>
             <select id="mwi-csim-tier" style="${selectStyle} flex:0; width:64px; min-width:64px;">
             </select>
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Hours')}</label>
+            <label style="color:#888; font-size:12px;">${t('Hours')}</label>
             <input id="mwi-csim-hours" type="number" min="1" max="10000" value="${config.getSettingValue('combatSim_defaultHours', 100)}" style="${inputStyle}">
             <button id="mwi-csim-run" style="
                 margin-left: auto;
@@ -18246,7 +18352,7 @@
                 padding: 5px 14px;
                 font-size: 12px;
                 font-weight: 600;
-                cursor: pointer;">${i18n_js.t('Simulate')}</button>
+                cursor: pointer;">${t('Simulate')}</button>
         `;
 
             // All Zones controls row
@@ -18266,17 +18372,17 @@
             allZonesRow.innerHTML = `
             <label style="${labelStyle}">
                 <input type="checkbox" id="mwi-csim-allzones-group" style="${checkboxStyle}">
-                ${i18n_js.t('Sim All Zones')}
+                ${t('Sim All Zones')}
             </label>
             <label style="${labelStyle}">
                 <input type="checkbox" id="mwi-csim-allzones-solo" style="${checkboxStyle}">
-                ${i18n_js.t('Sim All Solo')}
+                ${t('Sim All Solo')}
             </label>
-            <label id="mwi-csim-allzones-hours-label" style="color:#888; font-size:12px; display:none;">${i18n_js.t('Hours')}</label>
+            <label id="mwi-csim-allzones-hours-label" style="color:#888; font-size:12px; display:none;">${t('Hours')}</label>
             <input id="mwi-csim-allzones-hours" type="number" min="1" max="10000" value="${config.getSettingValue('combatSim_allZonesDefaultHours', 10)}" style="display:none; width:60px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444; border-radius:4px; padding:3px 6px; font-size:12px; text-align:center;">
-            <label id="mwi-csim-earlyexit-label" style="${labelStyle} display:none;" title="${i18n_js.t('Stop simming higher tiers for a zone if both XP/hr and profit/hr declined vs the previous tier')}">
+            <label id="mwi-csim-earlyexit-label" style="${labelStyle} display:none;" title="${t('Stop simming higher tiers for a zone if both XP/hr and profit/hr declined vs the previous tier')}">
                 <input type="checkbox" id="mwi-csim-earlyexit" style="${checkboxStyle}" checked>
-                ${i18n_js.t('Skip Worse Tiers')}
+                ${t('Skip Worse Tiers')}
             </label>
         `;
 
@@ -18296,7 +18402,7 @@
             const editorArea = document.createElement('div');
             editorArea.id = 'mwi-csim-editor';
             editorArea.style.cssText = 'flex:1; overflow-y:auto; padding:10px 14px;';
-            editorArea.innerHTML = `<div style="color:#555; font-size:12px; text-align:center; padding:20px 0;">${i18n_js.t('Loading loadout...')}</div>`;
+            editorArea.innerHTML = `<div style="color:#555; font-size:12px; text-align:center; padding:20px 0;">${t('Loading loadout...')}</div>`;
 
             this._editor = new SimEditor({ editorEl: editorArea, labMode: false });
 
@@ -18349,7 +18455,7 @@
                     font-weight:600;
                     cursor:pointer;
                     font-family:inherit;
-                    flex-shrink:0;">${i18n_js.t('Stop')}</button>
+                    flex-shrink:0;">${t('Stop')}</button>
             </div>
         `;
 
@@ -18377,13 +18483,13 @@
             flex-shrink: 0;
         `;
             seekControls.innerHTML = `
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Item')}</label>
-            <input id="mwi-csim-seek-input" type="text" placeholder="${i18n_js.t('Search item...')}" style="
+            <label style="color:#888; font-size:12px;">${t('Item')}</label>
+            <input id="mwi-csim-seek-input" type="text" placeholder="${t('Search item...')}" style="
                 flex:1; min-width:0;
                 background:#1a1a2e; color:#e0e0e0;
                 border:1px solid #444; border-radius:4px;
                 padding:3px 6px; font-size:12px; font-family:inherit;">
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Hours')}</label>
+            <label style="color:#888; font-size:12px;">${t('Hours')}</label>
             <input id="mwi-csim-seek-hours" type="number" min="1" max="10000" value="${config.getSettingValue('combatSim_seekDefaultHours', 10)}" style="
                 width:60px; background:#1a1a2e; color:#e0e0e0;
                 border:1px solid #444; border-radius:4px;
@@ -18397,7 +18503,7 @@
                 font-size: 12px;
                 font-weight: 600;
                 cursor: pointer;
-                font-family: inherit;">${i18n_js.t('Seek')}</button>
+                font-family: inherit;">${t('Seek')}</button>
             <button id="mwi-csim-seek-stop" style="
                 display:none;
                 background:rgba(244, 67, 54, 0.2);
@@ -18408,7 +18514,7 @@
                 font-size:12px;
                 font-weight:600;
                 cursor:pointer;
-                font-family:inherit;">${i18n_js.t('Stop')}</button>
+                font-family:inherit;">${t('Stop')}</button>
         `;
 
             const seekSuggestions = document.createElement('div');
@@ -18459,26 +18565,30 @@
             flex-shrink: 0;
         `;
             upgradeControls.innerHTML = `
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Player')}</label>
+            <label style="color:#888; font-size:12px;">${t('Player')}</label>
             <select id="mwi-csim-upgrade-player" style="${selectStyle}"></select>
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Mode')}</label>
+            <label style="color:#888; font-size:12px;">${t('Mode')}</label>
             <select id="mwi-csim-upgrade-mode" style="${selectStyle}">
-                <option value="equipment">${i18n_js.t('Equipment')}</option>
-                <option value="ability_level">${i18n_js.t('Ability Levels')}</option>
-                <option value="ability_swap">${i18n_js.t('Ability Swaps')}</option>
+                <option value="equipment">${t('Equipment')}</option>
+                <option value="ability_level">${t('Ability Levels')}</option>
+                <option value="ability_swap">${t('Ability Swaps')}</option>
             </select>
             <span id="mwi-csim-upgrade-level-group" style="display:none; align-items:center; gap:4px;">
                 <select id="mwi-csim-upgrade-level-type" style="
                     background:#1a1a2e; color:#e0e0e0; border:1px solid #444;
                     border-radius:3px; padding:3px 5px; font-size:12px;">
-                    <option value="increment">${i18n_js.t('+Levels')}</option>
-                    <option value="target">${i18n_js.t('Target Lv')}</option>
+                    <option value="increment">${t('+Levels')}</option>
+                    <option value="target">${t('Target Lv')}</option>
                 </select>
                 <input id="mwi-csim-upgrade-target-level" type="number" min="1" max="200" value="5" placeholder="+5" style="
                     width:55px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444;
                     border-radius:3px; padding:3px 5px; font-size:12px; text-align:center;"
-                    title="${i18n_js.t('Number of levels to add to each ability')}">
+                    title="${t('Number of levels to add to each ability')}">
             </span>
+            <label style="display:flex; align-items:center; gap:4px; color:#888; font-size:12px; cursor:pointer;">
+                <input type="checkbox" id="mwi-csim-upgrade-skip-back" style="margin:0; cursor:pointer;">
+                Skip Back
+            </label>
             <button id="mwi-csim-upgrade-run" style="
                 background: ${ACCENT_BTN_BG$1};
                 color: ${ACCENT$1};
@@ -18488,7 +18598,7 @@
                 font-size: 12px;
                 font-weight: 600;
                 cursor: pointer;
-                font-family: inherit;">${i18n_js.t('Analyze')}</button>
+                font-family: inherit;">${t('Analyze')}</button>
             <button id="mwi-csim-upgrade-stop" style="
                 display:none;
                 background:rgba(244, 67, 54, 0.2);
@@ -18499,7 +18609,7 @@
                 font-size:12px;
                 font-weight:600;
                 cursor:pointer;
-                font-family:inherit;">${i18n_js.t('Stop')}</button>
+                font-family:inherit;">${t('Stop')}</button>
         `;
 
             const upgradeProgress = document.createElement('div');
@@ -18527,7 +18637,7 @@
             status.id = 'mwi-csim-status';
             status.style.cssText =
                 'padding:6px 14px; color:#555; font-size:11px; border-top:1px solid #1a1a1a; flex-shrink:0; text-align:center;';
-            status.textContent = i18n_js.t('Select a zone and click Simulate.');
+            status.textContent = t('Select a zone and click Simulate.');
 
             this.panel.appendChild(header);
             this.panel.appendChild(tabBar);
@@ -18587,11 +18697,11 @@
                 if (e.target.value === 'increment') {
                     input.value = '5';
                     input.placeholder = '+5';
-                    input.title = i18n_js.t('Number of levels to add to each ability');
+                    input.title = t('Number of levels to add to each ability');
                 } else {
                     input.value = '';
                     input.placeholder = 'e.g. 80';
-                    input.title = i18n_js.t('Absolute target level for all abilities');
+                    input.title = t('Absolute target level for all abilities');
                 }
             });
             this.panel.querySelector('#mwi-csim-upgrade-target-level').addEventListener('change', (e) => {
@@ -18663,14 +18773,11 @@
             for (const zone of zones) {
                 const option = document.createElement('option');
                 option.value = zone.hrid;
-                const monsterDisplay = getMonsterDisplayName(zone.hrid);
-                const rawSegment = zone.hrid.split('/').pop();
-                const monsterMatched = monsterDisplay !== rawSegment;
                 option.textContent = zone.isDungeon
-                    ? `[D] ${monsterMatched ? monsterDisplay : getZoneDisplayName(zone)}`
-                    : monsterMatched
-                      ? monsterDisplay
-                      : getZoneDisplayName(zone);
+                    ? `[D] ${getMonsterDisplayName(zone.hrid)}`
+                    : zone.hrid.includes('/actions/combat/')
+                        ? getMonsterDisplayName(zone.hrid)
+                        : getZoneDisplayName(zone);
                 zoneSelect.appendChild(option);
             }
 
@@ -18783,7 +18890,7 @@
             checklist.innerHTML = `
             <label style="display:flex; align-items:center; gap:4px; color:${ACCENT$1}; font-size:11px; font-weight:600; margin-bottom:4px; cursor:pointer;">
                 <input type="checkbox" id="${checkAllId}" checked style="margin:0; cursor:pointer;">
-                ${i18n_js.t('Check All')}
+                ${t('Check All')}
             </label>
         `;
 
@@ -18797,6 +18904,7 @@
         }
 
         startAllZonesSimulation() {
+            // eslint-disable-next-line no-unused-vars
             parseFloat(this.panel?.querySelector('#mwi-csim-hours')?.value) || 100;
             const selected = [];
             for (const zone of getCombatZones()) {
@@ -18823,26 +18931,26 @@
             container.style.display = 'block';
 
             const skillCols = [
-                { key: 'totalXP', label: i18n_js.t('Total XP/hr') },
-                { key: 'profitDay', label: i18n_js.t('Profit/day') },
-                { key: 'stamina', label: i18n_js.t('Stam') },
-                { key: 'intelligence', label: i18n_js.t('Int') },
-                { key: 'attack', label: i18n_js.t('Atk') },
-                { key: 'melee', label: i18n_js.t('Melee') },
-                { key: 'defense', label: i18n_js.t('Def') },
-                { key: 'ranged', label: i18n_js.t('Ranged') },
-                { key: 'magic', label: i18n_js.t('Magic') },
+                { key: 'totalXP', label: t('Total XP/hr') },
+                { key: 'profitDay', label: t('Profit/day') },
+                { key: 'stamina', label: t('Stam') },
+                { key: 'intelligence', label: t('Int') },
+                { key: 'attack', label: t('Atk') },
+                { key: 'melee', label: t('Melee') },
+                { key: 'defense', label: t('Def') },
+                { key: 'ranged', label: t('Ranged') },
+                { key: 'magic', label: t('Magic') },
             ];
 
             const cols = [
-                { key: 'zone', label: i18n_js.t('Zone') },
-                { key: 'tier', label: i18n_js.t('T') },
-                { key: 'encounters', label: i18n_js.t('Enc/hr') },
-                { key: 'deaths', label: i18n_js.t('Deaths/hr') },
+                { key: 'zone', label: t('Zone') },
+                { key: 'tier', label: t('T') },
+                { key: 'encounters', label: t('Enc/hr') },
+                { key: 'deaths', label: t('Deaths/hr') },
                 ...skillCols,
-                { key: 'revenue', label: i18n_js.t('Rev/hr') },
-                { key: 'expenses', label: i18n_js.t('Cost/hr') },
-                { key: 'profit', label: i18n_js.t('Profit/hr') },
+                { key: 'revenue', label: t('Rev/hr') },
+                { key: 'expenses', label: t('Cost/hr') },
+                { key: 'profit', label: t('Profit/hr') },
             ];
 
             // Build row data
@@ -19061,7 +19169,7 @@
                 const el = document.createElement('div');
                 el.style.cssText =
                     'padding:3px 0; font-size:12px; color:#ccc; cursor:pointer; border-bottom:1px solid #1a1a2e;';
-                el.textContent = itemNameTranslator.getDisplayName(item.itemHrid);
+                el.textContent = item.name;
                 el.addEventListener('mousedown', () => {
                     this._seekSelectedItem = item;
                     const input = this.panel.querySelector('#mwi-csim-seek-input');
@@ -19087,7 +19195,7 @@
                 if (match) {
                     this._seekSelectedItem = match;
                 } else {
-                    this._setStatus(i18n_js.t('No item selected. Type a name and pick from the list.'));
+                    this._setStatus(t('No item selected. Type a name and pick from the list.'));
                     return;
                 }
             }
@@ -19096,7 +19204,7 @@
 
             const gameData = buildGameDataPayload();
             if (!gameData) {
-                this._setStatus(i18n_js.t('No game data available.'));
+                this._setStatus(t('No game data available.'));
                 return;
             }
 
@@ -19127,7 +19235,7 @@
             }
 
             if (!playerDTOs.length) {
-                this._setStatus(i18n_js.t('No character data available.'));
+                this._setStatus(t('No character data available.'));
                 return;
             }
 
@@ -19155,7 +19263,7 @@
             const zoneCount = zones.length;
             this.elapsedTimer = setInterval(() => {
                 const elapsed = (Date.now() - simStartTime) / 1000;
-                this._setStatus(i18n_js.t('Seeking {0} in {1} zone/tiers... {2}', itemName, zoneCount, formatElapsed$1(elapsed)));
+                this._setStatus(t('Seeking {0} in {1} zone/tiers... {2}', itemName, zoneCount, formatElapsed$1(elapsed)));
             }, 100);
 
             try {
@@ -19207,16 +19315,16 @@
                 this._seekSortAsc = false;
                 this._displaySeekResults(seekRows, itemName);
                 this._setStatus(
-                    i18n_js.t('Seek complete in {0}: {1} sources found for {2}', totalElapsed, seekRows.length, itemName)
+                    t('Seek complete in {0}: {1} sources found for {2}', totalElapsed, seekRows.length, itemName)
                 );
             } catch (error) {
                 clearInterval(this.elapsedTimer);
                 this.elapsedTimer = null;
                 if (error.message === 'Cancelled') {
-                    this._setStatus(i18n_js.t('Seek cancelled.'));
+                    this._setStatus(t('Seek cancelled.'));
                 } else {
                     console.error('[CombatSimUI] Seek simulation failed:', error);
-                    this._setStatus(i18n_js.t('Seek error: {0}', error.message || i18n_js.t('Unknown error')));
+                    this._setStatus(t('Seek error: {0}', error.message || t('Unknown error')));
                 }
             } finally {
                 this.isRunning = false;
@@ -19257,17 +19365,9 @@
             const sortAsc = this._seekSortAsc;
             const sorted = [...rows].sort((a, b) => {
                 const va =
-                    sortCol === 'zone'
-                        ? getZoneDisplayName({ name: a.zone.name })
-                        : sortCol === 'tier'
-                          ? a.zone.difficultyTier
-                          : (a[sortCol] ?? 0);
+                    sortCol === 'zone' ? a.zone.name : sortCol === 'tier' ? a.zone.difficultyTier : (a[sortCol] ?? 0);
                 const vb =
-                    sortCol === 'zone'
-                        ? getZoneDisplayName({ name: b.zone.name })
-                        : sortCol === 'tier'
-                          ? b.zone.difficultyTier
-                          : (b[sortCol] ?? 0);
+                    sortCol === 'zone' ? b.zone.name : sortCol === 'tier' ? b.zone.difficultyTier : (b[sortCol] ?? 0);
                 if (typeof va === 'string') return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
                 return sortAsc ? va - vb : vb - va;
             });
@@ -19302,7 +19402,7 @@
                             const cellStyle = 'padding:2px 4px; font-size:10px; white-space:nowrap;';
 
                             if (col.key === 'zone') {
-                                display = getZoneDisplayName(row.zone);
+                                display = row.zone;
                             } else if (col.key === 'tier') {
                                 display = String(row.tier);
                             } else if (col.key === 'itemsPerHour') {
@@ -19394,22 +19494,22 @@
             if (tab === 'configure') {
                 configureContent.style.display = 'flex';
                 tabConfigure.style.cssText = activeStyle;
-                this._setStatus(i18n_js.t('Select a zone and click Simulate.'));
+                this._setStatus(t('Select a zone and click Simulate.'));
             } else if (tab === 'seek') {
                 if (seekContent) seekContent.style.display = 'flex';
                 if (tabSeek) tabSeek.style.cssText = activeStyle;
                 this._populateSeekItems();
-                this._setStatus(i18n_js.t('Search for a combat drop item, then click Seek.'));
+                this._setStatus(t('Search for a combat drop item, then click Seek.'));
             } else if (tab === 'upgrade') {
                 if (upgradeContent) upgradeContent.style.display = 'flex';
                 if (tabUpgrade) tabUpgrade.style.cssText = activeStyle;
                 this._populateUpgradePlayerSelector();
-                this._setStatus(i18n_js.t('Select a player and click Analyze.'));
+                this._setStatus(t('Select a player and click Analyze.'));
             } else {
                 resultsContent.style.display = 'flex';
                 tabResults.style.cssText = activeStyle;
                 if (!this.isRunning && !this._lastSimResult && !this._allZonesResults) {
-                    this._setStatus(i18n_js.t('No results yet. Run a simulation first.'));
+                    this._setStatus(t('No results yet. Run a simulation first.'));
                 }
             }
         }
@@ -19423,7 +19523,7 @@
                 // Stop the running simulation
                 cancelSimulation();
                 cancelAllZonesSimulation();
-                this._setStatus(i18n_js.t('Simulation cancelled.'));
+                this._setStatus(t('Simulation cancelled.'));
                 this._switchTab('configure');
                 return;
             }
@@ -19445,13 +19545,13 @@
             );
 
             if (!zoneHrid) {
-                this._setStatus(i18n_js.t('No zone selected.'));
+                this._setStatus(t('No zone selected.'));
                 return;
             }
 
             const gameData = buildGameDataPayload();
             if (!gameData) {
-                this._setStatus(i18n_js.t('No game data available.'));
+                this._setStatus(t('No game data available.'));
                 return;
             }
 
@@ -19476,7 +19576,7 @@
             }
 
             if (!playerDTOs.length) {
-                this._setStatus(i18n_js.t('No character data available.'));
+                this._setStatus(t('No character data available.'));
                 return;
             }
 
@@ -19485,7 +19585,7 @@
             const selectedZone = zones.find((z) => z.hrid === zoneHrid);
             if (selectedZone && !selectedZone.isDungeon && playerDTOs.length > 3) {
                 this._showWarning(
-                    i18n_js.t(
+                    t(
                         'Non-dungeon zones support max 3 players (you have {0}). Remove players to continue.',
                         playerDTOs.length
                     )
@@ -19501,12 +19601,12 @@
             // Show party info
             const partyInfo =
                 playerDTOs.length > 1
-                    ? i18n_js.t(
+                    ? t(
                           'Party ({0} loaded{1})',
                           playerDTOs.length,
-                          missingMembers.length ? ', ' + missingMembers.length + ' ' + i18n_js.t('missing') : ''
+                          missingMembers.length ? ', ' + missingMembers.length + ' ' + t('missing') : ''
                       )
-                    : i18n_js.t('Solo');
+                    : t('Solo');
 
             // Disable Simulate button during run
             this.isRunning = true;
@@ -19531,7 +19631,7 @@
             const simStartTime = Date.now();
             this.elapsedTimer = setInterval(() => {
                 const elapsed = (Date.now() - simStartTime) / 1000;
-                this._setStatus(i18n_js.t('Simulating ({0})... {1}', partyInfo, formatElapsed$1(elapsed)));
+                this._setStatus(t('Simulating ({0})... {1}', partyInfo, formatElapsed$1(elapsed)));
             }, 100);
 
             try {
@@ -19552,7 +19652,7 @@
                 this._lastGameData = gameData;
 
                 // Generate label before displaying (display may re-render)
-                const historyLabel = this._editor?.generateSimLabel() || i18n_js.t('Current Gear');
+                const historyLabel = this._editor?.generateSimLabel() || t('Current Gear');
 
                 // Add history entry (metrics filled after _displayResults computes them)
                 const historyEntry = {
@@ -19593,23 +19693,23 @@
                 this._displayResults(simResult, hours, gameData);
                 this._switchTab('results');
                 const modeLabels = {
-                    conservative: i18n_js.t('Buy: Ask / Sell: Bid'),
-                    hybrid: i18n_js.t('Buy: Ask / Sell: Ask'),
-                    optimistic: i18n_js.t('Buy: Bid / Sell: Ask'),
-                    patientBuy: i18n_js.t('Buy: Bid / Sell: Bid'),
+                    conservative: t('Buy: Ask / Sell: Bid'),
+                    hybrid: t('Buy: Ask / Sell: Ask'),
+                    optimistic: t('Buy: Bid / Sell: Ask'),
+                    patientBuy: t('Buy: Bid / Sell: Bid'),
                 };
                 const mode = config.getSettingValue('profitCalc_pricingMode', 'hybrid');
                 const modeLabel = modeLabels[mode] || mode;
                 const missingNote = missingMembers.length
-                    ? i18n_js.t(' | Missing: {0} (open their profiles)', missingMembers.join(', '))
+                    ? t(' | Missing: {0} (open their profiles)', missingMembers.join(', '))
                     : '';
                 this._setStatus(
-                    i18n_js.t(
+                    t(
                         'Simulation complete in {0}: {1} hours \u00b7 {2} \u00b7 {3}: {4}{5}',
                         totalElapsed,
                         formatters_js.formatWithSeparator(hours),
                         partyInfo,
-                        i18n_js.t('Pricing'),
+                        t('Pricing'),
                         modeLabel,
                         missingNote
                     )
@@ -19618,10 +19718,10 @@
                 clearInterval(this.elapsedTimer);
                 this.elapsedTimer = null;
                 if (error.message === 'Cancelled') {
-                    this._setStatus(i18n_js.t('Simulation cancelled.'));
+                    this._setStatus(t('Simulation cancelled.'));
                 } else {
                     console.error('[CombatSimUI] Simulation failed:', error);
-                    this._setStatus(i18n_js.t('Simulation error: {0}', error.message || i18n_js.t('Unknown error')));
+                    this._setStatus(t('Simulation error: {0}', error.message || t('Unknown error')));
                 }
             } finally {
                 this.isRunning = false;
@@ -19637,7 +19737,7 @@
         async _onSimulateAllZones() {
             const selectedZones = this._getSelectedAllZones();
             if (!selectedZones.length) {
-                this._setStatus(i18n_js.t('No zones selected.'));
+                this._setStatus(t('No zones selected.'));
                 return;
             }
 
@@ -19652,7 +19752,7 @@
 
             const gameData = buildGameDataPayload();
             if (!gameData) {
-                this._setStatus(i18n_js.t('No game data available.'));
+                this._setStatus(t('No game data available.'));
                 return;
             }
 
@@ -19669,14 +19769,14 @@
             }
 
             if (!playerDTOs.length) {
-                this._setStatus(i18n_js.t('No character data available.'));
+                this._setStatus(t('No character data available.'));
                 return;
             }
 
             // All-zones is always non-dungeon — enforce 3-player max
             if (playerDTOs.length > 3) {
                 this._showWarning(
-                    i18n_js.t(
+                    t(
                         'Non-dungeon zones support max 3 players (you have {0}). Remove players to continue.',
                         playerDTOs.length
                     )
@@ -19709,7 +19809,7 @@
             const zoneCount = selectedZones.length;
             this.elapsedTimer = setInterval(() => {
                 const elapsed = (Date.now() - simStartTime) / 1000;
-                this._setStatus(i18n_js.t('Simulating {0} zones... {1}', zoneCount, formatElapsed$1(elapsed)));
+                this._setStatus(t('Simulating {0} zones... {1}', zoneCount, formatElapsed$1(elapsed)));
             }, 100);
 
             try {
@@ -19753,7 +19853,7 @@
                 this._displayAllZonesResults(zoneResults, hours, gameData);
                 this._switchTab('results');
                 this._setStatus(
-                    i18n_js.t(
+                    t(
                         'All zones complete in {0}: {1} zones \u00b7 {2} hours each',
                         totalElapsed,
                         zoneCount,
@@ -19764,10 +19864,10 @@
                 clearInterval(this.elapsedTimer);
                 this.elapsedTimer = null;
                 if (error.message === 'Cancelled') {
-                    this._setStatus(i18n_js.t('Simulation cancelled.'));
+                    this._setStatus(t('Simulation cancelled.'));
                 } else {
                     console.error('[CombatSimUI] All zones simulation failed:', error);
-                    this._setStatus(i18n_js.t('Simulation error: {0}', error.message || i18n_js.t('Unknown error')));
+                    this._setStatus(t('Simulation error: {0}', error.message || t('Unknown error')));
                 }
             } finally {
                 this.isRunning = false;
@@ -19849,13 +19949,13 @@
             const deathsPerHr = playerDeaths / hours;
 
             html += `<div style="${sectionStyle}">`;
-            html += `<div style="${headingStyle}">${i18n_js.t('Overview')}</div>`;
+            html += `<div style="${headingStyle}">${t('Overview')}</div>`;
             html += `<div style="${rowStyle}">`;
-            html += `<span style="${labelStyle}">${i18n_js.t('Encounters/hr')}</span>`;
+            html += `<span style="${labelStyle}">${t('Encounters/hr')}</span>`;
             html += `<span style="${valueStyle}">${formatters_js.formatWithSeparator(Math.round(encountersPerHr))}${this._formatDelta(encountersPerHr, prevEncPerHr)}</span>`;
             html += '</div>';
             html += `<div style="${rowStyle}">`;
-            html += `<span style="${labelStyle}">${i18n_js.t('Deaths/hr')}</span>`;
+            html += `<span style="${labelStyle}">${t('Deaths/hr')}</span>`;
             html += `<span style="${valueStyle}">${this._formatDeaths(deathsPerHr)}${this._formatDelta(deathsPerHr, prevDeathsPerHr, false)}</span>`;
             html += '</div>';
 
@@ -19885,7 +19985,7 @@
                     prevDps = prevTotalDamage / (compHours * 3600);
                 }
                 html += `<div style="${rowStyle}">`;
-                html += `<span style="${labelStyle}">${i18n_js.t('Party DPS (est.)')}</span>`;
+                html += `<span style="${labelStyle}">${t('Party DPS (est.)')}</span>`;
                 html += `<span style="${valueStyle}">${formatters_js.formatWithSeparator(Math.round(dps))}${this._formatDelta(dps, prevDps)}</span>`;
                 html += '</div>';
             }
@@ -19896,15 +19996,15 @@
                 const failedPerHr = simResult.dungeonsFailed / hours;
 
                 html += `<div style="${rowStyle}">`;
-                html += `<span style="${labelStyle}">${i18n_js.t('Dungeons completed/hr')}</span>`;
+                html += `<span style="${labelStyle}">${t('Dungeons completed/hr')}</span>`;
                 html += `<span style="${valueStyle}">${this._formatRate(completedPerHr)}</span>`;
                 html += '</div>';
                 html += `<div style="${rowStyle}">`;
-                html += `<span style="${labelStyle}">${i18n_js.t('Dungeons failed/hr')}</span>`;
+                html += `<span style="${labelStyle}">${t('Dungeons failed/hr')}</span>`;
                 html += `<span style="${valueStyle}">${this._formatRate(failedPerHr)}</span>`;
                 html += '</div>';
                 html += `<div style="${rowStyle}">`;
-                html += `<span style="${labelStyle}">${i18n_js.t('Total completed / failed')}</span>`;
+                html += `<span style="${labelStyle}">${t('Total completed / failed')}</span>`;
                 html += `<span style="${valueStyle}">${formatters_js.formatWithSeparator(simResult.dungeonsCompleted)} / ${formatters_js.formatWithSeparator(simResult.dungeonsFailed)}</span>`;
                 html += '</div>';
                 if (simResult.dungeonsCompleted > 0) {
@@ -19919,12 +20019,12 @@
                         avgTimeStr = `${avgMin}m ${avgSec}s`;
                     }
                     html += `<div style="${rowStyle}">`;
-                    html += `<span style="${labelStyle}">${i18n_js.t('Avg completion time')}</span>`;
+                    html += `<span style="${labelStyle}">${t('Avg completion time')}</span>`;
                     html += `<span style="${valueStyle}">${avgTimeStr}</span>`;
                     html += '</div>';
                 }
                 html += `<div style="${rowStyle}">`;
-                html += `<span style="${labelStyle}">${i18n_js.t('Max wave reached')}</span>`;
+                html += `<span style="${labelStyle}">${t('Max wave reached')}</span>`;
                 html += `<span style="${valueStyle}">${simResult.maxWaveReached}</span>`;
                 html += '</div>';
             }
@@ -19949,7 +20049,7 @@
             const xpEntries = Object.entries(xpTotals).filter(([, total]) => total > 0);
             if (xpEntries.length > 0) {
                 html += `<div style="${sectionStyle}">`;
-                html += `<div style="${headingStyle}">${i18n_js.t('XP/hr')}</div>`;
+                html += `<div style="${headingStyle}">${t('XP/hr')}</div>`;
                 for (const [skill, total] of xpEntries) {
                     const perHr = Math.round(total / hours);
                     const prevVal = hasPrev ? prevXpPerHr[skill] || null : null;
@@ -19963,7 +20063,7 @@
                 const totalXpPerHr = xpEntries.reduce((sum, [, total]) => sum + Math.round(total / hours), 0);
                 const prevTotalXpPerHr = hasPrev ? Object.values(prevXpPerHr).reduce((sum, v) => sum + v, 0) : null;
                 html += `<div style="display:flex; justify-content:space-between; padding:4px 0 0; font-size:12px; border-top:1px solid #333; margin-top:4px;">`;
-                html += `<span style="color:#aaa; font-weight:700;">${i18n_js.t('Total')}</span>`;
+                html += `<span style="color:#aaa; font-weight:700;">${t('Total')}</span>`;
                 html += `<span style="${valueStyle}">${formatters_js.formatWithSeparator(totalXpPerHr)}${this._formatDelta(totalXpPerHr, prevTotalXpPerHr)}</span>`;
                 html += '</div>';
                 html += '</div>';
@@ -20016,16 +20116,16 @@
                     const colGold = 'flex:0; white-space:nowrap; min-width:76px; text-align:right; white-space:normal;';
 
                     html += `<div style="${sectionStyle}">`;
-                    html += `<div style="${headingStyle}">${i18n_js.t('Drops')}</div>`;
+                    html += `<div style="${headingStyle}">${t('Drops')}</div>`;
                     // Column headers
                     html += `<div style="display:flex; align-items:center; padding:0 0 4px; font-size:10px; gap:6px; color:#666;">`;
-                    html += `<span style="flex:1;">${i18n_js.t('Item')}</span>`;
-                    html += `<span style="${colNum}">${i18n_js.t('/hr')}</span>`;
-                    html += `<span style="${colNum}">${i18n_js.t('/day')}</span>`;
-                    html += `<span style="${colGold}">${i18n_js.t('Gold/hr')}</span>`;
-                    html += `<span style="${colGold}">${i18n_js.t('Gold/day')}</span>`;
-                    html += `<span style="${colNum}">${i18n_js.t('Total')}</span>`;
-                    html += `<span style="${colGold}">${i18n_js.t('Total Gold')}</span>`;
+                    html += `<span style="flex:1;">${t('Item')}</span>`;
+                    html += `<span style="${colNum}">${t('/hr')}</span>`;
+                    html += `<span style="${colNum}">${t('/day')}</span>`;
+                    html += `<span style="${colGold}">${t('Gold/hr')}</span>`;
+                    html += `<span style="${colGold}">${t('Gold/day')}</span>`;
+                    html += `<span style="${colNum}">${t('Total')}</span>`;
+                    html += `<span style="${colGold}">${t('Total Gold')}</span>`;
                     html += '</div>';
 
                     for (const drop of dropData) {
@@ -20065,7 +20165,7 @@
                             ? this._formatDelta(dropGoldPerHr, prevRevPerHr, true, true)
                             : '';
                     html += `<div style="display:flex; align-items:center; padding:4px 0 0; font-size:12px; border-top:1px solid #333; margin-top:4px; gap:6px;">`;
-                    html += `<span style="color:#aaa; font-weight:700; flex:1;">${i18n_js.t('Total Revenue')}</span>`;
+                    html += `<span style="color:#aaa; font-weight:700; flex:1;">${t('Total Revenue')}</span>`;
                     const revDayDelta =
                         prevRevPerHr !== null && prevRevPerHr !== undefined
                             ? this._formatDelta(dropGoldPerHr * 24, prevRevPerHr * 24, true, true)
@@ -20110,16 +20210,16 @@
                 const costColor = '#ff6b6b';
 
                 html += `<div style="${sectionStyle}">`;
-                html += `<div style="${headingStyle}">${i18n_js.t('Consumable Costs')}</div>`;
+                html += `<div style="${headingStyle}">${t('Consumable Costs')}</div>`;
                 // Column headers
                 html += `<div style="display:flex; align-items:center; padding:0 0 4px; font-size:10px; gap:6px; color:#666;">`;
-                html += `<span style="flex:1;">${i18n_js.t('Item')}</span>`;
-                html += `<span style="${colNum}">${i18n_js.t('/hr')}</span>`;
-                html += `<span style="${colNum}">${i18n_js.t('/day')}</span>`;
-                html += `<span style="${colGold}">${i18n_js.t('Cost/hr')}</span>`;
-                html += `<span style="${colGold}">${i18n_js.t('Cost/day')}</span>`;
-                html += `<span style="${colNum}">${i18n_js.t('Total')}</span>`;
-                html += `<span style="${colGold}">${i18n_js.t('Total Cost')}</span>`;
+                html += `<span style="flex:1;">${t('Item')}</span>`;
+                html += `<span style="${colNum}">${t('/hr')}</span>`;
+                html += `<span style="${colNum}">${t('/day')}</span>`;
+                html += `<span style="${colGold}">${t('Cost/hr')}</span>`;
+                html += `<span style="${colGold}">${t('Cost/day')}</span>`;
+                html += `<span style="${colNum}">${t('Total')}</span>`;
+                html += `<span style="${colGold}">${t('Total Cost')}</span>`;
                 html += '</div>';
 
                 for (const cons of consumableEntries) {
@@ -20161,7 +20261,7 @@
                         ? this._formatDelta(consumableGoldPerHr * 24, prevConsumableCostPerHr * 24, false, true)
                         : '';
                 html += `<div style="display:flex; align-items:center; padding:4px 0 0; font-size:12px; border-top:1px solid #333; margin-top:4px; gap:6px;">`;
-                html += `<span style="color:#aaa; font-weight:700; flex:1;">${i18n_js.t('Total Expenses')}</span>`;
+                html += `<span style="color:#aaa; font-weight:700; flex:1;">${t('Total Expenses')}</span>`;
                 html += `<span style="${colNum}"></span>`;
                 html += `<span style="${colNum}"></span>`;
                 html += `<span style="color:${costColor}; font-weight:700; ${colGold}">${formatters_js.formatKMB(Math.round(consumableGoldPerHr))}<br>${expDelta}</span>`;
@@ -20180,15 +20280,15 @@
                 const costColor = '#ff6b6b';
 
                 html += `<div style="${sectionStyle}">`;
-                html += `<div style="${headingStyle}">${i18n_js.t('Key Costs')}</div>`;
+                html += `<div style="${headingStyle}">${t('Key Costs')}</div>`;
                 html += `<div style="display:flex; align-items:center; padding:0 0 4px; font-size:10px; gap:6px; color:#666;">`;
-                html += `<span style="flex:1;">${i18n_js.t('Item')}</span>`;
-                html += `<span style="${colNum}">${i18n_js.t('/hr')}</span>`;
-                html += `<span style="${colNum}">${i18n_js.t('/day')}</span>`;
-                html += `<span style="${colGold}">${i18n_js.t('Cost/hr')}</span>`;
-                html += `<span style="${colGold}">${i18n_js.t('Cost/day')}</span>`;
-                html += `<span style="${colNum}">${i18n_js.t('Total')}</span>`;
-                html += `<span style="${colGold}">${i18n_js.t('Total Cost')}</span>`;
+                html += `<span style="flex:1;">${t('Item')}</span>`;
+                html += `<span style="${colNum}">${t('/hr')}</span>`;
+                html += `<span style="${colNum}">${t('/day')}</span>`;
+                html += `<span style="${colGold}">${t('Cost/hr')}</span>`;
+                html += `<span style="${colGold}">${t('Cost/day')}</span>`;
+                html += `<span style="${colNum}">${t('Total')}</span>`;
+                html += `<span style="${colGold}">${t('Total Cost')}</span>`;
                 html += '</div>';
 
                 for (const key of dungeonKeyCosts) {
@@ -20216,7 +20316,7 @@
 
                 // Totals row
                 html += `<div style="display:flex; align-items:center; padding:4px 0 0; font-size:12px; border-top:1px solid #333; margin-top:4px; gap:6px;">`;
-                html += `<span style="color:#aaa; font-weight:700; flex:1;">Total ${i18n_js.t('Key Costs')}</span>`;
+                html += `<span style="color:#aaa; font-weight:700; flex:1;">Total ${t('Key Costs')}</span>`;
                 html += `<span style="${colNum}"></span>`;
                 html += `<span style="${colNum}"></span>`;
                 html += `<span style="color:${costColor}; font-weight:700; ${colGold}">${formatters_js.formatKMB(Math.round(keyCostPerHr))}</span>`;
@@ -20249,7 +20349,7 @@
             const profitDaySign = netProfitPerDay >= 0 ? '' : '-';
 
             html += `<div style="${sectionStyle}">`;
-            html += `<div style="${headingStyle}">${i18n_js.t('Net Profit')}</div>`;
+            html += `<div style="${headingStyle}">${t('Net Profit')}</div>`;
             const netColGold = 'flex:0; white-space:nowrap; min-width:76px; text-align:right; white-space:normal;';
             const netColNum = 'flex:0; white-space:nowrap; min-width:56px; text-align:right;';
             // Column headers
@@ -20257,13 +20357,13 @@
             html += `<span style="flex:1;"></span>`;
             html += `<span style="${netColNum}"></span>`;
             html += `<span style="${netColNum}"></span>`;
-            html += `<span style="${netColGold}">${i18n_js.t('/hr')}</span>`;
-            html += `<span style="${netColGold}">${i18n_js.t('/day')}</span>`;
+            html += `<span style="${netColGold}">${t('/hr')}</span>`;
+            html += `<span style="${netColGold}">${t('/day')}</span>`;
             html += `<span style="${netColNum}"></span>`;
-            html += `<span style="${netColGold}">${i18n_js.t('Total')}</span>`;
+            html += `<span style="${netColGold}">${t('Total')}</span>`;
             html += '</div>';
             html += `<div style="display:flex; align-items:center; padding:2px 0; font-size:13px; gap:6px;">`;
-            html += `<span style="color:#aaa; font-weight:700; flex:1;">${i18n_js.t('Profit')}</span>`;
+            html += `<span style="color:#aaa; font-weight:700; flex:1;">${t('Profit')}</span>`;
             html += `<span style="${netColNum}"></span>`;
             html += `<span style="${netColNum}"></span>`;
             const profitDayDelta =
@@ -20546,13 +20646,13 @@
                 '; font-weight:700; font-size:12px; margin-bottom:6px; cursor:pointer; user-select:none;" data-toggle="history-section">';
             html +=
                 '<span data-arrow="history-section" style="display:inline-block; width:14px; font-size:10px;">&#9660;</span> ' +
-                i18n_js.t('Comparison ({0} runs)', history.length);
+                t('Comparison ({0} runs)', history.length);
             html += '</div>';
             html += '<div id="mwi-csim-history-section" style="display:block;">';
 
             // Baseline selector
             html += '<div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; font-size:11px;">';
-            html += '<span style="color:#888;">' + i18n_js.t('Baseline:') + '</span>';
+            html += '<span style="color:#888;">' + t('Baseline:') + '</span>';
             html +=
                 '<select id="mwi-csim-baseline-select" style="flex:1; background:#1a1a2e; color:#e0e0e0; border:1px solid #444; border-radius:4px; padding:1px 4px; font-size:11px; font-family:inherit;">';
             for (let i = 0; i < history.length; i++) {
@@ -20564,12 +20664,12 @@
             // Table
             html += '<table style="width:100%; font-size:11px; border-collapse:collapse;">';
             html += '<tr style="border-bottom:1px solid #333; color:#666;">';
-            html += '<th style="text-align:left; padding:2px 4px;">' + i18n_js.t('Scenario') + '</th>';
-            html += '<th style="text-align:right; padding:2px 4px;">' + i18n_js.t('EPH') + '</th>';
-            html += '<th style="text-align:right; padding:2px 4px;">' + i18n_js.t('DPS') + '</th>';
-            html += '<th style="text-align:right; padding:2px 4px;">' + i18n_js.t('Profit/hr') + '</th>';
-            html += '<th style="text-align:right; padding:2px 4px;">' + i18n_js.t('XP/hr') + '</th>';
-            if (hasDungeon) html += '<th style="text-align:right; padding:2px 4px;">' + i18n_js.t('Success') + '</th>';
+            html += '<th style="text-align:left; padding:2px 4px;">' + t('Scenario') + '</th>';
+            html += '<th style="text-align:right; padding:2px 4px;">' + t('EPH') + '</th>';
+            html += '<th style="text-align:right; padding:2px 4px;">' + t('DPS') + '</th>';
+            html += '<th style="text-align:right; padding:2px 4px;">' + t('Profit/hr') + '</th>';
+            html += '<th style="text-align:right; padding:2px 4px;">' + t('XP/hr') + '</th>';
+            if (hasDungeon) html += '<th style="text-align:right; padding:2px 4px;">' + t('Success') + '</th>';
             html += '<th style="width:20px;"></th>';
             html += '<th style="width:20px;"></th>';
             html += '</tr>';
@@ -20612,7 +20712,7 @@
                 '<td style="text-align:center; padding:2px; cursor:pointer; color:#555;" data-delete-history="' +
                 baseIdx +
                 '" title="' +
-                i18n_js.t('Delete result') +
+                t('Delete result') +
                 '">✕</td>';
             html += '</tr>';
             for (const idx of this._comparisonSlots) {
@@ -20670,13 +20770,13 @@
                     '<td style="text-align:center; padding:2px; cursor:pointer; color:#666;" data-remove-comparison="' +
                     idx +
                     '" title="' +
-                    i18n_js.t('Remove from comparison') +
+                    t('Remove from comparison') +
                     '">×</td>';
                 html +=
                     '<td style="text-align:center; padding:2px; cursor:pointer; color:#555;" data-delete-history="' +
                     idx +
                     '" title="' +
-                    i18n_js.t('Delete result') +
+                    t('Delete result') +
                     '">✕</td>';
                 html += '</tr>';
             }
@@ -20991,7 +21091,7 @@
             if (typeSelect) typeSelect.value = 'increment';
             input.value = '5';
             input.placeholder = '+5';
-            input.title = i18n_js.t('Number of levels to add to each ability');
+            input.title = t('Number of levels to add to each ability');
         }
 
         /**
@@ -21018,13 +21118,13 @@
             );
 
             if (!zoneHrid) {
-                this._setStatus(i18n_js.t('Select a zone in Configure tab first.'));
+                this._setStatus(t('Select a zone in Configure tab first.'));
                 return;
             }
 
             const gameData = buildGameDataPayload();
             if (!gameData) {
-                this._setStatus(i18n_js.t('No game data available.'));
+                this._setStatus(t('No game data available.'));
                 return;
             }
 
@@ -21039,7 +21139,7 @@
             }
 
             if (!playerDTOs?.length || !playerDTOs[playerIndex]) {
-                this._setStatus(i18n_js.t('No player data available. Configure a simulation first.'));
+                this._setStatus(t('No player data available. Configure a simulation first.'));
                 return;
             }
 
@@ -21057,6 +21157,7 @@
             const communityBuffs = getCommunityBuffs();
 
             try {
+                const skipBackSlot = this.panel.querySelector('#mwi-csim-upgrade-skip-back')?.checked || false;
                 const results = await runUpgradeAnalysis(
                     {
                         playerDTOs,
@@ -21068,6 +21169,7 @@
                         upgradeMode,
                         abilityLevelType,
                         abilityTargetLevel,
+                        skipBackSlot,
                     },
                     ({ current, total, description }) => {
                         if (this._upgradeAborted) return;
@@ -21082,14 +21184,14 @@
                 );
 
                 if (this._upgradeAborted) {
-                    this._setStatus(i18n_js.t('Analysis cancelled.'));
+                    this._setStatus(t('Analysis cancelled.'));
                 } else {
                     this._renderUpgradeResults(results);
                     this._setStatus(`Analysis complete. ${results.results.length} upgrades evaluated.`);
                 }
             } catch (error) {
                 console.error('[CombatSimUI] Upgrade analysis failed:', error);
-                this._setStatus(i18n_js.t('Analysis failed:') + ' ' + error.message);
+                this._setStatus(t('Analysis failed:') + ' ' + error.message);
             } finally {
                 progressEl.style.display = 'none';
                 runBtn.style.display = 'inline-block';
@@ -21118,11 +21220,11 @@
 
             let html = `<table style="${tableStyle}">
             <thead><tr>
-                <th style="${thStyle}">${i18n_js.t('Upgrade')}</th>
-                <th style="${thStyle}">${i18n_js.t('Cost')}</th>
-                <th style="${thStyle}">${i18n_js.t('Gold/0.1% DPS')}</th>
-                <th style="${thStyle}">${i18n_js.t('Gold/0.1% EXP')}</th>
-                <th style="${thStyle}">${i18n_js.t('Gold/0.1% Profit')}</th>
+                <th style="${thStyle}">${t('Upgrade')}</th>
+                <th style="${thStyle}">${t('Cost')}</th>
+                <th style="${thStyle}">${t('Gold/0.1% DPS')}</th>
+                <th style="${thStyle}">${t('Gold/0.1% EXP')}</th>
+                <th style="${thStyle}">${t('Gold/0.1% Profit')}</th>
             </tr></thead><tbody>`;
 
             // Find best (lowest non-Infinity) value in each gold/0.1% column
@@ -21183,33 +21285,33 @@
                 <td colspan="5" style="padding:6px 12px; background:#0d0d1a; border-bottom:1px solid #222;">
                     <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr 1fr; gap:8px; font-size:11px;">
                         <div>
-                            <div style="color:#888;">${i18n_js.t('DPS')}</div>
+                            <div style="color:#888;">${t('DPS')}</div>
                             <div style="color:#e0e0e0;">${formatters_js.formatKMB(r.metrics.dps)}</div>
                             <div style="color:${deltaColor(dpsValueDelta)};">${fmtDelta(dpsValueDelta)} (${r.deltas.dps >= 0 ? '+' : ''}${r.deltas.dps.toFixed(2)}%)</div>
                         </div>
                         <div>
-                            <div style="color:#888;">${i18n_js.t('EXP/hr')}</div>
+                            <div style="color:#888;">${t('EXP/hr')}</div>
                             <div style="color:#e0e0e0;">${formatters_js.formatKMB(r.metrics.xpPerHour)}</div>
                             <div style="color:${deltaColor(xpValueDelta)};">${fmtDelta(xpValueDelta)} (${r.deltas.xp >= 0 ? '+' : ''}${r.deltas.xp.toFixed(2)}%)</div>
                         </div>
                         <div>
-                            <div style="color:#888;">${i18n_js.t('Profit/hr')}</div>
+                            <div style="color:#888;">${t('Profit/hr')}</div>
                             <div style="color:#e0e0e0;">${formatters_js.formatKMB(r.metrics.profitPerHour)}</div>
                             <div style="color:${deltaColor(profitValueDelta)};">${fmtDelta(profitValueDelta)} (${r.deltas.profit >= 0 ? '+' : ''}${r.deltas.profit.toFixed(2)}%)</div>
                         </div>
                         <div>
-                            <div style="color:#888;">${i18n_js.t('EPH')}</div>
+                            <div style="color:#888;">${t('EPH')}</div>
                             <div style="color:#e0e0e0;">${r.metrics.encountersPerHour.toFixed(1)}</div>
                             <div style="color:${deltaColor(ephDelta)};">${fmtDeltaSmall(ephDelta)} (${r.deltas.encounters >= 0 ? '+' : ''}${r.deltas.encounters.toFixed(2)}%)</div>
                         </div>
                         <div>
-                            <div style="color:#888;">${i18n_js.t('DPH')}</div>
+                            <div style="color:#888;">${t('DPH')}</div>
                             <div style="color:#e0e0e0;">${r.metrics.deathsPerHour.toFixed(1)}</div>
                             <div style="color:${deathDeltaColor(dphDelta)};">${fmtDeltaSmall(dphDelta)} (${r.deltas.deaths >= 0 ? '+' : ''}${r.deltas.deaths.toFixed(2)}%)</div>
                         </div>
                     </div>
                     <div style="margin-top:6px; color:#666; font-size:10px;">
-                        ${i18n_js.t('Baseline:')} DPS ${formatters_js.formatKMB(results.baseline.dps)} | EXP ${formatters_js.formatKMB(results.baseline.xpPerHour)} | Profit ${formatters_js.formatKMB(results.baseline.profitPerHour)} | EPH ${results.baseline.encountersPerHour.toFixed(1)} | DPH ${results.baseline.deathsPerHour.toFixed(1)}
+                        ${t('Baseline:')} DPS ${formatters_js.formatKMB(results.baseline.dps)} | EXP ${formatters_js.formatKMB(results.baseline.xpPerHour)} | Profit ${formatters_js.formatKMB(results.baseline.profitPerHour)} | EPH ${results.baseline.encountersPerHour.toFixed(1)} | DPH ${results.baseline.deathsPerHour.toFixed(1)}
                     </div>
                 </td>
             </tr>`;
@@ -21294,7 +21396,7 @@
 
             const button = document.createElement('div');
             button.className = 'MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1q2h7u5 ' + BUTTON_CLASS$1;
-            button.textContent = i18n_js.t('Combat Sim');
+            button.textContent = t('Combat Sim');
             button.style.cssText =
                 'cursor: pointer; background: linear-gradient(135deg, #3a7bd5, #5f3dc4); color: #fff; border-radius: 4px; padding: 4px 10px; font-size: 12px; white-space: nowrap;';
 
@@ -21502,7 +21604,7 @@
             flex-shrink: 0;
         `;
             header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:${ACCENT};">${i18n_js.t('Lab Simulator')}</span>
+            <span style="font-weight:700; font-size:14px; color:${ACCENT};">Lab Simulator</span>
             <button id="mwi-labsim-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">\u00d7</button>
@@ -21528,10 +21630,10 @@
             border-bottom: 2px solid ${active ? ACCENT : 'transparent'};
         `;
             tabBar.innerHTML = `
-            <button id="mwi-labsim-tab-configure" style="${tabStyle(true)}">${i18n_js.t('Configure')}</button>
-            <button id="mwi-labsim-tab-maxlevel" style="${tabStyle(false)}">${i18n_js.t('Max Level')}</button>
-            <button id="mwi-labsim-tab-upgrade" style="${tabStyle(false)}">${i18n_js.t('Upgrade')}</button>
-            <button id="mwi-labsim-tab-skilling" style="${tabStyle(false)}">${i18n_js.t('Skilling')}</button>
+            <button id="mwi-labsim-tab-configure" style="${tabStyle(true)}">Configure</button>
+            <button id="mwi-labsim-tab-maxlevel" style="${tabStyle(false)}">Max Level</button>
+            <button id="mwi-labsim-tab-upgrade" style="${tabStyle(false)}">Upgrade</button>
+            <button id="mwi-labsim-tab-skilling" style="${tabStyle(false)}">Skilling</button>
         `;
 
             // ── Configure tab ──
@@ -21552,26 +21654,26 @@
             const crateSelectStyle =
                 'background:#1a1a2e; color:#e0e0e0; border:1px solid #444; border-radius:4px; padding:3px 6px; font-size:12px;';
             crateRow.innerHTML = `
-            <label style="color:#888;">${i18n_js.t('Tea')}</label>
+            <label style="color:#888;">Tea</label>
             <select id="mwi-labsim-tea" style="${crateSelectStyle}">
-                <option value="">${i18n_js.t('None')}</option>
-                <option value="/items/basic_tea_crate">${i18n_js.t('Basic')}</option>
-                <option value="/items/advanced_tea_crate">${i18n_js.t('Advanced')}</option>
-                <option value="/items/expert_tea_crate" selected>${i18n_js.t('Expert')}</option>
+                <option value="">None</option>
+                <option value="/items/basic_tea_crate">Basic</option>
+                <option value="/items/advanced_tea_crate">Advanced</option>
+                <option value="/items/expert_tea_crate" selected>Expert</option>
             </select>
-            <label style="color:#888;">${i18n_js.t('Coffee')}</label>
+            <label style="color:#888;">Coffee</label>
             <select id="mwi-labsim-coffee" style="${crateSelectStyle}">
-                <option value="">${i18n_js.t('None')}</option>
-                <option value="/items/basic_coffee_crate">${i18n_js.t('Basic')}</option>
-                <option value="/items/advanced_coffee_crate">${i18n_js.t('Advanced')}</option>
-                <option value="/items/expert_coffee_crate" selected>${i18n_js.t('Expert')}</option>
+                <option value="">None</option>
+                <option value="/items/basic_coffee_crate">Basic</option>
+                <option value="/items/advanced_coffee_crate">Advanced</option>
+                <option value="/items/expert_coffee_crate" selected>Expert</option>
             </select>
-            <label style="color:#888;">${i18n_js.t('Food')}</label>
+            <label style="color:#888;">Food</label>
             <select id="mwi-labsim-food" style="${crateSelectStyle}">
-                <option value="">${i18n_js.t('None')}</option>
-                <option value="/items/basic_food_crate">${i18n_js.t('Basic')}</option>
-                <option value="/items/advanced_food_crate">${i18n_js.t('Advanced')}</option>
-                <option value="/items/expert_food_crate" selected>${i18n_js.t('Expert')}</option>
+                <option value="">None</option>
+                <option value="/items/basic_food_crate">Basic</option>
+                <option value="/items/advanced_food_crate">Advanced</option>
+                <option value="/items/expert_food_crate" selected>Expert</option>
             </select>
         `;
 
@@ -21579,9 +21681,7 @@
             editorArea.id = 'mwi-labsim-editor';
             editorArea.style.cssText = 'flex:1; overflow-y:auto; padding:10px 14px;';
             editorArea.innerHTML =
-                '<div style="color:#555; font-size:12px; text-align:center; padding:20px 0;">' +
-                i18n_js.t('Loading loadout...') +
-                '</div>';
+                '<div style="color:#555; font-size:12px; text-align:center; padding:20px 0;">Loading loadout...</div>';
 
             this._editor = new SimEditor({ editorEl: editorArea, labMode: true });
 
@@ -21595,7 +21695,7 @@
             buffsHeader.style.cssText =
                 'display:flex; align-items:center; justify-content:space-between; padding:6px 14px; cursor:pointer; color:#888; font-size:12px;';
             buffsHeader.innerHTML = `
-            <span>${i18n_js.t('Labyrinth Buffs')}</span>
+            <span>Labyrinth Buffs</span>
             <span id="mwi-labsim-buffs-toggle" style="font-size:10px;">\u25B6</span>
         `;
 
@@ -21632,12 +21732,12 @@
             padding: 10px 14px; border-bottom: 1px solid #222; flex-shrink: 0;
         `;
             maxLevelControls.innerHTML = `
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Monster')}</label>
+            <label style="color:#888; font-size:12px;">Monster</label>
             <select id="mwi-labsim-monster" style="${selectStyle}"></select>
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Level')}</label>
+            <label style="color:#888; font-size:12px;">Level</label>
             <input id="mwi-labsim-level" type="number" min="20" max="300" value="100" style="${inputStyle}">
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Hours')}</label>
-            <input id="mwi-labsim-hours" type="number" min="1" max="10000" value="10" style="${inputStyle}">
+            <label style="color:#888; font-size:12px;">Hours</label>
+            <input id="mwi-labsim-hours" type="number" min="1" max="10000" value="${config.getSettingValue('labyrinthRecommendSimHours', 10)}" style="${inputStyle}">
             <button id="mwi-labsim-run" style="
                 margin-left: auto;
                 background: ${ACCENT_BTN_BG};
@@ -21647,7 +21747,7 @@
                 padding: 5px 14px;
                 font-size: 12px;
                 font-weight: 600;
-                cursor: pointer;">${i18n_js.t('Simulate')}</button>
+                cursor: pointer;">Simulate</button>
         `;
 
             const findMaxRow = document.createElement('div');
@@ -21656,11 +21756,11 @@
             padding: 6px 14px; border-bottom: 1px solid #222; flex-shrink: 0; font-size: 12px;
         `;
             findMaxRow.innerHTML = `
-            <label style="display:flex; align-items:center; gap:4px; color:#888; cursor:pointer;" title="${i18n_js.t('Binary search for highest beatable level at the specified win rate threshold')}">
+            <label style="display:flex; align-items:center; gap:4px; color:#888; cursor:pointer;" title="Binary search for highest beatable level at the specified win rate threshold">
                 <input type="checkbox" id="mwi-labsim-findmax" style="margin:0; cursor:pointer;">
-                ${i18n_js.t('Find Max')} \u2265
+                Find Max \u2265
             </label>
-            <input id="mwi-labsim-threshold" type="number" min="1" max="100" value="95" style="width:44px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444; border-radius:4px; padding:3px 4px; font-size:12px; text-align:center;">
+            <input id="mwi-labsim-threshold" type="number" min="1" max="100" value="${config.getSettingValue('labyrinthRecommendTargetRate', 95)}" style="width:44px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444; border-radius:4px; padding:3px 4px; font-size:12px; text-align:center;">
             <span style="color:#888; font-size:12px;">%</span>
         `;
 
@@ -21675,7 +21775,7 @@
                 </div>
                 <button id="mwi-labsim-stop" style="
                     background:rgba(255,80,80,0.2); color:#f44; border:1px solid rgba(255,80,80,0.4);
-                    border-radius:4px; padding:2px 10px; font-size:11px; cursor:pointer; font-weight:600;">${i18n_js.t('Stop')}</button>
+                    border-radius:4px; padding:2px 10px; font-size:11px; cursor:pointer; font-weight:600;">Stop</button>
             </div>
         `;
 
@@ -21699,11 +21799,11 @@
             padding: 10px 14px; border-bottom: 1px solid #222; flex-shrink: 0;
         `;
             upgradeControls.innerHTML = `
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Player')}</label>
+            <label style="color:#888; font-size:12px;">Player</label>
             <select id="mwi-labsim-upgrade-player" style="${selectStyle}"></select>
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Enemy Level')}</label>
+            <label style="color:#888; font-size:12px;">Enemy Level</label>
             <input id="mwi-labsim-upgrade-level" type="number" min="20" max="300" value="100" style="${inputStyle}"
-                title="${i18n_js.t('Defaults to Max Level result when available')}">
+                title="Defaults to Max Level result when available">
             <button id="mwi-labsim-upgrade-run" style="
                 margin-left: auto;
                 background: ${ACCENT_BTN_BG};
@@ -21714,7 +21814,7 @@
                 font-size: 12px;
                 font-weight: 600;
                 cursor: pointer;
-                font-family: inherit;">${i18n_js.t('Analyze')}</button>
+                font-family: inherit;">Analyze</button>
             <button id="mwi-labsim-upgrade-stop" style="
                 display:none;
                 background:rgba(244, 67, 54, 0.2);
@@ -21725,7 +21825,7 @@
                 font-size:12px;
                 font-weight:600;
                 cursor:pointer;
-                font-family:inherit;">${i18n_js.t('Stop')}</button>
+                font-family:inherit;">Stop</button>
         `;
 
             const upgradeProgress = document.createElement('div');
@@ -21759,7 +21859,7 @@
             padding: 10px 14px; border-bottom: 1px solid #222; flex-shrink: 0;
         `;
             skillingControls.innerHTML = `
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Room Level')}</label>
+            <label style="color:#888; font-size:12px;">Room Level</label>
             <input id="mwi-labsim-skilling-level" type="number" min="1" max="300" value="100" style="${inputStyle}">
             <button id="mwi-labsim-skilling-calc" style="
                 background: ${ACCENT_BTN_BG};
@@ -21770,7 +21870,7 @@
                 font-size: 12px;
                 font-weight: 600;
                 cursor: pointer;
-                font-family: inherit;">${i18n_js.t('Calculate')}</button>
+                font-family: inherit;">Calculate</button>
             <button id="mwi-labsim-skilling-upgrade" style="
                 background: rgba(255,255,255,0.04);
                 border: 1px solid #333;
@@ -21779,7 +21879,7 @@
                 padding: 5px 10px;
                 font-size: 12px;
                 cursor: pointer;
-                font-family: inherit;">${i18n_js.t('Analyze Upgrades')}</button>
+                font-family: inherit;">Analyze Upgrades</button>
             <button id="mwi-labsim-skilling-stop" style="
                 display:none;
                 background:rgba(244, 67, 54, 0.2);
@@ -21790,7 +21890,7 @@
                 font-size:12px;
                 font-weight:600;
                 cursor:pointer;
-                font-family:inherit;">${i18n_js.t('Stop')}</button>
+                font-family:inherit;">Stop</button>
             <select id="mwi-labsim-skilling-filter" style="
                 background:#1a1a2e;
                 color:#e0e0e0;
@@ -21800,17 +21900,17 @@
                 font-size:11px;
                 font-family:inherit;
                 margin-left:auto;">
-                <option value="">${i18n_js.t('All Skills')}</option>
-                <option value="/skills/woodcutting">${i18n_js.t('Woodcutting')}</option>
-                <option value="/skills/foraging">${i18n_js.t('Foraging')}</option>
-                <option value="/skills/milking">${i18n_js.t('Milking')}</option>
-                <option value="/skills/cooking">${i18n_js.t('Cooking')}</option>
-                <option value="/skills/brewing">${i18n_js.t('Brewing')}</option>
-                <option value="/skills/cheesesmithing">${i18n_js.t('Cheesesmithing')}</option>
-                <option value="/skills/crafting">${i18n_js.t('Crafting')}</option>
-                <option value="/skills/tailoring">${i18n_js.t('Tailoring')}</option>
-                <option value="/skills/alchemy">${i18n_js.t('Alchemy')}</option>
-                <option value="/skills/enhancing">${i18n_js.t('Enhancing')}</option>
+                <option value="">All Skills</option>
+                <option value="/skills/woodcutting">Woodcutting</option>
+                <option value="/skills/foraging">Foraging</option>
+                <option value="/skills/milking">Milking</option>
+                <option value="/skills/cooking">Cooking</option>
+                <option value="/skills/brewing">Brewing</option>
+                <option value="/skills/cheesesmithing">Cheesesmithing</option>
+                <option value="/skills/crafting">Crafting</option>
+                <option value="/skills/tailoring">Tailoring</option>
+                <option value="/skills/alchemy">Alchemy</option>
+                <option value="/skills/enhancing">Enhancing</option>
             </select>
         `;
 
@@ -21820,26 +21920,26 @@
             padding: 6px 14px; border-bottom: 1px solid #222; flex-shrink: 0; font-size: 12px;
         `;
             skillingCrateRow.innerHTML = `
-            <label style="color:#888;">${i18n_js.t('Tea')}</label>
+            <label style="color:#888;">Tea</label>
             <select id="mwi-labsim-skilling-tea" style="${crateSelectStyle}">
-                <option value="">${i18n_js.t('None')}</option>
-                <option value="/items/basic_tea_crate">${i18n_js.t('Basic')}</option>
-                <option value="/items/advanced_tea_crate">${i18n_js.t('Advanced')}</option>
-                <option value="/items/expert_tea_crate" selected>${i18n_js.t('Expert')}</option>
+                <option value="">None</option>
+                <option value="/items/basic_tea_crate">Basic</option>
+                <option value="/items/advanced_tea_crate">Advanced</option>
+                <option value="/items/expert_tea_crate" selected>Expert</option>
             </select>
-            <label style="color:#888;">${i18n_js.t('Coffee')}</label>
+            <label style="color:#888;">Coffee</label>
             <select id="mwi-labsim-skilling-coffee" style="${crateSelectStyle}">
-                <option value="">${i18n_js.t('None')}</option>
-                <option value="/items/basic_coffee_crate">${i18n_js.t('Basic')}</option>
-                <option value="/items/advanced_coffee_crate">${i18n_js.t('Advanced')}</option>
-                <option value="/items/expert_coffee_crate" selected>${i18n_js.t('Expert')}</option>
+                <option value="">None</option>
+                <option value="/items/basic_coffee_crate">Basic</option>
+                <option value="/items/advanced_coffee_crate">Advanced</option>
+                <option value="/items/expert_coffee_crate" selected>Expert</option>
             </select>
-            <label style="color:#888;">${i18n_js.t('Food')}</label>
+            <label style="color:#888;">Food</label>
             <select id="mwi-labsim-skilling-food" style="${crateSelectStyle}">
-                <option value="">${i18n_js.t('None')}</option>
-                <option value="/items/basic_food_crate">${i18n_js.t('Basic')}</option>
-                <option value="/items/advanced_food_crate">${i18n_js.t('Advanced')}</option>
-                <option value="/items/expert_food_crate" selected>${i18n_js.t('Expert')}</option>
+                <option value="">None</option>
+                <option value="/items/basic_food_crate">Basic</option>
+                <option value="/items/advanced_food_crate">Advanced</option>
+                <option value="/items/expert_food_crate" selected>Expert</option>
             </select>
         `;
 
@@ -21852,9 +21952,7 @@
             skillingEditorArea.id = 'mwi-labsim-skilling-editor';
             skillingEditorArea.style.cssText = 'overflow-y:auto; padding:10px 14px; max-height:200px; flex-shrink:0;';
             skillingEditorArea.innerHTML =
-                '<div style="color:#555; font-size:12px; text-align:center; padding:20px 0;">' +
-                i18n_js.t('Loading loadout...') +
-                '</div>';
+                '<div style="color:#555; font-size:12px; text-align:center; padding:20px 0;">Loading loadout...</div>';
 
             this._skillingEditor = new SimEditor({ editorEl: skillingEditorArea, labMode: true, skillingMode: true });
 
@@ -21886,7 +21984,7 @@
             status.id = 'mwi-labsim-status';
             status.style.cssText =
                 'padding:6px 14px; color:#555; font-size:11px; border-top:1px solid #1a1a1a; flex-shrink:0; text-align:center;';
-            status.textContent = i18n_js.t('Select a monster and click Simulate.');
+            status.textContent = 'Select a monster and click Simulate.';
 
             // Assemble
             this.panel.appendChild(header);
@@ -21938,7 +22036,7 @@
             this.panel.querySelector('#mwi-labsim-stop').addEventListener('click', () => {
                 cancelSimulation();
                 this.isRunning = false;
-                this._setStatus(i18n_js.t('Labyrinth simulation cancelled.'));
+                this._setStatus('Labyrinth simulation cancelled.');
                 this.panel.querySelector('#mwi-labsim-progress').style.display = 'none';
             });
             this.panel.querySelector('#mwi-labsim-findmax').addEventListener('change', (e) => {
@@ -21981,7 +22079,7 @@
             for (const monster of monsters) {
                 const option = document.createElement('option');
                 option.value = monster.hrid;
-                option.textContent = getMonsterDisplayName(monster.hrid);
+                option.textContent = monster.name;
                 select.appendChild(option);
             }
         }
@@ -21996,14 +22094,14 @@
             playerInfo.forEach((p, i) => {
                 const option = document.createElement('option');
                 option.value = i;
-                option.textContent = p.name || `${i18n_js.t('Player')} ${i + 1}`;
+                option.textContent = p.name || `Player ${i + 1}`;
                 select.appendChild(option);
             });
 
             if (playerInfo.length === 0) {
                 const option = document.createElement('option');
                 option.value = 0;
-                option.textContent = i18n_js.t('Player 1');
+                option.textContent = 'Player 1';
                 select.appendChild(option);
             }
         }
@@ -22015,38 +22113,38 @@
 
             const info = dataManager.characterData?.characterInfo;
             if (!info) {
-                container.innerHTML = `<div style="color:#555;">${i18n_js.t('No character data available.')}</div>`;
+                container.innerHTML = '<div style="color:#555;">No character data available.</div>';
                 return;
             }
 
             const groups = [
                 {
-                    label: i18n_js.t('Combat'),
+                    label: 'Combat',
                     buffs: [
-                        { key: 'labyrinthCombatDamageLevel', name: i18n_js.t('Damage') },
-                        { key: 'labyrinthAttackSpeedLevel', name: i18n_js.t('Atk Speed') },
-                        { key: 'labyrinthCastSpeedLevel', name: i18n_js.t('Cast Speed') },
-                        { key: 'labyrinthCriticalRateLevel', name: i18n_js.t('Crit Rate') },
+                        { key: 'labyrinthCombatDamageLevel', name: 'Damage' },
+                        { key: 'labyrinthAttackSpeedLevel', name: 'Atk Speed' },
+                        { key: 'labyrinthCastSpeedLevel', name: 'Cast Speed' },
+                        { key: 'labyrinthCriticalRateLevel', name: 'Crit Rate' },
                     ],
                 },
                 {
-                    label: i18n_js.t('Skilling'),
+                    label: 'Skilling',
                     buffs: [
-                        { key: 'labyrinthSkillActionSpeedLevel', name: i18n_js.t('Speed') },
-                        { key: 'labyrinthSkillingEfficiencyLevel', name: i18n_js.t('Efficiency') },
-                        { key: 'labyrinthSkillingSuccessLevel', name: i18n_js.t('Success') },
-                        { key: 'labyrinthSkillingDoubleProgressLevel', name: i18n_js.t('Double') },
+                        { key: 'labyrinthSkillActionSpeedLevel', name: 'Speed' },
+                        { key: 'labyrinthSkillingEfficiencyLevel', name: 'Efficiency' },
+                        { key: 'labyrinthSkillingSuccessLevel', name: 'Success' },
+                        { key: 'labyrinthSkillingDoubleProgressLevel', name: 'Double' },
                     ],
                 },
                 {
-                    label: i18n_js.t('Other'),
+                    label: 'Other',
                     buffs: [
-                        { key: 'labyrinthExperienceLevel', name: i18n_js.t('Experience') },
-                        { key: 'labyrinthCooldownLevel', name: i18n_js.t('Cooldown') },
-                        { key: 'labyrinthTorchLevel', name: i18n_js.t('Torch') },
-                        { key: 'labyrinthShroudLevel', name: i18n_js.t('Shroud') },
-                        { key: 'labyrinthBeaconLevel', name: i18n_js.t('Beacon') },
-                        { key: 'labyrinthAutomationLevel', name: i18n_js.t('Automation') },
+                        { key: 'labyrinthExperienceLevel', name: 'Experience' },
+                        { key: 'labyrinthCooldownLevel', name: 'Cooldown' },
+                        { key: 'labyrinthTorchLevel', name: 'Torch' },
+                        { key: 'labyrinthShroudLevel', name: 'Shroud' },
+                        { key: 'labyrinthBeaconLevel', name: 'Beacon' },
+                        { key: 'labyrinthAutomationLevel', name: 'Automation' },
                     ],
                 },
             ];
@@ -22146,7 +22244,7 @@
         async _onSimulate() {
             if (this.isRunning) {
                 cancelSimulation();
-                this._setStatus(i18n_js.t('Labyrinth simulation cancelled.'));
+                this._setStatus('Labyrinth simulation cancelled.');
                 return;
             }
 
@@ -22158,13 +22256,13 @@
             );
 
             if (!monsterHrid) {
-                this._setStatus(i18n_js.t('Select a monster first.'));
+                this._setStatus('Select a monster first.');
                 return;
             }
 
             const gameData = buildGameDataPayload();
             if (!gameData) {
-                this._setStatus(i18n_js.t('No game data available.'));
+                this._setStatus('No game data available.');
                 return;
             }
 
@@ -22181,7 +22279,7 @@
             }
 
             if (!playerDTOs.length) {
-                this._setStatus(i18n_js.t('No character data available.'));
+                this._setStatus('No character data available.');
                 return;
             }
 
@@ -22228,7 +22326,7 @@
                         (progress) => {
                             const percent = Math.round((progress.step / progress.totalSteps) * 100);
                             progressFill.style.width = `${percent}%`;
-                            progressText.textContent = `${i18n_js.t('Level')} ${progress.level} — ${(progress.winRate * 100).toFixed(0)}% (${i18n_js.t('step')} ${progress.step}/${progress.totalSteps})`;
+                            progressText.textContent = `Level ${progress.level} — ${(progress.winRate * 100).toFixed(0)}% (step ${progress.step}/${progress.totalSteps})`;
                         }
                     );
 
@@ -22265,7 +22363,7 @@
             } catch (error) {
                 if (error.message !== 'Cancelled') {
                     console.error('[LabSimUI] Simulation failed:', error);
-                    this._setStatus(i18n_js.t('Simulation failed:') + ' ' + error.message);
+                    this._setStatus('Simulation failed: ' + error.message);
                 }
             } finally {
                 this.isRunning = false;
@@ -22290,24 +22388,24 @@
             const simHours = (simResult.simulatedTime || 0) / (3600 * 1e9) || hours;
             const winRate = attempts > 0 ? ((encounters / attempts) * 100).toFixed(2) : '0.00';
 
-            const monsterName = getMonsterDisplayName(monsterHrid);
+            const monsterName = monsterHrid.split('/').pop().replace(/_/g, ' ');
 
             container.innerHTML = `
             <div style="margin-bottom:12px;">
                 <div style="color:${ACCENT}; font-weight:700; font-size:13px; margin-bottom:6px;">
-                    ${monsterName} \u2014 ${i18n_js.t('Level')} ${roomLevel}
+                    ${monsterName} \u2014 Level ${roomLevel}
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 20px; font-size:12px;">
-                    <div><span style="color:#888;">${i18n_js.t('Win Rate:')}</span> <span style="color:${parseFloat(winRate) >= 95 ? '#4caf50' : parseFloat(winRate) >= 50 ? '#ff9800' : '#f44336'}; font-weight:600;">${winRate}%</span></div>
-                    <div><span style="color:#888;">${i18n_js.t('Encounters:')}</span> ${formatters_js.formatWithSeparator(attempts)}</div>
-                    <div><span style="color:#888;">${i18n_js.t('Deaths:')}</span> <span style="color:${deaths > 0 ? '#f44336' : '#4caf50'};">${formatters_js.formatWithSeparator(deaths)}</span></div>
-                    <div><span style="color:#888;">${i18n_js.t('Sim Time:')}</span> ${simHours.toFixed(1)}h</div>
+                    <div><span style="color:#888;">Win Rate:</span> <span style="color:${parseFloat(winRate) >= 95 ? '#4caf50' : parseFloat(winRate) >= 50 ? '#ff9800' : '#f44336'}; font-weight:600;">${winRate}%</span></div>
+                    <div><span style="color:#888;">Encounters:</span> ${formatters_js.formatWithSeparator(attempts)}</div>
+                    <div><span style="color:#888;">Deaths:</span> <span style="color:${deaths > 0 ? '#f44336' : '#4caf50'};">${formatters_js.formatWithSeparator(deaths)}</span></div>
+                    <div><span style="color:#888;">Sim Time:</span> ${simHours.toFixed(1)}h</div>
                 </div>
-                <div style="color:#555; font-size:10px; margin-top:6px;">${i18n_js.t('Completed in')} ${totalElapsed}</div>
+                <div style="color:#555; font-size:10px; margin-top:6px;">Completed in ${totalElapsed}</div>
             </div>
         `;
 
-            this._setStatus(i18n_js.t('Simulation complete — {0}% win rate at level {1}.', winRate, roomLevel));
+            this._setStatus(`Simulation complete \u2014 ${winRate}% win rate at level ${roomLevel}.`);
         }
 
         /** @private */
@@ -22316,26 +22414,26 @@
             if (!container) return;
 
             const totalElapsed = formatElapsed((Date.now() - simStartTime) / 1000);
-            const monsterName = getMonsterDisplayName(monsterHrid);
+            const monsterName = monsterHrid.split('/').pop().replace(/_/g, ' ');
 
             container.innerHTML = `
             <div style="margin-bottom:12px;">
                 <div style="color:${ACCENT}; font-weight:700; font-size:13px; margin-bottom:6px;">
-                    ${monsterName} \u2014 ${i18n_js.t('Find Max Result')}
+                    ${monsterName} \u2014 Find Max Result
                 </div>
                 <div style="font-size:24px; font-weight:700; color:#4caf50; margin-bottom:6px;">
-                    ${i18n_js.t('Level')} ${maxResult.maxLevel}
+                    Level ${maxResult.maxLevel}
                 </div>
                 <div style="font-size:12px; color:#888;">
-                    ${i18n_js.t('Win Rate:')} <span style="color:#e0e0e0; font-weight:600;">${(maxResult.winRate * 100).toFixed(1)}%</span>
-                    ${i18n_js.t('at level')} ${maxResult.maxLevel}
+                    Win Rate: <span style="color:#e0e0e0; font-weight:600;">${(maxResult.winRate * 100).toFixed(1)}%</span>
+                    at level ${maxResult.maxLevel}
                 </div>
-                <div style="color:#555; font-size:10px; margin-top:6px;">${i18n_js.t('Completed in')} ${totalElapsed} (${maxResult.steps} ${i18n_js.t('steps')})</div>
+                <div style="color:#555; font-size:10px; margin-top:6px;">Completed in ${totalElapsed} (${maxResult.steps} steps)</div>
             </div>
         `;
 
             this._setStatus(
-                i18n_js.t('Max beatable level: {0} ({1}% win rate).', maxResult.maxLevel, (maxResult.winRate * 100).toFixed(1))
+                `Max beatable level: ${maxResult.maxLevel} (${(maxResult.winRate * 100).toFixed(1)}% win rate).`
             );
         }
 
@@ -22350,7 +22448,7 @@
             );
 
             if (!monsterHrid) {
-                this._setStatus(i18n_js.t('Select a monster in the Max Level tab first.'));
+                this._setStatus('Select a monster in the Max Level tab first.');
                 return;
             }
 
@@ -22358,7 +22456,7 @@
 
             const gameData = buildGameDataPayload();
             if (!gameData) {
-                this._setStatus(i18n_js.t('No game data available.'));
+                this._setStatus('No game data available.');
                 return;
             }
 
@@ -22372,7 +22470,7 @@
             }
 
             if (!playerDTOs?.length || !playerDTOs[playerIndex]) {
-                this._setStatus(i18n_js.t('No player data available.'));
+                this._setStatus('No player data available.');
                 return;
             }
 
@@ -22416,7 +22514,7 @@
             } catch (error) {
                 if (error.message !== 'Cancelled' && error.message !== 'Aborted') {
                     console.error('[LabSimUI] Upgrade analysis failed:', error);
-                    this._setStatus(i18n_js.t('Upgrade analysis failed:') + ' ' + error.message);
+                    this._setStatus('Upgrade analysis failed: ' + error.message);
                 }
             } finally {
                 progressEl.style.display = 'none';
@@ -22429,8 +22527,9 @@
         _renderUpgradeResults(analysisResult, container) {
             const results = analysisResult?.results;
             if (!results || !results.length) {
-                container.innerHTML = `<div style="color:#888; font-size:12px; padding:20px 0; text-align:center;">${i18n_js.t('No upgrade candidates found.')}</div>`;
-                this._setStatus(i18n_js.t('No upgrade candidates found.'));
+                container.innerHTML =
+                    '<div style="color:#888; font-size:12px; padding:20px 0; text-align:center;">No upgrade candidates found.</div>';
+                this._setStatus('No upgrade candidates found.');
                 return;
             }
 
@@ -22523,14 +22622,14 @@
                     return `<th data-sort-key="${key}" data-table="token" style="${style}">${label}${ind}</th>`;
                 };
 
-                let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">${i18n_js.t('Token Upgrades')}</div>`;
+                let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">Token Upgrades</div>`;
                 html += '<table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:12px;">';
                 html += `<thead><tr>
-                ${th(i18n_js.t('Upgrade'), 'desc', 'left')}
-                ${th(i18n_js.t('Tokens'), 'tokenCost', 'right')}
-                ${th(i18n_js.t('Rate'), 'rateVal', 'right')}
-                ${th(i18n_js.t('Delta'), 'deltaVal', 'right')}
-                ${th(i18n_js.t('Tokens/1%'), 'tokensPerPct', 'right')}
+                ${th('Upgrade', 'desc', 'left')}
+                ${th('Tokens', 'tokenCost', 'right')}
+                ${th('Rate', 'rateVal', 'right')}
+                ${th('Delta', 'deltaVal', 'right')}
+                ${th('Tokens/1%', 'tokensPerPct', 'right')}
             </tr></thead><tbody>`;
 
                 for (const row of tokenRows) {
@@ -22554,14 +22653,14 @@
                     return `<th data-sort-key="${key}" data-table="gold" style="${style}">${label}${ind}</th>`;
                 };
 
-                let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">${i18n_js.t('Gold Upgrades')}</div>`;
+                let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">Gold Upgrades</div>`;
                 html += '<table style="width:100%; border-collapse:collapse; font-size:11px;">';
                 html += `<thead><tr>
-                ${th(i18n_js.t('Upgrade'), 'desc', 'left')}
-                ${th(i18n_js.t('Cost'), 'cost', 'right')}
-                ${th(i18n_js.t('Win Rate'), 'winRate', 'right')}
-                ${th(i18n_js.t('Delta'), 'deltaVal', 'right')}
-                ${th(i18n_js.t('Gold/1%'), 'goldPerPct', 'right')}
+                ${th('Upgrade', 'desc', 'left')}
+                ${th('Cost', 'cost', 'right')}
+                ${th('Win Rate', 'winRate', 'right')}
+                ${th('Delta', 'deltaVal', 'right')}
+                ${th('Gold/1%', 'goldPerPct', 'right')}
             </tr></thead><tbody>`;
 
                 for (const row of goldRows) {
@@ -22603,7 +22702,7 @@
                 renderAll();
             });
 
-            this._setStatus(i18n_js.t('{0} upgrade candidates analyzed.', results.length));
+            this._setStatus(`${results.length} upgrade candidates analyzed.`);
         }
 
         /** @private */
@@ -22630,16 +22729,16 @@
             const allSkillsSnapshots = allSnapshots.filter((s) => !s.actionTypeHrid);
 
             const skills = [
-                { hrid: '/skills/woodcutting', label: i18n_js.t('Woodcutting'), actionType: '/action_types/woodcutting' },
-                { hrid: '/skills/foraging', label: i18n_js.t('Foraging'), actionType: '/action_types/foraging' },
-                { hrid: '/skills/milking', label: i18n_js.t('Milking'), actionType: '/action_types/milking' },
-                { hrid: '/skills/cooking', label: i18n_js.t('Cooking'), actionType: '/action_types/cooking' },
-                { hrid: '/skills/brewing', label: i18n_js.t('Brewing'), actionType: '/action_types/brewing' },
-                { hrid: '/skills/cheesesmithing', label: i18n_js.t('Cheesesmithing'), actionType: '/action_types/cheesesmithing' },
-                { hrid: '/skills/crafting', label: i18n_js.t('Crafting'), actionType: '/action_types/crafting' },
-                { hrid: '/skills/tailoring', label: i18n_js.t('Tailoring'), actionType: '/action_types/tailoring' },
-                { hrid: '/skills/alchemy', label: i18n_js.t('Alchemy'), actionType: '/action_types/alchemy' },
-                { hrid: '/skills/enhancing', label: i18n_js.t('Enhancing'), actionType: '/action_types/enhancing' },
+                { hrid: '/skills/woodcutting', label: 'Woodcutting', actionType: '/action_types/woodcutting' },
+                { hrid: '/skills/foraging', label: 'Foraging', actionType: '/action_types/foraging' },
+                { hrid: '/skills/milking', label: 'Milking', actionType: '/action_types/milking' },
+                { hrid: '/skills/cooking', label: 'Cooking', actionType: '/action_types/cooking' },
+                { hrid: '/skills/brewing', label: 'Brewing', actionType: '/action_types/brewing' },
+                { hrid: '/skills/cheesesmithing', label: 'Cheesesmithing', actionType: '/action_types/cheesesmithing' },
+                { hrid: '/skills/crafting', label: 'Crafting', actionType: '/action_types/crafting' },
+                { hrid: '/skills/tailoring', label: 'Tailoring', actionType: '/action_types/tailoring' },
+                { hrid: '/skills/alchemy', label: 'Alchemy', actionType: '/action_types/alchemy' },
+                { hrid: '/skills/enhancing', label: 'Enhancing', actionType: '/action_types/enhancing' },
             ];
 
             // Load persisted overrides once
@@ -22682,7 +22781,7 @@
 
             const arrow = collapsed ? '&#9654;' : '&#9660;';
             let html = `<div id="mwi-labsim-loadout-toggle" style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px; cursor:pointer; user-select:none;">
-            <span style="display:inline-block; width:14px; font-size:10px;">${arrow}</span> ${i18n_js.t('Skill Loadouts')}
+            <span style="display:inline-block; width:14px; font-size:10px;">${arrow}</span> Skill Loadouts
         </div>`;
             html += `<div id="mwi-labsim-loadout-grid" style="display:${collapsed ? 'none' : 'grid'}; grid-template-columns:1fr 1fr; gap:3px 10px;">`;
 
@@ -22691,9 +22790,9 @@
                 html += `<div style="display:flex; align-items:center; gap:4px; font-size:11px;">`;
                 html += `<span style="color:#888; width:85px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${skill.label}">${skill.label}</span>`;
                 html += `<select data-skill-loadout="${skill.hrid}" style="${selectStyle}">`;
-                html += `<option value=""${!current ? ' selected' : ''}>${i18n_js.t('Current Gear')}</option>`;
+                html += `<option value=""${!current ? ' selected' : ''}>Current Gear</option>`;
                 for (const snap of [...nonCombatSnapshots, ...allSkillsSnapshots]) {
-                    const label = snap.name + (snap.actionTypeHrid ? '' : ` ${i18n_js.t('(All)')}`);
+                    const label = snap.name + (snap.actionTypeHrid ? '' : ' (All)');
                     const selected = current === snap.name ? ' selected' : '';
                     html += `<option value="${snap.name}"${selected}>${label}</option>`;
                 }
@@ -22760,20 +22859,20 @@
             const roomLevel = parseInt(this.panel.querySelector('#mwi-labsim-skilling-level')?.value) || 100;
             const gameData = buildGameDataPayload();
             if (!gameData) {
-                this._setStatus(i18n_js.t('No game data available.'));
+                this._setStatus('No game data available.');
                 return;
             }
 
             const editedDTOs = this._skillingEditor?.getEditedDTOs();
             if (!editedDTOs) {
-                this._setStatus(i18n_js.t('No character data. Wait for editor to load.'));
+                this._setStatus('No character data. Wait for editor to load.');
                 return;
             }
 
             const selfHrid = this._skillingEditor.getSelfHrid();
             const dto = editedDTOs[selfHrid] || Object.values(editedDTOs)[0];
             if (!dto) {
-                this._setStatus(i18n_js.t('No player data available.'));
+                this._setStatus('No player data available.');
                 return;
             }
 
@@ -22795,20 +22894,20 @@
             const tdStyle = 'padding:3px 4px; text-align:right; font-size:11px;';
 
             let html = `<div style="color:${ACCENT}; font-weight:700; font-size:13px; margin-bottom:6px;">
-            ${i18n_js.t('Skilling Room Level')} ${roomLevel}
+            Skilling Room Level ${roomLevel}
             <span style="color:#888; font-weight:400; font-size:11px; margin-left:8px;">
-                ${i18n_js.t('Avg Clear:')} <span style="color:${avgClearRate >= 0.95 ? '#4caf50' : avgClearRate >= 0.5 ? '#ff9800' : '#f44336'}; font-weight:600;">${(avgClearRate * 100).toFixed(1)}%</span>
+                Avg Clear: <span style="color:${avgClearRate >= 0.95 ? '#4caf50' : avgClearRate >= 0.5 ? '#ff9800' : '#f44336'}; font-weight:600;">${(avgClearRate * 100).toFixed(1)}%</span>
             </span>
         </div>`;
 
             html += '<table style="width:100%; border-collapse:collapse; font-size:11px;">';
             html += `<thead><tr>
-            <th style="${thLeftStyle}">${i18n_js.t('Skill')}</th>
-            <th style="${thStyle}">${i18n_js.t('Level')}</th>
-            <th style="${thStyle}">${i18n_js.t('Eff. Lvl')}</th>
-            <th style="${thStyle}">${i18n_js.t('Success')}</th>
-            <th style="${thStyle}">${i18n_js.t('Clear')}</th>
-            <th style="${thStyle}">${i18n_js.t('Actions')}</th>
+            <th style="${thLeftStyle}">Skill</th>
+            <th style="${thStyle}">Level</th>
+            <th style="${thStyle}">Eff. Lvl</th>
+            <th style="${thStyle}">Success</th>
+            <th style="${thStyle}">Clear</th>
+            <th style="${thStyle}">Actions</th>
         </tr></thead><tbody>`;
 
             for (const r of results) {
@@ -22828,7 +22927,7 @@
 
             html += '</tbody></table>';
             container.innerHTML = html;
-            this._setStatus(i18n_js.t('Skilling clear rates calculated for level {0}.', roomLevel));
+            this._setStatus(`Skilling clear rates calculated for level ${roomLevel}.`);
         }
 
         /** @private */
@@ -22836,20 +22935,20 @@
             const roomLevel = parseInt(this.panel.querySelector('#mwi-labsim-skilling-level')?.value) || 100;
             const gameData = buildGameDataPayload();
             if (!gameData) {
-                this._setStatus(i18n_js.t('No game data available.'));
+                this._setStatus('No game data available.');
                 return;
             }
 
             const editedDTOs = this._skillingEditor?.getEditedDTOs();
             if (!editedDTOs) {
-                this._setStatus(i18n_js.t('No character data. Wait for editor to load.'));
+                this._setStatus('No character data. Wait for editor to load.');
                 return;
             }
 
             const selfHrid = this._skillingEditor.getSelfHrid();
             const dto = editedDTOs[selfHrid] || Object.values(editedDTOs)[0];
             if (!dto) {
-                this._setStatus(i18n_js.t('No player data available.'));
+                this._setStatus('No player data available.');
                 return;
             }
 
@@ -22885,7 +22984,7 @@
                 this._renderSkillingUpgradeResults(analysisResult, resultsEl);
             } catch (error) {
                 console.error('[LabSimUI] Skilling upgrade analysis failed:', error);
-                this._setStatus(i18n_js.t('Skilling upgrade analysis failed:') + ' ' + error.message);
+                this._setStatus('Skilling upgrade analysis failed: ' + error.message);
             } finally {
                 progressEl.style.display = 'none';
                 calcBtn.style.display = '';
@@ -22898,8 +22997,9 @@
         _renderSkillingUpgradeResults(analysisResult, container) {
             const results = analysisResult?.results;
             if (!results || !results.length) {
-                container.innerHTML = `<div style="color:#888; font-size:12px; padding:20px 0; text-align:center;">${i18n_js.t('No upgrade candidates found.')}</div>`;
-                this._setStatus(i18n_js.t('No skilling upgrade candidates found.'));
+                container.innerHTML =
+                    '<div style="color:#888; font-size:12px; padding:20px 0; text-align:center;">No upgrade candidates found.</div>';
+                this._setStatus('No skilling upgrade candidates found.');
                 return;
             }
 
@@ -22974,14 +23074,14 @@
                     return `<th data-sort-key="${key}" data-table="token" style="${style}">${label}${ind}</th>`;
                 };
 
-                let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">${i18n_js.t('Token Upgrades')}</div>`;
+                let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">Token Upgrades</div>`;
                 html += '<table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:12px;">';
                 html += `<thead><tr>
-                ${th(i18n_js.t('Upgrade'), 'desc', 'left')}
-                ${th(i18n_js.t('Tokens'), 'tokenCost', 'right')}
-                ${th(i18n_js.t('Clear Rate'), 'clearRate', 'right')}
-                ${th(i18n_js.t('Delta'), 'deltaVal', 'right')}
-                ${th(i18n_js.t('Tokens/1%'), 'tokensPerPct', 'right')}
+                ${th('Upgrade', 'desc', 'left')}
+                ${th('Tokens', 'tokenCost', 'right')}
+                ${th('Clear Rate', 'clearRate', 'right')}
+                ${th('Delta', 'deltaVal', 'right')}
+                ${th('Tokens/1%', 'tokensPerPct', 'right')}
             </tr></thead><tbody>`;
 
                 for (const row of tokenRows) {
@@ -23005,14 +23105,14 @@
                     return `<th data-sort-key="${key}" data-table="gold" style="${style}">${label}${ind}</th>`;
                 };
 
-                let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">${i18n_js.t('Equipment Upgrades')}</div>`;
+                let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">Equipment Upgrades</div>`;
                 html += '<table style="width:100%; border-collapse:collapse; font-size:11px;">';
                 html += `<thead><tr>
-                ${th(i18n_js.t('Upgrade'), 'desc', 'left')}
-                ${th(i18n_js.t('Cost'), 'cost', 'right')}
-                ${th(i18n_js.t('Clear Rate'), 'clearRate', 'right')}
-                ${th(i18n_js.t('Delta'), 'deltaVal', 'right')}
-                ${th(i18n_js.t('Gold/1%'), 'goldPerPct', 'right')}
+                ${th('Upgrade', 'desc', 'left')}
+                ${th('Cost', 'cost', 'right')}
+                ${th('Clear Rate', 'clearRate', 'right')}
+                ${th('Delta', 'deltaVal', 'right')}
+                ${th('Gold/1%', 'goldPerPct', 'right')}
             </tr></thead><tbody>`;
 
                 for (const row of goldRows) {
@@ -23032,7 +23132,7 @@
                 sortRows(tokenRows, sortState.token.key, sortState.token.dir);
                 sortRows(goldRows, sortState.gold.key, sortState.gold.dir);
                 let html = `<div style="color:#888; font-size:11px; margin-bottom:8px;">
-                ${i18n_js.t('Baseline Avg Clear:')} <span style="color:#e0e0e0; font-weight:600;">${((baseline?.clearRate || 0) * 100).toFixed(1)}%</span>
+                Baseline Avg Clear: <span style="color:#e0e0e0; font-weight:600;">${((baseline?.clearRate || 0) * 100).toFixed(1)}%</span>
             </div>`;
                 if (tokenRows.length > 0) html += renderTokenTable();
                 if (goldRows.length > 0) html += renderGoldTable();
@@ -23056,7 +23156,7 @@
                 renderAll();
             });
 
-            this._setStatus(i18n_js.t('{0} skilling upgrade candidates analyzed.', results.length));
+            this._setStatus(`${results.length} skilling upgrade candidates analyzed.`);
         }
 
         toggle() {
@@ -23190,7 +23290,7 @@
 
             const button = document.createElement('div');
             button.className = 'MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1q2h7u5 ' + BUTTON_CLASS;
-            button.textContent = i18n_js.t('Lab Sim');
+            button.textContent = t('Lab Sim');
             button.style.cssText =
                 'cursor: pointer; background: linear-gradient(135deg, #3a7bd5, #5f3dc4); color: #fff; border-radius: 4px; padding: 4px 10px; font-size: 12px; white-space: nowrap;';
 
@@ -24461,7 +24561,7 @@
             const button = document.createElement('div');
             button.className =
                 'MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1q2h7u5 toolasha-combat-stats-btn';
-            button.textContent = i18n_js.t('Statistics');
+            button.textContent = t('Statistics');
             button.style.cursor = 'pointer';
 
             button.onclick = () => this.showPopup();
@@ -24494,7 +24594,7 @@
             let message = '';
             if (Array.isArray(messageTemplate)) {
                 // Format numbers
-                const useKMB = config.getSetting('formatting_useKMBFormat');
+                const useKMB = formatters_js.isAbbreviationEnabled();
                 const formatNum = (num) => (useKMB ? formatters_js.coinFormatter(Math.round(num)) : formatters_js.formatWithSeparator(Math.round(num)));
 
                 // Build message from array
@@ -24530,7 +24630,7 @@
                     .join('');
             } else {
                 // Legacy string format (shouldn't happen, but handle it)
-                const useKMB = config.getSetting('formatting_useKMBFormat');
+                const useKMB = formatters_js.isAbbreviationEnabled();
                 const formatNum = (num) => (useKMB ? formatters_js.coinFormatter(Math.round(num)) : formatters_js.formatWithSeparator(Math.round(num)));
 
                 message = (messageTemplate || 'Combat Stats: {income} income | {dailyProfit} profit/d | {exp} exp/h')
@@ -24590,7 +24690,7 @@
                 const marketData = await marketAPI.fetch();
                 if (!marketData) {
                     console.error('[Combat Stats] Market data not available');
-                    alert(i18n_js.t('Market data not available. Please try again.'));
+                    alert(t('Market data not available. Please try again.'));
                     return;
                 }
             }
@@ -24605,7 +24705,7 @@
             }
 
             if (!combatData || !combatData.players || combatData.players.length === 0) {
-                alert(i18n_js.t('No combat data available. Start a combat run first.'));
+                alert(t('No combat data available. Start a combat run first.'));
                 return;
             }
 
@@ -24684,7 +24784,7 @@
         `;
 
             const title = document.createElement('h2');
-            title.textContent = i18n_js.t('Combat Statistics');
+            title.textContent = t('Combat Statistics');
             title.style.cssText = `
             margin: 0;
             color: ${textColor};
@@ -24700,7 +24800,7 @@
         `;
 
             const resetButton = document.createElement('button');
-            resetButton.textContent = i18n_js.t('Reset Consumable Tracking');
+            resetButton.textContent = t('Reset Consumable Tracking');
             resetButton.style.cssText = `
             background: #4a4a4a;
             border: 1px solid #5a5a5a;
@@ -24718,7 +24818,7 @@
             };
             resetButton.onclick = async () => {
                 if (
-                    confirm(i18n_js.t('Reset consumable tracking? This will clear all tracked consumption data and start fresh.'))
+                    confirm(t('Reset consumable tracking? This will clear all tracked consumption data and start fresh.'))
                 ) {
                     await combatStatsDataCollector.resetConsumableTracking();
 
@@ -24880,7 +24980,7 @@
 
             // Statistics rows
             // Use K/M/B formatting if enabled, otherwise use separators
-            const useKMB = config.getSetting('formatting_useKMBFormat');
+            const useKMB = formatters_js.isAbbreviationEnabled();
             const formatNum = (num) => (useKMB ? formatters_js.coinFormatter(Math.round(num)) : formatters_js.formatWithSeparator(Math.round(num)));
             const formatNumDecimals = (num) =>
                 useKMB
@@ -24890,25 +24990,25 @@
             const priceKey = config.getSettingValue('profitCalc_keyPricingMode') || 'ask';
 
             const statsRows = [
-                { label: i18n_js.t('Duration'), value: stats.durationFormatted || '0s' },
-                { label: i18n_js.t('Encounters/Hour'), value: formatNum(stats.encountersPerHour) },
+                { label: t('Duration'), value: stats.durationFormatted || '0s' },
+                { label: t('Encounters/Hour'), value: formatNum(stats.encountersPerHour) },
                 {
-                    label: i18n_js.t('Income'),
+                    label: t('Income'),
                     value: formatNum(stats.income[priceKey]),
                     ...(stats.isDungeonRun && stats.incomeBreakdown?.length > 0
                         ? { expandable: true, incomeBreakdown: stats.incomeBreakdown }
                         : {}),
                 },
-                { label: i18n_js.t('Daily Income'), value: `${formatNum(stats.dailyIncome[priceKey])}/d` },
+                { label: t('Daily Income'), value: `${formatNum(stats.dailyIncome[priceKey])}/d` },
                 {
-                    label: i18n_js.t('Consumable Costs'),
+                    label: t('Consumable Costs'),
                     value: formatNumDecimals(stats.consumableCosts),
                     color: '#ff6b6b',
                     expandable: true,
                     breakdown: stats.consumableBreakdown,
                 },
                 {
-                    label: i18n_js.t('Daily Consumable Costs'),
+                    label: t('Daily Consumable Costs'),
                     value: `${formatNumDecimals(stats.dailyConsumableCosts)}/d`,
                     color: '#ff6b6b',
                     expandable: true,
@@ -24918,7 +25018,7 @@
                 ...(stats.keyBreakdown && stats.keyBreakdown.length > 0
                     ? [
                           {
-                              label: i18n_js.t('Key Costs'),
+                              label: t('Key Costs'),
                               value: formatNum(stats.keyCosts[priceKey]),
                               color: '#ff6b6b',
                               expandable: true,
@@ -24927,7 +25027,7 @@
                               showKeyPricingNote: true,
                           },
                           {
-                              label: i18n_js.t('Daily Key Costs'),
+                              label: t('Daily Key Costs'),
                               value: `${formatNum(stats.dailyKeyCosts)}/d`,
                               color: '#ff6b6b',
                               expandable: true,
@@ -24939,14 +25039,14 @@
                       ]
                     : []),
                 {
-                    label: i18n_js.t('Daily Profit'),
+                    label: t('Daily Profit'),
                     value: `${formatNum(stats.dailyProfit[priceKey])}/d`,
                     color: stats.dailyProfit[priceKey] >= 0 ? '#51cf66' : '#ff6b6b',
                 },
-                { label: i18n_js.t('Total EXP'), value: formatNum(stats.totalExp) },
-                { label: i18n_js.t('EXP/hour'), value: `${formatNum(stats.expPerHour)}/h` },
-                { label: i18n_js.t('Death Count'), value: `${stats.deathCount}` },
-                { label: i18n_js.t('Deaths/hr'), value: `${stats.deathsPerHour.toFixed(2)}/h` },
+                { label: t('Total EXP'), value: formatNum(stats.totalExp) },
+                { label: t('EXP/hour'), value: `${formatNum(stats.expPerHour)}/h` },
+                { label: t('Death Count'), value: `${stats.deathCount}` },
+                { label: t('Deaths/hr'), value: `${stats.deathsPerHour.toFixed(2)}/h` },
             ];
 
             const statsContainer = document.createElement('div');
@@ -25004,7 +25104,7 @@
                                 font-size: 12px;
                                 color: #aaa;
                             `;
-                                pricingNote.textContent = i18n_js.t('Pricing: {0}', config.getPricingModeLabel(pricingMode));
+                                pricingNote.textContent = t('Pricing: {0}', config.getPricingModeLabel(pricingMode));
                                 breakdownDiv.appendChild(pricingNote);
 
                                 // Column header
@@ -25167,9 +25267,9 @@
                                     color: #aaa;
                                     margin-bottom: 6px;
                                 `;
-                                    keyPricingNote.textContent = i18n_js.t(
+                                    keyPricingNote.textContent = t(
                                         'Pricing: {0}',
-                                        keyPricing === 'bid' ? i18n_js.t('Bid (patient buy)') : i18n_js.t('Ask (instant buy)')
+                                        keyPricing === 'bid' ? t('Bid (patient buy)') : t('Ask (instant buy)')
                                     );
                                     breakdownDiv.appendChild(keyPricingNote);
                                 }
@@ -25282,7 +25382,7 @@
                                     const hasActualData = firstItem.actualConsumed > 0;
 
                                     if (!hasActualData) {
-                                        trackingNote.textContent = `${i18n_js.t('📊 Tracked {0} - No consumption yet (rate decreases over time)', formatTrackingDuration(trackingDuration))}`;
+                                        trackingNote.textContent = `${t('📊 Tracked {0} - No consumption yet (rate decreases over time)', formatTrackingDuration(trackingDuration))}`;
                                     } else {
                                         trackingNote.textContent = `📊 Tracked ${formatTrackingDuration(trackingDuration)} - 90% actual + 10% baseline blend`;
                                     }
@@ -25290,7 +25390,7 @@
                                     breakdownDiv.appendChild(trackingNote);
                                 }
                             } else if (breakdownDiv) {
-                                breakdownDiv.textContent = i18n_js.t('No consumables used');
+                                breakdownDiv.textContent = t('No consumables used');
                                 breakdownDiv.style.color = '#888';
                             }
 
@@ -25311,7 +25411,7 @@
             // Drop list
             if (stats.lootList && stats.lootList.length > 0) {
                 const dropHeader = document.createElement('div');
-                dropHeader.textContent = i18n_js.t('Drops');
+                dropHeader.textContent = t('Drops');
                 dropHeader.style.cssText = `
                 font-weight: bold;
                 margin-top: 10px;
@@ -25696,7 +25796,12 @@
 
         // Check if this is a buy modal (has a buy/confirm button)
         // A sell modal would have a sell button instead
-        const isBuyModal = modal.querySelector('[class*="Button_buy"]');
+        const isBuyModal =
+            modal.querySelector('[class*="Button_buy"]') ||
+            modal.textContent.includes('Buy Now') ||
+            modal.textContent.includes('Buy Listing') ||
+            modal.textContent.includes('立即购买') ||
+            modal.textContent.includes('买入挂单');
         if (!isBuyModal) {
             return;
         }
@@ -25853,7 +25958,7 @@
                 'ItemDictionary_modalContent__WvEBY',
                 (dictContent) => {
                     this.handleItemDictionary(dictContent);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             this.isActive = true;
@@ -25902,23 +26007,13 @@
             const titleElement = panel.querySelector('h1.ItemDictionary_title__27cTd');
             if (!titleElement) return null;
 
+            // Get the item name from title
+            const itemName = titleElement.textContent.trim().toLowerCase().replaceAll(' ', '_').replaceAll("'", '');
+
+            // Look up ability HRID from name
             const gameData = dataManager.getInitClientData();
             if (!gameData) return null;
 
-            const rawName = titleElement.textContent.trim();
-
-            // Try to resolve item HRID from Chinese display name first
-            const itemHrid = itemNameTranslator.findHridFromDomName(rawName);
-            if (itemHrid) {
-                // Convert item HRID to ability HRID (e.g., /items/cheesemaking_book → /abilities/cheesemaking)
-                const abilityHrid = itemHrid.replace('/items/', '/abilities/').replace('_book', '');
-                if (gameData.abilityDetailMap[abilityHrid]) {
-                    return abilityHrid;
-                }
-            }
-
-            // Fallback for English locale: match by lowercased title
-            const itemName = rawName.toLowerCase().replaceAll(' ', '_').replaceAll("'", '');
             for (const abilityHrid of Object.keys(gameData.abilityDetailMap)) {
                 if (abilityHrid.includes('/' + itemName)) {
                     return abilityHrid;
@@ -26022,10 +26117,10 @@
 
             calculatorDiv.innerHTML = `
             <div style="margin-bottom: 8px; font-size: 0.95em;">
-                <strong>${i18n_js.t('Current level:')}</strong> ${currentLevel}
+                <strong>${t('Current level:')}</strong> ${currentLevel}
             </div>
             <div style="margin-bottom: 8px;">
-                <label for="tillLevelInput">${i18n_js.t('To level:')} </label>
+                <label for="tillLevelInput">${t('To level:')} </label>
                 <input
                     id="tillLevelInput"
                     type="number"
@@ -26036,12 +26131,12 @@
                 >
             </div>
             <div id="tillLevelNumber" style="font-size: 0.95em;">
-                ${i18n_js.t('Books needed:')} <strong>${formatters_js.numberFormatter(booksNeeded)}</strong>
+                ${t('Books needed:')} <strong>${formatters_js.numberFormatter(booksNeeded)}</strong>
                 <br>
-                ${i18n_js.t('Cost: {0} / {1} (ask / bid)', formatters_js.formatKMB(Math.ceil(booksNeeded * ask)), formatters_js.formatKMB(Math.ceil(booksNeeded * bid)))}
+                ${t('Cost: {0} / {1} (ask / bid)', formatters_js.formatKMB(Math.ceil(booksNeeded * ask)), formatters_js.formatKMB(Math.ceil(booksNeeded * bid)))}
             </div>
             <div style="font-size: 0.85em; color: #999; margin-top: 8px; font-style: italic;">
-                ${i18n_js.t('Refresh page to update current level')}
+                ${t('Refresh page to update current level')}
             </div>
         `;
 
@@ -26058,13 +26153,13 @@
                     const books = this.calculateBooksNeeded(currentLevel, currentXp, target, xpPerBook);
                     currentBooks = books;
                     display.innerHTML = `
-                    ${i18n_js.t('Books needed:')} <strong>${formatters_js.numberFormatter(books)}</strong>
+                    ${t('Books needed:')} <strong>${formatters_js.numberFormatter(books)}</strong>
                     <br>
-                    ${i18n_js.t('Cost: {0} / {1} (ask / bid)', formatters_js.formatKMB(Math.ceil(books * ask)), formatters_js.formatKMB(Math.ceil(books * bid)))}
+                    ${t('Cost: {0} / {1} (ask / bid)', formatters_js.formatKMB(Math.ceil(books * ask)), formatters_js.formatKMB(Math.ceil(books * bid)))}
                 `;
                 } else {
                     currentBooks = 0;
-                    display.innerHTML = `<span style="color: ${config.COLOR_LOSS};">${i18n_js.t('Invalid target level')}</span>`;
+                    display.innerHTML = `<span style="color: ${config.COLOR_LOSS};">${t('Invalid target level')}</span>`;
                 }
             };
 
@@ -26073,7 +26168,7 @@
 
             // Buy on Marketplace button
             const buyButton = document.createElement('button');
-            buyButton.textContent = i18n_js.t('Buy on Marketplace');
+            buyButton.textContent = t('Buy on Marketplace');
             buyButton.style.cssText = `
             margin-top: 8px;
             padding: 4px 10px;
@@ -27117,7 +27212,7 @@ self.onmessage = function (e) {
 
         // Extract general info
         const character = characterData.sharableCharacter || characterData;
-        const name = character.name || i18n_js.t('Player');
+        const name = character.name || t('Player');
 
         // Avatar/outfit/icon - extract from sharableCharacter first, then fall back to items
         let avatar = 'person_default';
@@ -27946,9 +28041,9 @@ self.onmessage = function (e) {
                 this.currentPanel = null;
             }
 
-            const playerName = profileData.profile?.sharableCharacter?.name || i18n_js.t('Player');
+            const playerName = profileData.profile?.sharableCharacter?.name || t('Player');
             const equipmentHiddenText =
-                scoreData.equipmentHidden && !scoreData.hasEquipmentData ? i18n_js.t(' (Equipment hidden)') : '';
+                scoreData.equipmentHidden && !scoreData.hasEquipmentData ? t(' (Equipment hidden)') : '';
 
             // Create panel element
             const panel = document.createElement('div');
@@ -28011,7 +28106,7 @@ self.onmessage = function (e) {
                     font-weight: bold;
                     font-size: 0.85rem;
                     flex: 1;
-                ">${i18n_js.t('View Card')}</button>
+                ">${t('View Card')}</button>
                 <button id="mwi-character-card-loadout-btn" style="
                     padding: 8px 10px;
                     background: ${config.COLOR_ACCENT};
@@ -28050,28 +28145,28 @@ self.onmessage = function (e) {
                     color: #aaa;
                     padding: 0 5px;
                     line-height: 1;
-                " title="${i18n_js.t('Close')}">×</span>
+                " title="${t('Close')}">×</span>
             </div>
             <div style="cursor: pointer; font-weight: bold; margin-bottom: 8px; color: ${config.COLOR_PROFIT}; ${!config.getSetting('combatScore') ? 'display: none;' : ''}" id="mwi-score-toggle">
-                + ${i18n_js.t('Combat Score: {0}', formatters_js.numberFormatter(scoreData.total.toFixed(1)))}${equipmentHiddenText}
+                + ${t('Combat Score: {0}', formatters_js.numberFormatter(scoreData.total.toFixed(1)))}${equipmentHiddenText}
             </div>
             <div id="mwi-score-details" style="display: none; margin-left: 10px; color: ${config.COLOR_TEXT_PRIMARY};">
                 <div style="cursor: pointer; margin-bottom: 4px;" id="mwi-house-toggle">
-                    + ${i18n_js.t('House: {0}', formatters_js.numberFormatter(scoreData.house.toFixed(1)))}
+                    + ${t('House: {0}', formatters_js.numberFormatter(scoreData.house.toFixed(1)))}
                 </div>
                 <div id="mwi-house-breakdown" style="display: none; margin-bottom: 6px;">
                     ${houseBreakdownHTML}
                 </div>
 
                 <div style="cursor: pointer; margin-bottom: 4px;" id="mwi-ability-toggle">
-                    + ${i18n_js.t('Ability: {0}', formatters_js.numberFormatter(scoreData.ability.toFixed(1)))}
+                    + ${t('Ability: {0}', formatters_js.numberFormatter(scoreData.ability.toFixed(1)))}
                 </div>
                 <div id="mwi-ability-breakdown" style="display: none; margin-bottom: 6px;">
                     ${abilityBreakdownHTML}
                 </div>
 
                 <div style="cursor: pointer; margin-bottom: 4px;" id="mwi-equipment-toggle">
-                    + ${i18n_js.t('Equipment: {0}', formatters_js.numberFormatter(scoreData.equipment.toFixed(1)))}
+                    + ${t('Equipment: {0}', formatters_js.numberFormatter(scoreData.equipment.toFixed(1)))}
                 </div>
                 <div id="mwi-equipment-breakdown" style="display: none;">
                     ${equipmentBreakdownHTML}
@@ -28079,11 +28174,11 @@ self.onmessage = function (e) {
             </div>
 
             <div style="cursor: pointer; font-weight: bold; margin-top: 12px; margin-bottom: 8px; color: ${config.COLOR_PROFIT}; ${!config.getSetting('combatScore') ? 'display: none;' : ''}" id="mwi-skiller-score-toggle">
-                + ${i18n_js.t('Skiller Score: {0}', formatters_js.numberFormatter(scoreData.skillerTotal.toFixed(1)))}
+                + ${t('Skiller Score: {0}', formatters_js.numberFormatter(scoreData.skillerTotal.toFixed(1)))}
             </div>
             <div id="mwi-skiller-score-details" style="display: none; margin-left: 10px; color: ${config.COLOR_TEXT_PRIMARY};">
                 <div style="cursor: pointer; margin-bottom: 4px;" id="mwi-skiller-equipment-toggle">
-                    + ${i18n_js.t('Equipment: {0}', formatters_js.numberFormatter(scoreData.skillerEquipment.toFixed(1)))}
+                    + ${t('Equipment: {0}', formatters_js.numberFormatter(scoreData.skillerEquipment.toFixed(1)))}
                 </div>
                 <div id="mwi-skiller-equipment-breakdown" style="display: none;">
                     ${skillerEquipmentBreakdownHTML}
@@ -28102,7 +28197,7 @@ self.onmessage = function (e) {
                         font-weight: bold;
                         font-size: 0.85rem;
                         flex: 1;
-                    ">${i18n_js.t('Combat Sim Export')}</button>
+                    ">${t('Combat Sim Export')}</button>
                     <button id="mwi-combat-sim-loadout-btn" style="
                         padding: 8px 10px;
                         background: ${config.COLOR_ACCENT};
@@ -28139,7 +28234,7 @@ self.onmessage = function (e) {
                     font-weight: bold;
                     font-size: 0.85rem;
                     width: 100%;
-                ">${i18n_js.t('Sim Character')}</button>
+                ">${t('Sim Character')}</button>
                 <button id="mwi-milkonomy-export-btn" style="
                     padding: 8px 12px;
                     background: ${config.COLOR_ACCENT};
@@ -28150,7 +28245,7 @@ self.onmessage = function (e) {
                     font-weight: bold;
                     font-size: 0.85rem;
                     width: 100%;
-                ">${i18n_js.t('Milkonomy Export')}</button>
+                ">${t('Milkonomy Export')}</button>
                 ${viewCardButtonHTML}
             </div>
         `;
@@ -28222,7 +28317,7 @@ self.onmessage = function (e) {
                     details.style.display = isCollapsed ? 'block' : 'none';
                     toggleBtn.textContent =
                         (isCollapsed ? '- ' : '+ ') +
-                        i18n_js.t('Combat Score: {0}', formatters_js.numberFormatter(scoreData.total.toFixed(1))) +
+                        t('Combat Score: {0}', formatters_js.numberFormatter(scoreData.total.toFixed(1))) +
                         equipmentHiddenText;
                 });
             }
@@ -28235,7 +28330,7 @@ self.onmessage = function (e) {
                     const isCollapsed = houseBreakdown.style.display === 'none';
                     houseBreakdown.style.display = isCollapsed ? 'block' : 'none';
                     houseToggle.textContent =
-                        (isCollapsed ? '- ' : '+ ') + i18n_js.t('House: {0}', formatters_js.numberFormatter(scoreData.house.toFixed(1)));
+                        (isCollapsed ? '- ' : '+ ') + t('House: {0}', formatters_js.numberFormatter(scoreData.house.toFixed(1)));
                 });
             }
 
@@ -28247,7 +28342,7 @@ self.onmessage = function (e) {
                     const isCollapsed = abilityBreakdown.style.display === 'none';
                     abilityBreakdown.style.display = isCollapsed ? 'block' : 'none';
                     abilityToggle.textContent =
-                        (isCollapsed ? '- ' : '+ ') + i18n_js.t('Ability: {0}', formatters_js.numberFormatter(scoreData.ability.toFixed(1)));
+                        (isCollapsed ? '- ' : '+ ') + t('Ability: {0}', formatters_js.numberFormatter(scoreData.ability.toFixed(1)));
                 });
             }
 
@@ -28259,7 +28354,7 @@ self.onmessage = function (e) {
                     const isCollapsed = equipmentBreakdown.style.display === 'none';
                     equipmentBreakdown.style.display = isCollapsed ? 'block' : 'none';
                     equipmentToggle.textContent =
-                        (isCollapsed ? '- ' : '+ ') + i18n_js.t('Equipment: {0}', formatters_js.numberFormatter(scoreData.equipment.toFixed(1)));
+                        (isCollapsed ? '- ' : '+ ') + t('Equipment: {0}', formatters_js.numberFormatter(scoreData.equipment.toFixed(1)));
                 });
             }
 
@@ -28272,7 +28367,7 @@ self.onmessage = function (e) {
                     skillerScoreDetails.style.display = isCollapsed ? 'block' : 'none';
                     skillerScoreToggle.textContent =
                         (isCollapsed ? '- ' : '+ ') +
-                        i18n_js.t('Skiller Score: {0}', formatters_js.numberFormatter(scoreData.skillerTotal.toFixed(1)));
+                        t('Skiller Score: {0}', formatters_js.numberFormatter(scoreData.skillerTotal.toFixed(1)));
                 });
             }
 
@@ -28285,7 +28380,7 @@ self.onmessage = function (e) {
                     skillerEquipmentBreakdown.style.display = isCollapsed ? 'block' : 'none';
                     skillerEquipmentToggle.textContent =
                         (isCollapsed ? '- ' : '+ ') +
-                        i18n_js.t('Equipment: {0}', formatters_js.numberFormatter(scoreData.skillerEquipment.toFixed(1)));
+                        t('Equipment: {0}', formatters_js.numberFormatter(scoreData.skillerEquipment.toFixed(1)));
                 });
             }
 
@@ -28307,13 +28402,13 @@ self.onmessage = function (e) {
             const simCharBtn = panel.querySelector('#mwi-sim-character-btn');
             if (simCharBtn) {
                 simCharBtn.addEventListener('click', () => {
-                    const playerName = profileData?.profile?.sharableCharacter?.name || i18n_js.t('Player');
+                    const playerName = profileData?.profile?.sharableCharacter?.name || t('Player');
                     const dto = buildPlayerDTOFromProfile(profileData);
                     if (!dto) {
-                        simCharBtn.textContent = i18n_js.t('✗ No Data');
+                        simCharBtn.textContent = t('✗ No Data');
                         simCharBtn.style.background = config.COLOR_LOSS;
                         const resetTimeout = setTimeout(() => {
-                            simCharBtn.textContent = i18n_js.t('Sim Character');
+                            simCharBtn.textContent = t('Sim Character');
                             simCharBtn.style.background = 'linear-gradient(135deg, #3a7bd5, #5f3dc4)';
                         }, 3000);
                         this.timerRegistry.registerTimeout(resetTimeout);
@@ -28519,7 +28614,7 @@ self.onmessage = function (e) {
                 return;
             }
 
-            const playerName = profileData.profile?.sharableCharacter?.name || i18n_js.t('Player');
+            const playerName = profileData.profile?.sharableCharacter?.name || t('Player');
 
             // Create panel element
             const panel = document.createElement('div');
@@ -28543,17 +28638,17 @@ self.onmessage = function (e) {
             // Create panel HTML
             panel.innerHTML = `
             <div id="mwi-abilities-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-shrink: 0; cursor: move; user-select: none;">
-                <div style="font-weight: bold; color: ${config.COLOR_ACCENT}; font-size: 0.9rem;">${playerName}${i18n_js.t(' - Abilities & Triggers')}</div>
+                <div style="font-weight: bold; color: ${config.COLOR_ACCENT}; font-size: 0.9rem;">${playerName}${t(' - Abilities & Triggers')}</div>
                 <span id="mwi-abilities-close-btn" style="
                     cursor: pointer;
                     font-size: 18px;
                     color: #aaa;
                     padding: 0 5px;
                     line-height: 1;
-                " title="${i18n_js.t('Close')}">×</span>
+                " title="${t('Close')}">×</span>
             </div>
             <div style="cursor: pointer; font-weight: bold; margin-bottom: 8px; color: ${config.COLOR_ACCENT}; flex-shrink: 0;" id="mwi-abilities-toggle">
-                + ${i18n_js.t('Show Details')}
+                + ${t('Show Details')}
             </div>
             <div id="mwi-abilities-details" style="display: none; overflow-y: auto; flex: 1; min-height: 0;">
                 ${abilitiesTriggersHTML}
@@ -28622,7 +28717,7 @@ self.onmessage = function (e) {
                     const isCollapsed = details.style.display === 'none';
                     details.style.display = isCollapsed ? 'block' : 'none';
                     toggleBtn.textContent =
-                        (isCollapsed ? '- ' : '+ ') + (isCollapsed ? i18n_js.t('Hide Details') : i18n_js.t('Show Details'));
+                        (isCollapsed ? '- ' : '+ ') + (isCollapsed ? t('Hide Details') : t('Show Details'));
                     // Re-anchor to bottom after size change
                     requestAnimationFrame(() => {
                         const bottomGap = 10;
@@ -28730,7 +28825,7 @@ self.onmessage = function (e) {
                 // Get export data in single-player format (for pasting into "Player 1 import" field)
                 const exportData = await constructExportObject(currentProfileId, true);
                 if (!exportData) {
-                    button.textContent = i18n_js.t('✗ No Data');
+                    button.textContent = t('✗ No Data');
                     button.style.background = '${config.COLOR_LOSS}';
                     const resetTimeout = setTimeout(() => {
                         button.textContent = originalText;
@@ -28743,7 +28838,7 @@ self.onmessage = function (e) {
                 const exportString = JSON.stringify(exportData.exportObj);
                 await navigator.clipboard.writeText(exportString);
 
-                button.textContent = i18n_js.t('✓ Copied');
+                button.textContent = t('✓ Copied');
                 button.style.background = '${config.COLOR_PROFIT}';
                 const resetTimeout = setTimeout(() => {
                     button.textContent = originalText;
@@ -28752,7 +28847,7 @@ self.onmessage = function (e) {
                 this.timerRegistry.registerTimeout(resetTimeout);
             } catch (error) {
                 console.error('[Combat Score] Combat Sim export failed:', error);
-                button.textContent = i18n_js.t('✗ Failed');
+                button.textContent = t('✗ Failed');
                 button.style.background = '${config.COLOR_LOSS}';
                 const resetTimeout = setTimeout(() => {
                     button.textContent = originalText;
@@ -28781,7 +28876,7 @@ self.onmessage = function (e) {
                 // Get base export (skills, house, achievements, triggers)
                 const exportData = await constructExportObject(null, true);
                 if (!exportData) {
-                    button.textContent = i18n_js.t('✗ No Data');
+                    button.textContent = t('✗ No Data');
                     button.style.background = '${config.COLOR_LOSS}';
                     const resetTimeout = setTimeout(() => {
                         button.textContent = originalText;
@@ -28865,7 +28960,7 @@ self.onmessage = function (e) {
                 const exportString = JSON.stringify(playerObj);
                 await navigator.clipboard.writeText(exportString);
 
-                button.textContent = i18n_js.t('✓ Copied');
+                button.textContent = t('✓ Copied');
                 button.style.background = '${config.COLOR_PROFIT}';
                 const resetTimeout = setTimeout(() => {
                     button.textContent = originalText;
@@ -28874,7 +28969,7 @@ self.onmessage = function (e) {
                 this.timerRegistry.registerTimeout(resetTimeout);
             } catch (error) {
                 console.error('[Combat Score] Combat Sim snapshot export failed:', error);
-                button.textContent = i18n_js.t('✗ Failed');
+                button.textContent = t('✗ Failed');
                 button.style.background = '${config.COLOR_LOSS}';
                 const resetTimeout = setTimeout(() => {
                     button.textContent = originalText;
@@ -28899,7 +28994,7 @@ self.onmessage = function (e) {
                 // Get export data (pass profile ID if viewing external profile)
                 const exportData = await constructMilkonomyExport(currentProfileId);
                 if (!exportData) {
-                    button.textContent = i18n_js.t('✗ No Data');
+                    button.textContent = t('✗ No Data');
                     button.style.background = '${config.COLOR_LOSS}';
                     const resetTimeout = setTimeout(() => {
                         button.textContent = originalText;
@@ -28912,7 +29007,7 @@ self.onmessage = function (e) {
                 const exportString = JSON.stringify(exportData);
                 await navigator.clipboard.writeText(exportString);
 
-                button.textContent = i18n_js.t('✓ Copied');
+                button.textContent = t('✓ Copied');
                 button.style.background = '${config.COLOR_PROFIT}';
                 const resetTimeout = setTimeout(() => {
                     button.textContent = originalText;
@@ -28921,7 +29016,7 @@ self.onmessage = function (e) {
                 this.timerRegistry.registerTimeout(resetTimeout);
             } catch (error) {
                 console.error('[Combat Score] Milkonomy export failed:', error);
-                button.textContent = i18n_js.t('✗ Failed');
+                button.textContent = t('✗ Failed');
                 button.style.background = '${config.COLOR_LOSS}';
                 const resetTimeout = setTimeout(() => {
                     button.textContent = originalText;
@@ -28957,10 +29052,10 @@ self.onmessage = function (e) {
          */
         formatDependency(dependencyHrid) {
             const map = {
-                '/combat_trigger_dependencies/self': i18n_js.t('Self'),
-                '/combat_trigger_dependencies/targeted_enemy': i18n_js.t('Target'),
-                '/combat_trigger_dependencies/all_enemies': i18n_js.t('All Enemies'),
-                '/combat_trigger_dependencies/all_allies': i18n_js.t('All Allies'),
+                '/combat_trigger_dependencies/self': t('Self'),
+                '/combat_trigger_dependencies/targeted_enemy': t('Target'),
+                '/combat_trigger_dependencies/all_enemies': t('All Enemies'),
+                '/combat_trigger_dependencies/all_allies': t('All Allies'),
             };
             return map[dependencyHrid] || dependencyHrid.split('/').pop().replace(/_/g, ' ');
         }
@@ -28972,11 +29067,11 @@ self.onmessage = function (e) {
          */
         formatCondition(conditionHrid) {
             const map = {
-                '/combat_trigger_conditions/current_hp': i18n_js.t('HP'),
-                '/combat_trigger_conditions/missing_hp': i18n_js.t('Missing HP'),
-                '/combat_trigger_conditions/current_mp': i18n_js.t('MP'),
-                '/combat_trigger_conditions/missing_mp': i18n_js.t('Missing MP'),
-                '/combat_trigger_conditions/number_of_active_units': i18n_js.t('Active Units'),
+                '/combat_trigger_conditions/current_hp': t('HP'),
+                '/combat_trigger_conditions/missing_hp': t('Missing HP'),
+                '/combat_trigger_conditions/current_mp': t('MP'),
+                '/combat_trigger_conditions/missing_mp': t('Missing MP'),
+                '/combat_trigger_conditions/number_of_active_units': t('Active Units'),
             };
             if (map[conditionHrid]) return map[conditionHrid];
 
@@ -29000,8 +29095,8 @@ self.onmessage = function (e) {
                 '/combat_trigger_comparators/greater_than': '>',
                 '/combat_trigger_comparators/less_than': '<',
                 '/combat_trigger_comparators/equal': '=',
-                '/combat_trigger_comparators/is_active': i18n_js.t('is active'),
-                '/combat_trigger_comparators/is_inactive': i18n_js.t('is inactive'),
+                '/combat_trigger_comparators/is_active': t('is active'),
+                '/combat_trigger_comparators/is_inactive': t('is inactive'),
             };
             return map[comparatorHrid] || comparatorHrid.split('/').pop().replace(/_/g, ' ');
         }
@@ -29030,7 +29125,7 @@ self.onmessage = function (e) {
          * @returns {string} Formatted trigger string
          */
         formatTriggers(conditions) {
-            if (!conditions || conditions.length === 0) return i18n_js.t('No trigger');
+            if (!conditions || conditions.length === 0) return t('No trigger');
 
             return conditions.map((c) => this.formatTriggerCondition(c)).join(' AND ');
         }
@@ -29090,7 +29185,7 @@ self.onmessage = function (e) {
                 for (const ability of abilities) {
                     const abilityIconId = ability.abilityHrid.split('/').pop();
                     const triggers = abilityTriggers[ability.abilityHrid];
-                    const triggerText = triggers ? this.formatTriggers(triggers) : i18n_js.t('No trigger');
+                    const triggerText = triggers ? this.formatTriggers(triggers) : t('No trigger');
 
                     html += `
                     <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
@@ -29107,13 +29202,13 @@ self.onmessage = function (e) {
             const consumableKeys = Object.keys(consumableTriggers);
             if (consumableKeys.length > 0 && itemsSpriteUrl) {
                 if (abilities.length > 0) {
-                    html += `<div style="margin-top: 6px; margin-bottom: 6px; font-weight: 600; color: ${config.COLOR_TEXT_SECONDARY}; font-size: 0.85rem;">${i18n_js.t('Food & Drinks')}</div>`;
+                    html += `<div style="margin-top: 6px; margin-bottom: 6px; font-weight: 600; color: ${config.COLOR_TEXT_SECONDARY}; font-size: 0.85rem;">${t('Food & Drinks')}</div>`;
                 }
 
                 for (const itemHrid of consumableKeys) {
                     const itemIconId = itemHrid.split('/').pop();
                     const triggers = consumableTriggers[itemHrid];
-                    const triggerText = triggers ? this.formatTriggers(triggers) : i18n_js.t('No trigger');
+                    const triggerText = triggers ? this.formatTriggers(triggers) : t('No trigger');
 
                     html += `
                     <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
@@ -29205,4 +29300,4 @@ self.onmessage = function (e) {
 
     console.log('[Toolasha] Combat library loaded');
 
-})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.storage, Toolasha.Core.webSocketHook, Toolasha.Core.i18n, Toolasha.Utils.timerRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Core.marketAPI, Toolasha.Utils.formatters, Toolasha.Market.expectedValueCalculator, Toolasha.Utils.reactInput, Toolasha.Utils.profitHelpers, Toolasha.Utils.marketData, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.enhancementConfig, Toolasha.Utils.teaParser, Toolasha.Utils.abilityCalc, Toolasha.Utils.equipmentParser, Toolasha.Utils.dom, Toolasha.Utils.houseCostCalculator);
+})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.storage, Toolasha.Core.webSocketHook, Toolasha.Utils.timerRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.formatters, Toolasha.Core.marketAPI, Toolasha.Market.expectedValueCalculator, Toolasha.Utils.reactInput, Toolasha.Utils.profitHelpers, Toolasha.Utils.marketData, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.enhancementConfig, Toolasha.Utils.teaParser, Toolasha.Utils.abilityCalc, Toolasha.Utils.equipmentParser, Toolasha.Utils.dom, Toolasha.Utils.houseCostCalculator);

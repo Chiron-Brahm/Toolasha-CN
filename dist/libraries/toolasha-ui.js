@@ -1,11 +1,11 @@
 /**
  * Toolasha UI Library
  * UI enhancements, tasks, skills, and misc features
- * Version: 2.59.10
+ * Version: 2.58.6
  * License: CC-BY-NC-SA-4.0
  */
 
-(function (config, dataManager, domObserver, formatters_js, timerRegistry_js, domObserverHelpers_js, i18n_js, dom_js, storage, marketAPI, efficiency_js, webSocketHook, reactInput_js, actionPanelHelper_js, expectedValueCalculator, bonusRevenueCalculator_js, marketData_js, profitConstants_js, profitHelpers_js, profitCalculator, selectors_js, cleanupRegistry_js, settingsSchema_js, settingsStorage, enhancementConfig_js, materialCalculator_js, enhancementCalculator_js, teaParser_js, actionCalculator_js) {
+(function (config, dataManager, domObserver, formatters_js, timerRegistry_js, domObserverHelpers_js, dom_js, storage, marketAPI, efficiency_js, webSocketHook, reactInput_js, actionPanelHelper_js, expectedValueCalculator, bonusRevenueCalculator_js, marketData_js, profitConstants_js, profitHelpers_js, profitCalculator, selectors_js, actionCalculator_js, equipmentParser_js, cleanupRegistry_js, settingsSchema_js, settingsStorage, enhancementConfig_js, materialCalculator_js, enhancementCalculator_js, teaParser_js) {
     'use strict';
 
     /**
@@ -507,7 +507,7 @@
                 'NavigationBar_currentExperience',
                 (progressBar) => {
                     this.setupProgressBarObserver(progressBar);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
             this.unregisterHandlers.push(unregister);
         }
@@ -534,7 +534,7 @@
                 {
                     attributes: true,
                     attributeFilter: ['style'],
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             // Store the observer so we can clean it up later
@@ -639,6 +639,46 @@
     skillExperiencePercentage.setupSettingListener();
 
     /**
+     * Internationalization (i18n) Module
+     * Lightweight translation layer with English-as-key fallback.
+     *
+     * Usage:
+     *   import { t, registerLocale } from '../core/i18n.js';
+     *   t('Market Prices in Tooltips')  →  '市场价格提示' (if translated)
+     *   t('Market Prices in Tooltips')  →  'Market Prices in Tooltips' (fallback)
+     *   t('Cost: {0}/hr', '100K')       →  '花费: 100K/时'
+     */
+
+    /** @type {Record<string, string>} */
+    const translations = {};
+
+    /**
+     * Translate a string. Returns the Chinese translation if available, otherwise the English key itself.
+     * Supports positional interpolation with {0}, {1}, etc.
+     *
+     * @param {string} str - English key string
+     * @param {...(string|number)} args - Positional arguments for interpolation
+     * @returns {string} Translated or fallback string
+     *
+     * @example
+     *   t('Hello')                          // '你好'
+     *   t('Unknown key')                    // 'Unknown key' (fallback)
+     *   t('Profit: {0}/hr', '12.3K')        // '利润: 12.3K/时'
+     */
+    function t(str, ...args) {
+        const translated = translations[str] !== undefined ? translations[str] : str;
+
+        if (args.length === 0) {
+            return translated;
+        }
+
+        return translated.replace(/\{(\d+)\}/g, (_, index) => {
+            const arg = args[parseInt(index, 10)];
+            return arg !== undefined ? String(arg) : `{${index}}`;
+        });
+    }
+
+    /**
      * External Links
      * Adds links to external MWI tools in the left sidebar navigation
      */
@@ -680,7 +720,7 @@
                         this.addLinks(container);
                         this.addedContainers.add(container);
                     }
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             // Check for existing container immediately
@@ -698,27 +738,27 @@
         addLinks(container) {
             const links = [
                 {
-                    label: i18n_js.t('Combat Sim'),
+                    label: t('Combat Sim'),
                     url: 'https://shykai.github.io/MWICombatSimulatorTest/dist/',
                 },
                 {
-                    label: i18n_js.t('Milkyway Market'),
+                    label: t('Milkyway Market'),
                     url: 'https://milkyway.market/',
                 },
                 {
-                    label: i18n_js.t('Enhancelator'),
+                    label: t('Enhancelator'),
                     url: 'https://doh-nuts.github.io/Enhancelator/',
                 },
                 {
-                    label: i18n_js.t('Milkonomy'),
+                    label: t('Milkonomy'),
                     url: 'https://hyhfish.github.io/milkonomy/#/dashboard',
                 },
                 {
-                    label: i18n_js.t("Socko's Combat Tracker"),
+                    label: t("Socko's Combat Tracker"),
                     url: 'https://sockosnewcombattracker.pages.dev/',
                 },
                 {
-                    label: i18n_js.t('mwilinks'),
+                    label: t('mwilinks'),
                     url: 'https://www.mwilinks.site/',
                 },
             ];
@@ -1307,1221 +1347,6 @@
     const altClickNavigation = new AltClickNavigation();
     altClickNavigation.setupSettingListener();
 
-    var itemNamesZh = {
-        Coin: '金币',
-        'Task Token': '任务代币',
-        'Labyrinth Token': '迷宫代币',
-        'Chimerical Token': '奇幻代币',
-        'Sinister Token': '阴森代币',
-        'Enchanted Token': '秘法代币',
-        'Pirate Token': '海盗代币',
-        Cowbell: '牛铃',
-        'Bag Of 10 Cowbells': '牛铃袋 (10个)',
-        "Purple's Gift": '小紫牛的礼物',
-        'Small Meteorite Cache': '小陨石舱',
-        'Medium Meteorite Cache': '中陨石舱',
-        'Large Meteorite Cache': '大陨石舱',
-        "Small Artisan's Crate": '小工匠匣',
-        "Medium Artisan's Crate": '中工匠匣',
-        "Large Artisan's Crate": '大工匠匣',
-        'Small Treasure Chest': '小宝箱',
-        'Medium Treasure Chest': '中宝箱',
-        'Large Treasure Chest': '大宝箱',
-        'Chimerical Chest': '奇幻宝箱',
-        'Sinister Chest': '阴森宝箱',
-        'Enchanted Chest': '秘法宝箱',
-        'Pirate Chest': '海盗宝箱',
-        "Purdora's Box (Skilling)": '紫多拉之盒（生活）',
-        "Purdora's Box (Combat)": '紫多拉之盒（战斗）',
-        'Scroll Of Gathering': '采集卷轴',
-        'Scroll Of Gourmet': '美食卷轴',
-        'Scroll Of Processing': '加工卷轴',
-        'Scroll Of Efficiency': '效率卷轴',
-        'Scroll Of Action Speed': '行动速度卷轴',
-        'Scroll Of Combat Drop': '战斗掉落卷轴',
-        'Scroll Of Attack Speed': '攻击速度卷轴',
-        'Scroll Of Cast Speed': '施法速度卷轴',
-        'Scroll Of Damage': '伤害卷轴',
-        'Scroll Of Critical Rate': '暴击率卷轴',
-        'Scroll Of Wisdom': '经验卷轴',
-        'Scroll Of Rare Find': '稀有发现卷轴',
-        'Blue Key Fragment': '蓝色钥匙碎片',
-        'Green Key Fragment': '绿色钥匙碎片',
-        'Purple Key Fragment': '紫色钥匙碎片',
-        'White Key Fragment': '白色钥匙碎片',
-        'Orange Key Fragment': '橙色钥匙碎片',
-        'Brown Key Fragment': '棕色钥匙碎片',
-        'Stone Key Fragment': '石头钥匙碎片',
-        'Dark Key Fragment': '黑暗钥匙碎片',
-        'Burning Key Fragment': '燃烧钥匙碎片',
-        Donut: '甜甜圈',
-        'Blueberry Donut': '蓝莓甜甜圈',
-        'Blackberry Donut': '黑莓甜甜圈',
-        'Strawberry Donut': '草莓甜甜圈',
-        'Mooberry Donut': '哞莓甜甜圈',
-        'Marsberry Donut': '火星莓甜甜圈',
-        'Spaceberry Donut': '太空莓甜甜圈',
-        Cupcake: '纸杯蛋糕',
-        'Blueberry Cake': '蓝莓蛋糕',
-        'Blackberry Cake': '黑莓蛋糕',
-        'Strawberry Cake': '草莓蛋糕',
-        'Mooberry Cake': '哞莓蛋糕',
-        'Marsberry Cake': '火星莓蛋糕',
-        'Spaceberry Cake': '太空莓蛋糕',
-        Gummy: '软糖',
-        'Apple Gummy': '苹果软糖',
-        'Orange Gummy': '橙子软糖',
-        'Plum Gummy': '李子软糖',
-        'Peach Gummy': '桃子软糖',
-        'Dragon Fruit Gummy': '火龙果软糖',
-        'Star Fruit Gummy': '杨桃软糖',
-        Yogurt: '酸奶',
-        'Apple Yogurt': '苹果酸奶',
-        'Orange Yogurt': '橙子酸奶',
-        'Plum Yogurt': '李子酸奶',
-        'Peach Yogurt': '桃子酸奶',
-        'Dragon Fruit Yogurt': '火龙果酸奶',
-        'Star Fruit Yogurt': '杨桃酸奶',
-        'Milking Tea': '挤奶茶',
-        'Foraging Tea': '采摘茶',
-        'Woodcutting Tea': '伐木茶',
-        'Cooking Tea': '烹饪茶',
-        'Brewing Tea': '冲泡茶',
-        'Alchemy Tea': '炼金茶',
-        'Enhancing Tea': '强化茶',
-        'Cheesesmithing Tea': '奶酪锻造茶',
-        'Crafting Tea': '制作茶',
-        'Tailoring Tea': '缝纫茶',
-        'Super Milking Tea': '超级挤奶茶',
-        'Super Foraging Tea': '超级采摘茶',
-        'Super Woodcutting Tea': '超级伐木茶',
-        'Super Cooking Tea': '超级烹饪茶',
-        'Super Brewing Tea': '超级冲泡茶',
-        'Super Alchemy Tea': '超级炼金茶',
-        'Super Enhancing Tea': '超级强化茶',
-        'Super Crafting Tea': '超级制作茶',
-        'Super Tailoring Tea': '超级缝纫茶',
-        'Ultra Milking Tea': '究极挤奶茶',
-        'Ultra Foraging Tea': '究极采摘茶',
-        'Ultra Woodcutting Tea': '究极伐木茶',
-        'Ultra Cooking Tea': '究极烹饪茶',
-        'Ultra Brewing Tea': '究极冲泡茶',
-        'Ultra Alchemy Tea': '究极炼金茶',
-        'Ultra Enhancing Tea': '究极强化茶',
-        'Ultra Crafting Tea': '究极制作茶',
-        'Ultra Tailoring Tea': '究极缝纫茶',
-        'Gathering Tea': '采集茶',
-        'Gourmet Tea': '美食茶',
-        'Wisdom Tea': '经验茶',
-        'Processing Tea': '加工茶',
-        'Efficiency Tea': '效率茶',
-        'Artisan Tea': '工匠茶',
-        'Catalytic Tea': '催化茶',
-        'Blessed Tea': '福气茶',
-        'Stamina Coffee': '耐力咖啡',
-        'Intelligence Coffee': '智力咖啡',
-        'Defense Coffee': '防御咖啡',
-        'Attack Coffee': '攻击咖啡',
-        'Melee Coffee': '近战咖啡',
-        'Ranged Coffee': '远程咖啡',
-        'Magic Coffee': '魔法咖啡',
-        'Super Stamina Coffee': '超级耐力咖啡',
-        'Super Intelligence Coffee': '超级智力咖啡',
-        'Super Defense Coffee': '超级防御咖啡',
-        'Super Attack Coffee': '超级攻击咖啡',
-        'Super Melee Coffee': '超级近战咖啡',
-        'Super Ranged Coffee': '超级远程咖啡',
-        'Super Magic Coffee': '超级魔法咖啡',
-        'Ultra Stamina Coffee': '究极耐力咖啡',
-        'Ultra Intelligence Coffee': '究极智力咖啡',
-        'Ultra Defense Coffee': '究极防御咖啡',
-        'Ultra Attack Coffee': '究极攻击咖啡',
-        'Ultra Melee Coffee': '究极近战咖啡',
-        'Ultra Ranged Coffee': '究极远程咖啡',
-        'Ultra Magic Coffee': '究极魔法咖啡',
-        'Wisdom Coffee': '经验咖啡',
-        'Lucky Coffee': '幸运咖啡',
-        'Swiftness Coffee': '迅捷咖啡',
-        'Channeling Coffee': '吟唱咖啡',
-        'Critical Coffee': '暴击咖啡',
-        Poke: '破胆之刺',
-        Impale: '透骨之刺',
-        Puncture: '破甲之刺',
-        'Penetrating Strike': '贯心之刺',
-        Scratch: '爪影斩',
-        Cleave: '分裂斩',
-        Maim: '血刃斩',
-        'Crippling Slash': '致残斩',
-        Smack: '重碾',
-        Sweep: '重扫',
-        'Stunning Blow': '重锤',
-        'Fracturing Impact': '碎裂冲击',
-        'Shield Bash': '盾击',
-        'Quick Shot': '快速射击',
-        'Aqua Arrow': '流水箭',
-        'Flame Arrow': '烈焰箭',
-        'Rain Of Arrows': '箭雨',
-        'Silencing Shot': '沉默之箭',
-        'Steady Shot': '稳定射击',
-        'Pestilent Shot': '疫病射击',
-        'Penetrating Shot': '贯穿射击',
-        'Water Strike': '流水冲击',
-        'Ice Spear': '冰枪术',
-        'Frost Surge': '冰霜爆裂',
-        'Mana Spring': '法力喷泉',
-        Entangle: '缠绕',
-        'Toxic Pollen': '剧毒粉尘',
-        "Nature's Veil": '自然菌幕',
-        'Life Drain': '生命吸取',
-        Fireball: '火球',
-        'Flame Blast': '熔岩爆裂',
-        Firestorm: '火焰风暴',
-        'Smoke Burst': '烟爆灭影',
-        'Minor Heal': '初级自愈术',
-        Heal: '自愈术',
-        'Quick Aid': '快速治疗术',
-        Rejuvenate: '群体治疗术',
-        Taunt: '嘲讽',
-        Provoke: '挑衅',
-        Toughness: '坚韧',
-        Elusiveness: '闪避',
-        Precision: '精确',
-        Berserk: '狂暴',
-        'Elemental Affinity': '元素增幅',
-        Frenzy: '狂速',
-        'Spike Shell': '尖刺防护',
-        Retribution: '惩戒',
-        Vampirism: '吸血',
-        Revive: '复活',
-        Insanity: '疯狂',
-        Invincible: '无敌',
-        'Speed Aura': '速度光环',
-        'Guardian Aura': '守护光环',
-        'Fierce Aura': '物理光环',
-        'Critical Aura': '暴击光环',
-        'Mystic Aura': '元素光环',
-        'Gobo Stabber': '哥布林长剑',
-        'Gobo Slasher': '哥布林关刀',
-        'Gobo Smasher': '哥布林狼牙棒',
-        'Spiked Bulwark': '尖刺重盾',
-        'Werewolf Slasher': '狼人关刀',
-        'Griffin Bulwark': '狮鹫重盾',
-        'Griffin Bulwark (R)': '狮鹫重盾（精）',
-        'Gobo Shooter': '哥布林弹弓',
-        'Vampiric Bow': '吸血弓',
-        'Cursed Bow': '咒怨之弓',
-        'Cursed Bow (R)': '咒怨之弓（精）',
-        'Gobo Boomstick': '哥布林火棍',
-        'Cheese Bulwark': '奶酪重盾',
-        'Verdant Bulwark': '翠绿重盾',
-        'Azure Bulwark': '蔚蓝重盾',
-        'Burble Bulwark': '深紫重盾',
-        'Crimson Bulwark': '绛红重盾',
-        'Rainbow Bulwark': '彩虹重盾',
-        'Holy Bulwark': '神圣重盾',
-        'Wooden Bow': '木弓',
-        'Birch Bow': '桦木弓',
-        'Cedar Bow': '雪松弓',
-        'Purpleheart Bow': '紫心弓',
-        'Ginkgo Bow': '银杏弓',
-        'Redwood Bow': '红杉弓',
-        'Arcane Bow': '神秘弓',
-        'Stalactite Spear': '石钟长枪',
-        'Granite Bludgeon': '花岗岩大棒',
-        'Furious Spear': '狂怒长枪',
-        'Furious Spear (R)': '狂怒长枪（精）',
-        'Regal Sword': '君王之剑',
-        'Regal Sword (R)': '君王之剑（精）',
-        'Chaotic Flail': '混沌连枷',
-        'Chaotic Flail (R)': '混沌连枷（精）',
-        'Soul Hunter Crossbow': '灵魂猎手弩',
-        'Sundering Crossbow': '裂空之弩',
-        'Sundering Crossbow (R)': '裂空之弩（精）',
-        'Frost Staff': '冰霜法杖',
-        'Infernal Battlestaff': '炼狱法杖',
-        'Jackalope Staff': '鹿角兔之杖',
-        'Rippling Trident': '涟漪三叉戟',
-        'Rippling Trident (R)': '涟漪三叉戟（精）',
-        'Blooming Trident': '绽放三叉戟',
-        'Blooming Trident (R)': '绽放三叉戟（精）',
-        'Blazing Trident': '炽焰三叉戟',
-        'Blazing Trident (R)': '炽焰三叉戟（精）',
-        'Cheese Sword': '奶酪剑',
-        'Verdant Sword': '翠绿剑',
-        'Azure Sword': '蔚蓝剑',
-        'Burble Sword': '深紫剑',
-        'Crimson Sword': '绛红剑',
-        'Rainbow Sword': '彩虹剑',
-        'Holy Sword': '神圣剑',
-        'Cheese Spear': '奶酪长枪',
-        'Verdant Spear': '翠绿长枪',
-        'Azure Spear': '蔚蓝长枪',
-        'Burble Spear': '深紫长枪',
-        'Crimson Spear': '绛红长枪',
-        'Rainbow Spear': '彩虹长枪',
-        'Holy Spear': '神圣长枪',
-        'Cheese Mace': '奶酪钉头锤',
-        'Verdant Mace': '翠绿钉头锤',
-        'Azure Mace': '蔚蓝钉头锤',
-        'Burble Mace': '深紫钉头锤',
-        'Crimson Mace': '绛红钉头锤',
-        'Rainbow Mace': '彩虹钉头锤',
-        'Holy Mace': '神圣钉头锤',
-        'Wooden Crossbow': '木弩',
-        'Birch Crossbow': '桦木弩',
-        'Cedar Crossbow': '雪松弩',
-        'Purpleheart Crossbow': '紫心弩',
-        'Ginkgo Crossbow': '银杏弩',
-        'Redwood Crossbow': '红杉弩',
-        'Arcane Crossbow': '神秘弩',
-        'Wooden Water Staff': '木制水法杖',
-        'Birch Water Staff': '桦木水法杖',
-        'Cedar Water Staff': '雪松水法杖',
-        'Purpleheart Water Staff': '紫心水法杖',
-        'Ginkgo Water Staff': '银杏水法杖',
-        'Redwood Water Staff': '红杉水法杖',
-        'Arcane Water Staff': '神秘水法杖',
-        'Wooden Nature Staff': '木制自然法杖',
-        'Birch Nature Staff': '桦木自然法杖',
-        'Cedar Nature Staff': '雪松自然法杖',
-        'Purpleheart Nature Staff': '紫心自然法杖',
-        'Ginkgo Nature Staff': '银杏自然法杖',
-        'Redwood Nature Staff': '红杉自然法杖',
-        'Arcane Nature Staff': '神秘自然法杖',
-        'Wooden Fire Staff': '木制火法杖',
-        'Birch Fire Staff': '桦木火法杖',
-        'Cedar Fire Staff': '雪松火法杖',
-        'Purpleheart Fire Staff': '紫心火法杖',
-        'Ginkgo Fire Staff': '银杏火法杖',
-        'Redwood Fire Staff': '红杉火法杖',
-        'Arcane Fire Staff': '神秘火法杖',
-        'Eye Watch': '掌上监工',
-        'Snake Fang Dirk': '蛇牙短剑',
-        'Vision Shield': '视觉盾',
-        'Gobo Defender': '哥布林防御者',
-        'Vampire Fang Dirk': '吸血鬼短剑',
-        "Knight's Aegis": '骑士盾',
-        "Knight's Aegis (R)": '骑士盾（精）',
-        'Treant Shield': '树人盾',
-        'Manticore Shield': '蝎狮盾',
-        'Tome Of Healing': '治疗之书',
-        'Tome Of The Elements': '元素之书',
-        'Watchful Relic': '警戒遗物',
-        "Bishop's Codex": '主教法典',
-        "Bishop's Codex (R)": '主教法典（精）',
-        'Cheese Buckler': '奶酪圆盾',
-        'Verdant Buckler': '翠绿圆盾',
-        'Azure Buckler': '蔚蓝圆盾',
-        'Burble Buckler': '深紫圆盾',
-        'Crimson Buckler': '绛红圆盾',
-        'Rainbow Buckler': '彩虹圆盾',
-        'Holy Buckler': '神圣圆盾',
-        'Wooden Shield': '木盾',
-        'Birch Shield': '桦木盾',
-        'Cedar Shield': '雪松盾',
-        'Purpleheart Shield': '紫心盾',
-        'Ginkgo Shield': '银杏盾',
-        'Redwood Shield': '红杉盾',
-        'Arcane Shield': '神秘盾',
-        'Gatherer Cape': '采集者披风',
-        'Gatherer Cape (R)': '采集者披风（精）',
-        'Artificer Cape': '工匠披风',
-        'Artificer Cape (R)': '工匠披风（精）',
-        'Culinary Cape': '厨师披风',
-        'Culinary Cape (R)': '厨师披风（精）',
-        'Chance Cape': '机缘披风',
-        'Chance Cape (R)': '机缘披风（精）',
-        'Sinister Cape': '阴森披风',
-        'Sinister Cape (R)': '阴森披风（精）',
-        'Chimerical Quiver': '奇幻箭袋',
-        'Chimerical Quiver (R)': '奇幻箭袋（精）',
-        'Enchanted Cloak': '秘法披风',
-        'Enchanted Cloak (R)': '秘法披风（精）',
-        'Red Culinary Hat': '红色厨师帽',
-        'Snail Shell Helmet': '蜗牛壳头盔',
-        'Vision Helmet': '视觉头盔',
-        'Fluffy Red Hat': '蓬松红帽子',
-        'Corsair Helmet': '掠夺者头盔',
-        'Corsair Helmet (R)': '掠夺者头盔（精）',
-        'Acrobatic Hood': '杂技师兜帽',
-        'Acrobatic Hood (R)': '杂技师兜帽（精）',
-        "Magician's Hat": '魔术师帽',
-        "Magician's Hat (R)": '魔术师帽（精）',
-        'Cheese Helmet': '奶酪头盔',
-        'Verdant Helmet': '翠绿头盔',
-        'Azure Helmet': '蔚蓝头盔',
-        'Burble Helmet': '深紫头盔',
-        'Crimson Helmet': '绛红头盔',
-        'Rainbow Helmet': '彩虹头盔',
-        'Holy Helmet': '神圣头盔',
-        'Rough Hood': '粗糙兜帽',
-        'Reptile Hood': '爬行动物兜帽',
-        'Gobo Hood': '哥布林兜帽',
-        'Beast Hood': '野兽兜帽',
-        'Umbral Hood': '暗影兜帽',
-        'Cotton Hat': '棉帽',
-        'Linen Hat': '亚麻帽',
-        'Bamboo Hat': '竹帽',
-        'Silk Hat': '丝帽',
-        'Radiant Hat': '光辉帽',
-        "Dairyhand's Top": '挤奶工上衣',
-        "Forager's Top": '采摘者上衣',
-        "Lumberjack's Top": '伐木工上衣',
-        "Cheesemaker's Top": '奶酪师上衣',
-        "Crafter's Top": '工匠上衣',
-        "Tailor's Top": '裁缝上衣',
-        "Chef's Top": '厨师上衣',
-        "Brewer's Top": '饮品师上衣',
-        "Alchemist's Top": '炼金师上衣',
-        "Enhancer's Top": '强化师上衣',
-        'Gator Vest': '鳄鱼马甲',
-        'Turtle Shell Body': '龟壳胸甲',
-        'Colossus Plate Body': '巨像胸甲',
-        'Demonic Plate Body': '恶魔胸甲',
-        'Anchorbound Plate Body': '锚定胸甲',
-        'Anchorbound Plate Body (R)': '锚定胸甲（精）',
-        'Maelstrom Plate Body': '怒涛胸甲',
-        'Maelstrom Plate Body (R)': '怒涛胸甲（精）',
-        'Marine Tunic': '海洋皮衣',
-        'Revenant Tunic': '亡灵皮衣',
-        'Griffin Tunic': '狮鹫皮衣',
-        'Kraken Tunic': '克拉肯皮衣',
-        'Kraken Tunic (R)': '克拉肯皮衣（精）',
-        'Icy Robe Top': '冰霜袍服',
-        'Flaming Robe Top': '烈焰袍服',
-        'Luna Robe Top': '月神袍服',
-        'Royal Water Robe Top': '皇家水系袍服',
-        'Royal Water Robe Top (R)': '皇家水系袍服（精）',
-        'Royal Nature Robe Top': '皇家自然系袍服',
-        'Royal Nature Robe Top (R)': '皇家自然系袍服（精）',
-        'Royal Fire Robe Top': '皇家火系袍服',
-        'Royal Fire Robe Top (R)': '皇家火系袍服（精）',
-        'Cheese Plate Body': '奶酪胸甲',
-        'Verdant Plate Body': '翠绿胸甲',
-        'Azure Plate Body': '蔚蓝胸甲',
-        'Burble Plate Body': '深紫胸甲',
-        'Crimson Plate Body': '绛红胸甲',
-        'Rainbow Plate Body': '彩虹胸甲',
-        'Holy Plate Body': '神圣胸甲',
-        'Rough Tunic': '粗糙皮衣',
-        'Reptile Tunic': '爬行动物皮衣',
-        'Gobo Tunic': '哥布林皮衣',
-        'Beast Tunic': '野兽皮衣',
-        'Umbral Tunic': '暗影皮衣',
-        'Cotton Robe Top': '棉袍服',
-        'Linen Robe Top': '亚麻袍服',
-        'Bamboo Robe Top': '竹袍服',
-        'Silk Robe Top': '丝绸袍服',
-        'Radiant Robe Top': '光辉袍服',
-        "Dairyhand's Bottoms": '挤奶工下装',
-        "Forager's Bottoms": '采摘者下装',
-        "Lumberjack's Bottoms": '伐木工下装',
-        "Cheesemaker's Bottoms": '奶酪师下装',
-        "Crafter's Bottoms": '工匠下装',
-        "Tailor's Bottoms": '裁缝下装',
-        "Chef's Bottoms": '厨师下装',
-        "Brewer's Bottoms": '饮品师下装',
-        "Alchemist's Bottoms": '炼金师下装',
-        "Enhancer's Bottoms": '强化师下装',
-        'Turtle Shell Legs': '龟壳腿甲',
-        'Colossus Plate Legs': '巨像腿甲',
-        'Demonic Plate Legs': '恶魔腿甲',
-        'Anchorbound Plate Legs': '锚定腿甲',
-        'Anchorbound Plate Legs (R)': '锚定腿甲（精）',
-        'Maelstrom Plate Legs': '怒涛腿甲',
-        'Maelstrom Plate Legs (R)': '怒涛腿甲（精）',
-        'Marine Chaps': '航海皮裤',
-        'Revenant Chaps': '亡灵皮裤',
-        'Griffin Chaps': '狮鹫皮裤',
-        'Kraken Chaps': '克拉肯皮裤',
-        'Kraken Chaps (R)': '克拉肯皮裤（精）',
-        'Icy Robe Bottoms': '冰霜袍裙',
-        'Flaming Robe Bottoms': '烈焰袍裙',
-        'Luna Robe Bottoms': '月神袍裙',
-        'Royal Water Robe Bottoms': '皇家水系袍裙',
-        'Royal Water Robe Bottoms (R)': '皇家水系袍裙（精）',
-        'Royal Nature Robe Bottoms': '皇家自然系袍裙',
-        'Royal Nature Robe Bottoms (R)': '皇家自然系袍裙（精）',
-        'Royal Fire Robe Bottoms': '皇家火系袍裙',
-        'Royal Fire Robe Bottoms (R)': '皇家火系袍裙（精）',
-        'Cheese Plate Legs': '奶酪腿甲',
-        'Verdant Plate Legs': '翠绿腿甲',
-        'Azure Plate Legs': '蔚蓝腿甲',
-        'Burble Plate Legs': '深紫腿甲',
-        'Crimson Plate Legs': '绛红腿甲',
-        'Rainbow Plate Legs': '彩虹腿甲',
-        'Holy Plate Legs': '神圣腿甲',
-        'Rough Chaps': '粗糙皮裤',
-        'Reptile Chaps': '爬行动物皮裤',
-        'Gobo Chaps': '哥布林皮裤',
-        'Beast Chaps': '野兽皮裤',
-        'Umbral Chaps': '暗影皮裤',
-        'Cotton Robe Bottoms': '棉袍裙',
-        'Linen Robe Bottoms': '亚麻袍裙',
-        'Bamboo Robe Bottoms': '竹袍裙',
-        'Silk Robe Bottoms': '丝绸袍裙',
-        'Radiant Robe Bottoms': '光辉袍裙',
-        'Enchanted Gloves': '附魔手套',
-        'Pincer Gloves': '蟹钳手套',
-        'Panda Gloves': '熊猫手套',
-        'Magnetic Gloves': '磁力手套',
-        'Dodocamel Gauntlets': '渡渡驼护手',
-        'Dodocamel Gauntlets (R)': '渡渡驼护手（精）',
-        'Sighted Bracers': '瞄准护腕',
-        'Marksman Bracers': '神射护腕',
-        'Marksman Bracers (R)': '神射护腕（精）',
-        'Chrono Gloves': '时空手套',
-        'Cheese Gauntlets': '奶酪护手',
-        'Verdant Gauntlets': '翠绿护手',
-        'Azure Gauntlets': '蔚蓝护手',
-        'Burble Gauntlets': '深紫护手',
-        'Crimson Gauntlets': '绛红护手',
-        'Rainbow Gauntlets': '彩虹护手',
-        'Holy Gauntlets': '神圣护手',
-        'Rough Bracers': '粗糙护腕',
-        'Reptile Bracers': '爬行动物护腕',
-        'Gobo Bracers': '哥布林护腕',
-        'Beast Bracers': '野兽护腕',
-        'Umbral Bracers': '暗影护腕',
-        'Cotton Gloves': '棉手套',
-        'Linen Gloves': '亚麻手套',
-        'Bamboo Gloves': '竹手套',
-        'Silk Gloves': '丝手套',
-        'Radiant Gloves': '光辉手套',
-        "Collector's Boots": '收藏家靴',
-        'Shoebill Shoes': '鲸头鹳鞋',
-        'Black Bear Shoes': '黑熊鞋',
-        'Grizzly Bear Shoes': '棕熊鞋',
-        'Polar Bear Shoes': '北极熊鞋',
-        'Pathbreaker Boots': '开路者靴',
-        'Pathbreaker Boots (R)': '开路者靴（精）',
-        'Centaur Boots': '半人马靴',
-        'Pathfinder Boots': '探路者靴',
-        'Pathfinder Boots (R)': '探路者靴（精）',
-        'Sorcerer Boots': '巫师靴',
-        'Pathseeker Boots': '寻路者靴',
-        'Pathseeker Boots (R)': '寻路者靴（精）',
-        'Cheese Boots': '奶酪靴',
-        'Verdant Boots': '翠绿靴',
-        'Azure Boots': '蔚蓝靴',
-        'Burble Boots': '深紫靴',
-        'Crimson Boots': '绛红靴',
-        'Rainbow Boots': '彩虹靴',
-        'Holy Boots': '神圣靴',
-        'Rough Boots': '粗糙靴',
-        'Reptile Boots': '爬行动物靴',
-        'Gobo Boots': '哥布林靴',
-        'Beast Boots': '野兽靴',
-        'Umbral Boots': '暗影靴',
-        'Cotton Boots': '棉靴',
-        'Linen Boots': '亚麻靴',
-        'Bamboo Boots': '竹靴',
-        'Silk Boots': '丝靴',
-        'Radiant Boots': '光辉靴',
-        'Small Pouch': '小袋子',
-        'Medium Pouch': '中袋子',
-        'Large Pouch': '大袋子',
-        'Giant Pouch': '巨大袋子',
-        'Gluttonous Pouch': '贪食之袋',
-        'Guzzling Pouch': '暴饮之囊',
-        'Necklace Of Efficiency': '效率项链',
-        'Fighter Necklace': '战士项链',
-        'Ranger Necklace': '射手项链',
-        'Wizard Necklace': '巫师项链',
-        'Necklace Of Wisdom': '经验项链',
-        'Necklace Of Speed': '速度项链',
-        "Philosopher's Necklace": '贤者项链',
-        'Earrings Of Gathering': '采集耳环',
-        'Earrings Of Essence Find': '精华发现耳环',
-        'Earrings Of Armor': '护甲耳环',
-        'Earrings Of Regeneration': '恢复耳环',
-        'Earrings Of Resistance': '抗性耳环',
-        'Earrings Of Rare Find': '稀有发现耳环',
-        'Earrings Of Critical Strike': '暴击耳环',
-        "Philosopher's Earrings": '贤者耳环',
-        'Ring Of Gathering': '采集戒指',
-        'Ring Of Essence Find': '精华发现戒指',
-        'Ring Of Armor': '护甲戒指',
-        'Ring Of Regeneration': '恢复戒指',
-        'Ring Of Resistance': '抗性戒指',
-        'Ring Of Rare Find': '稀有发现戒指',
-        'Ring Of Critical Strike': '暴击戒指',
-        "Philosopher's Ring": '贤者戒指',
-        'Trainee Milking Charm': '实习挤奶护符',
-        'Basic Milking Charm': '基础挤奶护符',
-        'Advanced Milking Charm': '高级挤奶护符',
-        'Expert Milking Charm': '专家挤奶护符',
-        'Master Milking Charm': '大师挤奶护符',
-        'Grandmaster Milking Charm': '宗师挤奶护符',
-        'Trainee Foraging Charm': '实习采摘护符',
-        'Basic Foraging Charm': '基础采摘护符',
-        'Advanced Foraging Charm': '高级采摘护符',
-        'Expert Foraging Charm': '专家采摘护符',
-        'Master Foraging Charm': '大师采摘护符',
-        'Grandmaster Foraging Charm': '宗师采摘护符',
-        'Trainee Woodcutting Charm': '实习伐木护符',
-        'Basic Woodcutting Charm': '基础伐木护符',
-        'Advanced Woodcutting Charm': '高级伐木护符',
-        'Expert Woodcutting Charm': '专家伐木护符',
-        'Master Woodcutting Charm': '大师伐木护符',
-        'Grandmaster Woodcutting Charm': '宗师伐木护符',
-        'Trainee Cheesesmithing Charm': '实习奶酪锻造护符',
-        'Basic Cheesesmithing Charm': '基础奶酪锻造护符',
-        'Advanced Cheesesmithing Charm': '高级奶酪锻造护符',
-        'Expert Cheesesmithing Charm': '专家奶酪锻造护符',
-        'Master Cheesesmithing Charm': '大师奶酪锻造护符',
-        'Grandmaster Cheesesmithing Charm': '宗师奶酪锻造护符',
-        'Trainee Crafting Charm': '实习制作护符',
-        'Basic Crafting Charm': '基础制作护符',
-        'Advanced Crafting Charm': '高级制作护符',
-        'Expert Crafting Charm': '专家制作护符',
-        'Master Crafting Charm': '大师制作护符',
-        'Grandmaster Crafting Charm': '宗师制作护符',
-        'Trainee Tailoring Charm': '实习缝纫护符',
-        'Basic Tailoring Charm': '基础缝纫护符',
-        'Advanced Tailoring Charm': '高级缝纫护符',
-        'Expert Tailoring Charm': '专家缝纫护符',
-        'Master Tailoring Charm': '大师缝纫护符',
-        'Grandmaster Tailoring Charm': '宗师缝纫护符',
-        'Trainee Cooking Charm': '实习烹饪护符',
-        'Basic Cooking Charm': '基础烹饪护符',
-        'Advanced Cooking Charm': '高级烹饪护符',
-        'Expert Cooking Charm': '专家烹饪护符',
-        'Master Cooking Charm': '大师烹饪护符',
-        'Grandmaster Cooking Charm': '宗师烹饪护符',
-        'Trainee Brewing Charm': '实习冲泡护符',
-        'Basic Brewing Charm': '基础冲泡护符',
-        'Advanced Brewing Charm': '高级冲泡护符',
-        'Expert Brewing Charm': '专家冲泡护符',
-        'Master Brewing Charm': '大师冲泡护符',
-        'Grandmaster Brewing Charm': '宗师冲泡护符',
-        'Trainee Alchemy Charm': '实习炼金护符',
-        'Basic Alchemy Charm': '基础炼金护符',
-        'Advanced Alchemy Charm': '高级炼金护符',
-        'Expert Alchemy Charm': '专家炼金护符',
-        'Master Alchemy Charm': '大师炼金护符',
-        'Grandmaster Alchemy Charm': '宗师炼金护符',
-        'Trainee Enhancing Charm': '实习强化护符',
-        'Basic Enhancing Charm': '基础强化护符',
-        'Advanced Enhancing Charm': '高级强化护符',
-        'Expert Enhancing Charm': '专家强化护符',
-        'Master Enhancing Charm': '大师强化护符',
-        'Grandmaster Enhancing Charm': '宗师强化护符',
-        'Trainee Stamina Charm': '实习耐力护符',
-        'Basic Stamina Charm': '基础耐力护符',
-        'Advanced Stamina Charm': '高级耐力护符',
-        'Expert Stamina Charm': '专家耐力护符',
-        'Master Stamina Charm': '大师耐力护符',
-        'Grandmaster Stamina Charm': '宗师耐力护符',
-        'Trainee Intelligence Charm': '实习智力护符',
-        'Basic Intelligence Charm': '基础智力护符',
-        'Advanced Intelligence Charm': '高级智力护符',
-        'Expert Intelligence Charm': '专家智力护符',
-        'Master Intelligence Charm': '大师智力护符',
-        'Grandmaster Intelligence Charm': '宗师智力护符',
-        'Trainee Attack Charm': '实习攻击护符',
-        'Basic Attack Charm': '基础攻击护符',
-        'Advanced Attack Charm': '高级攻击护符',
-        'Expert Attack Charm': '专家攻击护符',
-        'Master Attack Charm': '大师攻击护符',
-        'Grandmaster Attack Charm': '宗师攻击护符',
-        'Trainee Defense Charm': '实习防御护符',
-        'Basic Defense Charm': '基础防御护符',
-        'Advanced Defense Charm': '高级防御护符',
-        'Expert Defense Charm': '专家防御护符',
-        'Master Defense Charm': '大师防御护符',
-        'Grandmaster Defense Charm': '宗师防御护符',
-        'Trainee Melee Charm': '实习近战护符',
-        'Basic Melee Charm': '基础近战护符',
-        'Advanced Melee Charm': '高级近战护符',
-        'Expert Melee Charm': '专家近战护符',
-        'Master Melee Charm': '大师近战护符',
-        'Grandmaster Melee Charm': '宗师近战护符',
-        'Trainee Ranged Charm': '实习远程护符',
-        'Basic Ranged Charm': '基础远程护符',
-        'Advanced Ranged Charm': '高级远程护符',
-        'Expert Ranged Charm': '专家远程护符',
-        'Master Ranged Charm': '大师远程护符',
-        'Grandmaster Ranged Charm': '宗师远程护符',
-        'Trainee Magic Charm': '实习魔法护符',
-        'Basic Magic Charm': '基础魔法护符',
-        'Advanced Magic Charm': '高级魔法护符',
-        'Expert Magic Charm': '专家魔法护符',
-        'Master Magic Charm': '大师魔法护符',
-        'Grandmaster Magic Charm': '宗师魔法护符',
-        'Basic Task Badge': '基础任务徽章',
-        'Advanced Task Badge': '高级任务徽章',
-        'Expert Task Badge': '专家任务徽章',
-        'Celestial Brush': '星空刷子',
-        'Cheese Brush': '奶酪刷子',
-        'Verdant Brush': '翠绿刷子',
-        'Azure Brush': '蔚蓝刷子',
-        'Burble Brush': '深紫刷子',
-        'Crimson Brush': '绛红刷子',
-        'Rainbow Brush': '彩虹刷子',
-        'Holy Brush': '神圣刷子',
-        'Celestial Shears': '星空剪刀',
-        'Cheese Shears': '奶酪剪刀',
-        'Verdant Shears': '翠绿剪刀',
-        'Azure Shears': '蔚蓝剪刀',
-        'Burble Shears': '深紫剪刀',
-        'Crimson Shears': '绛红剪刀',
-        'Rainbow Shears': '彩虹剪刀',
-        'Holy Shears': '神圣剪刀',
-        'Celestial Hatchet': '星空斧头',
-        'Cheese Hatchet': '奶酪斧头',
-        'Verdant Hatchet': '翠绿斧头',
-        'Azure Hatchet': '蔚蓝斧头',
-        'Burble Hatchet': '深紫斧头',
-        'Crimson Hatchet': '绛红斧头',
-        'Rainbow Hatchet': '彩虹斧头',
-        'Holy Hatchet': '神圣斧头',
-        'Celestial Hammer': '星空锤子',
-        'Cheese Hammer': '奶酪锤子',
-        'Verdant Hammer': '翠绿锤子',
-        'Azure Hammer': '蔚蓝锤子',
-        'Burble Hammer': '深紫锤子',
-        'Crimson Hammer': '绛红锤子',
-        'Rainbow Hammer': '彩虹锤子',
-        'Holy Hammer': '神圣锤子',
-        'Celestial Chisel': '星空凿子',
-        'Cheese Chisel': '奶酪凿子',
-        'Verdant Chisel': '翠绿凿子',
-        'Azure Chisel': '蔚蓝凿子',
-        'Burble Chisel': '深紫凿子',
-        'Crimson Chisel': '绛红凿子',
-        'Rainbow Chisel': '彩虹凿子',
-        'Holy Chisel': '神圣凿子',
-        'Celestial Needle': '星空针',
-        'Cheese Needle': '奶酪针',
-        'Verdant Needle': '翠绿针',
-        'Azure Needle': '蔚蓝针',
-        'Burble Needle': '深紫针',
-        'Crimson Needle': '绛红针',
-        'Rainbow Needle': '彩虹针',
-        'Holy Needle': '神圣针',
-        'Celestial Spatula': '星空锅铲',
-        'Cheese Spatula': '奶酪锅铲',
-        'Verdant Spatula': '翠绿锅铲',
-        'Azure Spatula': '蔚蓝锅铲',
-        'Burble Spatula': '深紫锅铲',
-        'Crimson Spatula': '绛红锅铲',
-        'Rainbow Spatula': '彩虹锅铲',
-        'Holy Spatula': '神圣锅铲',
-        'Celestial Pot': '星空壶',
-        'Cheese Pot': '奶酪壶',
-        'Verdant Pot': '翠绿壶',
-        'Azure Pot': '蔚蓝壶',
-        'Burble Pot': '深紫壶',
-        'Crimson Pot': '绛红壶',
-        'Rainbow Pot': '彩虹壶',
-        'Holy Pot': '神圣壶',
-        'Celestial Alembic': '星空蒸馏器',
-        'Cheese Alembic': '奶酪蒸馏器',
-        'Verdant Alembic': '翠绿蒸馏器',
-        'Azure Alembic': '蔚蓝蒸馏器',
-        'Burble Alembic': '深紫蒸馏器',
-        'Crimson Alembic': '绛红蒸馏器',
-        'Rainbow Alembic': '彩虹蒸馏器',
-        'Holy Alembic': '神圣蒸馏器',
-        'Celestial Enhancer': '星空强化器',
-        'Cheese Enhancer': '奶酪强化器',
-        'Verdant Enhancer': '翠绿强化器',
-        'Azure Enhancer': '蔚蓝强化器',
-        'Burble Enhancer': '深紫强化器',
-        'Crimson Enhancer': '绛红强化器',
-        'Rainbow Enhancer': '彩虹强化器',
-        'Holy Enhancer': '神圣强化器',
-        Milk: '牛奶',
-        'Verdant Milk': '翠绿牛奶',
-        'Azure Milk': '蔚蓝牛奶',
-        'Burble Milk': '深紫牛奶',
-        'Crimson Milk': '绛红牛奶',
-        'Rainbow Milk': '彩虹牛奶',
-        'Holy Milk': '神圣牛奶',
-        Cheese: '奶酪',
-        'Verdant Cheese': '翠绿奶酪',
-        'Azure Cheese': '蔚蓝奶酪',
-        'Burble Cheese': '深紫奶酪',
-        'Crimson Cheese': '绛红奶酪',
-        'Rainbow Cheese': '彩虹奶酪',
-        'Holy Cheese': '神圣奶酪',
-        Log: '原木',
-        'Birch Log': '白桦原木',
-        'Cedar Log': '雪松原木',
-        'Purpleheart Log': '紫心原木',
-        'Ginkgo Log': '银杏原木',
-        'Redwood Log': '红杉原木',
-        'Arcane Log': '神秘原木',
-        Lumber: '木板',
-        'Birch Lumber': '白桦木板',
-        'Cedar Lumber': '雪松木板',
-        'Purpleheart Lumber': '紫心木板',
-        'Ginkgo Lumber': '银杏木板',
-        'Redwood Lumber': '红杉木板',
-        'Arcane Lumber': '神秘木板',
-        'Rough Hide': '粗糙兽皮',
-        'Reptile Hide': '爬行动物皮',
-        'Gobo Hide': '哥布林皮',
-        'Beast Hide': '野兽皮',
-        'Umbral Hide': '暗影皮',
-        'Rough Leather': '粗糙皮革',
-        'Reptile Leather': '爬行动物皮革',
-        'Gobo Leather': '哥布林皮革',
-        'Beast Leather': '野兽皮革',
-        'Umbral Leather': '暗影皮革',
-        Cotton: '棉花',
-        Flax: '亚麻',
-        'Bamboo Branch': '竹子',
-        Cocoon: '蚕茧',
-        'Radiant Fiber': '光辉纤维',
-        'Cotton Fabric': '棉花布料',
-        'Linen Fabric': '亚麻布料',
-        'Bamboo Fabric': '竹子布料',
-        'Silk Fabric': '丝绸',
-        'Radiant Fabric': '光辉布料',
-        Egg: '鸡蛋',
-        Wheat: '小麦',
-        Sugar: '糖',
-        Blueberry: '蓝莓',
-        Blackberry: '黑莓',
-        Strawberry: '草莓',
-        Mooberry: '哞莓',
-        Marsberry: '火星莓',
-        Spaceberry: '太空莓',
-        Apple: '苹果',
-        Orange: '橙子',
-        Plum: '李子',
-        Peach: '桃子',
-        'Dragon Fruit': '火龙果',
-        'Star Fruit': '杨桃',
-        'Arabica Coffee Bean': '低级咖啡豆',
-        'Robusta Coffee Bean': '中级咖啡豆',
-        'Liberica Coffee Bean': '高级咖啡豆',
-        'Excelsa Coffee Bean': '特级咖啡豆',
-        'Fieriosa Coffee Bean': '火山咖啡豆',
-        'Spacia Coffee Bean': '太空咖啡豆',
-        'Green Tea Leaf': '绿茶叶',
-        'Black Tea Leaf': '黑茶叶',
-        'Burble Tea Leaf': '紫茶叶',
-        'Moolong Tea Leaf': '哞龙茶叶',
-        'Red Tea Leaf': '红茶叶',
-        'Emp Tea Leaf': '虚空茶叶',
-        'Catalyst Of Coinification': '点金催化剂',
-        'Catalyst Of Decomposition': '分解催化剂',
-        'Catalyst Of Transmutation': '转化催化剂',
-        'Prime Catalyst': '至高催化剂',
-        'Snake Fang': '蛇牙',
-        'Shoebill Feather': '鲸头鹳羽毛',
-        'Snail Shell': '蜗牛壳',
-        'Crab Pincer': '蟹钳',
-        'Turtle Shell': '乌龟壳',
-        'Marine Scale': '海洋鳞片',
-        'Treant Bark': '树皮',
-        'Centaur Hoof': '半人马蹄',
-        'Luna Wing': '月神翼',
-        'Gobo Rag': '哥布林抹布',
-        Goggles: '护目镜',
-        'Magnifying Glass': '放大镜',
-        'Eye Of The Watcher': '观察者之眼',
-        'Icy Cloth': '冰霜织物',
-        'Flaming Cloth': '烈焰织物',
-        "Sorcerer's Sole": '魔法师鞋底',
-        'Chrono Sphere': '时空球',
-        'Frost Sphere': '冰霜球',
-        'Panda Fluff': '熊猫绒',
-        'Black Bear Fluff': '黑熊绒',
-        'Grizzly Bear Fluff': '棕熊绒',
-        'Polar Bear Fluff': '北极熊绒',
-        'Red Panda Fluff': '小熊猫绒',
-        Magnet: '磁铁',
-        'Stalactite Shard': '钟乳石碎片',
-        'Living Granite': '花岗岩',
-        'Colossus Core': '巨像核心',
-        'Vampire Fang': '吸血鬼之牙',
-        'Werewolf Claw': '狼人之爪',
-        'Revenant Anima': '亡者之魂',
-        'Soul Fragment': '灵魂碎片',
-        'Infernal Ember': '地狱余烬',
-        'Demonic Core': '恶魔核心',
-        'Griffin Leather': '狮鹫之皮',
-        'Manticore Sting': '蝎狮之刺',
-        'Jackalope Antler': '鹿角兔之角',
-        'Dodocamel Plume': '渡渡驼之翎',
-        'Griffin Talon': '狮鹫之爪',
-        'Chimerical Refinement Shard': '奇幻精炼碎片',
-        "Acrobat's Ribbon": '杂技师彩带',
-        "Magician's Cloth": '魔术师织物',
-        'Chaotic Chain': '混沌锁链',
-        'Cursed Ball': '诅咒之球',
-        'Sinister Refinement Shard': '阴森精炼碎片',
-        'Royal Cloth': '皇家织物',
-        "Knight's Ingot": '骑士之锭',
-        "Bishop's Scroll": '主教卷轴',
-        'Regal Jewel': '君王宝石',
-        'Sundering Jewel': '裂空宝石',
-        'Enchanted Refinement Shard': '秘法精炼碎片',
-        'Marksman Brooch': '神射胸针',
-        'Corsair Crest': '掠夺者徽章',
-        'Damaged Anchor': '破损船锚',
-        'Maelstrom Plating': '怒涛甲片',
-        'Kraken Leather': '克拉肯皮革',
-        'Kraken Fang': '克拉肯之牙',
-        'Pirate Refinement Shard': '海盗精炼碎片',
-        'Pathbreaker Lodestone': '开路者磁石',
-        'Pathfinder Lodestone': '探路者磁石',
-        'Pathseeker Lodestone': '寻路者磁石',
-        'Labyrinth Refinement Shard': '迷宫精炼碎片',
-        'Butter Of Proficiency': '精通之油',
-        'Thread Of Expertise': '专精之线',
-        'Branch Of Insight': '洞察之枝',
-        'Gluttonous Energy': '贪食能量',
-        'Guzzling Energy': '暴饮能量',
-        'Milking Essence': '挤奶精华',
-        'Foraging Essence': '采摘精华',
-        'Woodcutting Essence': '伐木精华',
-        'Cheesesmithing Essence': '奶酪锻造精华',
-        'Crafting Essence': '制作精华',
-        'Tailoring Essence': '缝纫精华',
-        'Cooking Essence': '烹饪精华',
-        'Brewing Essence': '冲泡精华',
-        'Alchemy Essence': '炼金精华',
-        'Enhancing Essence': '强化精华',
-        'Swamp Essence': '沼泽精华',
-        'Aqua Essence': '海洋精华',
-        'Jungle Essence': '丛林精华',
-        'Gobo Essence': '哥布林精华',
-        Eyessence: '眼精华',
-        'Sorcerer Essence': '法师精华',
-        'Bear Essence': '熊熊精华',
-        'Golem Essence': '魔像精华',
-        'Twilight Essence': '暮光精华',
-        'Abyssal Essence': '地狱精华',
-        'Chimerical Essence': '奇幻精华',
-        'Sinister Essence': '阴森精华',
-        'Enchanted Essence': '秘法精华',
-        'Pirate Essence': '海盗精华',
-        'Labyrinth Essence': '迷宫精华',
-        'Task Crystal': '任务水晶',
-        'Star Fragment': '星光碎片',
-        Pearl: '珍珠',
-        Amber: '琥珀',
-        Garnet: '石榴石',
-        Jade: '翡翠',
-        Amethyst: '紫水晶',
-        Moonstone: '月亮石',
-        Sunstone: '太阳石',
-        "Philosopher's Stone": '贤者之石',
-        'Crushed Pearl': '珍珠碎片',
-        'Crushed Amber': '琥珀碎片',
-        'Crushed Garnet': '石榴石碎片',
-        'Crushed Jade': '翡翠碎片',
-        'Crushed Amethyst': '紫水晶碎片',
-        'Crushed Moonstone': '月亮石碎片',
-        'Crushed Sunstone': '太阳石碎片',
-        "Crushed Philosopher's Stone": '贤者之石碎片',
-        'Shard Of Protection': '保护碎片',
-        'Mirror Of Protection': '保护之镜',
-        "Philosopher's Mirror": '贤者之镜',
-        'Basic Torch': '基础火把',
-        'Advanced Torch': '进阶火把',
-        'Expert Torch': '专家火把',
-        'Basic Shroud': '基础斗篷',
-        'Advanced Shroud': '进阶斗篷',
-        'Expert Shroud': '专家斗篷',
-        'Basic Beacon': '基础探照灯',
-        'Advanced Beacon': '进阶探照灯',
-        'Expert Beacon': '专家探照灯',
-        'Basic Food Crate': '基础食物箱',
-        'Advanced Food Crate': '进阶食物箱',
-        'Expert Food Crate': '专家食物箱',
-        'Basic Tea Crate': '基础茶叶箱',
-        'Advanced Tea Crate': '进阶茶叶箱',
-        'Expert Tea Crate': '专家茶叶箱',
-        'Basic Coffee Crate': '基础咖啡箱',
-        'Advanced Coffee Crate': '进阶咖啡箱',
-        'Expert Coffee Crate': '专家咖啡箱',
-    };
-
-    /**
-     * Auto-discovers Chinese item names from the game DOM and builds a
-     * Chinese → English mapping cached in IndexedDB. Provides a unified
-     * getDisplayName() returning Chinese when available, English otherwise.
-     */
-
-
-    const STORAGE_KEY$5 = 'Toolasha_cnItemNames';
-    const CACHE_VERSION = 2;
-    const DEBOUNCE_DELAY = 5000;
-
-    const MUTATION_SELECTORS = [
-        '[class*="Item_name"]',
-        '[class*="Item_itemName"]',
-        '[class*="ItemTooltipText_name"]',
-        '[class*="Item_craftingItemName"]',
-        'svg[aria-label]',
-    ];
-
-    const ENHANCEMENT_STRIP_REGEX = /\s*\+\d+$/;
-    const CJK_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
-
-    class ItemNameTranslator {
-        constructor() {
-            this.cnNames = {};
-            this.isLoaded = false;
-            this._saveTimer = null;
-            this._dirty = false;
-            this._enToHrid = null;
-            this._hridToEn = null;
-            this._hridToEnSource = null;
-            this._observer = null;
-            this._observerStarted = false;
-        }
-
-        async load() {
-            if (this.isLoaded) return;
-            try {
-                const saved = await storage.get(STORAGE_KEY$5, 'settings');
-                if (
-                    saved &&
-                    typeof saved === 'object' &&
-                    saved._version === CACHE_VERSION &&
-                    Object.keys(saved).length > 1
-                ) {
-                    this.cnNames = saved;
-                }
-            } catch (_) {
-                /* ignore */
-            }
-            this.isLoaded = true;
-            this._importStaticMapping();
-        }
-
-        captureFromDOM(element, itemHrid) {
-            if (!element || !itemHrid) return;
-            const text = (element.textContent || element.getAttribute('aria-label') || '').trim();
-            if (!text || !CJK_REGEX.test(text)) return;
-            const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-            if (!baseName) return;
-            if (this.cnNames[itemHrid] === baseName) return;
-            this.cnNames[itemHrid] = baseName;
-            this._scheduleSave();
-        }
-
-        _importStaticMapping() {
-            const initData = dataManager.getInitClientData();
-            if (!initData?.itemDetailMap) return;
-            let count = 0;
-            for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                const cnName = itemNamesZh[item.name];
-                if (cnName && !this.cnNames[hrid]) {
-                    this.cnNames[hrid] = cnName;
-                    count++;
-                }
-            }
-            if (count > 0) this._scheduleSave();
-        }
-
-        _scheduleSave() {
-            if (!this.isLoaded) return;
-            this._dirty = true;
-            if (this._saveTimer) return;
-            this._saveTimer = setTimeout(async () => {
-                this._saveTimer = null;
-                if (!this._dirty) return;
-                this._dirty = false;
-                try {
-                    const data = { ...this.cnNames, _version: CACHE_VERSION };
-                    await storage.set(STORAGE_KEY$5, data, 'settings', true);
-                } catch (error) {
-                    console.warn('[ItemNameTranslator] Failed to save names:', error);
-                }
-            }, DEBOUNCE_DELAY);
-        }
-
-        flush() {
-            if (this._saveTimer) {
-                clearTimeout(this._saveTimer);
-                this._saveTimer = null;
-            }
-            if (this._dirty) {
-                this._dirty = false;
-                const data = { ...this.cnNames, _version: CACHE_VERSION };
-                storage.set(STORAGE_KEY$5, data, 'settings', true).catch(() => {});
-            }
-        }
-
-        _scanDomNow() {
-            for (const selector of MUTATION_SELECTORS) {
-                for (const el of document.querySelectorAll(selector)) {
-                    this._tryCaptureFromElement(el);
-                }
-            }
-        }
-
-        getDisplayName(itemHrid) {
-            if (!itemHrid) return '';
-            if (!this.isLoaded) this._lazyLoad();
-
-            const cached = this.cnNames[itemHrid];
-            if (cached) return cached;
-
-            const item = dataManager.getItemDetails(itemHrid);
-            const enName = item?.name;
-            if (!enName) return itemHrid;
-
-            const staticCn = itemNamesZh[enName];
-            if (staticCn) {
-                this.cnNames[itemHrid] = staticCn;
-                return staticCn;
-            }
-
-            return enName;
-        }
-
-        _lazyLoad() {
-            this.load().catch(() => {});
-        }
-
-        getHridFromChineseName(chineseName) {
-            if (!chineseName) return null;
-            const baseName = chineseName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-            for (const [hrid, cnName] of Object.entries(this.cnNames)) {
-                if (cnName === baseName) return hrid;
-            }
-            for (const [enName, cnName] of Object.entries(itemNamesZh)) {
-                if (cnName === baseName) {
-                    const initData = dataManager.getInitClientData();
-                    if (initData?.itemDetailMap) {
-                        for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                            if (item.name === enName) return hrid;
-                        }
-                    }
-                }
-            }
-            return null;
-        }
-
-        findHridFromDomName(chineseName) {
-            if (!chineseName) return null;
-            for (const [hrid, cnName] of Object.entries(this.cnNames)) {
-                if (cnName === chineseName) return hrid;
-            }
-            for (const [enName, cnName] of Object.entries(itemNamesZh)) {
-                if (cnName === chineseName) {
-                    const initData = dataManager.getInitClientData();
-                    if (initData?.itemDetailMap) {
-                        for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                            if (item.name === enName) return hrid;
-                        }
-                    }
-                }
-            }
-            const initData = dataManager.getInitClientData();
-            if (initData?.itemDetailMap) {
-                for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                    if (item.name === chineseName) return hrid;
-                }
-            }
-            return null;
-        }
-
-        _ensureHRIDMaps() {
-            if (this._hridToEn && this._enToHrid) return;
-            this._enToHrid = {};
-            this._hridToEn = {};
-            const initData = dataManager.getInitClientData();
-            if (!initData?.itemDetailMap) return;
-            for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                this._enToHrid[item.name] = hrid;
-                this._hridToEn[hrid] = item.name;
-            }
-        }
-
-        startObserver() {
-            if (this._observerStarted) return;
-            this._observerStarted = true;
-
-            const processNode = (node) => {
-                if (!node || node.nodeType !== 1) return;
-                for (const selector of MUTATION_SELECTORS) {
-                    if (node.matches(selector)) {
-                        this._tryCaptureFromElement(node);
-                        break;
-                    }
-                }
-                for (const selector of MUTATION_SELECTORS) {
-                    const children = node.querySelectorAll(selector);
-                    for (const child of children) {
-                        this._tryCaptureFromElement(child);
-                    }
-                }
-            };
-
-            for (const selector of MUTATION_SELECTORS) {
-                const elements = document.querySelectorAll(selector);
-                for (const el of elements) {
-                    this._tryCaptureFromElement(el);
-                }
-            }
-
-            this._observer = new MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    for (const node of mutation.addedNodes) {
-                        try {
-                            processNode(node);
-                        } catch (_) {
-                            // Skip errors from processing individual nodes
-                        }
-                    }
-                }
-            });
-
-            this._observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-            });
-        }
-
-        stopObserver() {
-            if (this._observer) {
-                this._observer.disconnect();
-                this._observer = null;
-            }
-            this._observerStarted = false;
-        }
-
-        _tryCaptureFromElement(el) {
-            if (!el) return;
-            const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
-            if (!text) return;
-
-            if (!CJK_REGEX.test(text)) return;
-
-            const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-            if (!baseName) return;
-
-            for (const [, cnName] of Object.entries(this.cnNames)) {
-                if (cnName === baseName) return;
-            }
-
-            const hrid = this.findHridFromDomName(baseName);
-            if (hrid) {
-                this.cnNames[hrid] = baseName;
-                this._scheduleSave();
-            } else {
-                // Log first 5 failures
-                if (!this._failCount) this._failCount = 0;
-                if (this._failCount < 5) {
-                    console.log('[ItemNameTranslator] CJK text found but no HRID match:', baseName);
-                    this._failCount++;
-                }
-            }
-        }
-    }
-
-    const itemNameTranslator = new ItemNameTranslator();
-
     /**
      * Collection Navigation
      * Adds "View Action" and "Item Dictionary" buttons when clicking collection items.
@@ -2683,7 +1508,8 @@
         showPopover(tile, itemHrid) {
             this.dismissPopover();
 
-            const itemName = itemNameTranslator.getDisplayName(itemHrid);
+            const itemDetails = dataManager.getItemDetails(itemHrid);
+            const itemName = itemDetails?.name || itemHrid.split('/').pop().replace(/_/g, ' ');
 
             const rect = tile.getBoundingClientRect();
 
@@ -2713,14 +1539,14 @@
             popover.appendChild(nameDiv);
 
             // View Action button
-            const viewActionBtn = this.createNavButton(i18n_js.t('View Action'), () => {
+            const viewActionBtn = this.createNavButton(t('View Action'), () => {
                 this.dismissPopover();
                 navigateToItem(itemHrid);
             });
             popover.appendChild(viewActionBtn);
 
             // Item Dictionary button
-            const dictBtn = this.createNavButton(i18n_js.t('Item Dictionary'), () => {
+            const dictBtn = this.createNavButton(t('Item Dictionary'), () => {
                 this.dismissPopover();
                 const game = getGameObject$1();
                 const itemDetails = dataManager.getItemDetails(itemHrid);
@@ -2811,12 +1637,12 @@
                 return;
             }
 
-            const viewActionBtn = this.createNavButton(i18n_js.t('View Action'), () => {
+            const viewActionBtn = this.createNavButton(t('View Action'), () => {
                 navigateToItem(itemHrid);
             });
             actionMenu.appendChild(viewActionBtn);
 
-            const dictBtn = this.createNavButton(i18n_js.t('Item Dictionary'), () => {
+            const dictBtn = this.createNavButton(t('Item Dictionary'), () => {
                 const game = getGameObject$1();
                 const itemDetails = dataManager.getItemDetails(itemHrid);
                 if (game?.handleOpenItemDictionary && itemDetails) {
@@ -3197,7 +2023,7 @@
                     className: 'celestial',
                     checked: false,
                     fn: (itemId, n) => itemId.includes('celestial') && n === 0,
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
         }
 
@@ -3438,7 +2264,7 @@ ${starCSS}
                     const collectionsPanel = node.closest('.AchievementsPanel_collections__qA6CY');
                     if (!collectionsPanel) return;
                     this._rerenderPanel(node);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
             this.unregisterHandlers.push(unregPanel);
 
@@ -3449,7 +2275,7 @@ ${starCSS}
                     'SkillActionGrid_skillActionGrid__1tJFk',
                     (node) => {
                         this._addSkillingBadges(node);
-                    }
+                    }, { debounce: true, debounceDelay: 150 }
                 );
                 this.unregisterHandlers.push(unregSkilling);
             }
@@ -3676,12 +2502,12 @@ ${starCSS}
             panelEl.insertAdjacentHTML(
                 'beforeend',
                 `<div class="toolasha-cf cf-sort-row" style="display:flex;align-items:center;gap:6px;margin-top:4px;">` +
-                    `<span style="font-size:12px;color:#aaa;">${i18n_js.t('Sort:')}</span>` +
+                    `<span style="font-size:12px;color:#aaa;">${t('Sort:')}</span>` +
                     `<select class="toolasha-cf cf-sort-select" style="font-size:12px;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:1px 4px;">` +
-                    `<option value="default"${this.sortMode === 'default' ? ' selected' : ''}>${i18n_js.t('Default')}</option>` +
-                    `<option value="items-needed"${this.sortMode === 'items-needed' ? ' selected' : ''}>${i18n_js.t('Items to next tier')}</option>` +
-                    `<option value="gold-cost"${this.sortMode === 'gold-cost' ? ' selected' : ''}>${i18n_js.t('Gold cost to next tier')}</option>` +
-                    `<option value="time-to-next-tier"${this.sortMode === 'time-to-next-tier' ? ' selected' : ''}>${i18n_js.t('Time to next tier')}</option>` +
+                    `<option value="default"${this.sortMode === 'default' ? ' selected' : ''}>${t('Default')}</option>` +
+                    `<option value="items-needed"${this.sortMode === 'items-needed' ? ' selected' : ''}>${t('Items to next tier')}</option>` +
+                    `<option value="gold-cost"${this.sortMode === 'gold-cost' ? ' selected' : ''}>${t('Gold cost to next tier')}</option>` +
+                    `<option value="time-to-next-tier"${this.sortMode === 'time-to-next-tier' ? ' selected' : ''}>${t('Time to next tier')}</option>` +
                     `</select></div>`
             );
             panelEl.querySelector('.cf-sort-select').addEventListener('change', (e) => {
@@ -3817,7 +2643,7 @@ ${starCSS}
 
             const header = document.createElement('div');
             header.className = 'toolasha-cf-favorites-header';
-            header.textContent = i18n_js.t('Favorites');
+            header.textContent = t('Favorites');
             section.appendChild(header);
 
             // Record positions: use the next non-favorite sibling as reference
@@ -4023,11 +2849,11 @@ ${starCSS}
          */
         _getBadgeStalenessTooltip(count) {
             if (!this.collectionsLastUpdated) {
-                return i18n_js.t('Collection data not yet loaded \u2014 visit Collections page to refresh');
+                return t('Collection data not yet loaded \u2014 visit Collections page to refresh');
             }
             const age = Date.now() - this.collectionsLastUpdated;
             const relativeTime = formatters_js.formatRelativeTime(age);
-            return i18n_js.t('{0} collected \u2014 updated {1} ago', formatCount(count), relativeTime);
+            return t('{0} collected \u2014 updated {1} ago', formatCount(count), relativeTime);
         }
 
         /**
@@ -4284,7 +3110,7 @@ ${starCSS}
                         this.openItemDictionary(itemHrid);
                     } else {
                         // Item not found in game data (best effort normalization was used)
-                        this.showError(i18n_js.t('Item "{0}" not found in game data', command.itemName));
+                        this.showError(t('Item "{0}" not found in game data', command.itemName));
                     }
                     break;
 
@@ -4298,7 +3124,7 @@ ${starCSS}
                         this.openMarketplace(itemHrid, command.enhancementLevel ?? 0);
                     } else {
                         // Item not found in game data (best effort normalization was used)
-                        this.showError(i18n_js.t('Item "{0}" not found in game data', command.itemName));
+                        this.showError(t('Item "{0}" not found in game data', command.itemName));
                     }
                     break;
             }
@@ -4387,7 +3213,7 @@ ${starCSS}
             });
 
             const matchList = properNames.slice(0, 5).join(', ') + (properNames.length > 5 ? '...' : '');
-            messageDiv.textContent = i18n_js.t('Multiple items match: {0}. Please be more specific.', matchList);
+            messageDiv.textContent = t('Multiple items match: {0}. Please be more specific.', matchList);
 
             chatHistory.appendChild(messageDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -4440,7 +3266,7 @@ ${starCSS}
          */
         openItemDictionary(itemHrid) {
             if (!this.gameCore?.handleOpenItemDictionary) {
-                this.showError(i18n_js.t('Feature unavailable after 2/21/26 game update'));
+                this.showError(t('Feature unavailable after 2/21/26 game update'));
                 return;
             }
 
@@ -4448,7 +3274,7 @@ ${starCSS}
                 this.gameCore.handleOpenItemDictionary(itemHrid);
             } catch (error) {
                 console.error('[Chat Commands] Failed to open Item Dictionary:', error);
-                this.showError(i18n_js.t('Failed to open Item Dictionary'));
+                this.showError(t('Failed to open Item Dictionary'));
             }
         }
 
@@ -4459,7 +3285,7 @@ ${starCSS}
          */
         openMarketplace(itemHrid, enhancementLevel = 0) {
             if (!this.gameCore?.handleGoToMarketplace) {
-                this.showError(i18n_js.t('Feature unavailable after 2/21/26 game update'));
+                this.showError(t('Feature unavailable after 2/21/26 game update'));
                 return;
             }
 
@@ -4467,7 +3293,7 @@ ${starCSS}
                 this.gameCore.handleGoToMarketplace(itemHrid, enhancementLevel);
             } catch (error) {
                 console.error('[Chat Commands] Failed to open marketplace:', error);
-                this.showError(i18n_js.t('Failed to open marketplace'));
+                this.showError(t('Failed to open marketplace'));
             }
         }
 
@@ -4581,26 +3407,7 @@ ${starCSS}
          */
         formatTimestamp(isoString) {
             if (!isoString) return '';
-
-            const timeFormat = config.getSettingValue('market_listingTimeFormat', '24hour');
-            const dateFormat = config.getSettingValue('market_listingDateFormat', 'MM-DD');
-            const use12Hour = timeFormat === '12hour';
-
-            const date = new Date(isoString);
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const datePart = dateFormat === 'DD-MM' ? `${day}-${month}` : `${month}-${day}`;
-
-            const timePart = date
-                .toLocaleString('en-US', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: use12Hour,
-                })
-                .trim();
-
-            return `${datePart} ${timePart}`;
+            return formatters_js.formatDateTime(new Date(isoString));
         }
 
         /**
@@ -4681,7 +3488,7 @@ ${starCSS}
             font-weight: 600;
             color: ${config.COLOR_ACCENT};
         `;
-            title.textContent = i18n_js.t('Mentions — {0}', channelDisplayName);
+            title.textContent = t('Mentions — {0}', channelDisplayName);
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '×';
@@ -4728,7 +3535,7 @@ ${starCSS}
          */
         _updateContent(mentions, channelDisplayName) {
             const title = this.container.querySelector('#mwi-mention-popup-title');
-            if (title) title.textContent = i18n_js.t('Mentions — {0}', channelDisplayName);
+            if (title) title.textContent = t('Mentions — {0}', channelDisplayName);
 
             const body = this.container.querySelector('#mwi-mention-popup-body');
             if (body) {
@@ -4751,7 +3558,7 @@ ${starCSS}
                 font-size: 0.85rem;
                 text-align: center;
             `;
-                empty.textContent = i18n_js.t('No mentions');
+                empty.textContent = t('No mentions');
                 body.appendChild(empty);
                 return;
             }
@@ -4929,7 +3736,7 @@ ${starCSS}
                 'Chat_tabsComponentContainer',
                 (tabsContainer) => {
                     this.setupTabBadges(tabsContainer);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             // Check for existing tabs
@@ -5252,195 +4059,6 @@ ${starCSS}
     };
 
     /**
-     * Locale-safe DOM matching utilities for game UI interactions.
-     * All functions use CSS classes, data attributes, or structural positions
-     * instead of textContent matching, which breaks when the game is in Chinese.
-     */
-
-    /**
-     * Check if a tabs container belongs to the marketplace panel.
-     * Uses the panel's CSS module class (partial match for hash stability).
-     *
-     * @param {Element} tablistContainer - A tablist container element
-     * @returns {boolean} True if the container is part of the marketplace panel
-     */
-    function isMarketplacePanel(tablistContainer) {
-        return !!tablistContainer.closest('[class*="MarketplacePanel_marketplacePanel"]');
-    }
-
-    /**
-     * Get the "My Listings" tab from a marketplace tablist.
-     * "My Listings" tab is at index 1 in the marketplace MUI tab bar.
-     * Index 0 = search/filter tab (verified via the panel detection above).
-     *
-     * @param {Element} tablist - The marketplace tablist element
-     * @returns {Element|null} The "My Listings" tab element, or null if not found
-     */
-    function getMyListingsTab(tablist) {
-        // Skip non-native tabs (Toolasha inventory tabs, missing material tabs)
-        // to find the second native marketplace tab
-        const nativeTabs = Array.from(tablist.children).filter(
-            (child) => !child.hasAttribute('data-mwi-custom-tab') && !child.classList.contains('toolasha-inv-tab')
-        );
-        return nativeTabs[1] || null;
-    }
-
-    /**
-     * Check if a tablist belongs to the alchemy action panel.
-     *
-     * @param {Element} tablist - A tablist element to check
-     * @returns {boolean} True if the tablist belongs to the alchemy panel
-     */
-    function isAlchemyPanel(tablist) {
-        return (
-            !!tablist.closest('[class*="SkillActionDetail_skillActionDetail"]') &&
-            !!tablist.closest('[class*="AlchemyPanel_"]')
-        );
-    }
-
-    /**
-     * Get an alchemy tab by its known position.
-     * Alchemy tabs order: [Coinify=0, Transmute=1, Decompose=2]
-     *
-     * @param {Element} tablist - The alchemy tablist element
-     * @param {number} positionIndex - The zero-based position index of the desired tab
-     * @returns {Element|null} The tab element at the given position, or null
-     */
-    function getAlchemyTab(tablist, positionIndex) {
-        const children = Array.from(tablist.children);
-        return children[positionIndex] || null;
-    }
-
-    // Chinese monster name mapping (sprite name → Chinese)
-    const CN_MONSTER_NAMES = {
-        fly: '苍蝇',
-        rat: '杰瑞',
-        skunk: '臭鼬',
-        porcupine: '豪猪',
-        slimy: '史莱姆',
-        smelly_planet: '臭臭星球',
-        frog: '青蛙',
-        snake: '蛇',
-        swampy: '沼泽虫',
-        alligator: '夏洛克',
-        swamp_planet: '沼泽星球',
-        sea_snail: '蜗牛',
-        crab: '螃蟹',
-        aquahorse: '水马',
-        nom_nom: '咬咬鱼',
-        turtle: '忍者龟',
-        aqua_planet: '海洋星球',
-        jungle_sprite: '丛林精灵',
-        myconid: '蘑菇人',
-        treant: '树人',
-        centaur_archer: '半人马弓箭手',
-        jungle_planet: '丛林星球',
-        gobo_stabby: '刺刺',
-        gobo_slashy: '砍砍',
-        gobo_smashy: '锤锤',
-        gobo_shooty: '咻咻',
-        gobo_boomy: '轰轰',
-        gobo_planet: '哥布林星球',
-        eye: '独眼',
-        eyes: '叠眼',
-        veyes: '复眼',
-        planet_of_the_eyes: '眼球星球',
-        novice_sorcerer: '新手巫师',
-        ice_sorcerer: '冰霜巫师',
-        flame_sorcerer: '火焰巫师',
-        elementalist: '元素法师',
-        sorcerers_tower: '巫师之塔',
-        gummy_bear: '软糖熊',
-        panda: '熊猫',
-        black_bear: '黑熊',
-        grizzly_bear: '棕熊',
-        polar_bear: '北极熊',
-        bear_with_it: '熊熊星球',
-        magnetic_golem: '磁力魔像',
-        stalactite_golem: '钟乳石魔像',
-        granite_golem: '花岗岩魔像',
-        golem_cave: '魔像洞穴',
-        zombie: '僵尸',
-        vampire: '吸血鬼',
-        werewolf: '狼人',
-        twilight_zone: '暮光之地',
-        abyssal_imp: '深渊小鬼',
-        soul_hunter: '灵魂猎手',
-        infernal_warlock: '地狱术士',
-        infernal_abyss: '地狱深渊',
-        chimerical_den: '奇幻洞穴',
-        sinister_circus: '阴森马戏团',
-        enchanted_fortress: '秘法要塞',
-        pirate_cove: '海盗基地',
-    };
-
-    function getMonsterDisplayName(monsterHrid) {
-        const spriteName = monsterHrid.split('/').pop();
-        return CN_MONSTER_NAMES[spriteName] || spriteName;
-    }
-
-    // Chinese zone name mapping (from game's official Chinese translation)
-    const CN_ZONE_NAMES = {
-        // Non-dungeon zones
-        Farmlands: '农田',
-        'Autumn Fields': '秋田',
-        'Quiet Valley': '幽谷',
-        'Misty Marsh': '雾沼',
-        'Sunset Forest': '落日森林',
-        'Frozen Tundra': '冰原',
-        'Volcanic Crater': '火山口',
-        'Stormy Highlands': '风暴高地',
-        'Abandoned Mines': '废弃矿洞',
-        'Ancient Ruins': '远古遗迹',
-        'Enchanted Meadow': '魔法草地',
-        'Cursed Swamp': '诅咒沼泽',
-        'Dark Cavern': '暗黑洞穴',
-        'Infernal Abyss': '地狱',
-        'Celestial Peak': '天界之巅',
-        'Ethereal Realm': '虚空领域',
-        // Dungeons (prefix [D])
-        'Abandoned Docks': '废弃码头',
-        'Abandoned Warehouse': '废弃仓库',
-        'Arachnid Lair': '蜘蛛巢穴',
-        'Bandits Hideout': '强盗藏身处',
-        'Crystal Cavern': '水晶洞穴',
-        'Dark Temple': '暗黑神殿',
-        'Desecrated Monastery': '亵渎修道院',
-        'Frozen Pass': '冰封山道',
-        'Goblin Fortress': '哥布林要塞',
-        'Haunted Castle': '幽灵城堡',
-        'Lava Palace': '熔岩宫殿',
-        'Shadow Tower': '暗影之塔',
-        'Sunken Temple': '沉没神殿',
-        'Thieves Guild': '盗贼公会',
-        'Undead Crypt': '亡灵地窖',
-        'Vampire Mansion': '吸血鬼庄园',
-        'Werewolf Den': '狼人洞穴',
-        // House rooms
-        'Archery Range': '射箭场',
-        Armory: '军械库',
-        Brewery: '冲泡坊',
-        'Dairy Barn': '奶牛棚',
-        'Dining Room': '餐厅',
-        Dojo: '道场',
-        Forge: '锻造间',
-        Garden: '花园',
-        Gym: '健身房',
-        Kitchen: '厨房',
-        Laboratory: '实验室',
-        Library: '图书馆',
-        'Log Shed': '木棚',
-        'Mystical Study': '神秘研究室',
-        Observatory: '天文台',
-        'Sewing Parlor': '缝纫室',
-        Workshop: '工作间',
-    };
-
-    function getZoneDisplayName(zone) {
-        return CN_ZONE_NAMES[zone.name] || zone.name;
-    }
-
-    /**
      * Pop-Out Chat Window
      * Opens game chat in a separate browser window with multi-channel split-pane support.
      * Game tab relays WebSocket messages via BroadcastChannel; pop-out is a pure UI shell.
@@ -5457,6 +4075,7 @@ ${starCSS}
         { hrid: '/chat_channel_types/trade', name: 'Trade' },
         { hrid: '/chat_channel_types/global', name: 'Global' },
         { hrid: '/chat_channel_types/local', name: 'Local' },
+        { hrid: '/chat_channel_types/help', name: 'Help' },
         { hrid: '/chat_channel_types/party', name: 'Party' },
         { hrid: '/chat_channel_types/guild', name: 'Guild' },
         { hrid: '/chat_channel_types/whisper', name: 'Whisper' },
@@ -5497,7 +4116,7 @@ ${starCSS}
     function resolveSystemMessage(messageKey, meta) {
         if (messageKey === 'systemChatMessage.characterLeveledUp') {
             const skillName = SKILL_HRID_TO_NAME[meta.skillHrid] || meta.skillHrid.split('/').pop().replace(/_/g, ' ');
-            return i18n_js.t('🎉 {0} reached {1} {2}!', meta.name, skillName, meta.level);
+            return t('🎉 {0} reached {1} {2}!', meta.name, skillName, meta.level);
         }
         return null;
     }
@@ -5509,15 +4128,17 @@ ${starCSS}
      */
     function resolveLink(link) {
         if (link.linkType === '/chat_link_types/market_listing') {
-            const itemName = itemNameTranslator.getDisplayName(link.itemHrid);
+            const itemDetails = dataManager.getItemDetails(link.itemHrid);
+            const itemName = itemDetails?.name || link.itemHrid.split('/').pop().replace(/_/g, ' ');
             const enhancement = link.itemEnhancementLevel > 0 ? ` +${link.itemEnhancementLevel}` : '';
             const count = link.itemCount > 1 ? ` ×${link.itemCount}` : '';
             const price = formatters_js.formatKMB(link.price);
-            const side = link.isSell ? i18n_js.t('Sell') : i18n_js.t('Buy');
+            const side = link.isSell ? t('Sell') : t('Buy');
             return `[${itemName}${enhancement}${count} @ ${price} ${side}]`;
         }
         if (link.linkType === '/chat_link_types/item') {
-            const itemName = itemNameTranslator.getDisplayName(link.itemHrid);
+            const itemDetails = dataManager.getItemDetails(link.itemHrid);
+            const itemName = itemDetails?.name || link.itemHrid.split('/').pop().replace(/_/g, ' ');
             const enhancement = link.itemEnhancementLevel > 0 ? ` +${link.itemEnhancementLevel}` : '';
             const count = link.itemCount > 1 ? ` ×${link.itemCount}` : '';
             return `[${itemName}${enhancement}${count}]`;
@@ -5533,19 +4154,18 @@ ${starCSS}
         }
         if (link.linkType === '/chat_link_types/party') {
             const actionDetails = dataManager.getActionDetails(link.partyActionHrid);
-            const zoneName =
-                (actionDetails && getZoneDisplayName(actionDetails)) ||
-                link.partyActionHrid.split('/').pop().replace(/_/g, ' ');
+            const zoneName = actionDetails?.name || link.partyActionHrid.split('/').pop().replace(/_/g, ' ');
             const tier = ` T${link.partyDifficultyTier ?? 0}`;
             return `[Party: ${zoneName}${tier}]`;
         }
         if (link.linkType === '/chat_link_types/collection') {
-            const itemName = itemNameTranslator.getDisplayName(link.itemHrid);
+            const itemDetails = dataManager.getItemDetails(link.itemHrid);
+            const itemName = itemDetails?.name || link.itemHrid.split('/').pop().replace(/_/g, ' ');
             return `[Collection: ${itemName} ×${formatters_js.formatKMB(link.itemCount)}]`;
         }
         if (link.linkType === '/chat_link_types/bestiary') {
-            const monsterName =
-                getMonsterDisplayName(link.monsterHrid) || link.monsterHrid.split('/').pop().replace(/_/g, ' ');
+            const monsterDetails = dataManager.getInitClientData()?.combatMonsterDetailMap?.[link.monsterHrid];
+            const monsterName = monsterDetails?.name || link.monsterHrid.split('/').pop().replace(/_/g, ' ');
             return `[Bestiary: ${monsterName} ×${link.monsterCount}]`;
         }
         // Fallback: humanize the HRID
@@ -5653,7 +4273,7 @@ ${starCSS}
             const btn = document.createElement('button');
             btn.setAttribute('data-mwi-popout-chat', 'true');
             btn.textContent = '⧉';
-            btn.title = i18n_js.t('Pop out chat');
+            btn.title = t('Pop out chat');
             btn.style.cssText = `
             padding: 2px 6px;
             font-size: 13px;
@@ -5865,7 +4485,7 @@ ${starCSS}
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${i18n_js.t('MWI Chat')}</title>
+<title>${t('MWI Chat')}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -6015,11 +4635,11 @@ ${starCSS}
 </head>
 <body>
 <div id="topbar">
-  <span id="topbar-title">${i18n_js.t('MWI Chat')}</span>
+  <span id="topbar-title">${t('MWI Chat')}</span>
   <span id="topbar-name"></span>
-  <button id="add-pane-btn">${i18n_js.t('+ Pane')}</button>
-  <label id="vertical-label"><input type="checkbox" id="vertical-toggle"> ${i18n_js.t('Vertical')}</label>
-  <div id="disconnect-banner">${i18n_js.t('⚠ Disconnected from game tab')}</div>
+  <button id="add-pane-btn">${t('+ Pane')}</button>
+  <label id="vertical-label"><input type="checkbox" id="vertical-toggle"> ${t('Vertical')}</label>
+  <div id="disconnect-banner">${t('⚠ Disconnected from game tab')}</div>
 </div>
 <div id="panes"></div>
 
@@ -6033,12 +4653,12 @@ ${starCSS}
   const STORAGE_KEY = 'mwi-chat-popout-layout';
 
   const FILTER_PRESETS = [
-    { value: 'none',         label: '${i18n_js.t('No filter')}',      regex: null },
-    { value: 'enhanced_buy', label: '${i18n_js.t('Enhanced Buy')}',   regex: /\\+\\d+.*Buy\\]/i },
-    { value: 'enhanced_sell',label: '${i18n_js.t('Enhanced Sell')}',  regex: /\\+\\d+.*Sell\\]/i },
-    { value: 'buy_only',     label: '${i18n_js.t('Buy only')}',       regex: /Buy\\]/i },
-    { value: 'sell_only',    label: '${i18n_js.t('Sell only')}',      regex: /Sell\\]/i },
-    { value: 'custom',       label: '${i18n_js.t('Custom\u2026')}',   regex: null },
+    { value: 'none',         label: '${t('No filter')}',      regex: null },
+    { value: 'enhanced_buy', label: '${t('Enhanced Buy')}',   regex: /\\+\\d+.*Buy\\]/i },
+    { value: 'enhanced_sell',label: '${t('Enhanced Sell')}',  regex: /\\+\\d+.*Sell\\]/i },
+    { value: 'buy_only',     label: '${t('Buy only')}',       regex: /Buy\\]/i },
+    { value: 'sell_only',    label: '${t('Sell only')}',      regex: /Sell\\]/i },
+    { value: 'custom',       label: '${t('Custom\u2026')}',   regex: null },
   ];
 
   function buildCustomRegex(text) {
@@ -6136,7 +4756,7 @@ ${starCSS}
     const dragHandle = document.createElement('span');
     dragHandle.className = 'pane-drag-handle';
     dragHandle.textContent = '⠿';
-    dragHandle.title = '${i18n_js.t('Drag to reorder')}';
+    dragHandle.title = '${t('Drag to reorder')}';
 
     const select = document.createElement('select');
     select.className = 'pane-channel-select';
@@ -6145,7 +4765,7 @@ ${starCSS}
     const closeBtn = document.createElement('button');
     closeBtn.className = 'pane-close-btn';
     closeBtn.textContent = '✕';
-    closeBtn.title = '${i18n_js.t('Close pane')}';
+    closeBtn.title = '${t('Close pane')}';
     closeBtn.addEventListener('click', () => removePane(id));
 
     header.appendChild(dragHandle);
@@ -6169,7 +4789,7 @@ ${starCSS}
     const filterInput = document.createElement('input');
     filterInput.className = 'pane-filter-input';
     filterInput.type = 'text';
-    filterInput.placeholder = '${i18n_js.t('text or /regex/')}';
+    filterInput.placeholder = '${t('text or /regex/')}';
     filterInput.value = savedFilterCustom || '';
     filterInput.style.display = filterSelect.value === 'custom' ? '' : 'none';
 
@@ -6187,12 +4807,12 @@ ${starCSS}
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'pane-input';
-    input.placeholder = '${i18n_js.t('Type a message...')}';
+    input.placeholder = '${t('Type a message...')}';
     input.maxLength = 500;
 
     const sendBtn = document.createElement('button');
     sendBtn.className = 'pane-send-btn';
-    sendBtn.textContent = '${i18n_js.t('SEND')}';
+    sendBtn.textContent = '${t('SEND')}';
 
     const doSend = () => {
       const text = input.value.trim();
@@ -6855,6 +5475,1165 @@ ${starCSS}
     }
 
     const chatHistoryExtender = new ChatHistoryExtender();
+
+    var itemNamesZh = {
+      "Coin": "金币",
+      "Task Token": "任务代币",
+      "Labyrinth Token": "迷宫代币",
+      "Chimerical Token": "奇幻代币",
+      "Sinister Token": "阴森代币",
+      "Enchanted Token": "秘法代币",
+      "Pirate Token": "海盗代币",
+      "Cowbell": "牛铃",
+      "Bag Of 10 Cowbells": "牛铃袋 (10个)",
+      "Purple's Gift": "小紫牛的礼物",
+      "Small Meteorite Cache": "小陨石舱",
+      "Medium Meteorite Cache": "中陨石舱",
+      "Large Meteorite Cache": "大陨石舱",
+      "Small Artisan's Crate": "小工匠匣",
+      "Medium Artisan's Crate": "中工匠匣",
+      "Large Artisan's Crate": "大工匠匣",
+      "Small Treasure Chest": "小宝箱",
+      "Medium Treasure Chest": "中宝箱",
+      "Large Treasure Chest": "大宝箱",
+      "Chimerical Chest": "奇幻宝箱",
+      "Sinister Chest": "阴森宝箱",
+      "Enchanted Chest": "秘法宝箱",
+      "Pirate Chest": "海盗宝箱",
+      "Purdora's Box (Skilling)": "紫多拉之盒（生活）",
+      "Purdora's Box (Combat)": "紫多拉之盒（战斗）",
+      "Scroll Of Gathering": "采集卷轴",
+      "Scroll Of Gourmet": "美食卷轴",
+      "Scroll Of Processing": "加工卷轴",
+      "Scroll Of Efficiency": "效率卷轴",
+      "Scroll Of Action Speed": "行动速度卷轴",
+      "Scroll Of Combat Drop": "战斗掉落卷轴",
+      "Scroll Of Attack Speed": "攻击速度卷轴",
+      "Scroll Of Cast Speed": "施法速度卷轴",
+      "Scroll Of Damage": "伤害卷轴",
+      "Scroll Of Critical Rate": "暴击率卷轴",
+      "Scroll Of Wisdom": "经验卷轴",
+      "Scroll Of Rare Find": "稀有发现卷轴",
+      "Blue Key Fragment": "蓝色钥匙碎片",
+      "Green Key Fragment": "绿色钥匙碎片",
+      "Purple Key Fragment": "紫色钥匙碎片",
+      "White Key Fragment": "白色钥匙碎片",
+      "Orange Key Fragment": "橙色钥匙碎片",
+      "Brown Key Fragment": "棕色钥匙碎片",
+      "Stone Key Fragment": "石头钥匙碎片",
+      "Dark Key Fragment": "黑暗钥匙碎片",
+      "Burning Key Fragment": "燃烧钥匙碎片",
+      "Donut": "甜甜圈",
+      "Blueberry Donut": "蓝莓甜甜圈",
+      "Blackberry Donut": "黑莓甜甜圈",
+      "Strawberry Donut": "草莓甜甜圈",
+      "Mooberry Donut": "哞莓甜甜圈",
+      "Marsberry Donut": "火星莓甜甜圈",
+      "Spaceberry Donut": "太空莓甜甜圈",
+      "Cupcake": "纸杯蛋糕",
+      "Blueberry Cake": "蓝莓蛋糕",
+      "Blackberry Cake": "黑莓蛋糕",
+      "Strawberry Cake": "草莓蛋糕",
+      "Mooberry Cake": "哞莓蛋糕",
+      "Marsberry Cake": "火星莓蛋糕",
+      "Spaceberry Cake": "太空莓蛋糕",
+      "Gummy": "软糖",
+      "Apple Gummy": "苹果软糖",
+      "Orange Gummy": "橙子软糖",
+      "Plum Gummy": "李子软糖",
+      "Peach Gummy": "桃子软糖",
+      "Dragon Fruit Gummy": "火龙果软糖",
+      "Star Fruit Gummy": "杨桃软糖",
+      "Yogurt": "酸奶",
+      "Apple Yogurt": "苹果酸奶",
+      "Orange Yogurt": "橙子酸奶",
+      "Plum Yogurt": "李子酸奶",
+      "Peach Yogurt": "桃子酸奶",
+      "Dragon Fruit Yogurt": "火龙果酸奶",
+      "Star Fruit Yogurt": "杨桃酸奶",
+      "Milking Tea": "挤奶茶",
+      "Foraging Tea": "采摘茶",
+      "Woodcutting Tea": "伐木茶",
+      "Cooking Tea": "烹饪茶",
+      "Brewing Tea": "冲泡茶",
+      "Alchemy Tea": "炼金茶",
+      "Enhancing Tea": "强化茶",
+      "Cheesesmithing Tea": "奶酪锻造茶",
+      "Crafting Tea": "制作茶",
+      "Tailoring Tea": "缝纫茶",
+      "Super Milking Tea": "超级挤奶茶",
+      "Super Foraging Tea": "超级采摘茶",
+      "Super Woodcutting Tea": "超级伐木茶",
+      "Super Cooking Tea": "超级烹饪茶",
+      "Super Brewing Tea": "超级冲泡茶",
+      "Super Alchemy Tea": "超级炼金茶",
+      "Super Enhancing Tea": "超级强化茶",
+      "Super Crafting Tea": "超级制作茶",
+      "Super Tailoring Tea": "超级缝纫茶",
+      "Ultra Milking Tea": "究极挤奶茶",
+      "Ultra Foraging Tea": "究极采摘茶",
+      "Ultra Woodcutting Tea": "究极伐木茶",
+      "Ultra Cooking Tea": "究极烹饪茶",
+      "Ultra Brewing Tea": "究极冲泡茶",
+      "Ultra Alchemy Tea": "究极炼金茶",
+      "Ultra Enhancing Tea": "究极强化茶",
+      "Ultra Crafting Tea": "究极制作茶",
+      "Ultra Tailoring Tea": "究极缝纫茶",
+      "Gathering Tea": "采集茶",
+      "Gourmet Tea": "美食茶",
+      "Wisdom Tea": "经验茶",
+      "Processing Tea": "加工茶",
+      "Efficiency Tea": "效率茶",
+      "Artisan Tea": "工匠茶",
+      "Catalytic Tea": "催化茶",
+      "Blessed Tea": "福气茶",
+      "Stamina Coffee": "耐力咖啡",
+      "Intelligence Coffee": "智力咖啡",
+      "Defense Coffee": "防御咖啡",
+      "Attack Coffee": "攻击咖啡",
+      "Melee Coffee": "近战咖啡",
+      "Ranged Coffee": "远程咖啡",
+      "Magic Coffee": "魔法咖啡",
+      "Super Stamina Coffee": "超级耐力咖啡",
+      "Super Intelligence Coffee": "超级智力咖啡",
+      "Super Defense Coffee": "超级防御咖啡",
+      "Super Attack Coffee": "超级攻击咖啡",
+      "Super Melee Coffee": "超级近战咖啡",
+      "Super Ranged Coffee": "超级远程咖啡",
+      "Super Magic Coffee": "超级魔法咖啡",
+      "Ultra Stamina Coffee": "究极耐力咖啡",
+      "Ultra Intelligence Coffee": "究极智力咖啡",
+      "Ultra Defense Coffee": "究极防御咖啡",
+      "Ultra Attack Coffee": "究极攻击咖啡",
+      "Ultra Melee Coffee": "究极近战咖啡",
+      "Ultra Ranged Coffee": "究极远程咖啡",
+      "Ultra Magic Coffee": "究极魔法咖啡",
+      "Wisdom Coffee": "经验咖啡",
+      "Lucky Coffee": "幸运咖啡",
+      "Swiftness Coffee": "迅捷咖啡",
+      "Channeling Coffee": "吟唱咖啡",
+      "Critical Coffee": "暴击咖啡",
+      "Poke": "破胆之刺",
+      "Impale": "透骨之刺",
+      "Puncture": "破甲之刺",
+      "Penetrating Strike": "贯心之刺",
+      "Scratch": "爪影斩",
+      "Cleave": "分裂斩",
+      "Maim": "血刃斩",
+      "Crippling Slash": "致残斩",
+      "Smack": "重碾",
+      "Sweep": "重扫",
+      "Stunning Blow": "重锤",
+      "Fracturing Impact": "碎裂冲击",
+      "Shield Bash": "盾击",
+      "Quick Shot": "快速射击",
+      "Aqua Arrow": "流水箭",
+      "Flame Arrow": "烈焰箭",
+      "Rain Of Arrows": "箭雨",
+      "Silencing Shot": "沉默之箭",
+      "Steady Shot": "稳定射击",
+      "Pestilent Shot": "疫病射击",
+      "Penetrating Shot": "贯穿射击",
+      "Water Strike": "流水冲击",
+      "Ice Spear": "冰枪术",
+      "Frost Surge": "冰霜爆裂",
+      "Mana Spring": "法力喷泉",
+      "Entangle": "缠绕",
+      "Toxic Pollen": "剧毒粉尘",
+      "Nature's Veil": "自然菌幕",
+      "Life Drain": "生命吸取",
+      "Fireball": "火球",
+      "Flame Blast": "熔岩爆裂",
+      "Firestorm": "火焰风暴",
+      "Smoke Burst": "烟爆灭影",
+      "Minor Heal": "初级自愈术",
+      "Heal": "自愈术",
+      "Quick Aid": "快速治疗术",
+      "Rejuvenate": "群体治疗术",
+      "Taunt": "嘲讽",
+      "Provoke": "挑衅",
+      "Toughness": "坚韧",
+      "Elusiveness": "闪避",
+      "Precision": "精确",
+      "Berserk": "狂暴",
+      "Elemental Affinity": "元素增幅",
+      "Frenzy": "狂速",
+      "Spike Shell": "尖刺防护",
+      "Retribution": "惩戒",
+      "Vampirism": "吸血",
+      "Revive": "复活",
+      "Insanity": "疯狂",
+      "Invincible": "无敌",
+      "Speed Aura": "速度光环",
+      "Guardian Aura": "守护光环",
+      "Fierce Aura": "物理光环",
+      "Critical Aura": "暴击光环",
+      "Mystic Aura": "元素光环",
+      "Gobo Stabber": "哥布林长剑",
+      "Gobo Slasher": "哥布林关刀",
+      "Gobo Smasher": "哥布林狼牙棒",
+      "Spiked Bulwark": "尖刺重盾",
+      "Werewolf Slasher": "狼人关刀",
+      "Griffin Bulwark": "狮鹫重盾",
+      "Griffin Bulwark (R)": "狮鹫重盾（精）",
+      "Gobo Shooter": "哥布林弹弓",
+      "Vampiric Bow": "吸血弓",
+      "Cursed Bow": "咒怨之弓",
+      "Cursed Bow (R)": "咒怨之弓（精）",
+      "Gobo Boomstick": "哥布林火棍",
+      "Cheese Bulwark": "奶酪重盾",
+      "Verdant Bulwark": "翠绿重盾",
+      "Azure Bulwark": "蔚蓝重盾",
+      "Burble Bulwark": "深紫重盾",
+      "Crimson Bulwark": "绛红重盾",
+      "Rainbow Bulwark": "彩虹重盾",
+      "Holy Bulwark": "神圣重盾",
+      "Wooden Bow": "木弓",
+      "Birch Bow": "桦木弓",
+      "Cedar Bow": "雪松弓",
+      "Purpleheart Bow": "紫心弓",
+      "Ginkgo Bow": "银杏弓",
+      "Redwood Bow": "红杉弓",
+      "Arcane Bow": "神秘弓",
+      "Stalactite Spear": "石钟长枪",
+      "Granite Bludgeon": "花岗岩大棒",
+      "Furious Spear": "狂怒长枪",
+      "Furious Spear (R)": "狂怒长枪（精）",
+      "Regal Sword": "君王之剑",
+      "Regal Sword (R)": "君王之剑（精）",
+      "Chaotic Flail": "混沌连枷",
+      "Chaotic Flail (R)": "混沌连枷（精）",
+      "Soul Hunter Crossbow": "灵魂猎手弩",
+      "Sundering Crossbow": "裂空之弩",
+      "Sundering Crossbow (R)": "裂空之弩（精）",
+      "Frost Staff": "冰霜法杖",
+      "Infernal Battlestaff": "炼狱法杖",
+      "Jackalope Staff": "鹿角兔之杖",
+      "Rippling Trident": "涟漪三叉戟",
+      "Rippling Trident (R)": "涟漪三叉戟（精）",
+      "Blooming Trident": "绽放三叉戟",
+      "Blooming Trident (R)": "绽放三叉戟（精）",
+      "Blazing Trident": "炽焰三叉戟",
+      "Blazing Trident (R)": "炽焰三叉戟（精）",
+      "Cheese Sword": "奶酪剑",
+      "Verdant Sword": "翠绿剑",
+      "Azure Sword": "蔚蓝剑",
+      "Burble Sword": "深紫剑",
+      "Crimson Sword": "绛红剑",
+      "Rainbow Sword": "彩虹剑",
+      "Holy Sword": "神圣剑",
+      "Cheese Spear": "奶酪长枪",
+      "Verdant Spear": "翠绿长枪",
+      "Azure Spear": "蔚蓝长枪",
+      "Burble Spear": "深紫长枪",
+      "Crimson Spear": "绛红长枪",
+      "Rainbow Spear": "彩虹长枪",
+      "Holy Spear": "神圣长枪",
+      "Cheese Mace": "奶酪钉头锤",
+      "Verdant Mace": "翠绿钉头锤",
+      "Azure Mace": "蔚蓝钉头锤",
+      "Burble Mace": "深紫钉头锤",
+      "Crimson Mace": "绛红钉头锤",
+      "Rainbow Mace": "彩虹钉头锤",
+      "Holy Mace": "神圣钉头锤",
+      "Wooden Crossbow": "木弩",
+      "Birch Crossbow": "桦木弩",
+      "Cedar Crossbow": "雪松弩",
+      "Purpleheart Crossbow": "紫心弩",
+      "Ginkgo Crossbow": "银杏弩",
+      "Redwood Crossbow": "红杉弩",
+      "Arcane Crossbow": "神秘弩",
+      "Wooden Water Staff": "木制水法杖",
+      "Birch Water Staff": "桦木水法杖",
+      "Cedar Water Staff": "雪松水法杖",
+      "Purpleheart Water Staff": "紫心水法杖",
+      "Ginkgo Water Staff": "银杏水法杖",
+      "Redwood Water Staff": "红杉水法杖",
+      "Arcane Water Staff": "神秘水法杖",
+      "Wooden Nature Staff": "木制自然法杖",
+      "Birch Nature Staff": "桦木自然法杖",
+      "Cedar Nature Staff": "雪松自然法杖",
+      "Purpleheart Nature Staff": "紫心自然法杖",
+      "Ginkgo Nature Staff": "银杏自然法杖",
+      "Redwood Nature Staff": "红杉自然法杖",
+      "Arcane Nature Staff": "神秘自然法杖",
+      "Wooden Fire Staff": "木制火法杖",
+      "Birch Fire Staff": "桦木火法杖",
+      "Cedar Fire Staff": "雪松火法杖",
+      "Purpleheart Fire Staff": "紫心火法杖",
+      "Ginkgo Fire Staff": "银杏火法杖",
+      "Redwood Fire Staff": "红杉火法杖",
+      "Arcane Fire Staff": "神秘火法杖",
+      "Eye Watch": "掌上监工",
+      "Snake Fang Dirk": "蛇牙短剑",
+      "Vision Shield": "视觉盾",
+      "Gobo Defender": "哥布林防御者",
+      "Vampire Fang Dirk": "吸血鬼短剑",
+      "Knight's Aegis": "骑士盾",
+      "Knight's Aegis (R)": "骑士盾（精）",
+      "Treant Shield": "树人盾",
+      "Manticore Shield": "蝎狮盾",
+      "Tome Of Healing": "治疗之书",
+      "Tome Of The Elements": "元素之书",
+      "Watchful Relic": "警戒遗物",
+      "Bishop's Codex": "主教法典",
+      "Bishop's Codex (R)": "主教法典（精）",
+      "Cheese Buckler": "奶酪圆盾",
+      "Verdant Buckler": "翠绿圆盾",
+      "Azure Buckler": "蔚蓝圆盾",
+      "Burble Buckler": "深紫圆盾",
+      "Crimson Buckler": "绛红圆盾",
+      "Rainbow Buckler": "彩虹圆盾",
+      "Holy Buckler": "神圣圆盾",
+      "Wooden Shield": "木盾",
+      "Birch Shield": "桦木盾",
+      "Cedar Shield": "雪松盾",
+      "Purpleheart Shield": "紫心盾",
+      "Ginkgo Shield": "银杏盾",
+      "Redwood Shield": "红杉盾",
+      "Arcane Shield": "神秘盾",
+      "Gatherer Cape": "采集者披风",
+      "Gatherer Cape (R)": "采集者披风（精）",
+      "Artificer Cape": "工匠披风",
+      "Artificer Cape (R)": "工匠披风（精）",
+      "Culinary Cape": "厨师披风",
+      "Culinary Cape (R)": "厨师披风（精）",
+      "Chance Cape": "机缘披风",
+      "Chance Cape (R)": "机缘披风（精）",
+      "Sinister Cape": "阴森披风",
+      "Sinister Cape (R)": "阴森披风（精）",
+      "Chimerical Quiver": "奇幻箭袋",
+      "Chimerical Quiver (R)": "奇幻箭袋（精）",
+      "Enchanted Cloak": "秘法披风",
+      "Enchanted Cloak (R)": "秘法披风（精）",
+      "Red Culinary Hat": "红色厨师帽",
+      "Snail Shell Helmet": "蜗牛壳头盔",
+      "Vision Helmet": "视觉头盔",
+      "Fluffy Red Hat": "蓬松红帽子",
+      "Corsair Helmet": "掠夺者头盔",
+      "Corsair Helmet (R)": "掠夺者头盔（精）",
+      "Acrobatic Hood": "杂技师兜帽",
+      "Acrobatic Hood (R)": "杂技师兜帽（精）",
+      "Magician's Hat": "魔术师帽",
+      "Magician's Hat (R)": "魔术师帽（精）",
+      "Cheese Helmet": "奶酪头盔",
+      "Verdant Helmet": "翠绿头盔",
+      "Azure Helmet": "蔚蓝头盔",
+      "Burble Helmet": "深紫头盔",
+      "Crimson Helmet": "绛红头盔",
+      "Rainbow Helmet": "彩虹头盔",
+      "Holy Helmet": "神圣头盔",
+      "Rough Hood": "粗糙兜帽",
+      "Reptile Hood": "爬行动物兜帽",
+      "Gobo Hood": "哥布林兜帽",
+      "Beast Hood": "野兽兜帽",
+      "Umbral Hood": "暗影兜帽",
+      "Cotton Hat": "棉帽",
+      "Linen Hat": "亚麻帽",
+      "Bamboo Hat": "竹帽",
+      "Silk Hat": "丝帽",
+      "Radiant Hat": "光辉帽",
+      "Dairyhand's Top": "挤奶工上衣",
+      "Forager's Top": "采摘者上衣",
+      "Lumberjack's Top": "伐木工上衣",
+      "Cheesemaker's Top": "奶酪师上衣",
+      "Crafter's Top": "工匠上衣",
+      "Tailor's Top": "裁缝上衣",
+      "Chef's Top": "厨师上衣",
+      "Brewer's Top": "饮品师上衣",
+      "Alchemist's Top": "炼金师上衣",
+      "Enhancer's Top": "强化师上衣",
+      "Gator Vest": "鳄鱼马甲",
+      "Turtle Shell Body": "龟壳胸甲",
+      "Colossus Plate Body": "巨像胸甲",
+      "Demonic Plate Body": "恶魔胸甲",
+      "Anchorbound Plate Body": "锚定胸甲",
+      "Anchorbound Plate Body (R)": "锚定胸甲（精）",
+      "Maelstrom Plate Body": "怒涛胸甲",
+      "Maelstrom Plate Body (R)": "怒涛胸甲（精）",
+      "Marine Tunic": "海洋皮衣",
+      "Revenant Tunic": "亡灵皮衣",
+      "Griffin Tunic": "狮鹫皮衣",
+      "Kraken Tunic": "克拉肯皮衣",
+      "Kraken Tunic (R)": "克拉肯皮衣（精）",
+      "Icy Robe Top": "冰霜袍服",
+      "Flaming Robe Top": "烈焰袍服",
+      "Luna Robe Top": "月神袍服",
+      "Royal Water Robe Top": "皇家水系袍服",
+      "Royal Water Robe Top (R)": "皇家水系袍服（精）",
+      "Royal Nature Robe Top": "皇家自然系袍服",
+      "Royal Nature Robe Top (R)": "皇家自然系袍服（精）",
+      "Royal Fire Robe Top": "皇家火系袍服",
+      "Royal Fire Robe Top (R)": "皇家火系袍服（精）",
+      "Cheese Plate Body": "奶酪胸甲",
+      "Verdant Plate Body": "翠绿胸甲",
+      "Azure Plate Body": "蔚蓝胸甲",
+      "Burble Plate Body": "深紫胸甲",
+      "Crimson Plate Body": "绛红胸甲",
+      "Rainbow Plate Body": "彩虹胸甲",
+      "Holy Plate Body": "神圣胸甲",
+      "Rough Tunic": "粗糙皮衣",
+      "Reptile Tunic": "爬行动物皮衣",
+      "Gobo Tunic": "哥布林皮衣",
+      "Beast Tunic": "野兽皮衣",
+      "Umbral Tunic": "暗影皮衣",
+      "Cotton Robe Top": "棉袍服",
+      "Linen Robe Top": "亚麻袍服",
+      "Bamboo Robe Top": "竹袍服",
+      "Silk Robe Top": "丝绸袍服",
+      "Radiant Robe Top": "光辉袍服",
+      "Dairyhand's Bottoms": "挤奶工下装",
+      "Forager's Bottoms": "采摘者下装",
+      "Lumberjack's Bottoms": "伐木工下装",
+      "Cheesemaker's Bottoms": "奶酪师下装",
+      "Crafter's Bottoms": "工匠下装",
+      "Tailor's Bottoms": "裁缝下装",
+      "Chef's Bottoms": "厨师下装",
+      "Brewer's Bottoms": "饮品师下装",
+      "Alchemist's Bottoms": "炼金师下装",
+      "Enhancer's Bottoms": "强化师下装",
+      "Turtle Shell Legs": "龟壳腿甲",
+      "Colossus Plate Legs": "巨像腿甲",
+      "Demonic Plate Legs": "恶魔腿甲",
+      "Anchorbound Plate Legs": "锚定腿甲",
+      "Anchorbound Plate Legs (R)": "锚定腿甲（精）",
+      "Maelstrom Plate Legs": "怒涛腿甲",
+      "Maelstrom Plate Legs (R)": "怒涛腿甲（精）",
+      "Marine Chaps": "航海皮裤",
+      "Revenant Chaps": "亡灵皮裤",
+      "Griffin Chaps": "狮鹫皮裤",
+      "Kraken Chaps": "克拉肯皮裤",
+      "Kraken Chaps (R)": "克拉肯皮裤（精）",
+      "Icy Robe Bottoms": "冰霜袍裙",
+      "Flaming Robe Bottoms": "烈焰袍裙",
+      "Luna Robe Bottoms": "月神袍裙",
+      "Royal Water Robe Bottoms": "皇家水系袍裙",
+      "Royal Water Robe Bottoms (R)": "皇家水系袍裙（精）",
+      "Royal Nature Robe Bottoms": "皇家自然系袍裙",
+      "Royal Nature Robe Bottoms (R)": "皇家自然系袍裙（精）",
+      "Royal Fire Robe Bottoms": "皇家火系袍裙",
+      "Royal Fire Robe Bottoms (R)": "皇家火系袍裙（精）",
+      "Cheese Plate Legs": "奶酪腿甲",
+      "Verdant Plate Legs": "翠绿腿甲",
+      "Azure Plate Legs": "蔚蓝腿甲",
+      "Burble Plate Legs": "深紫腿甲",
+      "Crimson Plate Legs": "绛红腿甲",
+      "Rainbow Plate Legs": "彩虹腿甲",
+      "Holy Plate Legs": "神圣腿甲",
+      "Rough Chaps": "粗糙皮裤",
+      "Reptile Chaps": "爬行动物皮裤",
+      "Gobo Chaps": "哥布林皮裤",
+      "Beast Chaps": "野兽皮裤",
+      "Umbral Chaps": "暗影皮裤",
+      "Cotton Robe Bottoms": "棉袍裙",
+      "Linen Robe Bottoms": "亚麻袍裙",
+      "Bamboo Robe Bottoms": "竹袍裙",
+      "Silk Robe Bottoms": "丝绸袍裙",
+      "Radiant Robe Bottoms": "光辉袍裙",
+      "Enchanted Gloves": "附魔手套",
+      "Pincer Gloves": "蟹钳手套",
+      "Panda Gloves": "熊猫手套",
+      "Magnetic Gloves": "磁力手套",
+      "Dodocamel Gauntlets": "渡渡驼护手",
+      "Dodocamel Gauntlets (R)": "渡渡驼护手（精）",
+      "Sighted Bracers": "瞄准护腕",
+      "Marksman Bracers": "神射护腕",
+      "Marksman Bracers (R)": "神射护腕（精）",
+      "Chrono Gloves": "时空手套",
+      "Cheese Gauntlets": "奶酪护手",
+      "Verdant Gauntlets": "翠绿护手",
+      "Azure Gauntlets": "蔚蓝护手",
+      "Burble Gauntlets": "深紫护手",
+      "Crimson Gauntlets": "绛红护手",
+      "Rainbow Gauntlets": "彩虹护手",
+      "Holy Gauntlets": "神圣护手",
+      "Rough Bracers": "粗糙护腕",
+      "Reptile Bracers": "爬行动物护腕",
+      "Gobo Bracers": "哥布林护腕",
+      "Beast Bracers": "野兽护腕",
+      "Umbral Bracers": "暗影护腕",
+      "Cotton Gloves": "棉手套",
+      "Linen Gloves": "亚麻手套",
+      "Bamboo Gloves": "竹手套",
+      "Silk Gloves": "丝手套",
+      "Radiant Gloves": "光辉手套",
+      "Collector's Boots": "收藏家靴",
+      "Shoebill Shoes": "鲸头鹳鞋",
+      "Black Bear Shoes": "黑熊鞋",
+      "Grizzly Bear Shoes": "棕熊鞋",
+      "Polar Bear Shoes": "北极熊鞋",
+      "Pathbreaker Boots": "开路者靴",
+      "Pathbreaker Boots (R)": "开路者靴（精）",
+      "Centaur Boots": "半人马靴",
+      "Pathfinder Boots": "探路者靴",
+      "Pathfinder Boots (R)": "探路者靴（精）",
+      "Sorcerer Boots": "巫师靴",
+      "Pathseeker Boots": "寻路者靴",
+      "Pathseeker Boots (R)": "寻路者靴（精）",
+      "Cheese Boots": "奶酪靴",
+      "Verdant Boots": "翠绿靴",
+      "Azure Boots": "蔚蓝靴",
+      "Burble Boots": "深紫靴",
+      "Crimson Boots": "绛红靴",
+      "Rainbow Boots": "彩虹靴",
+      "Holy Boots": "神圣靴",
+      "Rough Boots": "粗糙靴",
+      "Reptile Boots": "爬行动物靴",
+      "Gobo Boots": "哥布林靴",
+      "Beast Boots": "野兽靴",
+      "Umbral Boots": "暗影靴",
+      "Cotton Boots": "棉靴",
+      "Linen Boots": "亚麻靴",
+      "Bamboo Boots": "竹靴",
+      "Silk Boots": "丝靴",
+      "Radiant Boots": "光辉靴",
+      "Small Pouch": "小袋子",
+      "Medium Pouch": "中袋子",
+      "Large Pouch": "大袋子",
+      "Giant Pouch": "巨大袋子",
+      "Gluttonous Pouch": "贪食之袋",
+      "Guzzling Pouch": "暴饮之囊",
+      "Necklace Of Efficiency": "效率项链",
+      "Fighter Necklace": "战士项链",
+      "Ranger Necklace": "射手项链",
+      "Wizard Necklace": "巫师项链",
+      "Necklace Of Wisdom": "经验项链",
+      "Necklace Of Speed": "速度项链",
+      "Philosopher's Necklace": "贤者项链",
+      "Earrings Of Gathering": "采集耳环",
+      "Earrings Of Essence Find": "精华发现耳环",
+      "Earrings Of Armor": "护甲耳环",
+      "Earrings Of Regeneration": "恢复耳环",
+      "Earrings Of Resistance": "抗性耳环",
+      "Earrings Of Rare Find": "稀有发现耳环",
+      "Earrings Of Critical Strike": "暴击耳环",
+      "Philosopher's Earrings": "贤者耳环",
+      "Ring Of Gathering": "采集戒指",
+      "Ring Of Essence Find": "精华发现戒指",
+      "Ring Of Armor": "护甲戒指",
+      "Ring Of Regeneration": "恢复戒指",
+      "Ring Of Resistance": "抗性戒指",
+      "Ring Of Rare Find": "稀有发现戒指",
+      "Ring Of Critical Strike": "暴击戒指",
+      "Philosopher's Ring": "贤者戒指",
+      "Trainee Milking Charm": "实习挤奶护符",
+      "Basic Milking Charm": "基础挤奶护符",
+      "Advanced Milking Charm": "高级挤奶护符",
+      "Expert Milking Charm": "专家挤奶护符",
+      "Master Milking Charm": "大师挤奶护符",
+      "Grandmaster Milking Charm": "宗师挤奶护符",
+      "Trainee Foraging Charm": "实习采摘护符",
+      "Basic Foraging Charm": "基础采摘护符",
+      "Advanced Foraging Charm": "高级采摘护符",
+      "Expert Foraging Charm": "专家采摘护符",
+      "Master Foraging Charm": "大师采摘护符",
+      "Grandmaster Foraging Charm": "宗师采摘护符",
+      "Trainee Woodcutting Charm": "实习伐木护符",
+      "Basic Woodcutting Charm": "基础伐木护符",
+      "Advanced Woodcutting Charm": "高级伐木护符",
+      "Expert Woodcutting Charm": "专家伐木护符",
+      "Master Woodcutting Charm": "大师伐木护符",
+      "Grandmaster Woodcutting Charm": "宗师伐木护符",
+      "Trainee Cheesesmithing Charm": "实习奶酪锻造护符",
+      "Basic Cheesesmithing Charm": "基础奶酪锻造护符",
+      "Advanced Cheesesmithing Charm": "高级奶酪锻造护符",
+      "Expert Cheesesmithing Charm": "专家奶酪锻造护符",
+      "Master Cheesesmithing Charm": "大师奶酪锻造护符",
+      "Grandmaster Cheesesmithing Charm": "宗师奶酪锻造护符",
+      "Trainee Crafting Charm": "实习制作护符",
+      "Basic Crafting Charm": "基础制作护符",
+      "Advanced Crafting Charm": "高级制作护符",
+      "Expert Crafting Charm": "专家制作护符",
+      "Master Crafting Charm": "大师制作护符",
+      "Grandmaster Crafting Charm": "宗师制作护符",
+      "Trainee Tailoring Charm": "实习缝纫护符",
+      "Basic Tailoring Charm": "基础缝纫护符",
+      "Advanced Tailoring Charm": "高级缝纫护符",
+      "Expert Tailoring Charm": "专家缝纫护符",
+      "Master Tailoring Charm": "大师缝纫护符",
+      "Grandmaster Tailoring Charm": "宗师缝纫护符",
+      "Trainee Cooking Charm": "实习烹饪护符",
+      "Basic Cooking Charm": "基础烹饪护符",
+      "Advanced Cooking Charm": "高级烹饪护符",
+      "Expert Cooking Charm": "专家烹饪护符",
+      "Master Cooking Charm": "大师烹饪护符",
+      "Grandmaster Cooking Charm": "宗师烹饪护符",
+      "Trainee Brewing Charm": "实习冲泡护符",
+      "Basic Brewing Charm": "基础冲泡护符",
+      "Advanced Brewing Charm": "高级冲泡护符",
+      "Expert Brewing Charm": "专家冲泡护符",
+      "Master Brewing Charm": "大师冲泡护符",
+      "Grandmaster Brewing Charm": "宗师冲泡护符",
+      "Trainee Alchemy Charm": "实习炼金护符",
+      "Basic Alchemy Charm": "基础炼金护符",
+      "Advanced Alchemy Charm": "高级炼金护符",
+      "Expert Alchemy Charm": "专家炼金护符",
+      "Master Alchemy Charm": "大师炼金护符",
+      "Grandmaster Alchemy Charm": "宗师炼金护符",
+      "Trainee Enhancing Charm": "实习强化护符",
+      "Basic Enhancing Charm": "基础强化护符",
+      "Advanced Enhancing Charm": "高级强化护符",
+      "Expert Enhancing Charm": "专家强化护符",
+      "Master Enhancing Charm": "大师强化护符",
+      "Grandmaster Enhancing Charm": "宗师强化护符",
+      "Trainee Stamina Charm": "实习耐力护符",
+      "Basic Stamina Charm": "基础耐力护符",
+      "Advanced Stamina Charm": "高级耐力护符",
+      "Expert Stamina Charm": "专家耐力护符",
+      "Master Stamina Charm": "大师耐力护符",
+      "Grandmaster Stamina Charm": "宗师耐力护符",
+      "Trainee Intelligence Charm": "实习智力护符",
+      "Basic Intelligence Charm": "基础智力护符",
+      "Advanced Intelligence Charm": "高级智力护符",
+      "Expert Intelligence Charm": "专家智力护符",
+      "Master Intelligence Charm": "大师智力护符",
+      "Grandmaster Intelligence Charm": "宗师智力护符",
+      "Trainee Attack Charm": "实习攻击护符",
+      "Basic Attack Charm": "基础攻击护符",
+      "Advanced Attack Charm": "高级攻击护符",
+      "Expert Attack Charm": "专家攻击护符",
+      "Master Attack Charm": "大师攻击护符",
+      "Grandmaster Attack Charm": "宗师攻击护符",
+      "Trainee Defense Charm": "实习防御护符",
+      "Basic Defense Charm": "基础防御护符",
+      "Advanced Defense Charm": "高级防御护符",
+      "Expert Defense Charm": "专家防御护符",
+      "Master Defense Charm": "大师防御护符",
+      "Grandmaster Defense Charm": "宗师防御护符",
+      "Trainee Melee Charm": "实习近战护符",
+      "Basic Melee Charm": "基础近战护符",
+      "Advanced Melee Charm": "高级近战护符",
+      "Expert Melee Charm": "专家近战护符",
+      "Master Melee Charm": "大师近战护符",
+      "Grandmaster Melee Charm": "宗师近战护符",
+      "Trainee Ranged Charm": "实习远程护符",
+      "Basic Ranged Charm": "基础远程护符",
+      "Advanced Ranged Charm": "高级远程护符",
+      "Expert Ranged Charm": "专家远程护符",
+      "Master Ranged Charm": "大师远程护符",
+      "Grandmaster Ranged Charm": "宗师远程护符",
+      "Trainee Magic Charm": "实习魔法护符",
+      "Basic Magic Charm": "基础魔法护符",
+      "Advanced Magic Charm": "高级魔法护符",
+      "Expert Magic Charm": "专家魔法护符",
+      "Master Magic Charm": "大师魔法护符",
+      "Grandmaster Magic Charm": "宗师魔法护符",
+      "Basic Task Badge": "基础任务徽章",
+      "Advanced Task Badge": "高级任务徽章",
+      "Expert Task Badge": "专家任务徽章",
+      "Celestial Brush": "星空刷子",
+      "Cheese Brush": "奶酪刷子",
+      "Verdant Brush": "翠绿刷子",
+      "Azure Brush": "蔚蓝刷子",
+      "Burble Brush": "深紫刷子",
+      "Crimson Brush": "绛红刷子",
+      "Rainbow Brush": "彩虹刷子",
+      "Holy Brush": "神圣刷子",
+      "Celestial Shears": "星空剪刀",
+      "Cheese Shears": "奶酪剪刀",
+      "Verdant Shears": "翠绿剪刀",
+      "Azure Shears": "蔚蓝剪刀",
+      "Burble Shears": "深紫剪刀",
+      "Crimson Shears": "绛红剪刀",
+      "Rainbow Shears": "彩虹剪刀",
+      "Holy Shears": "神圣剪刀",
+      "Celestial Hatchet": "星空斧头",
+      "Cheese Hatchet": "奶酪斧头",
+      "Verdant Hatchet": "翠绿斧头",
+      "Azure Hatchet": "蔚蓝斧头",
+      "Burble Hatchet": "深紫斧头",
+      "Crimson Hatchet": "绛红斧头",
+      "Rainbow Hatchet": "彩虹斧头",
+      "Holy Hatchet": "神圣斧头",
+      "Celestial Hammer": "星空锤子",
+      "Cheese Hammer": "奶酪锤子",
+      "Verdant Hammer": "翠绿锤子",
+      "Azure Hammer": "蔚蓝锤子",
+      "Burble Hammer": "深紫锤子",
+      "Crimson Hammer": "绛红锤子",
+      "Rainbow Hammer": "彩虹锤子",
+      "Holy Hammer": "神圣锤子",
+      "Celestial Chisel": "星空凿子",
+      "Cheese Chisel": "奶酪凿子",
+      "Verdant Chisel": "翠绿凿子",
+      "Azure Chisel": "蔚蓝凿子",
+      "Burble Chisel": "深紫凿子",
+      "Crimson Chisel": "绛红凿子",
+      "Rainbow Chisel": "彩虹凿子",
+      "Holy Chisel": "神圣凿子",
+      "Celestial Needle": "星空针",
+      "Cheese Needle": "奶酪针",
+      "Verdant Needle": "翠绿针",
+      "Azure Needle": "蔚蓝针",
+      "Burble Needle": "深紫针",
+      "Crimson Needle": "绛红针",
+      "Rainbow Needle": "彩虹针",
+      "Holy Needle": "神圣针",
+      "Celestial Spatula": "星空锅铲",
+      "Cheese Spatula": "奶酪锅铲",
+      "Verdant Spatula": "翠绿锅铲",
+      "Azure Spatula": "蔚蓝锅铲",
+      "Burble Spatula": "深紫锅铲",
+      "Crimson Spatula": "绛红锅铲",
+      "Rainbow Spatula": "彩虹锅铲",
+      "Holy Spatula": "神圣锅铲",
+      "Celestial Pot": "星空壶",
+      "Cheese Pot": "奶酪壶",
+      "Verdant Pot": "翠绿壶",
+      "Azure Pot": "蔚蓝壶",
+      "Burble Pot": "深紫壶",
+      "Crimson Pot": "绛红壶",
+      "Rainbow Pot": "彩虹壶",
+      "Holy Pot": "神圣壶",
+      "Celestial Alembic": "星空蒸馏器",
+      "Cheese Alembic": "奶酪蒸馏器",
+      "Verdant Alembic": "翠绿蒸馏器",
+      "Azure Alembic": "蔚蓝蒸馏器",
+      "Burble Alembic": "深紫蒸馏器",
+      "Crimson Alembic": "绛红蒸馏器",
+      "Rainbow Alembic": "彩虹蒸馏器",
+      "Holy Alembic": "神圣蒸馏器",
+      "Celestial Enhancer": "星空强化器",
+      "Cheese Enhancer": "奶酪强化器",
+      "Verdant Enhancer": "翠绿强化器",
+      "Azure Enhancer": "蔚蓝强化器",
+      "Burble Enhancer": "深紫强化器",
+      "Crimson Enhancer": "绛红强化器",
+      "Rainbow Enhancer": "彩虹强化器",
+      "Holy Enhancer": "神圣强化器",
+      "Milk": "牛奶",
+      "Verdant Milk": "翠绿牛奶",
+      "Azure Milk": "蔚蓝牛奶",
+      "Burble Milk": "深紫牛奶",
+      "Crimson Milk": "绛红牛奶",
+      "Rainbow Milk": "彩虹牛奶",
+      "Holy Milk": "神圣牛奶",
+      "Cheese": "奶酪",
+      "Verdant Cheese": "翠绿奶酪",
+      "Azure Cheese": "蔚蓝奶酪",
+      "Burble Cheese": "深紫奶酪",
+      "Crimson Cheese": "绛红奶酪",
+      "Rainbow Cheese": "彩虹奶酪",
+      "Holy Cheese": "神圣奶酪",
+      "Log": "原木",
+      "Birch Log": "白桦原木",
+      "Cedar Log": "雪松原木",
+      "Purpleheart Log": "紫心原木",
+      "Ginkgo Log": "银杏原木",
+      "Redwood Log": "红杉原木",
+      "Arcane Log": "神秘原木",
+      "Lumber": "木板",
+      "Birch Lumber": "白桦木板",
+      "Cedar Lumber": "雪松木板",
+      "Purpleheart Lumber": "紫心木板",
+      "Ginkgo Lumber": "银杏木板",
+      "Redwood Lumber": "红杉木板",
+      "Arcane Lumber": "神秘木板",
+      "Rough Hide": "粗糙兽皮",
+      "Reptile Hide": "爬行动物皮",
+      "Gobo Hide": "哥布林皮",
+      "Beast Hide": "野兽皮",
+      "Umbral Hide": "暗影皮",
+      "Rough Leather": "粗糙皮革",
+      "Reptile Leather": "爬行动物皮革",
+      "Gobo Leather": "哥布林皮革",
+      "Beast Leather": "野兽皮革",
+      "Umbral Leather": "暗影皮革",
+      "Cotton": "棉花",
+      "Flax": "亚麻",
+      "Bamboo Branch": "竹子",
+      "Cocoon": "蚕茧",
+      "Radiant Fiber": "光辉纤维",
+      "Cotton Fabric": "棉花布料",
+      "Linen Fabric": "亚麻布料",
+      "Bamboo Fabric": "竹子布料",
+      "Silk Fabric": "丝绸",
+      "Radiant Fabric": "光辉布料",
+      "Egg": "鸡蛋",
+      "Wheat": "小麦",
+      "Sugar": "糖",
+      "Blueberry": "蓝莓",
+      "Blackberry": "黑莓",
+      "Strawberry": "草莓",
+      "Mooberry": "哞莓",
+      "Marsberry": "火星莓",
+      "Spaceberry": "太空莓",
+      "Apple": "苹果",
+      "Orange": "橙子",
+      "Plum": "李子",
+      "Peach": "桃子",
+      "Dragon Fruit": "火龙果",
+      "Star Fruit": "杨桃",
+      "Arabica Coffee Bean": "低级咖啡豆",
+      "Robusta Coffee Bean": "中级咖啡豆",
+      "Liberica Coffee Bean": "高级咖啡豆",
+      "Excelsa Coffee Bean": "特级咖啡豆",
+      "Fieriosa Coffee Bean": "火山咖啡豆",
+      "Spacia Coffee Bean": "太空咖啡豆",
+      "Green Tea Leaf": "绿茶叶",
+      "Black Tea Leaf": "黑茶叶",
+      "Burble Tea Leaf": "紫茶叶",
+      "Moolong Tea Leaf": "哞龙茶叶",
+      "Red Tea Leaf": "红茶叶",
+      "Emp Tea Leaf": "虚空茶叶",
+      "Catalyst Of Coinification": "点金催化剂",
+      "Catalyst Of Decomposition": "分解催化剂",
+      "Catalyst Of Transmutation": "转化催化剂",
+      "Prime Catalyst": "至高催化剂",
+      "Snake Fang": "蛇牙",
+      "Shoebill Feather": "鲸头鹳羽毛",
+      "Snail Shell": "蜗牛壳",
+      "Crab Pincer": "蟹钳",
+      "Turtle Shell": "乌龟壳",
+      "Marine Scale": "海洋鳞片",
+      "Treant Bark": "树皮",
+      "Centaur Hoof": "半人马蹄",
+      "Luna Wing": "月神翼",
+      "Gobo Rag": "哥布林抹布",
+      "Goggles": "护目镜",
+      "Magnifying Glass": "放大镜",
+      "Eye Of The Watcher": "观察者之眼",
+      "Icy Cloth": "冰霜织物",
+      "Flaming Cloth": "烈焰织物",
+      "Sorcerer's Sole": "魔法师鞋底",
+      "Chrono Sphere": "时空球",
+      "Frost Sphere": "冰霜球",
+      "Panda Fluff": "熊猫绒",
+      "Black Bear Fluff": "黑熊绒",
+      "Grizzly Bear Fluff": "棕熊绒",
+      "Polar Bear Fluff": "北极熊绒",
+      "Red Panda Fluff": "小熊猫绒",
+      "Magnet": "磁铁",
+      "Stalactite Shard": "钟乳石碎片",
+      "Living Granite": "花岗岩",
+      "Colossus Core": "巨像核心",
+      "Vampire Fang": "吸血鬼之牙",
+      "Werewolf Claw": "狼人之爪",
+      "Revenant Anima": "亡者之魂",
+      "Soul Fragment": "灵魂碎片",
+      "Infernal Ember": "地狱余烬",
+      "Demonic Core": "恶魔核心",
+      "Griffin Leather": "狮鹫之皮",
+      "Manticore Sting": "蝎狮之刺",
+      "Jackalope Antler": "鹿角兔之角",
+      "Dodocamel Plume": "渡渡驼之翎",
+      "Griffin Talon": "狮鹫之爪",
+      "Chimerical Refinement Shard": "奇幻精炼碎片",
+      "Acrobat's Ribbon": "杂技师彩带",
+      "Magician's Cloth": "魔术师织物",
+      "Chaotic Chain": "混沌锁链",
+      "Cursed Ball": "诅咒之球",
+      "Sinister Refinement Shard": "阴森精炼碎片",
+      "Royal Cloth": "皇家织物",
+      "Knight's Ingot": "骑士之锭",
+      "Bishop's Scroll": "主教卷轴",
+      "Regal Jewel": "君王宝石",
+      "Sundering Jewel": "裂空宝石",
+      "Enchanted Refinement Shard": "秘法精炼碎片",
+      "Marksman Brooch": "神射胸针",
+      "Corsair Crest": "掠夺者徽章",
+      "Damaged Anchor": "破损船锚",
+      "Maelstrom Plating": "怒涛甲片",
+      "Kraken Leather": "克拉肯皮革",
+      "Kraken Fang": "克拉肯之牙",
+      "Pirate Refinement Shard": "海盗精炼碎片",
+      "Pathbreaker Lodestone": "开路者磁石",
+      "Pathfinder Lodestone": "探路者磁石",
+      "Pathseeker Lodestone": "寻路者磁石",
+      "Labyrinth Refinement Shard": "迷宫精炼碎片",
+      "Butter Of Proficiency": "精通之油",
+      "Thread Of Expertise": "专精之线",
+      "Branch Of Insight": "洞察之枝",
+      "Gluttonous Energy": "贪食能量",
+      "Guzzling Energy": "暴饮能量",
+      "Milking Essence": "挤奶精华",
+      "Foraging Essence": "采摘精华",
+      "Woodcutting Essence": "伐木精华",
+      "Cheesesmithing Essence": "奶酪锻造精华",
+      "Crafting Essence": "制作精华",
+      "Tailoring Essence": "缝纫精华",
+      "Cooking Essence": "烹饪精华",
+      "Brewing Essence": "冲泡精华",
+      "Alchemy Essence": "炼金精华",
+      "Enhancing Essence": "强化精华",
+      "Swamp Essence": "沼泽精华",
+      "Aqua Essence": "海洋精华",
+      "Jungle Essence": "丛林精华",
+      "Gobo Essence": "哥布林精华",
+      "Eyessence": "眼精华",
+      "Sorcerer Essence": "法师精华",
+      "Bear Essence": "熊熊精华",
+      "Golem Essence": "魔像精华",
+      "Twilight Essence": "暮光精华",
+      "Abyssal Essence": "地狱精华",
+      "Chimerical Essence": "奇幻精华",
+      "Sinister Essence": "阴森精华",
+      "Enchanted Essence": "秘法精华",
+      "Pirate Essence": "海盗精华",
+      "Labyrinth Essence": "迷宫精华",
+      "Task Crystal": "任务水晶",
+      "Star Fragment": "星光碎片",
+      "Pearl": "珍珠",
+      "Amber": "琥珀",
+      "Garnet": "石榴石",
+      "Jade": "翡翠",
+      "Amethyst": "紫水晶",
+      "Moonstone": "月亮石",
+      "Sunstone": "太阳石",
+      "Philosopher's Stone": "贤者之石",
+      "Crushed Pearl": "珍珠碎片",
+      "Crushed Amber": "琥珀碎片",
+      "Crushed Garnet": "石榴石碎片",
+      "Crushed Jade": "翡翠碎片",
+      "Crushed Amethyst": "紫水晶碎片",
+      "Crushed Moonstone": "月亮石碎片",
+      "Crushed Sunstone": "太阳石碎片",
+      "Crushed Philosopher's Stone": "贤者之石碎片",
+      "Shard Of Protection": "保护碎片",
+      "Mirror Of Protection": "保护之镜",
+      "Philosopher's Mirror": "贤者之镜",
+      "Basic Torch": "基础火把",
+      "Advanced Torch": "进阶火把",
+      "Expert Torch": "专家火把",
+      "Basic Shroud": "基础斗篷",
+      "Advanced Shroud": "进阶斗篷",
+      "Expert Shroud": "专家斗篷",
+      "Basic Beacon": "基础探照灯",
+      "Advanced Beacon": "进阶探照灯",
+      "Expert Beacon": "专家探照灯",
+      "Basic Food Crate": "基础食物箱",
+      "Advanced Food Crate": "进阶食物箱",
+      "Expert Food Crate": "专家食物箱",
+      "Basic Tea Crate": "基础茶叶箱",
+      "Advanced Tea Crate": "进阶茶叶箱",
+      "Expert Tea Crate": "专家茶叶箱",
+      "Basic Coffee Crate": "基础咖啡箱",
+      "Advanced Coffee Crate": "进阶咖啡箱",
+      "Expert Coffee Crate": "专家咖啡箱"
+    };
+
+    /**
+     * Auto-discovers Chinese item names from the game DOM and builds a
+     * Chinese → English mapping cached in IndexedDB. Provides a unified
+     * getDisplayName() returning Chinese when available, English otherwise.
+     */
+
+
+    const STORAGE_KEY$5 = 'Toolasha_cnItemNames';
+    const CACHE_VERSION = 2;
+    const DEBOUNCE_DELAY = 5000;
+
+    const MUTATION_SELECTORS = [
+        '[class*="Item_name"]',
+        '[class*="Item_itemName"]',
+        '[class*="ItemTooltipText_name"]',
+        '[class*="Item_craftingItemName"]',
+        'svg[aria-label]',
+    ];
+
+    const ENHANCEMENT_STRIP_REGEX = /\s*\+\d+$/;
+    const CJK_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
+
+    class ItemNameTranslator {
+        constructor() {
+            this.cnNames = {};
+            this.isLoaded = false;
+            this._saveTimer = null;
+            this._dirty = false;
+            this._enToHrid = null;
+            this._hridToEn = null;
+            this._hridToEnSource = null;
+            this._observer = null;
+            this._observerStarted = false;
+        }
+
+        async load() {
+            if (this.isLoaded) return;
+            try {
+                const saved = await storage.get(STORAGE_KEY$5, 'settings');
+                if (saved && typeof saved === 'object' && saved._version === CACHE_VERSION && Object.keys(saved).length > 1) {
+                    this.cnNames = saved;
+                }
+            } catch { /* ignore */ }
+            this.isLoaded = true;
+
+            // Bulk import from static Chinese name mapping (Edible Tools translations)
+            if (Object.keys(this.cnNames).length <= 1) {
+                this._importStaticMapping();
+            }
+        }
+
+        captureFromDOM(element, itemHrid) {
+            if (!element || !itemHrid) return;
+            const text = (element.textContent || element.getAttribute('aria-label') || '').trim();
+            if (!text || !CJK_REGEX.test(text)) return;
+            const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+            if (!baseName) return;
+            if (this.cnNames[itemHrid] === baseName) return;
+            this.cnNames[itemHrid] = baseName;
+            this._scheduleSave();
+        }
+
+        _importStaticMapping() {
+            const initData = dataManager.getInitClientData();
+            if (!initData?.itemDetailMap) return;
+            let count = 0;
+            for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
+                const cnName = itemNamesZh[item.name];
+                if (cnName && !this.cnNames[hrid]) {
+                    this.cnNames[hrid] = cnName;
+                    count++;
+                }
+            }
+            if (count > 0) this._scheduleSave();
+        }
+
+        _scheduleSave() {
+            if (!this.isLoaded) return;
+            this._dirty = true;
+            if (this._saveTimer) return;
+            this._saveTimer = setTimeout(async () => {
+                this._saveTimer = null;
+                if (!this._dirty) return;
+                this._dirty = false;
+                try {
+                    const data = { ...this.cnNames, _version: CACHE_VERSION };
+                    await storage.set(STORAGE_KEY$5, data, 'settings', true);
+                } catch (error) {
+                    console.warn('[ItemNameTranslator] Failed to save names:', error);
+                }
+            }, DEBOUNCE_DELAY);
+        }
+
+        flush() {
+            if (this._saveTimer) {
+                clearTimeout(this._saveTimer);
+                this._saveTimer = null;
+            }
+            if (this._dirty) {
+                this._dirty = false;
+                const data = { ...this.cnNames, _version: CACHE_VERSION };
+                storage.set(STORAGE_KEY$5, data, 'settings', true).catch(() => {});
+            }
+        }
+
+        _scanDomNow() {
+            for (const selector of MUTATION_SELECTORS) {
+                for (const el of document.querySelectorAll(selector)) {
+                    this._tryCaptureFromElement(el);
+                }
+            }
+        }
+
+        getHridFromChineseName(chineseName) {
+            if (!chineseName) return null;
+            const baseName = chineseName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+            for (const [hrid, cnName] of Object.entries(this.cnNames)) {
+                if (cnName === baseName) return hrid;
+            }
+            return null;
+        }
+
+        startObserver() {
+            if (this._observerStarted) return;
+            this._observerStarted = true;
+            console.log('[ItemNameTranslator] Observer starting, selectors:', MUTATION_SELECTORS);
+
+            const processNode = (node) => {
+                if (!node || node.nodeType !== 1) return;
+                for (const selector of MUTATION_SELECTORS) {
+                    if (node.matches(selector)) {
+                        this._tryCaptureFromElement(node);
+                        break;
+                    }
+                }
+                for (const selector of MUTATION_SELECTORS) {
+                    const children = node.querySelectorAll(selector);
+                    for (const child of children) {
+                        this._tryCaptureFromElement(child);
+                    }
+                }
+            };
+
+            for (const selector of MUTATION_SELECTORS) {
+                const elements = document.querySelectorAll(selector);
+                for (const el of elements) {
+                    this._tryCaptureFromElement(el);
+                }
+            }
+
+            this._observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    for (const node of mutation.addedNodes) {
+                        try {
+                            processNode(node);
+                        } catch {
+                            // Skip errors from processing individual nodes
+                        }
+                    }
+                }
+            });
+
+            this._observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+            });
+        }
+
+        stopObserver() {
+            if (this._observer) {
+                this._observer.disconnect();
+                this._observer = null;
+            }
+            this._observerStarted = false;
+        }
+
+        _tryCaptureFromElement(el) {
+            if (!el) return;
+            const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
+            if (!text) return;
+
+            if (!CJK_REGEX.test(text)) return;
+
+            const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+            if (!baseName) return;
+
+            for (const [, cnName] of Object.entries(this.cnNames)) {
+                if (cnName === baseName) return;
+            }
+
+            const hrid = this.findHridFromDomName(baseName);
+            if (hrid) {
+                this.cnNames[hrid] = baseName;
+                this._scheduleSave();
+            } else {
+                // Log first 5 failures
+                if (!this._failCount) this._failCount = 0;
+                if (this._failCount < 5) {
+                    console.log('[ItemNameTranslator] CJK text found but no HRID match:', baseName);
+                    this._failCount++;
+                }
+            }
+        }
+
+        /**
+         * Get the display name for an item.
+         * Returns the Chinese name if cached, otherwise the English name from game data,
+         * and as a final fallback parses the HRID into a readable label.
+         * @param {string} itemHrid - Item HRID (e.g., '/items/essence')
+         * @returns {string} Display name
+         */
+        getDisplayName(itemHrid) {
+            const cnName = this.cnNames[itemHrid];
+            if (cnName) return cnName;
+            const enName = dataManager.getItemDetails(itemHrid)?.name;
+            if (enName) return enName;
+            return itemHrid.split('/').pop().replace(/_/g, ' ');
+        }
+
+    }
+
+    const itemNameTranslator = new ItemNameTranslator();
 
     /**
      * Gathering Profit Calculator
@@ -9026,7 +8805,7 @@ ${starCSS}
             const perHour = (total / hours) * unitValue;
             revenuePerHour += perHour;
             if (unitValue > 0) {
-                const itemName = itemNameTranslator.getDisplayName(itemHrid);
+                const itemName = dataManager.getItemDetails(itemHrid)?.name || itemHrid.split('/').pop();
                 dropEntries.push({ name: itemName, countPerHour: total / hours, unitValue, totalValue: perHour });
             }
         }
@@ -9040,7 +8819,7 @@ ${starCSS}
             const perHour = (count / hours) * unitCost;
             costPerHour += perHour;
             if (unitCost > 0) {
-                const itemName = itemNameTranslator.getDisplayName(itemHrid);
+                const itemName = dataManager.getItemDetails(itemHrid)?.name || itemHrid.split('/').pop();
                 consumableEntries.push({ name: itemName, countPerHour: count / hours, unitCost, totalCost: perHour });
             }
         }
@@ -9069,6 +8848,17 @@ ${starCSS}
     const RATING_MODE_TOKENS = 'tokens';
     const RATING_MODE_GOLD = 'gold';
 
+    const HOUSE_ROOM_MAP = {
+        '/action_types/cheesesmithing': '/house_rooms/forge',
+        '/action_types/cooking': '/house_rooms/kitchen',
+        '/action_types/crafting': '/house_rooms/workshop',
+        '/action_types/foraging': '/house_rooms/garden',
+        '/action_types/milking': '/house_rooms/dairy_barn',
+        '/action_types/tailoring': '/house_rooms/sewing_parlor',
+        '/action_types/woodcutting': '/house_rooms/log_shed',
+        '/action_types/brewing': '/house_rooms/brewery',
+    };
+
     /**
      * Calculate task completion time in seconds based on task progress and action rates
      * @param {Object} profitData - Profit calculation result
@@ -9091,7 +8881,33 @@ ${starCSS}
         const efficiencyMultiplier = profitData.action.details.efficiencyMultiplier || 1;
         const baseActionsNeeded = Math.ceil(remainingActions / (efficiencyMultiplier > 0 ? efficiencyMultiplier : 1));
 
-        return profitHelpers_js.calculateSecondsForActions(baseActionsNeeded, actionsPerHour);
+        const taskSpeedBonus = dataManager.getTaskSpeedBonus();
+        const adjustedActionsPerHour = actionsPerHour * (1 + taskSpeedBonus / 100);
+
+        return profitHelpers_js.calculateSecondsForActions(baseActionsNeeded, adjustedActionsPerHour);
+    }
+
+    /**
+     * Calculate total task time in seconds (full quantity, ignoring progress)
+     * Used for rate calculations (gold/hr) where we need the overall rate, not time remaining.
+     * @param {Object} profitData - Profit calculation result
+     * @returns {number|null} Total task time in seconds or null if unavailable
+     */
+    function calculateTaskTotalSeconds(profitData) {
+        const actionsPerHour = profitData?.action?.details?.actionsPerHour;
+        const totalQuantity = profitData?.taskInfo?.quantity;
+
+        if (!actionsPerHour || !totalQuantity) {
+            return null;
+        }
+
+        const efficiencyMultiplier = profitData.action?.details?.efficiencyMultiplier || 1;
+        const baseActionsNeeded = Math.ceil(totalQuantity / (efficiencyMultiplier > 0 ? efficiencyMultiplier : 1));
+
+        const taskSpeedBonus = dataManager.getTaskSpeedBonus();
+        const adjustedActionsPerHour = actionsPerHour * (1 + taskSpeedBonus / 100);
+
+        return profitHelpers_js.calculateSecondsForActions(baseActionsNeeded, adjustedActionsPerHour);
     }
 
     /**
@@ -9101,7 +8917,7 @@ ${starCSS}
      * @returns {Object|null} Rating data or null if unavailable
      */
     function calculateTaskEfficiencyRating(profitData, ratingMode) {
-        const completionSeconds = calculateTaskCompletionSeconds(profitData);
+        const completionSeconds = calculateTaskTotalSeconds(profitData);
         if (!completionSeconds || completionSeconds <= 0) {
             return null;
         }
@@ -9112,14 +8928,14 @@ ${starCSS}
             if (profitData.rewards?.error || profitData.totalProfit === null || profitData.totalProfit === undefined) {
                 return {
                     value: null,
-                    unitLabel: i18n_js.t('gold/hr'),
-                    error: profitData.rewards?.error || i18n_js.t('Missing price data'),
+                    unitLabel: t('gold/hr'),
+                    error: profitData.rewards?.error || t('Missing price data'),
                 };
             }
 
             return {
                 value: profitData.totalProfit / hours,
-                unitLabel: i18n_js.t('gold/hr'),
+                unitLabel: t('gold/hr'),
                 error: null,
             };
         }
@@ -9127,7 +8943,7 @@ ${starCSS}
         const tokensReceived = profitData.rewards?.breakdown?.tokensReceived ?? 0;
         return {
             value: tokensReceived / hours,
-            unitLabel: i18n_js.t('tokens/hr'),
+            unitLabel: t('tokens/hr'),
             error: null,
         };
     }
@@ -9170,7 +8986,7 @@ ${starCSS}
             const need = mat.a * remaining;
             const canDo = Math.floor(have / mat.a);
             if (canDo < craftable) craftable = canDo;
-            details.push({ name: mat.n, hrid: mat.h, have, need, enough: have >= need });
+            details.push({ name: mat.n, have, need, enough: have >= need });
         }
         if (craftable === Infinity) craftable = 0;
         return { craftable, details };
@@ -9247,7 +9063,7 @@ ${starCSS}
         for (const d of details) {
             const line = document.createElement('div');
             line.style.color = d.enough ? '#4ade80' : config.COLOR_WARNING;
-            line.textContent = `${itemNameTranslator.getDisplayName(d.hrid)}: ${formatters_js.formatKMB(d.have)} / ${formatters_js.formatKMB(d.need)}`;
+            line.textContent = `${d.name}: ${formatters_js.formatKMB(d.have)} / ${formatters_js.formatKMB(d.need)}`;
             container.appendChild(line);
         }
     }
@@ -9376,6 +9192,7 @@ ${starCSS}
             this.isInitialized = false;
             this.timerRegistry = timerRegistry_js.createTimerRegistry();
             this.marketDataInitPromise = null; // Guard against duplicate market data inits
+            this._simQueue = Promise.resolve();
         }
 
         /**
@@ -9809,7 +9626,15 @@ ${starCSS}
                         const estimateContainer = document.createElement('div');
                         estimateContainer.className = 'mwi-task-profit';
                         estimateContainer.style.cssText = 'margin-top: 4px; font-size: 0.75rem;';
-                        this._renderCombatEstimateConfig(estimateContainer, taskData);
+
+                        if (config.getSetting('combatSim_autoEstimate')) {
+                            const defaultLoadout = config.getSettingValue('combatSim_defaultLoadout', '');
+                            this._simQueue = this._simQueue.then(() =>
+                                this._runCombatSimEstimate(estimateContainer, taskData, defaultLoadout)
+                            );
+                        } else {
+                            this._renderCombatEstimateConfig(estimateContainer, taskData);
+                        }
 
                         if (actionNode) {
                             actionNode.appendChild(estimateContainer);
@@ -9842,7 +9667,7 @@ ${starCSS}
                 console.error('[Task Profit Display] Failed to calculate profit:', error);
 
                 // Display error state in UI
-                this.displayErrorState(taskNode, i18n_js.t('Unable to calculate profit'));
+                this.displayErrorState(taskNode, 'Unable to calculate profit');
 
                 // Remove from pending queue if present
                 this.pendingTaskNodes.delete(taskNode);
@@ -9866,16 +9691,20 @@ ${starCSS}
                 ? nameNode.textContent.replace(zoneSpan.textContent, '').trim()
                 : nameNode.textContent.trim();
 
-            // Get quantity from progress div (use CSS class instead of text matching)
+            // Get quantity from progress (plain div with text "Progress: 0 / 1562")
+            // Find all divs in taskInfo and look for the one containing "Progress:"
             let quantity = 0;
             let currentProgress = 0;
-            const progressDiv = taskNode.querySelector('[class*="progress"]');
-            if (progressDiv) {
-                const text = progressDiv.textContent.trim();
-                const match = text.match(REGEX_TASK_PROGRESS);
-                if (match) {
-                    currentProgress = parseInt(match[1]); // Current progress
-                    quantity = parseInt(match[2]); // Total quantity
+            const taskInfoDivs = taskNode.querySelectorAll('div');
+            for (const div of taskInfoDivs) {
+                const text = div.textContent.trim();
+                if (text.startsWith('Progress:')) {
+                    const match = text.match(REGEX_TASK_PROGRESS);
+                    if (match) {
+                        currentProgress = parseInt(match[1]); // Current progress
+                        quantity = parseInt(match[2]); // Total quantity
+                    }
+                    break;
                 }
             }
 
@@ -9948,25 +9777,44 @@ ${starCSS}
                 .getAllSnapshots()
                 .filter((s) => !s.actionTypeHrid || s.actionTypeHrid === '/action_types/combat');
 
+            const defaultLoadout = config.getSettingValue('combatSim_defaultLoadout', '');
+
             let html = '<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">';
             html +=
                 '<select class="mwi-combat-est-loadout" style="font-size:11px; background:#1a1a1a; color:#ccc; border:1px solid #444; border-radius:3px; padding:2px 4px;">';
-            html += `<option value="">${i18n_js.t('— Current Gear —')}</option>`;
+            html += `<option value=""${!defaultLoadout ? ' selected' : ''}>— Current Gear —</option>`;
             for (const s of snapshots) {
-                html += `<option value="${s.name}">${s.name}</option>`;
+                const selected = s.name === defaultLoadout ? ' selected' : '';
+                html += `<option value="${s.name}"${selected}>${s.name}</option>`;
             }
             html += '</select>';
             html +=
-                '<button class="mwi-combat-est-btn" style="font-size:11px; padding:2px 8px; background:#1a3a5c; color:#4a9eff; border:1px solid #4a9eff44; border-radius:3px; cursor:pointer;">' +
-                '⚔ ' +
-                i18n_js.t('Estimate') +
-                '</button>';
+                '<button class="mwi-combat-est-mode" data-mode="solo" title="Solo: simulate only target monster. Zone: simulate full zone spawn table." style="font-size:11px; padding:2px 6px; background:#1a1a1a; color:#ccc; border:1px solid #444; border-radius:3px; cursor:pointer;">Solo</button>';
+            html +=
+                '<button class="mwi-combat-est-btn" style="font-size:11px; padding:2px 8px; background:#1a3a5c; color:#4a9eff; border:1px solid #4a9eff44; border-radius:3px; cursor:pointer;">⚔ Estimate</button>';
             html += '</div>';
             container.innerHTML = html;
 
+            const modeBtn = container.querySelector('.mwi-combat-est-mode');
+            modeBtn.addEventListener('click', () => {
+                const current = modeBtn.dataset.mode;
+                if (current === 'solo') {
+                    modeBtn.dataset.mode = 'zone';
+                    modeBtn.textContent = 'Zone';
+                    modeBtn.style.color = '#aaddff';
+                    modeBtn.style.borderColor = '#4a9eff44';
+                } else {
+                    modeBtn.dataset.mode = 'solo';
+                    modeBtn.textContent = 'Solo';
+                    modeBtn.style.color = '#ccc';
+                    modeBtn.style.borderColor = '#444';
+                }
+            });
+
             container.querySelector('.mwi-combat-est-btn').addEventListener('click', () => {
                 const loadoutName = container.querySelector('.mwi-combat-est-loadout').value;
-                this._runCombatSimEstimate(container, taskData, loadoutName);
+                const mode = modeBtn.dataset.mode;
+                this._runCombatSimEstimate(container, taskData, loadoutName, mode);
             });
         }
 
@@ -9975,9 +9823,10 @@ ${starCSS}
          * @param {Element} container - Container element to render into
          * @param {Object} taskData - Parsed task data
          * @param {string} loadoutName - Loadout snapshot name (empty = current gear)
+         * @param {string} mode - 'solo' (single monster) or 'zone' (full spawn table)
          * @private
          */
-        async _runCombatSimEstimate(container, taskData, loadoutName) {
+        async _runCombatSimEstimate(container, taskData, loadoutName, mode = 'solo') {
             // Extract monster name from "Defeat - Monster Name" description
             const match = taskData.description.match(/^Defeat\s*-\s*(.+)$/i);
             const monsterName = match?.[1]?.trim() || null;
@@ -10003,19 +9852,17 @@ ${starCSS}
                           )
                         : [],
                 });
-                container.innerHTML =
-                    '<span style="color:#f87171; font-size:11px;">' + i18n_js.t('Could not identify monster.') + '</span>';
+                container.innerHTML = '<span style="color:#f87171; font-size:11px;">Could not identify monster.</span>';
                 return;
             }
 
             const zoneHrid = dataManager.getCombatZoneForMonster(monsterHrid);
             if (!zoneHrid) {
-                container.innerHTML =
-                    '<span style="color:#f87171; font-size:11px;">' + i18n_js.t('No zone found for monster.') + '</span>';
+                container.innerHTML = '<span style="color:#f87171; font-size:11px;">No zone found for monster.</span>';
                 return;
             }
 
-            container.innerHTML = '<span style="color:#888; font-size:11px;">' + '⏳ ' + i18n_js.t('Simulating...') + '</span>';
+            container.innerHTML = '<span style="color:#888; font-size:11px;">⏳ Simulating…</span>';
 
             try {
                 const gameData = buildGameDataPayload();
@@ -10028,41 +9875,49 @@ ${starCSS}
                     applyLoadoutSnapshotToDTO(players[0], loadoutName, gameData);
                 }
 
-                // Single-monster mode: filter zone spawn table to only the target monster.
-                // Preserve all fields from the real spawn entry (rate, strength, difficultyTier, etc.)
-                // so the sim engine's weighted-selection logic works correctly.
                 const zoneAction = gameData.actionDetailMap[zoneHrid];
                 const allSpawns = zoneAction.combatZoneInfo?.fightInfo?.randomSpawnInfo?.spawns || [];
-                const monsterSpawn = allSpawns.find((s) => s.combatMonsterHrid === monsterHrid) || {
-                    combatMonsterHrid: monsterHrid,
-                    rate: 1,
-                    strength: 1,
-                    difficultyTier: 0,
-                };
-                const filteredGameData = {
-                    ...gameData,
-                    actionDetailMap: {
-                        ...gameData.actionDetailMap,
-                        [zoneHrid]: {
-                            ...zoneAction,
-                            combatZoneInfo: {
-                                ...zoneAction.combatZoneInfo,
-                                fightInfo: {
-                                    ...zoneAction.combatZoneInfo.fightInfo,
-                                    randomSpawnInfo: {
-                                        ...zoneAction.combatZoneInfo.fightInfo.randomSpawnInfo,
-                                        spawns: [monsterSpawn],
+                const bossSpawns = zoneAction.combatZoneInfo?.fightInfo?.bossSpawns || [];
+                const isBossTarget = bossSpawns.some((s) => s.combatMonsterHrid === monsterHrid);
+
+                let simGameData;
+                if (mode === 'zone' || isBossTarget) {
+                    // Zone mode or boss target: use full unfiltered spawn table
+                    // Bosses need the full zone (9 regular fights per boss spawn)
+                    simGameData = gameData;
+                } else {
+                    // Solo mode: filter spawn table to only the target monster
+                    const monsterSpawn = allSpawns.find((s) => s.combatMonsterHrid === monsterHrid) || {
+                        combatMonsterHrid: monsterHrid,
+                        rate: 1,
+                        strength: 1,
+                        difficultyTier: 0,
+                    };
+                    simGameData = {
+                        ...gameData,
+                        actionDetailMap: {
+                            ...gameData.actionDetailMap,
+                            [zoneHrid]: {
+                                ...zoneAction,
+                                combatZoneInfo: {
+                                    ...zoneAction.combatZoneInfo,
+                                    fightInfo: {
+                                        ...zoneAction.combatZoneInfo.fightInfo,
+                                        randomSpawnInfo: {
+                                            ...zoneAction.combatZoneInfo.fightInfo.randomSpawnInfo,
+                                            spawns: [monsterSpawn],
+                                        },
+                                        bossSpawns: [],
                                     },
-                                    bossSpawns: [],
                                 },
                             },
                         },
-                    },
-                };
+                    };
+                }
 
                 const SIM_HOURS = 1;
                 const simResult = await runSimulation({
-                    gameData: filteredGameData,
+                    gameData: simGameData,
                     playerDTOs: players,
                     zoneHrid,
                     difficultyTier: 0,
@@ -10074,12 +9929,12 @@ ${starCSS}
                 const killsPerHour = Math.round(kills / SIM_HOURS);
                 const remaining = Math.max((taskData.quantity ?? 0) - (taskData.currentProgress ?? 0), 0);
                 const completionSeconds = killsPerHour > 0 ? Math.round((remaining / killsPerHour) * 3600) : null;
-                const timeEstimate = completionSeconds !== null ? formatters_js.timeReadableZh(completionSeconds) : '???';
+                const timeEstimate = completionSeconds !== null ? formatters_js.timeReadable(completionSeconds) : '???';
 
                 const playerHrid = players[0]?.hrid || 'player1';
                 const { netPerHour, dropEntries, consumableEntries } = calculateSimRevenue(
                     simResult,
-                    filteredGameData,
+                    simGameData,
                     playerHrid,
                     SIM_HOURS
                 );
@@ -10098,13 +9953,16 @@ ${starCSS}
                     netPerHour,
                     rewardValue,
                     dropEntries,
-                    consumableEntries
+                    consumableEntries,
+                    mode,
+                    simResult,
+                    zoneHrid
                 );
             } catch (e) {
                 console.error('[TaskProfit] Combat estimate failed:', e);
-                container.innerHTML = '<span style="color:#f87171; font-size:11px;">' + i18n_js.t('Estimate failed. ') + '</span>';
+                container.innerHTML = '<span style="color:#f87171; font-size:11px;">Estimate failed. </span>';
                 const retry = document.createElement('span');
-                retry.textContent = i18n_js.t('Retry');
+                retry.textContent = 'Retry';
                 retry.style.cssText = 'color:#4a9eff; cursor:pointer; font-size:11px;';
                 retry.addEventListener('click', () => this._renderCombatEstimateConfig(container, taskData));
                 container.appendChild(retry);
@@ -10136,7 +9994,10 @@ ${starCSS}
             netPerHour,
             rewardValue,
             dropEntries,
-            consumableEntries
+            consumableEntries,
+            mode,
+            simResult,
+            zoneHrid
         ) {
             container.innerHTML = '';
             if (completionSeconds !== null) {
@@ -10169,37 +10030,31 @@ ${starCSS}
 
             const remaining = Math.max((taskData.quantity ?? 0) - (taskData.currentProgress ?? 0), 0);
             const lines = [];
-            lines.push(`<div style="font-weight: bold; margin-bottom: 4px;">${i18n_js.t('Task Profit Breakdown')}</div>`);
+            lines.push('<div style="font-weight: bold; margin-bottom: 4px;">Task Profit Breakdown</div>');
             lines.push('<div style="border-bottom: 1px solid #555; margin-bottom: 4px;"></div>');
             lines.push(
-                `<div style="margin-bottom: 2px; color: #aaa;">${i18n_js.t('Monster:')} ${monsterName} × ${remaining.toLocaleString()} ${i18n_js.t('kills')} (${formatters_js.formatKMB(killsPerHour)}/hr)</div>`
+                `<div style="margin-bottom: 2px; color: #aaa;">Monster: ${monsterName} × ${remaining.toLocaleString()} kills (${formatters_js.formatKMB(killsPerHour)}/hr)</div>`
             );
-            lines.push(
-                `<div style="margin-bottom: 4px; color: #aaa;">${i18n_js.t('Loadout:')} ${loadoutName || i18n_js.t('Current Gear')}</div>`
-            );
+            lines.push(`<div style="margin-bottom: 4px; color: #aaa;">Loadout: ${loadoutName || 'Current Gear'}</div>`);
 
             // Task Rewards — matching skilling section exactly
-            lines.push(`<div style="margin-bottom: 4px; color: #aaa;">${i18n_js.t('Task Rewards:')}</div>`);
-            lines.push(`<div style="margin-left: 10px;">${i18n_js.t('Coins:')} ${formatters_js.formatKMB(rewardValue.coins)}</div>`);
+            lines.push('<div style="margin-bottom: 4px; color: #aaa;">Task Rewards:</div>');
+            lines.push(`<div style="margin-left: 10px;">Coins: ${formatters_js.formatKMB(rewardValue.coins)}</div>`);
             if (!rewardValue.error) {
+                lines.push(`<div style="margin-left: 10px;">Task Tokens: ${formatters_js.formatKMB(rewardValue.taskTokens)}</div>`);
                 lines.push(
-                    `<div style="margin-left: 10px;">${i18n_js.t('Task Tokens:')} ${formatters_js.formatKMB(rewardValue.taskTokens)}</div>`
+                    `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${rewardValue.breakdown.tokensReceived} tokens @ ${formatters_js.formatKMB(Math.round(rewardValue.breakdown.tokenValue))} each)</div>`
                 );
+                lines.push(`<div style="margin-left: 10px;">Purple's Gift: ${formatters_js.formatKMB(rewardValue.purpleGift)}</div>`);
                 lines.push(
-                    `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${rewardValue.breakdown.tokensReceived} ${i18n_js.t('tokens')} @ ${formatters_js.formatKMB(Math.round(rewardValue.breakdown.tokenValue))} ${i18n_js.t('each')})</div>`
-                );
-                lines.push(
-                    `<div style="margin-left: 10px;">${i18n_js.t("Purple's Gift:")} ${formatters_js.formatKMB(rewardValue.purpleGift)}</div>`
-                );
-                lines.push(
-                    `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${formatters_js.formatKMB(Math.round(rewardValue.breakdown.giftPerTask))} ${i18n_js.t('per task')})</div>`
+                    `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${formatters_js.formatKMB(Math.round(rewardValue.breakdown.giftPerTask))} per task)</div>`
                 );
             }
 
             // Drops — total over task duration
             if (dropEntries.length > 0) {
                 lines.push(
-                    `<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">${i18n_js.t('Drops:')} ${formatters_js.formatKMB(Math.round(totalDropValue))}</div>`
+                    `<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">Drops: ${formatters_js.formatKMB(Math.round(totalDropValue))}</div>`
                 );
                 for (const d of dropEntries.slice(0, 8)) {
                     const taskCount = d.countPerHour * completionHours;
@@ -10213,7 +10068,7 @@ ${starCSS}
             // Consumables — total over task duration
             if (consumableEntries.length > 0) {
                 lines.push(
-                    `<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">${i18n_js.t('Consumables:')} -${formatters_js.formatKMB(Math.round(totalConsumableCost))}</div>`
+                    `<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">Consumables: -${formatters_js.formatKMB(Math.round(totalConsumableCost))}</div>`
                 );
                 for (const c of consumableEntries) {
                     const taskCount = c.countPerHour * completionHours;
@@ -10227,7 +10082,7 @@ ${starCSS}
             breakdown.innerHTML = lines.join('');
 
             const rerunBtn = document.createElement('button');
-            rerunBtn.textContent = i18n_js.t('Re-run');
+            rerunBtn.textContent = 'Re-run';
             rerunBtn.style.cssText =
                 'margin-top:6px; font-size:11px; padding:2px 8px; background:#1a3a5c; color:#4a9eff; border:1px solid #4a9eff44; border-radius:3px; cursor:pointer;';
             rerunBtn.addEventListener('click', (e) => {
@@ -10243,7 +10098,80 @@ ${starCSS}
             });
 
             container.appendChild(mainLine);
+
+            // Efficiency rating (tokens/hr or gold/hr) — matching skilling task format
+            // Use total task time (not remaining) so rate doesn't inflate as task progresses
+            const totalKills = taskData.quantity ?? 0;
+            const totalTaskSeconds = killsPerHour > 0 ? Math.round((totalKills / killsPerHour) * 3600) : 0;
+            if (config.getSetting('taskEfficiencyRating') && totalTaskSeconds > 0) {
+                const ratingMode = config.getSettingValue('taskEfficiencyRatingMode', RATING_MODE_TOKENS);
+                const totalHours = totalTaskSeconds / 3600;
+                const totalDropValueFull = dropEntries.reduce((s, d) => s + d.totalValue * totalHours, 0);
+                const totalConsumableCostFull = consumableEntries.reduce((s, c) => s + c.totalCost * totalHours, 0);
+                const totalProfitFull = Math.round(totalDropValueFull - totalConsumableCostFull + rewardValue.total);
+                let ratingValue, unitLabel;
+
+                if (ratingMode === RATING_MODE_GOLD) {
+                    ratingValue = totalProfitFull / totalHours;
+                    unitLabel = 'gold/hr';
+                } else {
+                    const tokensReceived = rewardValue.breakdown?.tokensReceived ?? 0;
+                    ratingValue = tokensReceived / totalHours;
+                    unitLabel = 'tokens/hr';
+                }
+
+                const ratingLine = document.createElement('div');
+                ratingLine.className = 'mwi-task-profit-rating';
+                ratingLine.style.cssText = 'margin-top: 2px; font-size: 0.7rem;';
+                ratingLine.dataset.ratingValue = `${ratingValue}`;
+                ratingLine.dataset.ratingMode = ratingMode;
+                ratingLine.style.color = config.COLOR_ACCENT;
+                ratingLine.textContent = `⚡ ${formatters_js.formatKMB(ratingValue)} ${unitLabel}`;
+                container.appendChild(ratingLine);
+
+                this.updateEfficiencyGradientColors();
+            }
+
             container.appendChild(breakdown);
+
+            // Zone summary: show aggregate time to clear all tasks in this zone
+            if (mode === 'zone' && simResult && zoneHrid) {
+                const taskListNode = document.querySelector(selectors_js.GAME.TASK_LIST);
+                const allTaskInfos = taskListNode ? taskListNode.querySelectorAll(selectors_js.GAME.TASK_INFO) : [];
+                const zoneTasks = [];
+
+                for (const node of allTaskInfos) {
+                    const td = this.parseTaskData(node);
+                    if (!td) continue;
+                    const m = td.description.match(/^Defeat\s*-\s*(.+)$/i);
+                    if (!m) continue;
+                    const mName = m[1].trim();
+                    const mHrid = dataManager.getMonsterHridFromName(mName);
+                    if (!mHrid) continue;
+                    const mZone = dataManager.getCombatZoneForMonster(mHrid);
+                    if (mZone !== zoneHrid) continue;
+
+                    const rem = Math.max((td.quantity ?? 0) - (td.currentProgress ?? 0), 0);
+                    const mKills = simResult.deaths?.[mHrid] ?? 0;
+                    const mKillsPerHour = mKills / 1; // SIM_HOURS = 1
+                    const hoursNeeded = mKillsPerHour > 0 ? rem / mKillsPerHour : Infinity;
+                    zoneTasks.push({ name: mName, remaining: rem, killsPerHour: mKillsPerHour, hoursNeeded });
+                }
+
+                if (zoneTasks.length > 1) {
+                    const bottleneck = zoneTasks.reduce((a, b) => (a.hoursNeeded > b.hoursNeeded ? a : b));
+                    const totalSeconds = Math.round(bottleneck.hoursNeeded * 3600);
+                    const totalFightsPerHour = Object.values(simResult.deaths).reduce((s, v) => s + v, 0);
+                    const fightsNeeded = Math.round(totalFightsPerHour * bottleneck.hoursNeeded);
+
+                    const summary = document.createElement('div');
+                    summary.style.cssText =
+                        'margin-top: 4px; font-size: 0.7rem; color: #aaddff; border-top: 1px solid #333; padding-top: 4px;';
+                    const zoneName = dataManager.getInitClientData()?.actionDetailMap?.[zoneHrid]?.name || 'Zone';
+                    summary.textContent = `${zoneName}: ~${formatters_js.formatKMB(fightsNeeded)} fights | ${formatters_js.timeReadable(totalSeconds)} (bottleneck: ${bottleneck.name})`;
+                    container.appendChild(summary);
+                }
+            }
         }
 
         /**
@@ -10273,7 +10201,7 @@ ${starCSS}
             if (profitData.error) {
                 profitContainer.innerHTML = `
                 <div style="color: ${config.SCRIPT_COLOR_ALERT};">
-                    ${i18n_js.t('Unable to calculate profit')}
+                    Unable to calculate profit
                 </div>
             `;
                 actionNode.appendChild(profitContainer);
@@ -10282,7 +10210,7 @@ ${starCSS}
 
             // Calculate time estimate for task completion
             const completionSeconds = calculateTaskCompletionSeconds(profitData);
-            const timeEstimate = completionSeconds !== null ? formatters_js.timeReadableZh(completionSeconds) : '???';
+            const timeEstimate = completionSeconds !== null ? formatters_js.timeReadable(completionSeconds) : '???';
 
             // Store machine-readable value for task sorter
             if (completionSeconds !== null) {
@@ -10355,10 +10283,40 @@ ${starCSS}
                 profitContainer.appendChild(profitLine);
                 profitContainer.appendChild(breakdownSection);
             } else if (completionSeconds !== null) {
+                const showSpeedBreakdown = config.getSetting('taskSpeedBreakdown');
+                const speedTimeHTML = showSpeedBreakdown ? this.buildSpeedTimeHTML(profitData) : '';
+                const hasSpeedBreakdown = !!speedTimeHTML;
+
                 const timeLine = document.createElement('div');
-                timeLine.style.cssText = `color: ${config.COLOR_ACCENT};`;
-                timeLine.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${timeEstimate}`;
-                profitContainer.appendChild(timeLine);
+                timeLine.style.cssText = `color: ${config.COLOR_ACCENT};${hasSpeedBreakdown ? ' cursor: pointer; user-select: none;' : ''}`;
+                timeLine.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${timeEstimate}${hasSpeedBreakdown ? ' ▸' : ''}`;
+
+                if (hasSpeedBreakdown) {
+                    const speedSection = document.createElement('div');
+                    speedSection.style.cssText = `
+                    display: none;
+                    margin-top: 6px;
+                    padding: 8px;
+                    background: rgba(0, 0, 0, 0.2);
+                    border-radius: 4px;
+                    font-size: 0.7rem;
+                    color: #ddd;
+                `;
+                    speedSection.innerHTML = speedTimeHTML;
+
+                    const timeLineListener = () => {
+                        const isHidden = speedSection.style.display === 'none';
+                        speedSection.style.display = isHidden ? 'block' : 'none';
+                        timeLine.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${timeEstimate} ${isHidden ? '▾' : '▸'}`;
+                    };
+                    timeLine.addEventListener('click', timeLineListener);
+                    listeners.set(timeLine, timeLineListener);
+
+                    profitContainer.appendChild(timeLine);
+                    profitContainer.appendChild(speedSection);
+                } else {
+                    profitContainer.appendChild(timeLine);
+                }
             }
 
             this.eventListeners.set(profitContainer, listeners);
@@ -10474,7 +10432,7 @@ ${starCSS}
             const formatTotalValue = (value) => (showTotals ? formatters_js.formatKMB(value) : '-- ⚠');
             const formatPerActionValue = (value) => (showTotals ? formatters_js.formatKMB(Math.round(value)) : '-- ⚠');
 
-            lines.push(`<div style="font-weight: bold; margin-bottom: 4px;">${i18n_js.t('Task Profit Breakdown')}</div>`);
+            lines.push('<div style="font-weight: bold; margin-bottom: 4px;">Task Profit Breakdown</div>');
             lines.push('<div style="border-bottom: 1px solid #555; margin-bottom: 4px;"></div>');
 
             // Show warning if market data unavailable
@@ -10485,15 +10443,15 @@ ${starCSS}
             }
 
             // Task Rewards section
-            lines.push(`<div style="margin-bottom: 4px; color: #aaa;">${i18n_js.t('Task Rewards:')}</div>`);
-            lines.push(`<div style="margin-left: 10px;">${i18n_js.t('Coins:')} ${formatters_js.formatKMB(profitData.rewards.coins)}</div>`);
+            lines.push('<div style="margin-bottom: 4px; color: #aaa;">Task Rewards:</div>');
+            lines.push(`<div style="margin-left: 10px;">Coins: ${formatters_js.formatKMB(profitData.rewards.coins)}</div>`);
 
             if (!profitData.rewards.error) {
                 lines.push(
                     `<div style="margin-left: 10px;">Task Tokens: ${formatters_js.formatKMB(profitData.rewards.taskTokens)}</div>`
                 );
                 lines.push(
-                    `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${profitData.rewards.breakdown.tokensReceived} ${i18n_js.t('tokens')} @ ${formatters_js.formatKMB(Math.round(profitData.rewards.breakdown.tokenValue))} ${i18n_js.t('each')})</div>`
+                    `<div style="margin-left: 20px; font-size: 0.65rem; color: #888;">(${profitData.rewards.breakdown.tokensReceived} tokens @ ${formatters_js.formatKMB(Math.round(profitData.rewards.breakdown.tokenValue))} each)</div>`
                 );
                 lines.push(
                     `<div style="margin-left: 10px;">Purple's Gift: ${formatters_js.formatKMB(profitData.rewards.purpleGift)}</div>`
@@ -10503,19 +10461,19 @@ ${starCSS}
                 );
             } else {
                 lines.push(
-                    `<div style="margin-left: 10px; color: #888; font-style: italic;">${i18n_js.t('Task Tokens: Loading...')}</div>`
+                    `<div style="margin-left: 10px; color: #888; font-style: italic;">Task Tokens: Loading...</div>`
                 );
                 lines.push(
-                    `<div style="margin-left: 10px; color: #888; font-style: italic;">${i18n_js.t("Purple's Gift: Loading...")}</div>`
+                    `<div style="margin-left: 10px; color: #888; font-style: italic;">Purple's Gift: Loading...</div>`
                 );
             }
             // Action profit section
-            lines.push(`<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">${i18n_js.t('Action Profit:')}</div>`);
+            lines.push('<div style="margin-top: 6px; margin-bottom: 4px; color: #aaa;">Action Profit:</div>');
 
             if (profitData.type === 'gathering') {
                 // Gathering Value (expandable)
                 lines.push(
-                    `<div class="mwi-expandable-header" data-section="gathering" style="margin-left: 10px; cursor: pointer; user-select: none;">${i18n_js.t('Gathering Value:')} ${formatTotalValue(profitData.action.totalValue)} ▸</div>`
+                    `<div class="mwi-expandable-header" data-section="gathering" style="margin-left: 10px; cursor: pointer; user-select: none;">Gathering Value: ${formatTotalValue(profitData.action.totalValue)} ▸</div>`
                 );
                 lines.push(
                     `<div class="mwi-expandable-section" data-section="gathering" style="display: none; margin-left: 20px; font-size: 0.65rem; color: #888; margin-top: 2px;">`
@@ -10536,7 +10494,7 @@ ${starCSS}
                         const processingRevenueTotal = (details.processingRevenueBonusPerAction || 0) * quantity;
                         const primaryOutputTotal = baseRevenueTotal + gourmetRevenueTotal + processingRevenueTotal;
                         lines.push(
-                            `<div style="margin-top: 2px; color: #aaa;">${i18n_js.t('Primary Outputs:')} ${formatTotalValue(Math.round(primaryOutputTotal))}</div>`
+                            `<div style="margin-top: 2px; color: #aaa;">Primary Outputs: ${formatTotalValue(Math.round(primaryOutputTotal))}</div>`
                         );
                         for (const output of details.baseOutputs) {
                             const itemsPerAction = output.itemsPerAction ?? output.itemsPerHour / actionsPerHour;
@@ -10544,7 +10502,7 @@ ${starCSS}
                             const itemsForTask = itemsPerAction * quantity;
                             const revenueForTask = revenuePerAction * quantity;
                             const dropRateText =
-                                output.dropRate < 1.0 ? ` (${formatters_js.formatPercentage(output.dropRate, 1)} ${i18n_js.t('drop')})` : '';
+                                output.dropRate < 1.0 ? ` (${formatters_js.formatPercentage(output.dropRate, 1)} drop)` : '';
                             const missingPriceNote = output.missingPrice ? ' ⚠' : '';
                             lines.push(
                                 `<div>• ${output.name} (Base): ${itemsForTask.toFixed(1)} items @ ${formatters_js.formatKMB(Math.round(output.priceEach))}${missingPriceNote} = ${formatters_js.formatKMB(Math.round(revenueForTask))}${dropRateText}</div>`
@@ -10607,7 +10565,7 @@ ${starCSS}
                                 0
                             );
                             lines.push(
-                                `<div style="margin-top: 4px; color: #aaa;">${i18n_js.t('Essence Drops:')} ${formatTotalValue(Math.round(totalEssenceRevenue))}</div>`
+                                `<div style="margin-top: 4px; color: #aaa;">Essence Drops: ${formatTotalValue(Math.round(totalEssenceRevenue))}</div>`
                             );
                             for (const drop of essenceDrops) {
                                 const dropsForTask = (drop.dropsPerAction || 0) * quantity;
@@ -10625,7 +10583,7 @@ ${starCSS}
                                 0
                             );
                             lines.push(
-                                `<div style="margin-top: 4px; color: #aaa;">${i18n_js.t('Rare Finds:')} ${formatTotalValue(Math.round(totalRareRevenue))}</div>`
+                                `<div style="margin-top: 4px; color: #aaa;">Rare Finds: ${formatTotalValue(Math.round(totalRareRevenue))}</div>`
                             );
                             for (const drop of rareFindDrops) {
                                 const dropsForTask = (drop.dropsPerAction || 0) * quantity;
@@ -10650,7 +10608,7 @@ ${starCSS}
 
                 // Net Production (expandable)
                 lines.push(
-                    `<div class="mwi-expandable-header" data-section="production" style="margin-left: 10px; cursor: pointer; user-select: none;">${i18n_js.t('Net Production:')} ${formatTotalValue(netProductionValue)} ▸</div>`
+                    `<div class="mwi-expandable-header" data-section="production" style="margin-left: 10px; cursor: pointer; user-select: none;">Net Production: ${formatTotalValue(netProductionValue)} ▸</div>`
                 );
                 lines.push(
                     `<div class="mwi-expandable-section" data-section="production" style="display: none; margin-left: 20px; font-size: 0.65rem; color: #888; margin-top: 2px;">`
@@ -10667,7 +10625,7 @@ ${starCSS}
                     const primaryOutputTotal = baseRevenueTotal + gourmetRevenueTotal;
 
                     lines.push(
-                        `<div style="margin-top: 2px; color: #aaa;">${i18n_js.t('Primary Outputs:')} ${formatTotalValue(Math.round(primaryOutputTotal))}</div>`
+                        `<div style="margin-top: 2px; color: #aaa;">Primary Outputs: ${formatTotalValue(Math.round(primaryOutputTotal))}</div>`
                     );
 
                     lines.push(
@@ -10692,7 +10650,7 @@ ${starCSS}
                             0
                         );
                         lines.push(
-                            `<div style="margin-top: 4px; color: #aaa;">${i18n_js.t('Essence Drops:')} ${formatTotalValue(Math.round(totalEssenceRevenue))}</div>`
+                            `<div style="margin-top: 4px; color: #aaa;">Essence Drops: ${formatTotalValue(Math.round(totalEssenceRevenue))}</div>`
                         );
                         for (const drop of essenceDrops) {
                             const dropsForTask = (drop.dropsPerAction || 0) * profitData.action.breakdown.quantity;
@@ -10710,7 +10668,7 @@ ${starCSS}
                             0
                         );
                         lines.push(
-                            `<div style="margin-top: 4px; color: #aaa;">${i18n_js.t('Rare Finds:')} ${formatTotalValue(Math.round(totalRareRevenue))}</div>`
+                            `<div style="margin-top: 4px; color: #aaa;">Rare Finds: ${formatTotalValue(Math.round(totalRareRevenue))}</div>`
                         );
                         for (const drop of rareFindDrops) {
                             const dropsForTask = (drop.dropsPerAction || 0) * profitData.action.breakdown.quantity;
@@ -10731,7 +10689,7 @@ ${starCSS}
                     );
                     const hoursNeeded = effectiveActionsPerHour > 0 ? actionsNeeded / effectiveActionsPerHour : 0;
                     lines.push(
-                        `<div style="margin-top: 4px; color: #aaa;">${i18n_js.t('Material Costs:')} ${formatTotalValue(profitData.action.breakdown.materialCost)}</div>`
+                        `<div style="margin-top: 4px; color: #aaa;">Material Costs: ${formatTotalValue(profitData.action.breakdown.materialCost)}</div>`
                     );
 
                     for (const mat of details.materialCosts) {
@@ -10763,6 +10721,21 @@ ${starCSS}
                 );
             }
 
+            // Action Speed & Time (expandable)
+            if (config.getSetting('taskSpeedBreakdown')) {
+                const speedTimeHTML = this.buildSpeedTimeHTML(profitData);
+                if (speedTimeHTML) {
+                    lines.push(
+                        `<div class="mwi-expandable-header" data-section="speedtime" style="margin-top: 6px; cursor: pointer; user-select: none; color: #aaa;">Action Speed & Time ▸</div>`
+                    );
+                    lines.push(
+                        `<div class="mwi-expandable-section" data-section="speedtime" style="display: none; margin-left: 10px; font-size: 0.65rem; color: #888; margin-top: 2px;">`
+                    );
+                    lines.push(speedTimeHTML);
+                    lines.push('</div>');
+                }
+            }
+
             // Total
             lines.push('<div style="border-top: 1px solid #555; margin-top: 6px; padding-top: 4px;"></div>');
             const totalProfitColor = profitData.hasMissingPrices
@@ -10771,7 +10744,188 @@ ${starCSS}
                   ? '#4ade80'
                   : config.COLOR_LOSS;
             lines.push(
-                `<div style="font-weight: bold; color: ${totalProfitColor};">${i18n_js.t('Total Profit:')} ${formatTotalValue(profitData.totalProfit)}</div>`
+                `<div style="font-weight: bold; color: ${totalProfitColor};">Total Profit: ${formatTotalValue(profitData.totalProfit)}</div>`
+            );
+
+            return lines.join('');
+        }
+
+        /**
+         * Build speed, efficiency, and timing breakdown HTML for the expandable section
+         * @param {Object} profitData - Profit calculation result
+         * @returns {string} HTML string or empty string if unavailable
+         */
+        buildSpeedTimeHTML(profitData) {
+            const actionHrid = profitData.taskInfo?.actionHrid;
+            if (!actionHrid) return '';
+
+            const gameData = dataManager.getInitClientData();
+            const actionDetails = gameData?.actionDetailMap?.[actionHrid];
+            if (!actionDetails) return '';
+
+            const skills = dataManager.getSkills();
+            const equipment = dataManager.getEquipment();
+            const itemDetailMap = gameData.itemDetailMap || {};
+
+            const stats = actionCalculator_js.calculateActionStats(actionDetails, {
+                skills,
+                equipment,
+                itemDetailMap,
+                actionHrid: null,
+                includeCommunityBuff: true,
+                includeBreakdown: true,
+            });
+            if (!stats) return '';
+
+            const { actionTime: timeAfterEquip, totalEfficiency, efficiencyBreakdown: eb } = stats;
+            const baseTime = actionDetails.baseTimeCost / 1e9;
+            const speedBonus = equipmentParser_js.parseEquipmentSpeedBonuses(equipment, actionDetails.type, itemDetailMap);
+            const personalSpeedBonus = dataManager.getPersonalBuffFlatBoost(actionDetails.type, '/buff_types/action_speed');
+            const displayTimeAfterEquip = Math.max(profitConstants_js.MIN_ACTION_TIME_SECONDS, timeAfterEquip);
+
+            const isTaskAction = dataManager.isTaskAction(actionHrid);
+            const taskSpeedBonus = isTaskAction ? dataManager.getTaskSpeedBonus() : 0;
+            const finalActionTime =
+                taskSpeedBonus > 0
+                    ? Math.max(profitConstants_js.MIN_ACTION_TIME_SECONDS, timeAfterEquip / (1 + taskSpeedBonus / 100))
+                    : displayTimeAfterEquip;
+
+            const efficiencyMultiplier = 1 + totalEfficiency / 100;
+            const actionsPerHour = profitHelpers_js.calculateActionsPerHour(finalActionTime);
+            const effectiveAPH = actionsPerHour * efficiencyMultiplier;
+
+            const totalQuantity = profitData.taskInfo?.quantity || 0;
+            const currentProgress = profitData.taskInfo?.currentProgress || 0;
+            const remaining = Math.max(totalQuantity - currentProgress, 0);
+            const baseActionsNeeded = remaining > 0 ? Math.ceil(remaining / efficiencyMultiplier) : 0;
+            const completionSeconds = baseActionsNeeded * finalActionTime;
+
+            const lines = [];
+
+            // Speed
+            lines.push(`<div>Base: ${baseTime.toFixed(2)}s → ${displayTimeAfterEquip.toFixed(2)}s</div>`);
+            if (speedBonus + personalSpeedBonus > 0) {
+                lines.push(
+                    `<div>Speed: +${formatters_js.formatPercentage(speedBonus + personalSpeedBonus, 1)} | ${profitHelpers_js.calculateActionsPerHour(timeAfterEquip).toFixed(0)}/hr</div>`
+                );
+            } else {
+                lines.push(`<div>${profitHelpers_js.calculateActionsPerHour(timeAfterEquip).toFixed(0)}/hr</div>`);
+            }
+
+            const allSpeedBonuses = equipmentParser_js.debugEquipmentSpeedBonuses(equipment, itemDetailMap);
+            const skillName = actionDetails.type.replace('/action_types/', '');
+            const skillSpecificSpeed = skillName + 'Speed';
+            const relevantSpeeds = allSpeedBonuses.filter(
+                (item) => item.speedType === skillSpecificSpeed || item.speedType === 'skillingSpeed'
+            );
+            for (const item of relevantSpeeds) {
+                const enhText = item.enhancementLevel > 0 ? ` +${item.enhancementLevel}` : '';
+                lines.push(
+                    `<div style="margin-left: 10px;">- ${item.itemName}${enhText}: +${formatters_js.formatPercentage(item.scaledBonus, 1)}</div>`
+                );
+            }
+            if (personalSpeedBonus > 0) {
+                lines.push(
+                    `<div style="margin-left: 10px;">- Scroll of Action Speed: +${formatters_js.formatPercentage(personalSpeedBonus, 1)}</div>`
+                );
+            }
+
+            // Task Speed
+            if (isTaskAction && taskSpeedBonus > 0) {
+                lines.push(
+                    `<div style="margin-top: 4px; font-weight: 500; color: #ccc;">Task Speed (multiplicative): +${taskSpeedBonus.toFixed(2)}%</div>`
+                );
+                lines.push(
+                    `<div>${displayTimeAfterEquip.toFixed(2)}s → ${finalActionTime.toFixed(2)}s | ${actionsPerHour.toFixed(0)}/hr</div>`
+                );
+                const trinketSlot = equipment.get('/item_locations/trinket');
+                if (trinketSlot?.itemHrid) {
+                    const badgeDetails = itemDetailMap[trinketSlot.itemHrid];
+                    if (badgeDetails) {
+                        const enhText = trinketSlot.enhancementLevel > 0 ? ` +${trinketSlot.enhancementLevel}` : '';
+                        const baseTaskSpeed = badgeDetails.equipmentDetail?.noncombatStats?.taskSpeed || 0;
+                        const enhBonus = badgeDetails.equipmentDetail?.noncombatEnhancementBonuses?.taskSpeed || 0;
+                        const enhLevel = trinketSlot.enhancementLevel || 0;
+                        const detailText =
+                            enhBonus > 0
+                                ? ` (${(baseTaskSpeed * 100).toFixed(2)}% + ${(enhBonus * enhLevel * 100).toFixed(2)}%)`
+                                : '';
+                        lines.push(
+                            `<div style="margin-left: 10px;">- ${badgeDetails.name}${enhText}: +${taskSpeedBonus.toFixed(2)}%${detailText}</div>`
+                        );
+                    }
+                }
+            }
+
+            // Efficiency
+            lines.push(
+                `<div style="margin-top: 4px; font-weight: 500; color: #ccc;">Efficiency: +${totalEfficiency.toFixed(2)}% → Output: ×${efficiencyMultiplier.toFixed(2)} (${Math.round(effectiveAPH)}/hr)</div>`
+            );
+            if (eb.levelEfficiency > 0 || eb.actionLevelBreakdown?.length > 0) {
+                lines.push(`<div style="margin-left: 10px;">- Level: +${eb.levelEfficiency.toFixed(2)}%</div>`);
+                const rawLevelDelta = eb.skillLevel - eb.baseRequirement;
+                lines.push(
+                    `<div style="margin-left: 20px;">- Raw level delta: +${rawLevelDelta.toFixed(2)}% (${eb.skillLevel} - ${eb.baseRequirement} base requirement)</div>`
+                );
+                if (eb.actionLevelBreakdown?.length > 0) {
+                    for (const tea of eb.actionLevelBreakdown) {
+                        lines.push(
+                            `<div style="margin-left: 20px;">- ${tea.name} impact: ${(-tea.baseActionLevel).toFixed(2)}% (raises requirement)</div>`
+                        );
+                        if (tea.dcContribution > 0) {
+                            lines.push(
+                                `<div style="margin-left: 30px;">- Drink Concentration: ${(-tea.dcContribution).toFixed(2)}%</div>`
+                            );
+                        }
+                    }
+                }
+            }
+            if (eb.houseEfficiency > 0) {
+                const roomHrid = HOUSE_ROOM_MAP[actionDetails.type];
+                let roomLabel = 'Unknown Room';
+                if (roomHrid) {
+                    const room = dataManager.getHouseRooms().get(roomHrid);
+                    const roomName = roomHrid
+                        .split('/')
+                        .pop()
+                        .split('_')
+                        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join(' ');
+                    roomLabel = `${roomName} level ${room?.level || 0}`;
+                }
+                lines.push(
+                    `<div style="margin-left: 10px;">- House: +${eb.houseEfficiency.toFixed(2)}% (${roomLabel})</div>`
+                );
+            }
+            if (eb.equipmentEfficiency > 0) {
+                lines.push(`<div style="margin-left: 10px;">- Equipment: +${eb.equipmentEfficiency.toFixed(2)}%</div>`);
+            }
+            if (eb.achievementEfficiency > 0) {
+                lines.push(`<div style="margin-left: 10px;">- Achievement: +${eb.achievementEfficiency.toFixed(2)}%</div>`);
+            }
+            if (eb.teaBreakdown?.length > 0) {
+                for (const tea of eb.teaBreakdown) {
+                    lines.push(`<div style="margin-left: 10px;">- ${tea.name}: +${tea.baseEfficiency.toFixed(2)}%</div>`);
+                    if (tea.dcContribution > 0) {
+                        lines.push(
+                            `<div style="margin-left: 20px;">- Drink Concentration: +${tea.dcContribution.toFixed(2)}%</div>`
+                        );
+                    }
+                }
+            }
+            if (eb.communityEfficiency > 0) {
+                const communityBuffLevel = dataManager.getCommunityBuffLevel('/community_buff_types/production_efficiency');
+                lines.push(
+                    `<div style="margin-left: 10px;">- Community: +${eb.communityEfficiency.toFixed(2)}% (Production Efficiency T${communityBuffLevel})</div>`
+                );
+            }
+            if (eb.personalEfficiency > 0) {
+                lines.push(`<div style="margin-left: 10px;">- Seal: +${eb.personalEfficiency.toFixed(2)}%</div>`);
+            }
+
+            // Total time
+            lines.push(
+                `<div style="margin-top: 4px; font-weight: 500; color: ${config.COLOR_INFO};">Total time: ${formatters_js.timeReadable(completionSeconds)}</div>`
             );
 
             return lines.join('');
@@ -10818,7 +10972,7 @@ ${starCSS}
             color: #888;
             font-style: italic;
         `;
-            loadingContainer.textContent = `⏳ ${i18n_js.t('Loading market data...')}`;
+            loadingContainer.textContent = '⏳ Loading market data...';
 
             // Store task key for reroll detection
             const taskKey = `${taskData.description}|${taskData.quantity}`;
@@ -10888,7 +11042,7 @@ ${starCSS}
 
             // Determine if active (first in queue) or queued
             const isActive = matchActionHrid === activeActionHrid;
-            const label = isActive ? i18n_js.t('▶ Active') : i18n_js.t('⏸ Queued');
+            const label = isActive ? '▶ Active' : '⏸ Queued';
             const color = isActive ? config.COLOR_ACCENT : config.SCRIPT_COLOR_SECONDARY;
 
             if (existingIndicator) {
@@ -11428,7 +11582,7 @@ ${starCSS}
             }
 
             if (parts.length > 0) {
-                displayElement.textContent = i18n_js.t('Reroll spent: ') + parts.join(' + ');
+                displayElement.textContent = t('Reroll spent: ') + parts.join(' + ');
                 displayElement.style.display = 'block';
             } else {
                 displayElement.style.display = 'none';
@@ -12402,8 +12556,8 @@ ${starCSS}
             font-weight: 500;
             margin-top: 4px;
         `;
-            warning.textContent = `⚠ ${i18n_js.t('Combat icons unavailable')} - ${i18n_js.t('visit Combat to load sprites')}`;
-            warning.title = i18n_js.t('Combat monster sprites need to be loaded. Visit the Combat panel to load them.');
+            warning.textContent = `⚠ ${t('Combat icons unavailable')} - ${t('visit Combat to load sprites')}`;
+            warning.title = t('Combat monster sprites need to be loaded. Visit the Combat panel to load them.');
 
             titleElement.appendChild(warning);
             this.spriteWarningShown = true;
@@ -13051,7 +13205,7 @@ ${starCSS}
                 'TasksPanel_taskSlotCount', // Just the class name, not [class*="..."]
                 (headerElement) => {
                     this.addSortButton(headerElement);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
         }
 
@@ -13068,7 +13222,7 @@ ${starCSS}
             if (!config.getSetting('taskSorter_hideButton')) {
                 this.sortButton = document.createElement('button');
                 this.sortButton.className = 'Button_button__1Fe9z Button_small__3fqC7';
-                this.sortButton.textContent = i18n_js.t('Sort Tasks');
+                this.sortButton.textContent = t('Sort Tasks');
                 this.sortButton.style.marginLeft = '8px';
                 this.sortButton.setAttribute('data-mwi-task-sort', 'true');
                 this.sortButton.addEventListener('click', () => this.sortTasks());
@@ -13432,7 +13586,7 @@ ${starCSS}
                 'TasksPanel_taskSlotCount',
                 (headerElement) => {
                     this.addHighlightButton(headerElement);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
         }
 
@@ -13448,7 +13602,7 @@ ${starCSS}
             // Create button
             this.highlightButton = document.createElement('button');
             this.highlightButton.className = 'Button_button__1Fe9z Button_small__3fqC7';
-            this.highlightButton.textContent = i18n_js.t('Highlight Task Items');
+            this.highlightButton.textContent = t('Highlight Task Items');
             this.highlightButton.style.marginLeft = '8px';
             this.highlightButton.setAttribute('data-mwi-task-highlight', 'true');
 
@@ -13487,7 +13641,7 @@ ${starCSS}
 
             // Update button state
             this.isHighlightActive = true;
-            this.highlightButton.textContent = i18n_js.t('Clear Highlight');
+            this.highlightButton.textContent = t('Clear Highlight');
             this.highlightButton.style.backgroundColor = '#22c55e';
         }
 
@@ -13507,7 +13661,7 @@ ${starCSS}
             // Update button state
             this.isHighlightActive = false;
             if (this.highlightButton) {
-                this.highlightButton.textContent = i18n_js.t('Highlight Task Items');
+                this.highlightButton.textContent = t('Highlight Task Items');
                 this.highlightButton.style.backgroundColor = '';
             }
         }
@@ -13833,7 +13987,7 @@ ${starCSS}
             // Create button matching MUI tab styling
             const button = document.createElement('div');
             button.className = 'MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1q2h7u5 toolasha-task-stats-btn';
-            button.textContent = i18n_js.t('Statistics');
+            button.textContent = 'Statistics';
             button.style.cursor = 'pointer';
             button.onclick = () => this.showPopup();
 
@@ -13993,9 +14147,11 @@ ${starCSS}
                 // Get display name
                 let taskName = '';
                 if (isCombat && monsterHrid) {
-                    taskName = itemNameTranslator.getDisplayName(monsterHrid);
+                    const monsterDetails = dataManager.getInitClientData()?.combatMonsterDetailMap?.[monsterHrid];
+                    taskName = monsterDetails?.name || monsterHrid.split('/').pop();
                 } else if (actionHrid) {
-                    taskName = itemNameTranslator.getDisplayName(actionHrid);
+                    const actionDetails = dataManager.getInitClientData()?.actionDetailMap?.[actionHrid];
+                    taskName = actionDetails?.name || actionHrid.split('/').pop();
                 }
 
                 // Calculate action profit for non-combat tasks
@@ -14125,7 +14281,7 @@ ${starCSS}
         `;
 
             const title = document.createElement('h2');
-            title.textContent = i18n_js.t('Task Statistics');
+            title.textContent = 'Task Statistics';
             title.style.cssText = `margin: 0; color: ${textColor}; font-size: 24px;`;
 
             const closeButton = document.createElement('button');
@@ -14229,29 +14385,27 @@ ${starCSS}
          * @returns {HTMLElement} Section element
          */
         createOverflowSection(overflow, textColor) {
-            const section = this.createSection(i18n_js.t('Task Slots'));
+            const section = this.createSection('Task Slots');
 
             if (overflow.error) {
-                section.appendChild(this.createRow(i18n_js.t('Status'), overflow.error, config.COLOR_LOSS));
+                section.appendChild(this.createRow('Status', overflow.error, config.COLOR_LOSS));
                 return section;
             }
 
+            section.appendChild(this.createRow('Slots Used', `${overflow.usedSlots} / ${overflow.taskSlotCap}`, textColor));
+            section.appendChild(this.createRow('Available', `${overflow.availableSlots}`, textColor));
             section.appendChild(
-                this.createRow(i18n_js.t('Slots Used'), `${overflow.usedSlots} / ${overflow.taskSlotCap}`, textColor)
-            );
-            section.appendChild(this.createRow(i18n_js.t('Available'), `${overflow.availableSlots}`, textColor));
-            section.appendChild(
-                this.createRow(i18n_js.t('Cooldown'), `${overflow.taskCooldownHours}h per task`, config.COLOR_TEXT_SECONDARY)
+                this.createRow('Cooldown', `${overflow.taskCooldownHours}h per task`, config.COLOR_TEXT_SECONDARY)
             );
 
             // Overflow time
             if (overflow.isOverflowing) {
-                section.appendChild(this.createRow(i18n_js.t('Status'), i18n_js.t('Tasks full!'), config.COLOR_LOSS));
+                section.appendChild(this.createRow('Status', 'Tasks full!', config.COLOR_LOSS));
             } else {
-                const overflowTimeStr = formatters_js.timeReadableZh(overflow.msUntilOverflow / 1000);
-                const overflowDateStr = overflow.overflowDate.toLocaleString();
-                section.appendChild(this.createRow(i18n_js.t('Full in'), overflowTimeStr, config.COLOR_INFO));
-                section.appendChild(this.createRow(i18n_js.t('Full at'), overflowDateStr, config.COLOR_TEXT_SECONDARY));
+                const overflowTimeStr = formatters_js.timeReadable(overflow.msUntilOverflow / 1000);
+                const overflowDateStr = formatters_js.formatDateTime(overflow.overflowDate);
+                section.appendChild(this.createRow('Full in', overflowTimeStr, config.COLOR_INFO));
+                section.appendChild(this.createRow('Full at', overflowDateStr, config.COLOR_TEXT_SECONDARY));
             }
 
             return section;
@@ -14264,24 +14418,24 @@ ${starCSS}
          * @returns {HTMLElement} Section element
          */
         createRewardsSection(rewards, textColor) {
-            const section = this.createSection(i18n_js.t('Expected Rewards'));
+            const section = this.createSection('Expected Rewards');
 
-            section.appendChild(this.createRow(i18n_js.t('Total Coins'), formatters_js.formatKMB(rewards.totalCoins), config.COLOR_GOLD));
-            section.appendChild(this.createRow(i18n_js.t('Total Task Tokens'), String(rewards.totalTokens), textColor));
+            section.appendChild(this.createRow('Total Coins', formatters_js.formatKMB(rewards.totalCoins), config.COLOR_GOLD));
+            section.appendChild(this.createRow('Total Task Tokens', String(rewards.totalTokens), textColor));
 
             if (!rewards.rewardValue.error) {
                 const tokenValueStr = `${formatters_js.formatKMB(Math.round(rewards.rewardValue.breakdown.tokenValue))} each`;
-                section.appendChild(this.createRow(i18n_js.t('Token Value'), tokenValueStr, config.COLOR_TEXT_SECONDARY));
+                section.appendChild(this.createRow('Token Value', tokenValueStr, config.COLOR_TEXT_SECONDARY));
                 section.appendChild(
                     this.createRow(
-                        i18n_js.t('Tokens Value'),
+                        'Tokens Value',
                         formatters_js.formatKMB(Math.round(rewards.rewardValue.taskTokens)),
                         config.COLOR_PROFIT
                     )
                 );
                 section.appendChild(
                     this.createRow(
-                        i18n_js.t("Purple's Gift"),
+                        "Purple's Gift",
                         formatters_js.formatKMB(Math.round(rewards.rewardValue.purpleGift)),
                         config.COLOR_ESSENCE
                     )
@@ -14294,13 +14448,13 @@ ${starCSS}
 
                 section.appendChild(
                     this.createRow(
-                        i18n_js.t('Total Reward Value'),
+                        'Total Reward Value',
                         formatters_js.formatKMB(Math.round(rewards.rewardValue.total)),
                         config.COLOR_ACCENT
                     )
                 );
             } else {
-                section.appendChild(this.createRow(i18n_js.t('Token Value'), i18n_js.t('Loading...'), config.COLOR_TEXT_SECONDARY));
+                section.appendChild(this.createRow('Token Value', 'Loading...', config.COLOR_TEXT_SECONDARY));
             }
 
             return section;
@@ -14312,14 +14466,14 @@ ${starCSS}
          * @returns {HTMLElement} Section element
          */
         createActionProfitSection(rewards) {
-            const section = this.createSection(i18n_js.t('Action Profit'));
+            const section = this.createSection('Action Profit');
 
             for (const detail of rewards.taskDetails) {
                 const profitStr = detail.isCombat
-                    ? i18n_js.t('N/A (combat)')
+                    ? 'N/A (combat)'
                     : detail.actionProfit !== null
                       ? formatters_js.formatKMB(Math.round(detail.actionProfit))
-                      : i18n_js.t('N/A');
+                      : 'N/A';
 
                 const profitColor = detail.isCombat
                     ? config.COLOR_TEXT_SECONDARY
@@ -14337,8 +14491,7 @@ ${starCSS}
             separator.style.cssText = 'border-top: 1px solid #3a3a3a; margin: 6px 0;';
             section.appendChild(separator);
 
-            const totalStr =
-                rewards.totalActionProfit !== null ? formatters_js.formatKMB(Math.round(rewards.totalActionProfit)) : i18n_js.t('N/A');
+            const totalStr = rewards.totalActionProfit !== null ? formatters_js.formatKMB(Math.round(rewards.totalActionProfit)) : 'N/A';
             const totalColor =
                 rewards.totalActionProfit !== null && rewards.totalActionProfit >= 0
                     ? config.COLOR_PROFIT
@@ -14346,7 +14499,7 @@ ${starCSS}
                       ? config.COLOR_LOSS
                       : config.COLOR_TEXT_SECONDARY;
 
-            section.appendChild(this.createRow(i18n_js.t('Total Action Profit'), totalStr, totalColor));
+            section.appendChild(this.createRow('Total Action Profit', totalStr, totalColor));
 
             // Combined total
             const separator2 = document.createElement('div');
@@ -14354,7 +14507,7 @@ ${starCSS}
             section.appendChild(separator2);
 
             section.appendChild(
-                this.createRow(i18n_js.t('Combined Total'), formatters_js.formatKMB(Math.round(rewards.combinedTotal)), config.COLOR_ACCENT)
+                this.createRow('Combined Total', formatters_js.formatKMB(Math.round(rewards.combinedTotal)), config.COLOR_ACCENT)
             );
 
             return section;
@@ -14367,14 +14520,14 @@ ${starCSS}
          * @returns {HTMLElement} Section element
          */
         createCompletionTimeSection(rewards, textColor) {
-            const section = this.createSection(i18n_js.t('Completion Time'));
+            const section = this.createSection('Completion Time');
 
             for (const detail of rewards.taskDetails) {
                 const timeStr = detail.isCombat
-                    ? i18n_js.t('N/A (combat)')
+                    ? 'N/A (combat)'
                     : detail.completionSeconds !== null
-                      ? formatters_js.timeReadableZh(detail.completionSeconds)
-                      : i18n_js.t('N/A');
+                      ? formatters_js.timeReadable(detail.completionSeconds)
+                      : 'N/A';
 
                 const progressStr = detail.currentCount > 0 ? ` (${detail.currentCount}/${detail.goalCount})` : '';
 
@@ -14393,9 +14546,9 @@ ${starCSS}
             section.appendChild(separator);
 
             const totalTimeStr =
-                rewards.totalCompletionSeconds !== null ? formatters_js.timeReadableZh(rewards.totalCompletionSeconds) : i18n_js.t('N/A');
+                rewards.totalCompletionSeconds !== null ? formatters_js.timeReadable(rewards.totalCompletionSeconds) : 'N/A';
 
-            section.appendChild(this.createRow(i18n_js.t('Total (non-combat)'), totalTimeStr, config.COLOR_INFO));
+            section.appendChild(this.createRow('Total (non-combat)', totalTimeStr, config.COLOR_INFO));
 
             return section;
         }
@@ -14489,7 +14642,7 @@ ${starCSS}
             this.proxyButton = document.createElement('button');
             this.proxyButton.id = PROXY_BTN_ID;
             this.proxyButton.className = 'Button_button__1Fe9z Button_small__3fqC7';
-            this.proxyButton.style.marginLeft = '8px';
+            this.proxyButton.style.cssText = 'margin-left: 8px; min-width: 130px;';
             this.proxyButton.addEventListener('click', () => this._claimNext());
 
             const highlightBtn = headerElement.querySelector('[data-mwi-task-highlight]');
@@ -14508,7 +14661,7 @@ ${starCSS}
 
             const count = this._getClaimableButtons(taskList).length;
             if (count > 0) {
-                this.proxyButton.textContent = count > 1 ? `${i18n_js.t('Claim Reward')} (${count})` : i18n_js.t('Claim Reward');
+                this.proxyButton.textContent = count > 1 ? `${t('Claim Reward')} (${count})` : t('Claim Reward');
                 this.proxyButton.style.display = '';
             } else {
                 this.proxyButton.style.display = 'none';
@@ -14616,7 +14769,7 @@ ${starCSS}
                 'TasksPanel_taskSlotCount',
                 (panel) => {
                     this._injectConfigButton(panel);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
             this.unregisterHandlers.push(unregisterPanel);
 
@@ -14647,7 +14800,7 @@ ${starCSS}
             const btn = document.createElement('span');
             btn.className = 'mwi-task-protection-btn';
             btn.textContent = '🛡️';
-            btn.title = i18n_js.t('Configure task reroll protection');
+            btn.title = t('Configure task reroll protection');
             btn.style.cssText = 'cursor:pointer; font-size:16px; margin-left:6px; opacity:0.7; transition:opacity 0.1s;';
             btn.addEventListener('mouseover', () => {
                 btn.style.opacity = '1';
@@ -14794,7 +14947,7 @@ ${starCSS}
 
                         // Initial click — start 3s lockdown
                         card.dataset.mwiRerollLocked = '1';
-                        this._showWarning(card, i18n_js.t('Protected task! Unlocks in 3s...'));
+                        this._showWarning(card, t('Protected task! Unlocks in 3s...'));
 
                         // Clear any existing timers for this card
                         const existingTimer = this.confirmTimers.get(card);
@@ -14804,7 +14957,7 @@ ${starCSS}
                         const lockdownTimer = setTimeout(() => {
                             card.dataset.mwiRerollLocked = '';
                             card.dataset.mwiRerollConfirmed = '1';
-                            this._showWarning(card, i18n_js.t('Click reroll now to confirm.'));
+                            this._showWarning(card, t('Click reroll now to confirm.'));
 
                             // Auto-clear confirmation after another 3s
                             const confirmTimer = setTimeout(() => {
@@ -14826,7 +14979,7 @@ ${starCSS}
          * @param {string} [message='Protected task! Unlocks in 3s...']
          * @private
          */
-        _showWarning(taskCard, message = i18n_js.t('Protected task! Unlocks in 3s...')) {
+        _showWarning(taskCard, message = t('Protected task! Unlocks in 3s...')) {
             this._clearWarning(taskCard);
 
             const warning = document.createElement('div');
@@ -15014,7 +15167,7 @@ ${starCSS}
             flex-shrink: 0;
         `;
             header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:#4a9eff;">${i18n_js.t('Protected Tasks')}</span>
+            <span style="font-weight:700; font-size:14px; color:#4a9eff;">${t('Protected Tasks')}</span>
             <button id="mwi-task-protection-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">×</button>
@@ -15025,7 +15178,7 @@ ${starCSS}
             searchDiv.style.cssText = 'padding: 8px 14px; flex-shrink: 0;';
             const searchInput = document.createElement('input');
             searchInput.type = 'search';
-            searchInput.placeholder = i18n_js.t('Search actions, monsters, zones...');
+            searchInput.placeholder = t('Search actions, monsters, zones...');
             searchInput.style.cssText = `
             width: 100%;
             padding: 6px 10px;
@@ -15057,7 +15210,7 @@ ${starCSS}
 
                 let html = '';
                 if (!query && filtered.length === 0) {
-                    html = `<div style="color:#666; text-align:center; padding:20px 0;">${i18n_js.t('No protected tasks yet. Search to add.')}</div>`;
+                    html = `<div style="color:#666; text-align:center; padding:20px 0;">${t('No protected tasks yet. Search to add.')}</div>`;
                 }
 
                 for (const item of filtered.slice(0, 50)) {
@@ -15087,13 +15240,13 @@ ${starCSS}
                 " onmouseover="this.style.background='rgba(255,255,255,0.04)'"
                    onmouseout="this.style.background=''">
                     <span style="width:18px; text-align:center; color:${checkColor}; font-weight:700;">${checkmark}</span>
-                    <span style="flex:1; color:${nameColor};">${itemNameTranslator.getDisplayName(item.hrid)}</span>
+                    <span style="flex:1; color:${nameColor};">${item.name}</span>
                     <span style="color:#666; font-size:11px;">${typeLabel}</span>
                 </div>`;
                 }
 
                 if (filtered.length > 50) {
-                    html += `<div style="color:#666; text-align:center; padding:8px;">...${filtered.length - 50} ${i18n_js.t('more (refine search)')}</div>`;
+                    html += `<div style="color:#666; text-align:center; padding:8px;">...${filtered.length - 50} ${t('more (refine search)')}</div>`;
                 }
 
                 listContainer.innerHTML = html;
@@ -15172,7 +15325,7 @@ ${starCSS}
     const taskRerollProtection = new TaskRerollProtection();
 
     var taskRerollProtection$1 = {
-        name: i18n_js.t('Task Reroll Protection'),
+        name: t('Task Reroll Protection'),
         initialize: async () => {
             await taskRerollProtection.initialize();
         },
@@ -15251,7 +15404,7 @@ ${starCSS}
             const btn = document.createElement('span');
             btn.className = 'mwi-task-autoreroll-btn';
             btn.textContent = '\u{1F3AF}';
-            btn.title = i18n_js.t('Configure task auto-reroll reminders');
+            btn.title = t('Configure task auto-reroll reminders');
             btn.style.cssText = 'cursor:pointer; font-size:16px; margin-left:6px; opacity:0.7; transition:opacity 0.1s;';
             btn.addEventListener('mouseover', () => {
                 btn.style.opacity = '1';
@@ -15291,7 +15444,7 @@ ${starCSS}
 
             const badge = document.createElement('div');
             badge.className = 'mwi-autoreroll-badge';
-            badge.textContent = i18n_js.t('Reroll!');
+            badge.textContent = t('Reroll!');
             badge.style.cssText = `
             position: absolute;
             top: 4px;
@@ -15459,7 +15612,7 @@ ${starCSS}
             flex-shrink: 0;
         `;
             header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:#ef4444;">${i18n_js.t('Auto-Reroll List')}</span>
+            <span style="font-weight:700; font-size:14px; color:#ef4444;">${t('Auto-Reroll List')}</span>
             <button id="mwi-task-autoreroll-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">\u00d7</button>
@@ -15469,7 +15622,7 @@ ${starCSS}
             searchDiv.style.cssText = 'padding: 8px 14px; flex-shrink: 0;';
             const searchInput = document.createElement('input');
             searchInput.type = 'search';
-            searchInput.placeholder = i18n_js.t('Search actions, monsters, zones...');
+            searchInput.placeholder = t('Search actions, monsters, zones...');
             searchInput.style.cssText = `
             width: 100%;
             padding: 6px 10px;
@@ -15499,7 +15652,7 @@ ${starCSS}
 
                 let html = '';
                 if (!query && filtered.length === 0) {
-                    html = `<div style="color:#666; text-align:center; padding:20px 0;">${i18n_js.t('No auto-reroll tasks yet. Search to add.')}</div>`;
+                    html = `<div style="color:#666; text-align:center; padding:20px 0;">${t('No auto-reroll tasks yet. Search to add.')}</div>`;
                 }
 
                 for (const item of filtered.slice(0, 50)) {
@@ -15529,13 +15682,13 @@ ${starCSS}
                 " onmouseover="this.style.background='rgba(255,255,255,0.04)'"
                    onmouseout="this.style.background=''">
                     <span style="width:18px; text-align:center; color:${checkColor}; font-weight:700;">${checkmark}</span>
-                    <span style="flex:1; color:${nameColor};">${itemNameTranslator.getDisplayName(item.hrid)}</span>
+                    <span style="flex:1; color:${nameColor};">${item.name}</span>
                     <span style="color:#666; font-size:11px;">${typeLabel}</span>
                 </div>`;
                 }
 
                 if (filtered.length > 50) {
-                    html += `<div style="color:#666; text-align:center; padding:8px;">...${filtered.length - 50} ${i18n_js.t('more (refine search)')}</div>`;
+                    html += `<div style="color:#666; text-align:center; padding:8px;">...${filtered.length - 50} ${t('more (refine search)')}</div>`;
                 }
 
                 listContainer.innerHTML = html;
@@ -15613,7 +15766,7 @@ ${starCSS}
     const taskAutoReroll = new TaskAutoReroll();
 
     var taskAutoReroll$1 = {
-        name: i18n_js.t('Task Auto-Reroll Reminder'),
+        name: t('Task Auto-Reroll Reminder'),
         initialize: async () => {
             await taskAutoReroll.initialize();
         },
@@ -15630,29 +15783,6 @@ ${starCSS}
      * Shows remaining XP to next level on skill bars in the left navigation panel
      */
 
-
-    // Chinese locale support: translate Chinese skill names to English for HRID construction
-    const SKILL_NAME_ZH_TO_EN = {
-        挤奶: 'milking',
-        采集: 'foraging',
-        伐木: 'woodcutting',
-        奶酪: 'cheesesmithing',
-        制作: 'crafting',
-        缝纫: 'tailoring',
-        编织: 'weaving',
-        烹饪: 'cooking',
-        酿造: 'brewing',
-        炼金: 'alchemy',
-        强化: 'enhancing',
-        耐力: 'stamina',
-        智力: 'intelligence',
-        攻击: 'attack',
-        近战: 'melee',
-        防御: 'defense',
-        远程: 'ranged',
-        魔法: 'magic',
-        总等级: 'total_level',
-    };
 
     class RemainingXP {
         constructor() {
@@ -15691,7 +15821,7 @@ ${starCSS}
                 'NavigationBar_currentExperience',
                 (progressBar) => {
                     this.setupProgressBarObserver(progressBar);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
             this.unregisterObservers.push(unregisterNav);
 
@@ -15741,7 +15871,7 @@ ${starCSS}
                 {
                     attributes: true,
                     attributeFilter: ['style'],
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             // Store the observer so we can clean it up later
@@ -15815,7 +15945,7 @@ ${starCSS}
                 // Create the remaining XP display
                 const xpDisplay = document.createElement('span');
                 xpDisplay.className = 'mwi-remaining-xp';
-                xpDisplay.textContent = i18n_js.t('{0} XP left', formatters_js.formatLargeNumber(remainingXP));
+                xpDisplay.textContent = t('{0} XP left', formatters_js.formatLargeNumber(remainingXP));
 
                 // Build style with optional text shadow
                 const useBlackBorder = config.getSetting('skillRemainingXP_blackBorder', true);
@@ -15849,9 +15979,8 @@ ${starCSS}
          * @returns {number|null} Remaining XP or null if unavailable
          */
         calculateRemainingXPFromProgressBar(progressBar, skillName) {
-            // Convert skill name to HRID (handle Chinese locale)
-            const englishName = SKILL_NAME_ZH_TO_EN[skillName] || skillName;
-            const skillHrid = `/skills/${englishName.toLowerCase()}`;
+            // Convert skill name to HRID
+            const skillHrid = `/skills/${skillName.toLowerCase()}`;
 
             // Get character skills data for level info
             const characterData = dataManager.characterData;
@@ -15932,7 +16061,7 @@ ${starCSS}
      */
 
 
-    const STORE_NAME$3 = 'xpHistory';
+    const STORE_NAME$4 = 'xpHistory';
     const WINDOW_10M$1 = 10 * 60 * 1000;
     const WINDOW_1H$1 = 60 * 60 * 1000;
     const WINDOW_1W$1 = 7 * 24 * 60 * 60 * 1000;
@@ -15963,31 +16092,6 @@ ${starCSS}
 
     const SKILL_NAME_TO_ID = {};
     SKILLS.forEach((s) => (SKILL_NAME_TO_ID[s.name.toLowerCase()] = s.id));
-
-    // Chinese locale support: add Chinese skill name keys
-    const SKILL_NAMES_ZH = {
-        total_level: '总等级',
-        milking: '挤奶',
-        foraging: '采集',
-        woodcutting: '伐木',
-        cheesesmithing: '奶酪锻造',
-        crafting: '制作',
-        tailoring: '缝纫',
-        cooking: '烹饪',
-        brewing: '酿造',
-        alchemy: '炼金',
-        enhancing: '强化',
-        stamina: '耐力',
-        intelligence: '智力',
-        attack: '攻击',
-        melee: '近战',
-        defense: '防御',
-        ranged: '远程',
-        magic: '魔法',
-    };
-    Object.entries(SKILL_NAMES_ZH).forEach(([id, zhName]) => {
-        SKILL_NAME_TO_ID[zhName] = id;
-    });
 
     // Also map hrid → skill for reverse lookups
     const SKILL_HRID_TO_ID = {};
@@ -16116,12 +16220,12 @@ ${starCSS}
         const s = (n) => (n === 1 ? '' : 's');
         const parts = [];
 
-        if (w >= 1) parts.push(i18n_js.t('{0} week{1}', w, s(w)));
-        if (d >= 1) parts.push(i18n_js.t('{0} day{1}', d, s(d)));
-        if (ms < w1 && h >= 1) parts.push(i18n_js.t('{0} hour{1}', h, s(h)));
-        if (ms < 6 * h1 && m >= 1) parts.push(i18n_js.t('{0} minute{1}', m, s(m)));
+        if (w >= 1) parts.push(t('{0} week{1}', w, s(w)));
+        if (d >= 1) parts.push(t('{0} day{1}', d, s(d)));
+        if (ms < w1 && h >= 1) parts.push(t('{0} hour{1}', h, s(h)));
+        if (ms < 6 * h1 && m >= 1) parts.push(t('{0} minute{1}', m, s(m)));
 
-        return parts.join(' ') || i18n_js.t('< 1 minute');
+        return parts.join(' ') || t('< 1 minute');
     }
 
     class XPTracker {
@@ -16175,7 +16279,7 @@ ${starCSS}
             this.characterId = charId;
 
             // Load persisted history for this character
-            const stored = await storage.get(`xpHistory_${charId}`, STORE_NAME$3, {});
+            const stored = await storage.get(`xpHistory_${charId}`, STORE_NAME$4, {});
             this.xpHistory = stored;
 
             const t = data.currentTimestamp ? +new Date(data.currentTimestamp) : Date.now();
@@ -16193,7 +16297,7 @@ ${starCSS}
             });
 
             // Don't await — write is fire-and-forget, no need to block initialization
-            storage.set(`xpHistory_${charId}`, this.xpHistory, STORE_NAME$3);
+            storage.set(`xpHistory_${charId}`, this.xpHistory, STORE_NAME$4);
 
             this._updateNavBars();
         }
@@ -16220,7 +16324,7 @@ ${starCSS}
                 pushXP$1(this.xpHistory[skillId], { t, xp: skillEntry.experience });
             });
 
-            storage.set(`xpHistory_${this.characterId}`, this.xpHistory, STORE_NAME$3);
+            storage.set(`xpHistory_${this.characterId}`, this.xpHistory, STORE_NAME$4);
 
             this._updateNavBars();
         }
@@ -16254,7 +16358,7 @@ ${starCSS}
 
                 if (rate <= 0) return;
 
-                const rateText = i18n_js.t('{0} xp/h', formatters_js.formatKMB(rate));
+                const rateText = t('{0} xp/h', formatters_js.formatKMB(rate));
                 const rateSpan = document.createElement('span');
                 rateSpan.className = 'mwi-xp-rate';
                 rateSpan.textContent = rateText;
@@ -16309,7 +16413,7 @@ ${starCSS}
                             this._addTimeTillLevelUp(tooltipEl);
                         });
                     }
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
             this.unregisterObservers.push(unregister);
         }
@@ -16367,7 +16471,7 @@ ${starCSS}
             const div = document.createElement('div');
             div.className = 'mwi-xp-time-left';
             div.style.cssText = `font-size: 12px; color: ${config.COLOR_HOURS_TO_LEVEL}; margin-top: 4px;`;
-            div.innerHTML = `<span style="font-weight:700">${timeStr}</span> ${i18n_js.t('till next level')}`;
+            div.innerHTML = `<span style="font-weight:700">${timeStr}</span> ${t('till next level')}`;
 
             divs[3].insertAdjacentElement('afterend', div);
         }
@@ -16400,7 +16504,7 @@ ${starCSS}
      */
 
 
-    const STORE_NAME$2 = 'lootLogHistory';
+    const STORE_NAME$3 = 'lootLogHistory';
     const MAX_ENTRIES = 500;
 
     class LootLogHistory {
@@ -16415,7 +16519,7 @@ ${starCSS}
         async _load() {
             const key = this._getKey();
             if (!key) return [];
-            return await storage.get(key, STORE_NAME$2, []);
+            return await storage.get(key, STORE_NAME$3, []);
         }
 
         /**
@@ -16424,7 +16528,7 @@ ${starCSS}
         async _save(entries) {
             const key = this._getKey();
             if (!key) return;
-            await storage.set(key, entries, STORE_NAME$2, true);
+            await storage.set(key, entries, STORE_NAME$3, true);
         }
 
         /**
@@ -16460,7 +16564,7 @@ ${starCSS}
         async clearHistory() {
             const key = this._getKey();
             if (!key) return;
-            await storage.delete(key, STORE_NAME$2);
+            await storage.delete(key, STORE_NAME$3);
         }
     }
 
@@ -16769,13 +16873,13 @@ ${starCSS}
             header.style.cssText = `color: ${config.COLOR_GOLD}; font-weight: bold;`;
 
             if (askTotal === 0 && bidTotal === 0) {
-                header.textContent = i18n_js.t('Total Value: —');
+                header.textContent = 'Total Value: —';
                 wrapper.appendChild(header);
                 secondDiv.appendChild(wrapper);
                 return;
             }
 
-            header.textContent = i18n_js.t('▶ Total Value: {0}/{1}', formatters_js.formatKMB(askTotal), formatters_js.formatKMB(bidTotal));
+            header.textContent = `▶ Total Value: ${formatters_js.formatKMB(askTotal)}/${formatters_js.formatKMB(bidTotal)}`;
             header.style.cursor = 'pointer';
             wrapper.appendChild(header);
 
@@ -16822,12 +16926,12 @@ ${starCSS}
                 let bidPerItem = 0;
 
                 if (baseHrid === '/items/coin') {
-                    name = i18n_js.t('Coins');
+                    name = 'Coins';
                     askPerItem = 1;
                     bidPerItem = 1;
                 } else {
-                    name = itemNameTranslator.getDisplayName(baseHrid);
                     const itemDetails = dataManager.getItemDetails(baseHrid);
+                    name = itemDetails?.name || baseHrid.split('/').pop().replace(/_/g, ' ');
 
                     // Check for openable containers — use expected value
                     if (itemDetails?.isOpenable && expectedValueCalculator.isInitialized) {
@@ -16909,7 +17013,7 @@ ${starCSS}
                 if (item.askTotal > 0 || item.bidTotal > 0) {
                     totalSpan.textContent = `${formatters_js.formatKMB(item.askTotal)}/${formatters_js.formatKMB(item.bidTotal)}`;
                 } else {
-                    totalSpan.textContent = i18n_js.t('—');
+                    totalSpan.textContent = '—';
                 }
                 row.appendChild(totalSpan);
 
@@ -16983,7 +17087,7 @@ ${starCSS}
             // Create average time span
             const avgTimeSpan = document.createElement('span');
             avgTimeSpan.className = 'mwi-loot-log-avgtime';
-            avgTimeSpan.textContent = i18n_js.t('⏱{0}', this.formatDuration(avgTime));
+            avgTimeSpan.textContent = `⏱${this.formatDuration(avgTime)}`;
             avgTimeSpan.style.marginRight = '16px';
             avgTimeSpan.style.marginLeft = '2ch';
             avgTimeSpan.style.color = config.COLOR_INFO;
@@ -17000,9 +17104,9 @@ ${starCSS}
             dayValueSpan.className = 'mwi-loot-log-day-value';
 
             if (dayValueAsk === 0 && dayValueBid === 0) {
-                dayValueSpan.textContent = i18n_js.t('Daily Output: —');
+                dayValueSpan.textContent = 'Daily Output: —';
             } else {
-                dayValueSpan.textContent = i18n_js.t('Daily Output: {0}/{1}', formatters_js.formatKMB(dayValueAsk), formatters_js.formatKMB(dayValueBid));
+                dayValueSpan.textContent = `Daily Output: ${formatters_js.formatKMB(dayValueAsk)}/${formatters_js.formatKMB(dayValueBid)}`;
             }
 
             dayValueSpan.style.float = 'right';
@@ -17042,7 +17146,7 @@ ${starCSS}
             color: rgba(96, 165, 250, 0.7);
             font-size: 0.85em;
         `;
-            separator.textContent = i18n_js.t('— Historical Entries ({0}) —', historicalEntries.length);
+            separator.textContent = `— Historical Entries (${historicalEntries.length}) —`;
 
             // Create wrapper
             const wrapper = document.createElement('div');
@@ -17062,10 +17166,7 @@ ${starCSS}
             if (historicalEntries.length > this.historicalBatchSize) {
                 const showMoreBtn = document.createElement('button');
                 showMoreBtn.className = 'mwi-loot-log-history-more';
-                showMoreBtn.textContent = i18n_js.t(
-                    'Show more ({0} remaining)',
-                    historicalEntries.length - this.historicalRendered
-                );
+                showMoreBtn.textContent = `Show more (${historicalEntries.length - this.historicalRendered} remaining)`;
                 showMoreBtn.style.cssText = `
                 display: block;
                 width: 100%;
@@ -17092,7 +17193,7 @@ ${starCSS}
                     if (remaining <= 0) {
                         showMoreBtn.remove();
                     } else {
-                        showMoreBtn.textContent = i18n_js.t('Show more ({0} remaining)', remaining);
+                        showMoreBtn.textContent = `Show more (${remaining} remaining)`;
                     }
                 });
                 wrapper.appendChild(showMoreBtn);
@@ -17157,7 +17258,7 @@ ${starCSS}
                     if (remaining === 0) {
                         wrapper.remove();
                     } else if (sep) {
-                        sep.textContent = i18n_js.t('— Historical Entries ({0}) —', remaining);
+                        sep.textContent = `— Historical Entries (${remaining}) —`;
                     }
                 }
             });
@@ -17185,7 +17286,7 @@ ${starCSS}
             timeDiv.style.cssText = 'margin-bottom: 2px;';
 
             const startDate = new Date(entry.startTime);
-            timeDiv.textContent = i18n_js.t('Start Time: {0}', startDate.toLocaleString());
+            timeDiv.textContent = `Start Time: ${formatters_js.formatDateTime(startDate)}`;
             entryEl.appendChild(timeDiv);
 
             this.injectTotalValue(timeDiv, entry);
@@ -17196,7 +17297,7 @@ ${starCSS}
 
             if (entry.startTime && entry.endTime) {
                 const durationSec = (new Date(entry.endTime) - new Date(entry.startTime)) / 1000;
-                durationDiv.textContent = i18n_js.t('Duration: {0}', this.formatDuration(durationSec));
+                durationDiv.textContent = `Duration: ${this.formatDuration(durationSec)}`;
             }
             entryEl.appendChild(durationDiv);
 
@@ -17315,7 +17416,7 @@ ${starCSS}
          * @returns {string}
          */
         getActionName(actionHrid) {
-            if (!actionHrid) return i18n_js.t('Unknown');
+            if (!actionHrid) return 'Unknown';
             const details = dataManager.getActionDetails(actionHrid);
             if (details?.name) return details.name;
             return actionHrid.split('/').pop().replace(/_/g, ' ');
@@ -17358,7 +17459,7 @@ ${starCSS}
 
     // Export as feature module
     var lootLogStats = {
-        name: i18n_js.t('Loot Log Statistics'),
+        name: 'Loot Log Statistics',
         initialize: async () => {
             const lootLogStats = new LootLogStats();
             await lootLogStats.initialize();
@@ -17550,7 +17651,7 @@ ${starCSS}
          */
         getItemName(itemHrid) {
             if (itemHrid === '/items/coin') {
-                return i18n_js.t('Gold');
+                return t('Gold');
             }
 
             return itemNameTranslator.getDisplayName(itemHrid);
@@ -17564,7 +17665,7 @@ ${starCSS}
         getRoomName(houseRoomHrid) {
             const initData = dataManager.getInitClientData();
             const roomData = initData?.houseRoomDetailMap?.[houseRoomHrid];
-            return roomData?.name || i18n_js.t('Unknown Room');
+            return roomData?.name || t('Unknown Room');
         }
     }
 
@@ -17612,7 +17713,12 @@ ${starCSS}
 
         // Check if this is a buy modal (has a buy/confirm button)
         // A sell modal would have a sell button instead
-        const isBuyModal = modal.querySelector('[class*="Button_buy"]');
+        const isBuyModal =
+            modal.querySelector('[class*="Button_buy"]') ||
+            modal.textContent.includes('Buy Now') ||
+            modal.textContent.includes('Buy Listing') ||
+            modal.textContent.includes('立即购买') ||
+            modal.textContent.includes('买入挂单');
         if (!isBuyModal) {
             return;
         }
@@ -17707,6 +17813,42 @@ ${starCSS}
                 pendingCalculation = null;
             },
         };
+    }
+
+    /**
+     * Locale-safe DOM matching utilities for game UI interactions.
+     * All functions use CSS classes, data attributes, or structural positions
+     * instead of textContent matching, which breaks when the game is in Chinese.
+     */
+
+    /**
+     * Check if a tabs container belongs to the marketplace panel.
+     * Uses the panel's CSS module class (partial match for hash stability).
+     *
+     * @param {Element} tablistContainer - A tablist container element
+     * @returns {boolean} True if the container is part of the marketplace panel
+     */
+    function isMarketplacePanel(tablistContainer) {
+        return !!tablistContainer.closest('[class*="MarketplacePanel_marketplacePanel"]');
+    }
+
+    /**
+     * Get the "My Listings" tab from a marketplace tablist.
+     * "My Listings" tab is at index 1 in the marketplace MUI tab bar.
+     * Index 0 = search/filter tab (verified via the panel detection above).
+     *
+     * @param {Element} tablist - The marketplace tablist element
+     * @returns {Element|null} The "My Listings" tab element, or null if not found
+     */
+    function getMyListingsTab(tablist) {
+        // Skip non-native tabs (Toolasha inventory tabs, missing material tabs)
+        // to find the second native marketplace tab
+        const nativeTabs = Array.from(tablist.children).filter(
+            (child) =>
+                !child.hasAttribute('data-mwi-custom-tab') &&
+                !child.classList.contains('toolasha-inv-tab')
+        );
+        return nativeTabs[1] || null;
     }
 
     /**
@@ -18134,7 +18276,7 @@ ${starCSS}
             color: ${config.COLOR_ACCENT};
             text-align: center;
         `;
-            totalDiv.textContent = i18n_js.t('Total Market Value: {0}', formatters_js.coinFormatter(costData.totalValue));
+            totalDiv.textContent = t('Total Market Value: {0}', formatters_js.coinFormatter(costData.totalValue));
             costsSection.appendChild(totalDiv);
         }
 
@@ -18171,7 +18313,7 @@ ${starCSS}
             font-weight: bold;
             font-size: 0.875rem;
         `;
-            label.textContent = i18n_js.t('Cumulative to Level:');
+            label.textContent = t('Cumulative to Level:');
 
             const dropdown = document.createElement('select');
             dropdown.style.cssText = `
@@ -18278,7 +18420,7 @@ ${starCSS}
             color: ${config.COLOR_ACCENT};
             text-align: center;
         `;
-            totalDiv.textContent = i18n_js.t('Total Market Value: {0}', formatters_js.coinFormatter(costData.totalValue));
+            totalDiv.textContent = t('Total Market Value: {0}', formatters_js.coinFormatter(costData.totalValue));
             container.appendChild(totalDiv);
 
             // Add Missing Mats Marketplace button if any materials are missing
@@ -18352,7 +18494,7 @@ ${starCSS}
             margin-left: auto;
             text-align: right;
         `;
-            missingSpan.textContent = i18n_js.t('Missing: {0}', formatters_js.coinFormatter(amountNeeded));
+            missingSpan.textContent = t('Missing: {0}', formatters_js.coinFormatter(amountNeeded));
             row.appendChild(missingSpan);
 
             container.appendChild(row);
@@ -18420,7 +18562,7 @@ ${starCSS}
             transition: all 0.2s ease;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         `;
-            button.textContent = i18n_js.t('Missing Mats Marketplace');
+            button.textContent = t('Missing Mats Marketplace');
 
             // Hover effects
             button.addEventListener('mouseenter', () => {
@@ -18694,14 +18836,14 @@ ${starCSS}
 
                 if (!material) {
                     statusColor = '#4ade80';
-                    statusText = i18n_js.t('Complete');
+                    statusText = t('Complete');
                 } else if (!material.isTradeable) {
                     statusColor = '#888888';
-                    statusText = i18n_js.t('Not Tradeable');
+                    statusText = t('Not Tradeable');
                     displayName = material.itemName;
                 } else {
                     statusColor = '#ef4444';
-                    statusText = i18n_js.t('Missing: {0}', formatters_js.formatWithSeparator(material.missing));
+                    statusText = t('Missing: {0}', formatters_js.formatWithSeparator(material.missing));
                     displayName = material.itemName;
                 }
 
@@ -18812,7 +18954,7 @@ ${starCSS}
                 'HousePanel_modalContent',
                 (modalContent) => {
                     this.handleHouseModal(modalContent);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
             this.cleanupRegistry.registerCleanup(unregisterModal);
         }
@@ -18915,7 +19057,7 @@ ${starCSS}
                     childList: true,
                     subtree: true,
                     characterData: true,
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
             this.cleanupRegistry.registerCleanup(observer);
         }
@@ -19203,8 +19345,8 @@ ${starCSS}
 
             const title = document.createElement('span');
             title.style.cssText = `font-size: 0.9rem; font-weight: 600; color: ${config.COLOR_ACCENT};`;
-            const contextLabel = this.loadoutName ? this.loadoutName : i18n_js.t('Scroll Defaults');
-            title.textContent = `${i18n_js.t('Scroll Simulation')} — ${contextLabel}`;
+            const contextLabel = this.loadoutName ? this.loadoutName : t('Scroll Defaults');
+            title.textContent = `${t('Scroll Simulation')} — ${contextLabel}`;
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '×';
@@ -19254,8 +19396,8 @@ ${starCSS}
             line-height: 1.4;
         `;
             note.textContent = this.loadoutName
-                ? i18n_js.t('These scrolls override the defaults when this loadout is active for a skill.')
-                : i18n_js.t('Applied when no loadout matches the current skill (or loadout snapshots are disabled).');
+                ? t('These scrolls override the defaults when this loadout is active for a skill.')
+                : t('Applied when no loadout matches the current skill (or loadout snapshots are disabled).');
             body.appendChild(note);
 
             // Scroll rows
@@ -19374,6 +19516,7 @@ ${starCSS}
 
     function injectButton(navButtons) {
         if (document.getElementById(BUTTON_ID)) return;
+        if (!config.getSetting('simulateScrollEffects')) return;
 
         const loadoutName = getLoadoutName(navButtons);
 
@@ -19383,7 +19526,7 @@ ${starCSS}
 
         const button = document.createElement('button');
         button.id = BUTTON_ID;
-        button.textContent = i18n_js.t('Scroll Simulation');
+        button.textContent = t('Scroll Simulation');
         button.className = 'Button_button__1Fe9z';
         button.style.cssText = `white-space: nowrap;`;
         button.addEventListener('click', () => popup.open(loadoutName));
@@ -19405,6 +19548,13 @@ ${starCSS}
             const navButtons = panel?.querySelector('[class*="LoadoutsPanel_navButtons"]');
             if (navButtons) injectButton(navButtons);
         });
+
+        config.onSettingChange('simulateScrollEffects', (enabled) => {
+            if (!enabled) {
+                document.getElementById(BUTTON_ID)?.remove();
+                popup.close();
+            }
+        });
     }
 
     /**
@@ -19420,7 +19570,7 @@ ${starCSS}
     }
 
     var scrollSimulatorUI = {
-        name: i18n_js.t('Scroll Simulator UI'),
+        name: t('Scroll Simulator UI'),
         initialize,
         openDefaultsPopup,
         disable,
@@ -19706,7 +19856,7 @@ ${starCSS}
             this.headerEl = header;
 
             const title = document.createElement('span');
-            title.textContent = i18n_js.t('PFormance');
+            title.textContent = t('PFormance');
             title.style.fontWeight = 'bold';
             title.style.color = COLORS.accent;
 
@@ -19721,7 +19871,7 @@ ${starCSS}
             });
 
             const closeBtn = this._headerButton('✕', () => this._removePanel());
-            closeBtn.title = i18n_js.t('Close');
+            closeBtn.title = t('Close');
 
             buttons.appendChild(collapseBtn);
             buttons.appendChild(closeBtn);
@@ -19836,12 +19986,12 @@ ${starCSS}
 
             this.contentEl.innerHTML = '';
             this.contentEl.appendChild(
-                this._createSection(i18n_js.t('Feature Init'), initEntries, this.featureSectionCollapsed, (v) => {
+                this._createSection(t('Feature Init'), initEntries, this.featureSectionCollapsed, (v) => {
                     this.featureSectionCollapsed = v;
                 })
             );
             this.contentEl.appendChild(
-                this._createSection(i18n_js.t('DOM Observers'), domEntries, this.domSectionCollapsed, (v) => {
+                this._createSection(t('DOM Observers'), domEntries, this.domSectionCollapsed, (v) => {
                     this.domSectionCollapsed = v;
                 })
             );
@@ -19888,7 +20038,7 @@ ${starCSS}
 
             if (entries.length === 0) {
                 const empty = document.createElement('div');
-                empty.textContent = i18n_js.t('No data');
+                empty.textContent = t('No data');
                 empty.style.padding = '4px 6px';
                 empty.style.color = COLORS.textDim;
                 empty.style.fontSize = '11px';
@@ -19906,9 +20056,9 @@ ${starCSS}
             const thead = document.createElement('thead');
             const headRow = document.createElement('tr');
             const columns =
-                title === i18n_js.t('Feature Init')
-                    ? [i18n_js.t('Name'), i18n_js.t('Time (ms)')]
-                    : [i18n_js.t('Name'), i18n_js.t('Calls/s'), i18n_js.t('Total ms'), i18n_js.t('CPU %')];
+                title === t('Feature Init')
+                    ? [t('Name'), t('Time (ms)')]
+                    : [t('Name'), t('Calls/s'), t('Total ms'), t('CPU %')];
 
             for (const col of columns) {
                 const th = document.createElement('th');
@@ -20369,7 +20519,7 @@ ${starCSS}
 
             const span = document.createElement('span');
             span.className = 'MuiTab-wrapper';
-            span.textContent = i18n_js.t('Toolasha');
+            span.textContent = 'Toolasha';
 
             button.appendChild(span);
 
@@ -20651,7 +20801,7 @@ ${starCSS}
                             white-space: nowrap;
                             transition: all 0.2s;
                         ">
-                        ${i18n_js.t('Edit Template')}
+                        Edit Template
                     </button>
                 `;
                 }
@@ -20671,7 +20821,8 @@ ${starCSS}
 
                 case 'select': {
                     const value = currentSetting?.value ?? settingDef.default ?? '';
-                    const options = settingDef.options || [];
+                    const options =
+                        typeof settingDef.options === 'function' ? settingDef.options() : settingDef.options || [];
                     const optionsHTML = options
                         .map((option) => {
                             const optValue = typeof option === 'object' ? option.value : option;
@@ -20776,14 +20927,14 @@ ${starCSS}
                             white-space: nowrap;
                             transition: all 0.2s;
                         ">
-                        ${i18n_js.t('Manage Overrides')}${count > 0 ? ` (${count})` : ''}
+                        Manage Overrides${count > 0 ? ` (${count})` : ''}
                     </button>
                 `;
                 }
 
                 case 'checkboxWithButton': {
                     const checkedCwb = currentSetting?.isTrue ?? settingDef.default ?? false;
-                    const btnLabel = settingDef.buttonLabel ?? i18n_js.t('Configure...');
+                    const btnLabel = settingDef.buttonLabel ?? 'Configure...';
                     return `
                     <div style="display:flex; align-items:center; gap:8px;">
                         <button type="button"
@@ -20832,7 +20983,7 @@ ${starCSS}
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
             searchInput.className = 'toolasha-search-input';
-            searchInput.placeholder = i18n_js.t('Search settings...');
+            searchInput.placeholder = 'Search settings...';
             searchInput.style.cssText = `
             flex: 1;
             padding: 8px 12px;
@@ -20845,7 +20996,7 @@ ${starCSS}
 
             // Clear button
             const clearButton = document.createElement('button');
-            clearButton.textContent = i18n_js.t('Clear');
+            clearButton.textContent = 'Clear';
             clearButton.className = 'toolasha-search-clear';
             clearButton.style.cssText = `
             padding: 8px 16px;
@@ -20931,43 +21082,43 @@ ${starCSS}
 
             // Sync button (at top - most important)
             const syncBtn = document.createElement('button');
-            syncBtn.textContent = i18n_js.t('Copy Settings to All Characters');
+            syncBtn.textContent = 'Copy Settings to All Characters';
             syncBtn.className = 'toolasha-utility-button toolasha-sync-button';
             syncBtn.addEventListener('click', () => this.handleSync());
 
             // Fetch Latest Prices button
             const fetchPricesBtn = document.createElement('button');
-            fetchPricesBtn.textContent = i18n_js.t('🔄 Fetch Latest Prices');
+            fetchPricesBtn.textContent = '🔄 Fetch Latest Prices';
             fetchPricesBtn.className = 'toolasha-utility-button toolasha-fetch-prices-button';
             fetchPricesBtn.addEventListener('click', () => this.handleFetchPrices(fetchPricesBtn));
 
             // Reset button
             const resetBtn = document.createElement('button');
-            resetBtn.textContent = i18n_js.t('Reset to Defaults');
+            resetBtn.textContent = 'Reset to Defaults';
             resetBtn.className = 'toolasha-utility-button';
             resetBtn.addEventListener('click', () => this.handleReset());
 
             // Export button
             const exportBtn = document.createElement('button');
-            exportBtn.textContent = i18n_js.t('Export Settings');
+            exportBtn.textContent = 'Export Settings';
             exportBtn.className = 'toolasha-utility-button';
             exportBtn.addEventListener('click', () => this.handleExport());
 
             // Import button
             const importBtn = document.createElement('button');
-            importBtn.textContent = i18n_js.t('Import Settings');
+            importBtn.textContent = 'Import Settings';
             importBtn.className = 'toolasha-utility-button';
             importBtn.addEventListener('click', () => this.handleImport());
 
             // All Off button
             const allOffBtn = document.createElement('button');
-            allOffBtn.textContent = i18n_js.t('All Off');
+            allOffBtn.textContent = 'All Off';
             allOffBtn.className = 'toolasha-utility-button';
             allOffBtn.addEventListener('click', () => this.handleAllOff(restoreBtn));
 
             // Restore button (only shown when an All Off snapshot exists)
             const restoreBtn = document.createElement('button');
-            restoreBtn.textContent = i18n_js.t('Restore');
+            restoreBtn.textContent = 'Restore';
             restoreBtn.className = 'toolasha-utility-button';
             restoreBtn.style.display = 'none';
             restoreBtn.addEventListener('click', () => this.handleRestore(restoreBtn));
@@ -20988,7 +21139,7 @@ ${starCSS}
             buttonsDiv.appendChild(importBtn);
 
             const pformanceBtn = document.createElement('button');
-            pformanceBtn.textContent = i18n_js.t('PFormance');
+            pformanceBtn.textContent = 'PFormance';
             pformanceBtn.className = 'toolasha-utility-button';
             pformanceBtn.addEventListener('click', () => pformancePanel.show());
             buttonsDiv.appendChild(pformanceBtn);
@@ -21003,7 +21154,7 @@ ${starCSS}
         addRefreshNotice(container) {
             const notice = document.createElement('div');
             notice.className = 'toolasha-refresh-notice';
-            notice.textContent = i18n_js.t('Some settings require a page refresh to take effect');
+            notice.textContent = 'Some settings require a page refresh to take effect';
             container.appendChild(notice);
         }
 
@@ -21045,7 +21196,7 @@ ${starCSS}
                         const ver = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window).Toolasha?.version || '';
                         titleEl.textContent = `⚙️ Toolasha ${ver ? `v${ver} ` : ''}Settings (refresh to apply)`;
                     } else {
-                        titleEl.textContent = i18n_js.t('Settings');
+                        titleEl.textContent = 'Settings';
                     }
                 }
             };
@@ -21271,16 +21422,16 @@ ${starCSS}
                 const params = enhancementConfig_js.getEnhancingParams();
                 const fmt = (v) => (typeof v === 'number' ? v.toFixed(2).replace(/\.?0+$/, '') : v);
                 return `
-                <span style="color:#6b9fff; font-weight:bold;">${i18n_js.t('Computed Stats')}</span><br>
-                ${i18n_js.t('Effective Level:')} <span style="color:#e0e0e0;">${fmt(params.enhancingLevel)}</span> &nbsp;|&nbsp;
-                ${i18n_js.t('Tool Success:')} <span style="color:#e0e0e0;">${fmt(params.toolBonus)}%</span> &nbsp;|&nbsp;
-                ${i18n_js.t('Speed:')} <span style="color:#e0e0e0;">${fmt(params.speedBonus)}%</span><br>
-                ${i18n_js.t('Drink Conc:')} <span style="color:#e0e0e0;">${fmt((params.guzzlingBonus - 1) * 100)}%</span> &nbsp;|&nbsp;
-                ${i18n_js.t('Rare Find:')} <span style="color:#e0e0e0;">${fmt(params.rareFindBonus)}%</span> &nbsp;|&nbsp;
-                ${i18n_js.t('Experience:')} <span style="color:#e0e0e0;">${fmt(params.experienceBonus)}%</span>
+                <span style="color:#6b9fff; font-weight:bold;">Computed Stats</span><br>
+                Effective Level: <span style="color:#e0e0e0;">${fmt(params.enhancingLevel)}</span> &nbsp;|&nbsp;
+                Tool Success: <span style="color:#e0e0e0;">${fmt(params.toolBonus)}%</span> &nbsp;|&nbsp;
+                Speed: <span style="color:#e0e0e0;">${fmt(params.speedBonus)}%</span><br>
+                Drink Conc: <span style="color:#e0e0e0;">${fmt((params.guzzlingBonus - 1) * 100)}%</span> &nbsp;|&nbsp;
+                Rare Find: <span style="color:#e0e0e0;">${fmt(params.rareFindBonus)}%</span> &nbsp;|&nbsp;
+                Experience: <span style="color:#e0e0e0;">${fmt(params.experienceBonus)}%</span>
             `;
             } catch {
-                return `<span style="color:#666;">${i18n_js.t('Stats unavailable (game data not loaded)')}</span>`;
+                return '<span style="color:#666;">Stats unavailable (game data not loaded)</span>';
             }
         }
 
@@ -21303,17 +21454,13 @@ ${starCSS}
 
             // If only 1 character (current), no need to sync
             if (characterCount <= 1) {
-                alert(i18n_js.t('You only have one character. Settings are already saved for this character.'));
+                alert('You only have one character. Settings are already saved for this character.');
                 return;
             }
 
             // Confirm action
             const otherCharacters = characterCount - 1;
-            const message = i18n_js.t(
-                'This will copy your current settings to {0} other character{1}. Their existing settings will be overwritten.\n\nContinue?',
-                otherCharacters,
-                otherCharacters > 1 ? 's' : ''
-            );
+            const message = `This will copy your current settings to ${otherCharacters} other character${otherCharacters > 1 ? 's' : ''}. Their existing settings will be overwritten.\n\nContinue?`;
 
             if (!confirm(message)) {
                 return;
@@ -21324,9 +21471,9 @@ ${starCSS}
 
             // Show result
             if (result.success) {
-                alert(i18n_js.t('Settings successfully copied to {0} character{1}!', result.count, result.count > 1 ? 's' : ''));
+                alert(`Settings successfully copied to ${result.count} character${result.count > 1 ? 's' : ''}!`);
             } else {
-                alert(i18n_js.t('Failed to sync settings: {0}', result.error || i18n_js.t('Unknown error')));
+                alert(`Failed to sync settings: ${result.error || 'Unknown error'}`);
             }
         }
 
@@ -21338,7 +21485,7 @@ ${starCSS}
             // Disable button and show loading state
             const originalText = button.textContent;
             button.disabled = true;
-            button.textContent = i18n_js.t('⏳ Fetching...');
+            button.textContent = '⏳ Fetching...';
 
             try {
                 // Clear cache and fetch fresh data
@@ -21351,7 +21498,7 @@ ${starCSS}
                     });
 
                     // Show success state
-                    button.textContent = i18n_js.t('✅ Updated!');
+                    button.textContent = '✅ Updated!';
                     button.style.backgroundColor = '#00ff00';
                     button.style.color = '#000';
 
@@ -21365,7 +21512,7 @@ ${starCSS}
                     this.timerRegistry.registerTimeout(resetSuccessTimeout);
                 } else {
                     // Failed - show error state
-                    button.textContent = i18n_js.t('❌ Failed');
+                    button.textContent = '❌ Failed';
                     button.style.backgroundColor = '#ff0000';
 
                     // Reset button after 3 seconds
@@ -21380,7 +21527,7 @@ ${starCSS}
                 console.error('[SettingsUI] Fetch prices failed:', error);
 
                 // Show error state
-                button.textContent = i18n_js.t('❌ Error');
+                button.textContent = '❌ Error';
                 button.style.backgroundColor = '#ff0000';
 
                 // Reset button after 3 seconds
@@ -21397,14 +21544,14 @@ ${starCSS}
          * Handle reset to defaults
          */
         async handleReset() {
-            if (!confirm(i18n_js.t('Reset all settings to defaults? This cannot be undone.'))) {
+            if (!confirm('Reset all settings to defaults? This cannot be undone.')) {
                 return;
             }
 
             await settingsStorage.resetToDefaults();
             await this.config.resetToDefaults();
 
-            alert(i18n_js.t('Settings reset to defaults. Please refresh the page.'));
+            alert('Settings reset to defaults. Please refresh the page.');
             window.location.reload();
         }
 
@@ -21442,24 +21589,17 @@ ${starCSS}
 
                     if (result) {
                         const msg =
-                            result.skipped > 0
-                                ? i18n_js.t(
-                                      'Settings imported successfully ({0} keys imported, {1} skipped from other characters). Please refresh the page.',
-                                      result.imported,
-                                      result.skipped
-                                  )
-                                : i18n_js.t(
-                                      'Settings imported successfully ({0} keys imported). Please refresh the page.',
-                                      result.imported
-                                  );
+                            `Settings imported successfully (${result.imported} keys imported` +
+                            (result.skipped > 0 ? `, ${result.skipped} skipped from other characters` : '') +
+                            '). Please refresh the page.';
                         alert(msg);
                         window.location.reload();
                     } else {
-                        alert(i18n_js.t('Failed to import settings. Please check the file format.'));
+                        alert('Failed to import settings. Please check the file format.');
                     }
                 } catch (error) {
                     console.error('[Toolasha Settings] Import error:', error);
-                    alert(i18n_js.t('Failed to import settings.'));
+                    alert('Failed to import settings.');
                 }
             });
 
@@ -21706,7 +21846,7 @@ ${starCSS}
             // Add text button
             const addTextBtn = document.createElement('button');
             addTextBtn.type = 'button';
-            addTextBtn.textContent = i18n_js.t('+ Add Text');
+            addTextBtn.textContent = '+ Add Text';
             addTextBtn.style.cssText = `
             background: #2a2a2a;
             border: 1px solid #4a4a4a;
@@ -21726,7 +21866,7 @@ ${starCSS}
                 addTextBtn.style.borderColor = '#4a4a4a';
             };
             addTextBtn.onclick = () => {
-                const text = prompt(i18n_js.t('Enter text:'));
+                const text = prompt('Enter text:');
                 if (text !== null && text !== '') {
                     templateItems.push({
                         type: 'text',
@@ -21751,7 +21891,7 @@ ${starCSS}
             // Restore to Default button (left side)
             const restoreBtn = document.createElement('button');
             restoreBtn.type = 'button';
-            restoreBtn.textContent = i18n_js.t('Restore to Default');
+            restoreBtn.textContent = 'Restore to Default';
             restoreBtn.style.cssText = `
             background: #6b5b3a;
             border: 1px solid #8b7b5a;
@@ -21762,7 +21902,7 @@ ${starCSS}
             font-size: 14px;
         `;
             restoreBtn.onclick = () => {
-                if (confirm(i18n_js.t('Reset template to default? This will discard your current template.'))) {
+                if (confirm('Reset template to default? This will discard your current template.')) {
                     // Reset to default
                     templateItems.length = 0;
                     const defaultTemplate = setting.default || [];
@@ -21777,7 +21917,7 @@ ${starCSS}
 
             const cancelBtn = document.createElement('button');
             cancelBtn.type = 'button';
-            cancelBtn.textContent = i18n_js.t('Cancel');
+            cancelBtn.textContent = 'Cancel';
             cancelBtn.style.cssText = `
             background: #2a2a2a;
             border: 1px solid #4a4a4a;
@@ -21791,7 +21931,7 @@ ${starCSS}
 
             const saveBtn = document.createElement('button');
             saveBtn.type = 'button';
-            saveBtn.textContent = i18n_js.t('Save');
+            saveBtn.textContent = 'Save';
             saveBtn.style.cssText = `
             background: #4a7c59;
             border: 1px solid #5a8c69;
@@ -21847,9 +21987,9 @@ ${starCSS}
             const itemDetailMap = gameData?.itemDetailMap || {};
 
             // Build item list for search
-            const allItems = Object.entries(itemDetailMap).map(([hrid, _detail]) => ({
+            const allItems = Object.entries(itemDetailMap).map(([hrid, detail]) => ({
                 hrid,
-                name: itemNameTranslator.getDisplayName(hrid),
+                name: detail.name || hrid.replace('/items/', ''),
             }));
 
             // Get sprite URL for item icons
@@ -21912,7 +22052,7 @@ ${starCSS}
             padding-bottom: 10px;
         `;
             header.innerHTML = `
-            <h3 style="margin: 0; color: #e0e0e0;">${i18n_js.t('Custom Price Overrides')}</h3>
+            <h3 style="margin: 0; color: #e0e0e0;">Custom Price Overrides</h3>
             <button class="toolasha-cpo-close-btn" style="
                 background: none;
                 border: none;
@@ -21932,9 +22072,9 @@ ${starCSS}
             margin-bottom: 16px;
             line-height: 1.4;
         `;
-            helpText.textContent = i18n_js.t(
-                'Set custom buy/sell prices for items. Leave a field blank to use the marketplace price. Overridden prices show * in profit displays.'
-            );
+            helpText.textContent =
+                'Set custom buy/sell prices for items. Leave a field blank to use the marketplace price. ' +
+                'Overridden prices show * in profit displays.';
 
             // Search section
             const searchSection = document.createElement('div');
@@ -21952,11 +22092,11 @@ ${starCSS}
 
             const searchLabel = document.createElement('div');
             searchLabel.style.cssText = 'font-size: 11px; color: #888; margin-bottom: 4px;';
-            searchLabel.textContent = i18n_js.t('Item');
+            searchLabel.textContent = 'Item';
 
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = i18n_js.t('Search items...');
+            searchInput.placeholder = 'Search items...';
             searchInput.style.cssText = `
             width: 100%;
             padding: 6px 10px;
@@ -21991,7 +22131,7 @@ ${starCSS}
             const enhWrapper = document.createElement('div');
             const enhLabel = document.createElement('div');
             enhLabel.style.cssText = 'font-size: 11px; color: #888; margin-bottom: 4px;';
-            enhLabel.textContent = i18n_js.t('Enh');
+            enhLabel.textContent = 'Enh';
 
             const enhInput = document.createElement('input');
             enhInput.type = 'number';
@@ -22115,7 +22255,7 @@ ${starCSS}
                 if (entries.length === 0) {
                     const empty = document.createElement('div');
                     empty.style.cssText = 'padding: 20px; text-align: center; color: #666; font-size: 13px;';
-                    empty.textContent = i18n_js.t('No custom price overrides. Use the search bar above to add items.');
+                    empty.textContent = 'No custom price overrides. Use the search bar above to add items.';
                     tableContainer.appendChild(empty);
                     return;
                 }
@@ -22133,9 +22273,9 @@ ${starCSS}
                 gap: 8px;
             `;
                 headerRow.innerHTML = `
-                <div style="flex: 1;">${i18n_js.t('Item')}</div>
-                <div style="width: 80px; text-align: center;">${i18n_js.t('Buy Price')}</div>
-                <div style="width: 80px; text-align: center;">${i18n_js.t('Sell Price')}</div>
+                <div style="flex: 1;">Item</div>
+                <div style="width: 80px; text-align: center;">Buy Price</div>
+                <div style="width: 80px; text-align: center;">Sell Price</div>
                 <div style="width: 28px;"></div>
             `;
                 tableContainer.appendChild(headerRow);
@@ -22143,7 +22283,8 @@ ${starCSS}
                 for (const [key, override] of entries) {
                     const [itemHrid, enhLevel] = key.split(':');
                     const enhNum = parseInt(enhLevel) || 0;
-                    const itemName = itemNameTranslator.getDisplayName(itemHrid);
+                    const itemDetail = itemDetailMap[itemHrid];
+                    const itemName = itemDetail?.name || itemHrid.replace('/items/', '');
                     const enhSuffix = enhNum > 0 ? ` +${enhNum}` : '';
 
                     const row = document.createElement('div');
@@ -22299,7 +22440,7 @@ ${starCSS}
 
             const clearAllBtn = document.createElement('button');
             clearAllBtn.type = 'button';
-            clearAllBtn.textContent = i18n_js.t('Clear All');
+            clearAllBtn.textContent = 'Clear All';
             clearAllBtn.style.cssText = `
             background: #6b3a3a;
             border: 1px solid #8b5a5a;
@@ -22311,7 +22452,7 @@ ${starCSS}
         `;
             clearAllBtn.addEventListener('click', () => {
                 if (Object.keys(workingOverrides).length === 0) return;
-                if (!confirm(i18n_js.t('Remove all custom price overrides?'))) return;
+                if (!confirm('Remove all custom price overrides?')) return;
                 for (const key of Object.keys(workingOverrides)) {
                     delete workingOverrides[key];
                 }
@@ -22323,7 +22464,7 @@ ${starCSS}
 
             const cancelBtn = document.createElement('button');
             cancelBtn.type = 'button';
-            cancelBtn.textContent = i18n_js.t('Cancel');
+            cancelBtn.textContent = 'Cancel';
             cancelBtn.style.cssText = `
             background: #2a2a2a;
             border: 1px solid #4a4a4a;
@@ -22337,7 +22478,7 @@ ${starCSS}
 
             const saveBtn = document.createElement('button');
             saveBtn.type = 'button';
-            saveBtn.textContent = i18n_js.t('Save');
+            saveBtn.textContent = 'Save';
             saveBtn.style.cssText = `
             background: #4a7c59;
             border: 1px solid #5a8c69;
@@ -22374,7 +22515,7 @@ ${starCSS}
                 const btn = document.querySelector('.toolasha-custom-price-edit-btn');
                 if (btn) {
                     const count = Object.keys(workingOverrides).length;
-                    btn.textContent = `${i18n_js.t('Manage Overrides')}${count > 0 ? ` (${count})` : ''}`;
+                    btn.textContent = `Manage Overrides${count > 0 ? ` (${count})` : ''}`;
                 }
 
                 overlay.remove();
@@ -22468,7 +22609,7 @@ ${starCSS}
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.textContent = '×';
-            deleteBtn.title = i18n_js.t('Remove');
+            deleteBtn.title = 'Remove';
             deleteBtn.style.cssText = `
             background: #8b0000;
             border: 1px solid #a00000;
@@ -22565,13 +22706,13 @@ ${starCSS}
 
             const title = document.createElement('div');
             title.style.cssText = `font-weight: 700; font-size: 14px; color: ${enabled ? '#d4900a' : '#c0c0c0'};`;
-            title.textContent = i18n_js.t('Iron Cow Mode');
+            title.textContent = 'Iron Cow Mode';
 
             const desc = document.createElement('div');
             desc.style.cssText = 'font-size: 12px; color: #888; margin-top: 2px;';
             desc.innerHTML = enabled
-                ? i18n_js.t('Disable all market &amp; profit features. ACTIVE — market features locked.')
-                : i18n_js.t('Disable all market &amp; profit features for a no-marketplace playthrough.');
+                ? 'Disable all market &amp; profit features. <span style="color:#d4900a;font-weight:600;">ACTIVE — market features locked.</span>'
+                : 'Disable all market &amp; profit features for a no-marketplace playthrough.';
 
             textBlock.appendChild(title);
             textBlock.appendChild(desc);
@@ -22624,8 +22765,8 @@ ${starCSS}
             const desc = wrapper.querySelector('div > div:last-child');
             if (desc) {
                 desc.innerHTML = enabled
-                    ? i18n_js.t('Disable all market &amp; profit features. ACTIVE — market features locked.')
-                    : i18n_js.t('Disable all market &amp; profit features for a no-marketplace playthrough.');
+                    ? 'Disable all market &amp; profit features. <span style="color:#d4900a;font-weight:600;">ACTIVE — market features locked.</span>'
+                    : 'Disable all market &amp; profit features for a no-marketplace playthrough.';
             }
         }
 
@@ -22979,7 +23120,7 @@ ${starCSS}
             if (!actionInfo) return;
 
             const btn = document.createElement('button');
-            btn.textContent = i18n_js.t('View Action');
+            btn.textContent = t('View Action');
 
             // Copy class from existing popup button for visual consistency
             const existingBtn = actionMenu.querySelector('button');
@@ -23028,7 +23169,7 @@ ${starCSS}
             // Create the action button
             const actionButton = document.createElement('button');
             actionButton.className = 'mwi-view-action-button';
-            actionButton.textContent = i18n_js.t('View Action');
+            actionButton.textContent = t('View Action');
             actionButton.style.cssText = `
             background: #2a2a2a;
             color: #ffffff;
@@ -23673,14 +23814,19 @@ ${starCSS}
                 const tablist = document.querySelector('[role="tablist"]');
                 if (!tablist) return;
 
-                // Verify this is the alchemy tablist
-                if (!isAlchemyPanel(tablist)) return;
+                // Verify this is the alchemy tablist by checking for "Transmute" tab
+                const hasTransmute = Array.from(tablist.children).some(
+                    (btn) => btn.textContent.includes('Transmute') && !btn.dataset.mwiTransmuteHistoryTab
+                );
+                if (!hasTransmute) return;
 
                 // Already injected?
                 if (tablist.querySelector('[data-mwi-transmute-history-tab="true"]')) return;
 
                 // Clone an existing tab for structure
-                const referenceTab = getAlchemyTab(tablist, 1);
+                const referenceTab = Array.from(tablist.children).find(
+                    (btn) => btn.textContent.includes('Transmute') && !btn.dataset.mwiTransmuteHistoryTab
+                );
                 if (!referenceTab) return;
 
                 const tab = referenceTab.cloneNode(true);
@@ -23695,10 +23841,10 @@ ${starCSS}
                     // Replace first text node (the label) while keeping badge span
                     const badgeSpan = badge.querySelector('.MuiBadge-badge');
                     badge.textContent = '';
-                    badge.appendChild(document.createTextNode(i18n_js.t('Transmute History')));
+                    badge.appendChild(document.createTextNode('Transmute History'));
                     if (badgeSpan) badge.appendChild(badgeSpan);
                 } else {
-                    tab.textContent = i18n_js.t('Transmute History');
+                    tab.textContent = 'Transmute History';
                 }
 
                 tab.addEventListener('click', (e) => {
@@ -23798,7 +23944,7 @@ ${starCSS}
         `;
 
             const title = document.createElement('h2');
-            title.textContent = i18n_js.t('Transmute History');
+            title.textContent = 'Transmute History';
             title.style.cssText = 'margin: 0; color: #fff;';
 
             const closeBtn = document.createElement('button');
@@ -23982,11 +24128,11 @@ ${starCSS}
             headerRow.style.background = '#1a1a1a';
 
             const columns = [
-                { key: 'startTime', label: i18n_js.t('Session Start'), filterable: true },
-                { key: 'inputItemHrid', label: i18n_js.t('Input Item'), filterable: true },
-                { key: 'totalAttempts', label: i18n_js.t('Attempts'), filterable: false },
-                { key: 'totalSuccesses', label: i18n_js.t('Successes'), filterable: false },
-                { key: 'results', label: i18n_js.t('Results'), filterable: true },
+                { key: 'startTime', label: 'Session Start', filterable: true },
+                { key: 'inputItemHrid', label: 'Input Item', filterable: true },
+                { key: 'totalAttempts', label: 'Attempts', filterable: false },
+                { key: 'totalSuccesses', label: 'Successes', filterable: false },
+                { key: 'results', label: 'Results', filterable: true },
                 { key: '_delete', label: '', filterable: false },
             ];
 
@@ -24063,8 +24209,8 @@ ${starCSS}
                 cell.colSpan = columns.length;
                 cell.textContent =
                     this.sessions.length === 0
-                        ? i18n_js.t('No transmute history recorded yet.')
-                        : i18n_js.t('No sessions match the current filters.');
+                        ? 'No transmute history recorded yet.'
+                        : 'No sessions match the current filters.';
                 cell.style.cssText = 'padding: 20px; text-align: center; color: #888;';
                 row.appendChild(cell);
                 tbody.appendChild(row);
@@ -24078,7 +24224,7 @@ ${starCSS}
 
                     // Session Start
                     const dateCell = document.createElement('td');
-                    dateCell.textContent = new Date(session.startTime).toLocaleString();
+                    dateCell.textContent = formatters_js.formatDateTime(new Date(session.startTime));
                     dateCell.style.padding = '6px 10px';
                     row.appendChild(dateCell);
 
@@ -24100,7 +24246,7 @@ ${starCSS}
                     // Successes
                     const successCell = document.createElement('td');
                     const failures = session.totalAttempts - session.totalSuccesses;
-                    successCell.textContent = i18n_js.t('{0} ({1} failed)', session.totalSuccesses, failures);
+                    successCell.textContent = `${session.totalSuccesses} (${failures} failed)`;
                     successCell.style.cssText = `
                     padding: 6px 10px;
                     color: ${failures > 0 ? '#fbbf24' : '#4ade80'};
@@ -24118,7 +24264,7 @@ ${starCSS}
                     deleteCell.style.cssText = 'padding: 6px 4px; text-align: center;';
                     const deleteBtn = document.createElement('button');
                     deleteBtn.textContent = '✕';
-                    deleteBtn.title = i18n_js.t('Delete this session');
+                    deleteBtn.title = 'Delete this session';
                     deleteBtn.style.cssText = `
                     background: none; border: none; color: #dc2626;
                     cursor: pointer; font-size: 14px; padding: 2px 6px;
@@ -24179,12 +24325,12 @@ ${starCSS}
                 const name = this.getItemName(itemHrid);
 
                 if (result.isSelfReturn) {
-                    text.textContent = i18n_js.t('{0} x{1} (self-return)', name, result.count);
+                    text.textContent = `${name} x${result.count} (self-return)`;
                     text.style.color = '#888';
                 } else {
                     const total = formatters_js.formatKMB(result.totalValue || 0, 1);
                     const each = formatters_js.formatKMB(result.priceEach || 0, 1);
-                    text.textContent = i18n_js.t('{0} x{1} = {2} ({3} each)', name, result.count, total, each);
+                    text.textContent = `${name} x${result.count} = ${total} (${each} each)`;
                 }
 
                 line.appendChild(text);
@@ -24202,7 +24348,7 @@ ${starCSS}
             // Stats
             const stats = document.createElement('span');
             stats.style.cssText = 'color: #aaa; font-size: 14px;';
-            stats.textContent = i18n_js.t('{0} sessions', this.filteredSessions.length);
+            stats.textContent = `${this.filteredSessions.length} session${this.filteredSessions.length !== 1 ? 's' : ''}`;
             controls.appendChild(stats);
 
             const rightGroup = document.createElement('div');
@@ -24211,7 +24357,7 @@ ${starCSS}
             // Clear All Filters button (only when filters active)
             if (this.hasAnyFilter()) {
                 const clearFiltersBtn = document.createElement('button');
-                clearFiltersBtn.textContent = i18n_js.t('Clear All Filters');
+                clearFiltersBtn.textContent = 'Clear All Filters';
                 clearFiltersBtn.style.cssText = `
                 padding: 6px 12px; background: #e67e22; color: white;
                 border: none; border-radius: 4px; cursor: pointer;
@@ -24222,7 +24368,7 @@ ${starCSS}
 
             // Export button
             const exportBtn = document.createElement('button');
-            exportBtn.textContent = i18n_js.t('Export');
+            exportBtn.textContent = 'Export';
             exportBtn.style.cssText = `
             padding: 6px 12px; background: #2563eb; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -24232,7 +24378,7 @@ ${starCSS}
 
             // Clear History button
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = i18n_js.t('Clear History');
+            clearBtn.textContent = 'Clear History';
             clearBtn.style.cssText = `
             padding: 6px 12px; background: #dc2626; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -24254,10 +24400,10 @@ ${starCSS}
 
             if (this.filters.dateFrom || this.filters.dateTo) {
                 const parts = [];
-                if (this.filters.dateFrom) parts.push(this.filters.dateFrom.toLocaleDateString());
-                if (this.filters.dateTo) parts.push(this.filters.dateTo.toLocaleDateString());
+                if (this.filters.dateFrom) parts.push(formatters_js.formatDateTime(this.filters.dateFrom, { includeTime: false }));
+                if (this.filters.dateTo) parts.push(formatters_js.formatDateTime(this.filters.dateTo, { includeTime: false }));
                 badges.push({
-                    label: i18n_js.t('Date: {0}', parts.join(' - ')),
+                    label: `Date: ${parts.join(' - ')}`,
                     onRemove: () => {
                         this.filters.dateFrom = null;
                         this.filters.dateTo = null;
@@ -24271,9 +24417,9 @@ ${starCSS}
                 const label =
                     this.filters.selectedInputItems.length === 1
                         ? this.getItemName(this.filters.selectedInputItems[0])
-                        : i18n_js.t('{0} input items', this.filters.selectedInputItems.length);
+                        : `${this.filters.selectedInputItems.length} input items`;
                 badges.push({
-                    label: i18n_js.t('Input: {0}', label),
+                    label: `Input: ${label}`,
                     icon: this.filters.selectedInputItems[0],
                     onRemove: () => {
                         this.filters.selectedInputItems = [];
@@ -24285,7 +24431,7 @@ ${starCSS}
 
             if (this.filters.resultsSearch.trim()) {
                 badges.push({
-                    label: i18n_js.t('Results: "{0}"', this.filters.resultsSearch.trim()),
+                    label: `Results: "${this.filters.resultsSearch.trim()}"`,
                     onRemove: () => {
                         this.filters.resultsSearch = '';
                         this.applyFilters();
@@ -24335,7 +24481,7 @@ ${starCSS}
             leftSide.style.cssText = 'display: flex; gap: 8px; align-items: center; color: #aaa;';
 
             const label = document.createElement('span');
-            label.textContent = i18n_js.t('Rows per page:');
+            label.textContent = 'Rows per page:';
 
             const rowsInput = document.createElement('input');
             rowsInput.type = 'number';
@@ -24371,7 +24517,7 @@ ${starCSS}
             });
 
             showAllLabel.appendChild(showAllCheckbox);
-            showAllLabel.appendChild(document.createTextNode(i18n_js.t('Show All')));
+            showAllLabel.appendChild(document.createTextNode('Show All'));
 
             leftSide.appendChild(label);
             leftSide.appendChild(rowsInput);
@@ -24401,7 +24547,7 @@ ${starCSS}
                 });
 
                 const pageInfo = document.createElement('span');
-                pageInfo.textContent = i18n_js.t('Page {0} of {1}', this.currentPage, totalPages || 1);
+                pageInfo.textContent = `Page ${this.currentPage} of ${totalPages || 1}`;
 
                 const nextBtn = document.createElement('button');
                 nextBtn.textContent = '▶';
@@ -24425,7 +24571,7 @@ ${starCSS}
                 rightSide.appendChild(nextBtn);
             } else {
                 const info = document.createElement('span');
-                info.textContent = i18n_js.t('Showing all {0} sessions', this.filteredSessions.length);
+                info.textContent = `Showing all ${this.filteredSessions.length} sessions`;
                 rightSide.appendChild(info);
             }
 
@@ -24504,7 +24650,7 @@ ${starCSS}
          * @returns {HTMLElement}
          */
         createDateFilterPopup() {
-            const popup = this.createPopupBase(i18n_js.t('Filter by Date'));
+            const popup = this.createPopupBase('Filter by Date');
 
             // Compute available range
             if (!this.cachedDateRange) {
@@ -24527,22 +24673,18 @@ ${starCSS}
                 color: #aaa; font-size: 11px; margin-bottom: 10px;
                 padding: 6px; background: #1a1a1a; border-radius: 3px;
             `;
-                rangeInfo.textContent = i18n_js.t(
-                    'Available: {0} - {1}',
-                    minDate.toLocaleDateString(),
-                    maxDate.toLocaleDateString()
-                );
+                rangeInfo.textContent = `Available: ${formatters_js.formatDateTime(minDate, { includeTime: false })} - ${formatters_js.formatDateTime(maxDate, { includeTime: false })}`;
                 popup.appendChild(rangeInfo);
             }
 
             const fromInput = this.createDateInput(
-                i18n_js.t('From:'),
+                'From:',
                 this.filters.dateFrom ? this.filters.dateFrom.toISOString().split('T')[0] : '',
                 minDate,
                 maxDate
             );
             const toInput = this.createDateInput(
-                i18n_js.t('To:'),
+                'To:',
                 this.filters.dateTo ? this.filters.dateTo.toISOString().split('T')[0] : '',
                 minDate,
                 maxDate
@@ -24579,7 +24721,7 @@ ${starCSS}
          * @returns {HTMLElement}
          */
         createInputItemFilterPopup() {
-            const popup = this.createPopupBase(i18n_js.t('Filter by Input Item'));
+            const popup = this.createPopupBase('Filter by Input Item');
             popup.style.minWidth = '220px';
 
             // Gather unique input items from all sessions
@@ -24597,7 +24739,7 @@ ${starCSS}
             // Search box
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = i18n_js.t('Search items...');
+            searchInput.placeholder = 'Search items...';
             searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 8px;
             background: #1a1a1a; border: 1px solid #555;
@@ -24669,12 +24811,12 @@ ${starCSS}
          * @returns {HTMLElement}
          */
         createResultsFilterPopup() {
-            const popup = this.createPopupBase(i18n_js.t('Filter by Result Item'));
+            const popup = this.createPopupBase('Filter by Result Item');
             popup.style.minWidth = '220px';
 
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = i18n_js.t('Item name...');
+            searchInput.placeholder = 'Item name...';
             searchInput.value = this.filters.resultsSearch;
             searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 10px;
@@ -24763,7 +24905,7 @@ ${starCSS}
             row.style.cssText = 'display: flex; gap: 8px; margin-top: 10px;';
 
             const applyBtn = document.createElement('button');
-            applyBtn.textContent = i18n_js.t('Apply');
+            applyBtn.textContent = 'Apply';
             applyBtn.style.cssText = `
             flex: 1; padding: 6px; background: #4a90e2; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -24771,7 +24913,7 @@ ${starCSS}
             applyBtn.addEventListener('click', onApply);
 
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = i18n_js.t('Clear');
+            clearBtn.textContent = 'Clear';
             clearBtn.style.cssText = `
             flex: 1; padding: 6px; background: #666; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -24830,7 +24972,8 @@ ${starCSS}
             if (this.itemNameCache.has(itemHrid)) {
                 return this.itemNameCache.get(itemHrid);
             }
-            const name = itemNameTranslator.getDisplayName(itemHrid);
+            const details = dataManager.getItemDetails(itemHrid);
+            const name = details?.name || itemHrid.split('/').pop().replace(/_/g, ' ');
             this.itemNameCache.set(itemHrid, name);
             return name;
         }
@@ -24880,7 +25023,7 @@ ${starCSS}
             const headers = ['Session Start', 'Input Item', 'Attempts', 'Successes', 'Failures', 'Results'];
 
             const rows = this.sessions.map((session) => {
-                const start = new Date(session.startTime).toLocaleString();
+                const start = formatters_js.formatDateTime(new Date(session.startTime));
                 const inputName = this.getItemName(session.inputItemHrid);
                 const failures = session.totalAttempts - session.totalSuccesses;
 
@@ -24923,10 +25066,7 @@ ${starCSS}
          */
         async clearHistory() {
             const confirmed = confirm(
-                i18n_js.t(
-                    '⚠️ This will permanently delete ALL transmute history ({0} sessions).\nThis cannot be undone.\n\nAre you sure?',
-                    this.sessions.length
-                )
+                `⚠️ This will permanently delete ALL transmute history (${this.sessions.length} sessions).\nThis cannot be undone.\n\nAre you sure?`
             );
             if (!confirmed) return;
 
@@ -24934,12 +25074,12 @@ ${starCSS}
                 await transmuteHistoryTracker.clearHistory();
                 this.sessions = [];
                 this.filteredSessions = [];
-                alert(i18n_js.t('Transmute history cleared.'));
+                alert('Transmute history cleared.');
                 this.applyFilters();
                 this.renderTable();
             } catch (error) {
                 console.error('[TransmuteHistoryViewer] Failed to clear history:', error);
-                alert(i18n_js.t('Failed to clear history: {0}', error.message));
+                alert(`Failed to clear history: ${error.message}`);
             }
         }
     }
@@ -25395,14 +25535,19 @@ ${starCSS}
                 const tablist = document.querySelector('[role="tablist"]');
                 if (!tablist) return;
 
-                // Verify this is the alchemy tablist
-                if (!isAlchemyPanel(tablist)) return;
+                // Verify this is the alchemy tablist by checking for "Coinify" tab
+                const hasCoinify = Array.from(tablist.children).some(
+                    (btn) => btn.textContent.includes('Coinify') && !btn.dataset.mwiCoinifyHistoryTab
+                );
+                if (!hasCoinify) return;
 
                 // Already injected?
                 if (tablist.querySelector('[data-mwi-coinify-history-tab="true"]')) return;
 
                 // Clone an existing tab for structure
-                const referenceTab = getAlchemyTab(tablist, 0);
+                const referenceTab = Array.from(tablist.children).find(
+                    (btn) => btn.textContent.includes('Coinify') && !btn.dataset.mwiCoinifyHistoryTab
+                );
                 if (!referenceTab) return;
 
                 const tab = referenceTab.cloneNode(true);
@@ -25417,10 +25562,10 @@ ${starCSS}
                     // Replace first text node (the label) while keeping badge span
                     const badgeSpan = badge.querySelector('.MuiBadge-badge');
                     badge.textContent = '';
-                    badge.appendChild(document.createTextNode(i18n_js.t('Coinify History')));
+                    badge.appendChild(document.createTextNode('Coinify History'));
                     if (badgeSpan) badge.appendChild(badgeSpan);
                 } else {
-                    tab.textContent = i18n_js.t('Coinify History');
+                    tab.textContent = 'Coinify History';
                 }
 
                 tab.addEventListener('click', (e) => {
@@ -25520,7 +25665,7 @@ ${starCSS}
         `;
 
             const title = document.createElement('h2');
-            title.textContent = i18n_js.t('Coinify History');
+            title.textContent = 'Coinify History';
             title.style.cssText = 'margin: 0; color: #fff;';
 
             const closeBtn = document.createElement('button');
@@ -25686,15 +25831,15 @@ ${starCSS}
             headerRow.style.background = '#1a1a1a';
 
             const columns = [
-                { key: 'startTime', label: i18n_js.t('Session Start'), filterable: true },
-                { key: 'inputItemHrid', label: i18n_js.t('Input Item'), filterable: true },
-                { key: 'enhancementLevel', label: i18n_js.t('Enh. Level'), filterable: false },
-                { key: 'totalAttempts', label: i18n_js.t('Attempts'), filterable: false },
-                { key: 'totalSuccesses', label: i18n_js.t('Successes'), filterable: false },
-                { key: '_successRate', label: i18n_js.t('Success Rate'), filterable: false },
-                { key: 'totalCoinsEarned', label: i18n_js.t('Coins Earned'), filterable: false },
-                { key: '_catalystOfCoinification', label: i18n_js.t('Catalyst of Coinification'), filterable: false },
-                { key: '_primeCatalyst', label: i18n_js.t('Prime Catalyst'), filterable: false },
+                { key: 'startTime', label: 'Session Start', filterable: true },
+                { key: 'inputItemHrid', label: 'Input Item', filterable: true },
+                { key: 'enhancementLevel', label: 'Enh. Level', filterable: false },
+                { key: 'totalAttempts', label: 'Attempts', filterable: false },
+                { key: 'totalSuccesses', label: 'Successes', filterable: false },
+                { key: '_successRate', label: 'Success Rate', filterable: false },
+                { key: 'totalCoinsEarned', label: 'Coins Earned', filterable: false },
+                { key: '_catalystOfCoinification', label: 'Catalyst of Coinification', filterable: false },
+                { key: '_primeCatalyst', label: 'Prime Catalyst', filterable: false },
                 { key: '_delete', label: '', filterable: false },
             ];
 
@@ -25781,8 +25926,8 @@ ${starCSS}
                 cell.colSpan = columns.length;
                 cell.textContent =
                     this.sessions.length === 0
-                        ? i18n_js.t('No coinify history recorded yet.')
-                        : i18n_js.t('No sessions match the current filters.');
+                        ? 'No coinify history recorded yet.'
+                        : 'No sessions match the current filters.';
                 cell.style.cssText = 'padding: 20px; text-align: center; color: #888;';
                 row.appendChild(cell);
                 tbody.appendChild(row);
@@ -25796,7 +25941,7 @@ ${starCSS}
 
                     // Session Start
                     const dateCell = document.createElement('td');
-                    dateCell.textContent = new Date(session.startTime).toLocaleString();
+                    dateCell.textContent = formatters_js.formatDateTime(new Date(session.startTime));
                     dateCell.style.padding = '6px 10px';
                     row.appendChild(dateCell);
 
@@ -25824,7 +25969,7 @@ ${starCSS}
                     // Successes
                     const successCell = document.createElement('td');
                     const failures = session.totalAttempts - session.totalSuccesses;
-                    successCell.textContent = i18n_js.t('{0} ({1} failed)', session.totalSuccesses, failures);
+                    successCell.textContent = `${session.totalSuccesses} (${failures} failed)`;
                     successCell.style.cssText = `
                     padding: 6px 10px;
                     color: ${failures > 0 ? '#fbbf24' : '#4ade80'};
@@ -25868,7 +26013,7 @@ ${starCSS}
                     deleteCell.style.cssText = 'padding: 6px 4px; text-align: center;';
                     const deleteBtn = document.createElement('button');
                     deleteBtn.textContent = '✕';
-                    deleteBtn.title = i18n_js.t('Delete this session');
+                    deleteBtn.title = 'Delete this session';
                     deleteBtn.style.cssText = `
                     background: none; border: none; color: #dc2626;
                     cursor: pointer; font-size: 14px; padding: 2px 6px;
@@ -25930,7 +26075,7 @@ ${starCSS}
             // Stats
             const stats = document.createElement('span');
             stats.style.cssText = 'color: #aaa; font-size: 14px;';
-            stats.textContent = i18n_js.t('{0} sessions', this.filteredSessions.length);
+            stats.textContent = `${this.filteredSessions.length} session${this.filteredSessions.length !== 1 ? 's' : ''}`;
             controls.appendChild(stats);
 
             const rightGroup = document.createElement('div');
@@ -25939,7 +26084,7 @@ ${starCSS}
             // Clear All Filters button (only when filters active)
             if (this.hasAnyFilter()) {
                 const clearFiltersBtn = document.createElement('button');
-                clearFiltersBtn.textContent = i18n_js.t('Clear All Filters');
+                clearFiltersBtn.textContent = 'Clear All Filters';
                 clearFiltersBtn.style.cssText = `
                 padding: 6px 12px; background: #e67e22; color: white;
                 border: none; border-radius: 4px; cursor: pointer;
@@ -25950,7 +26095,7 @@ ${starCSS}
 
             // Export button
             const exportBtn = document.createElement('button');
-            exportBtn.textContent = i18n_js.t('Export');
+            exportBtn.textContent = 'Export';
             exportBtn.style.cssText = `
             padding: 6px 12px; background: #2563eb; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -25960,7 +26105,7 @@ ${starCSS}
 
             // Clear History button
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = i18n_js.t('Clear History');
+            clearBtn.textContent = 'Clear History';
             clearBtn.style.cssText = `
             padding: 6px 12px; background: #dc2626; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -25982,10 +26127,10 @@ ${starCSS}
 
             if (this.filters.dateFrom || this.filters.dateTo) {
                 const parts = [];
-                if (this.filters.dateFrom) parts.push(this.filters.dateFrom.toLocaleDateString());
-                if (this.filters.dateTo) parts.push(this.filters.dateTo.toLocaleDateString());
+                if (this.filters.dateFrom) parts.push(formatters_js.formatDateTime(this.filters.dateFrom, { includeTime: false }));
+                if (this.filters.dateTo) parts.push(formatters_js.formatDateTime(this.filters.dateTo, { includeTime: false }));
                 badges.push({
-                    label: i18n_js.t('Date: {0}', parts.join(' - ')),
+                    label: `Date: ${parts.join(' - ')}`,
                     onRemove: () => {
                         this.filters.dateFrom = null;
                         this.filters.dateTo = null;
@@ -25999,9 +26144,9 @@ ${starCSS}
                 const label =
                     this.filters.selectedInputItems.length === 1
                         ? this.getItemName(this.filters.selectedInputItems[0])
-                        : i18n_js.t('{0} input items', this.filters.selectedInputItems.length);
+                        : `${this.filters.selectedInputItems.length} input items`;
                 badges.push({
-                    label: i18n_js.t('Input: {0}', label),
+                    label: `Input: ${label}`,
                     icon: this.filters.selectedInputItems[0],
                     onRemove: () => {
                         this.filters.selectedInputItems = [];
@@ -26052,7 +26197,7 @@ ${starCSS}
             leftSide.style.cssText = 'display: flex; gap: 8px; align-items: center; color: #aaa;';
 
             const label = document.createElement('span');
-            label.textContent = i18n_js.t('Rows per page:');
+            label.textContent = 'Rows per page:';
 
             const rowsInput = document.createElement('input');
             rowsInput.type = 'number';
@@ -26088,7 +26233,7 @@ ${starCSS}
             });
 
             showAllLabel.appendChild(showAllCheckbox);
-            showAllLabel.appendChild(document.createTextNode(i18n_js.t('Show All')));
+            showAllLabel.appendChild(document.createTextNode('Show All'));
 
             leftSide.appendChild(label);
             leftSide.appendChild(rowsInput);
@@ -26118,7 +26263,7 @@ ${starCSS}
                 });
 
                 const pageInfo = document.createElement('span');
-                pageInfo.textContent = i18n_js.t('Page {0} of {1}', this.currentPage, totalPages || 1);
+                pageInfo.textContent = `Page ${this.currentPage} of ${totalPages || 1}`;
 
                 const nextBtn = document.createElement('button');
                 nextBtn.textContent = '▶';
@@ -26142,7 +26287,7 @@ ${starCSS}
                 rightSide.appendChild(nextBtn);
             } else {
                 const info = document.createElement('span');
-                info.textContent = i18n_js.t('Showing all {0} sessions', this.filteredSessions.length);
+                info.textContent = `Showing all ${this.filteredSessions.length} sessions`;
                 rightSide.appendChild(info);
             }
 
@@ -26218,7 +26363,7 @@ ${starCSS}
          * @returns {HTMLElement}
          */
         createDateFilterPopup() {
-            const popup = this.createPopupBase(i18n_js.t('Filter by Date'));
+            const popup = this.createPopupBase('Filter by Date');
 
             // Compute available range
             if (!this.cachedDateRange) {
@@ -26241,22 +26386,18 @@ ${starCSS}
                 color: #aaa; font-size: 11px; margin-bottom: 10px;
                 padding: 6px; background: #1a1a1a; border-radius: 3px;
             `;
-                rangeInfo.textContent = i18n_js.t(
-                    'Available: {0} - {1}',
-                    minDate.toLocaleDateString(),
-                    maxDate.toLocaleDateString()
-                );
+                rangeInfo.textContent = `Available: ${formatters_js.formatDateTime(minDate, { includeTime: false })} - ${formatters_js.formatDateTime(maxDate, { includeTime: false })}`;
                 popup.appendChild(rangeInfo);
             }
 
             const fromInput = this.createDateInput(
-                i18n_js.t('From:'),
+                'From:',
                 this.filters.dateFrom ? this.filters.dateFrom.toISOString().split('T')[0] : '',
                 minDate,
                 maxDate
             );
             const toInput = this.createDateInput(
-                i18n_js.t('To:'),
+                'To:',
                 this.filters.dateTo ? this.filters.dateTo.toISOString().split('T')[0] : '',
                 minDate,
                 maxDate
@@ -26293,7 +26434,7 @@ ${starCSS}
          * @returns {HTMLElement}
          */
         createInputItemFilterPopup() {
-            const popup = this.createPopupBase(i18n_js.t('Filter by Input Item'));
+            const popup = this.createPopupBase('Filter by Input Item');
             popup.style.minWidth = '220px';
 
             // Gather unique input items from all sessions
@@ -26311,7 +26452,7 @@ ${starCSS}
             // Search box
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = i18n_js.t('Search items...');
+            searchInput.placeholder = 'Search items...';
             searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 8px;
             background: #1a1a1a; border: 1px solid #555;
@@ -26438,7 +26579,7 @@ ${starCSS}
             row.style.cssText = 'display: flex; gap: 8px; margin-top: 10px;';
 
             const applyBtn = document.createElement('button');
-            applyBtn.textContent = i18n_js.t('Apply');
+            applyBtn.textContent = 'Apply';
             applyBtn.style.cssText = `
             flex: 1; padding: 6px; background: #4a90e2; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -26446,7 +26587,7 @@ ${starCSS}
             applyBtn.addEventListener('click', onApply);
 
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = i18n_js.t('Clear');
+            clearBtn.textContent = 'Clear';
             clearBtn.style.cssText = `
             flex: 1; padding: 6px; background: #666; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -26505,7 +26646,8 @@ ${starCSS}
             if (this.itemNameCache.has(itemHrid)) {
                 return this.itemNameCache.get(itemHrid);
             }
-            const name = itemNameTranslator.getDisplayName(itemHrid);
+            const details = dataManager.getItemDetails(itemHrid);
+            const name = details?.name || itemHrid.split('/').pop().replace(/_/g, ' ');
             this.itemNameCache.set(itemHrid, name);
             return name;
         }
@@ -26566,7 +26708,7 @@ ${starCSS}
             ];
 
             const rows = this.sessions.map((session) => {
-                const start = new Date(session.startTime).toLocaleString();
+                const start = formatters_js.formatDateTime(new Date(session.startTime));
                 const inputName = this.getItemName(session.inputItemHrid);
                 const failures = session.totalAttempts - session.totalSuccesses;
                 const rate =
@@ -26608,10 +26750,7 @@ ${starCSS}
          */
         async clearHistory() {
             const confirmed = confirm(
-                i18n_js.t(
-                    'This will permanently delete ALL coinify history ({0} sessions).\nThis cannot be undone.\n\nAre you sure?',
-                    this.sessions.length
-                )
+                `This will permanently delete ALL coinify history (${this.sessions.length} sessions).\nThis cannot be undone.\n\nAre you sure?`
             );
             if (!confirmed) return;
 
@@ -26619,12 +26758,12 @@ ${starCSS}
                 await coinifyHistoryTracker.clearHistory();
                 this.sessions = [];
                 this.filteredSessions = [];
-                alert(i18n_js.t('Coinify history cleared.'));
+                alert('Coinify history cleared.');
                 this.applyFilters();
                 this.renderTable();
             } catch (error) {
                 console.error('[CoinifyHistoryViewer] Failed to clear history:', error);
-                alert(i18n_js.t('Failed to clear history: {0}', error.message));
+                alert(`Failed to clear history: ${error.message}`);
             }
         }
     }
@@ -27130,14 +27269,19 @@ ${starCSS}
                 const tablist = document.querySelector('[role="tablist"]');
                 if (!tablist) return;
 
-                // Verify this is the alchemy tablist
-                if (!isAlchemyPanel(tablist)) return;
+                // Verify this is the alchemy tablist by checking for "Decompose" tab
+                const hasDecompose = Array.from(tablist.children).some(
+                    (btn) => btn.textContent.includes('Decompose') && !btn.dataset.mwiDecomposeHistoryTab
+                );
+                if (!hasDecompose) return;
 
                 // Already injected?
                 if (tablist.querySelector('[data-mwi-decompose-history-tab="true"]')) return;
 
                 // Clone an existing tab for structure
-                const referenceTab = getAlchemyTab(tablist, 2);
+                const referenceTab = Array.from(tablist.children).find(
+                    (btn) => btn.textContent.includes('Decompose') && !btn.dataset.mwiDecomposeHistoryTab
+                );
                 if (!referenceTab) return;
 
                 const tab = referenceTab.cloneNode(true);
@@ -27152,10 +27296,10 @@ ${starCSS}
                     // Replace first text node (the label) while keeping badge span
                     const badgeSpan = badge.querySelector('.MuiBadge-badge');
                     badge.textContent = '';
-                    badge.appendChild(document.createTextNode(i18n_js.t('Decompose History')));
+                    badge.appendChild(document.createTextNode('Decompose History'));
                     if (badgeSpan) badge.appendChild(badgeSpan);
                 } else {
-                    tab.textContent = i18n_js.t('Decompose History');
+                    tab.textContent = 'Decompose History';
                 }
 
                 tab.addEventListener('click', (e) => {
@@ -27257,7 +27401,7 @@ ${starCSS}
         `;
 
             const title = document.createElement('h2');
-            title.textContent = i18n_js.t('Decompose History');
+            title.textContent = 'Decompose History';
             title.style.cssText = 'margin: 0; color: #fff;';
 
             const closeBtn = document.createElement('button');
@@ -27441,15 +27585,15 @@ ${starCSS}
             headerRow.style.background = '#1a1a1a';
 
             const columns = [
-                { key: 'startTime', label: i18n_js.t('Session Start'), filterable: true },
-                { key: 'inputItemHrid', label: i18n_js.t('Input Item'), filterable: true },
-                { key: 'enhancementLevel', label: i18n_js.t('Enh. Level'), filterable: false },
-                { key: 'totalAttempts', label: i18n_js.t('Attempts'), filterable: false },
-                { key: 'totalSuccesses', label: i18n_js.t('Successes'), filterable: false },
-                { key: '_successRate', label: i18n_js.t('Success Rate'), filterable: false },
-                { key: 'results', label: i18n_js.t('Results'), filterable: true },
-                { key: '_catalystOfDecomposition', label: i18n_js.t('Catalyst of Decomposition'), filterable: false },
-                { key: '_primeCatalyst', label: i18n_js.t('Prime Catalyst'), filterable: false },
+                { key: 'startTime', label: 'Session Start', filterable: true },
+                { key: 'inputItemHrid', label: 'Input Item', filterable: true },
+                { key: 'enhancementLevel', label: 'Enh. Level', filterable: false },
+                { key: 'totalAttempts', label: 'Attempts', filterable: false },
+                { key: 'totalSuccesses', label: 'Successes', filterable: false },
+                { key: '_successRate', label: 'Success Rate', filterable: false },
+                { key: 'results', label: 'Results', filterable: true },
+                { key: '_catalystOfDecomposition', label: 'Catalyst of Decomposition', filterable: false },
+                { key: '_primeCatalyst', label: 'Prime Catalyst', filterable: false },
                 { key: '_delete', label: '', filterable: false },
             ];
 
@@ -27536,8 +27680,8 @@ ${starCSS}
                 cell.colSpan = columns.length;
                 cell.textContent =
                     this.sessions.length === 0
-                        ? i18n_js.t('No decompose history recorded yet.')
-                        : i18n_js.t('No sessions match the current filters.');
+                        ? 'No decompose history recorded yet.'
+                        : 'No sessions match the current filters.';
                 cell.style.cssText = 'padding: 20px; text-align: center; color: #888;';
                 row.appendChild(cell);
                 tbody.appendChild(row);
@@ -27551,7 +27695,7 @@ ${starCSS}
 
                     // Session Start
                     const dateCell = document.createElement('td');
-                    dateCell.textContent = new Date(session.startTime).toLocaleString();
+                    dateCell.textContent = formatters_js.formatDateTime(new Date(session.startTime));
                     dateCell.style.padding = '6px 10px';
                     row.appendChild(dateCell);
 
@@ -27579,7 +27723,7 @@ ${starCSS}
                     // Successes
                     const successCell = document.createElement('td');
                     const failures = session.totalAttempts - session.totalSuccesses;
-                    successCell.textContent = i18n_js.t('{0} ({1} failed)', session.totalSuccesses, failures);
+                    successCell.textContent = `${session.totalSuccesses} (${failures} failed)`;
                     successCell.style.cssText = `
                     padding: 6px 10px;
                     color: ${failures > 0 ? '#fbbf24' : '#4ade80'};
@@ -27623,7 +27767,7 @@ ${starCSS}
                     deleteCell.style.cssText = 'padding: 6px 4px; text-align: center;';
                     const deleteBtn = document.createElement('button');
                     deleteBtn.textContent = '\u2715';
-                    deleteBtn.title = i18n_js.t('Delete this session');
+                    deleteBtn.title = 'Delete this session';
                     deleteBtn.style.cssText = `
                     background: none; border: none; color: #dc2626;
                     cursor: pointer; font-size: 14px; padding: 2px 6px;
@@ -27679,7 +27823,7 @@ ${starCSS}
                 const name = this.getItemName(itemHrid);
                 const total = formatters_js.formatKMB(result.totalValue || 0, 1);
                 const each = formatters_js.formatKMB(result.priceEach || 0, 1);
-                text.textContent = i18n_js.t('{0} x{1} = {2} ({3} each)', name, result.count, total, each);
+                text.textContent = `${name} x${result.count} = ${total} (${each} each)`;
 
                 line.appendChild(text);
                 cell.appendChild(line);
@@ -27722,7 +27866,7 @@ ${starCSS}
             // Stats
             const stats = document.createElement('span');
             stats.style.cssText = 'color: #aaa; font-size: 14px;';
-            stats.textContent = i18n_js.t('{0} sessions', this.filteredSessions.length);
+            stats.textContent = `${this.filteredSessions.length} session${this.filteredSessions.length !== 1 ? 's' : ''}`;
             controls.appendChild(stats);
 
             const rightGroup = document.createElement('div');
@@ -27731,7 +27875,7 @@ ${starCSS}
             // Clear All Filters button (only when filters active)
             if (this.hasAnyFilter()) {
                 const clearFiltersBtn = document.createElement('button');
-                clearFiltersBtn.textContent = i18n_js.t('Clear All Filters');
+                clearFiltersBtn.textContent = 'Clear All Filters';
                 clearFiltersBtn.style.cssText = `
                 padding: 6px 12px; background: #e67e22; color: white;
                 border: none; border-radius: 4px; cursor: pointer;
@@ -27752,7 +27896,7 @@ ${starCSS}
 
             // Clear History button
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = i18n_js.t('Clear History');
+            clearBtn.textContent = 'Clear History';
             clearBtn.style.cssText = `
             padding: 6px 12px; background: #dc2626; color: white;
             border: none; border-radius: 4px; cursor: pointer;
@@ -27774,8 +27918,8 @@ ${starCSS}
 
             if (this.filters.dateFrom || this.filters.dateTo) {
                 const parts = [];
-                if (this.filters.dateFrom) parts.push(this.filters.dateFrom.toLocaleDateString());
-                if (this.filters.dateTo) parts.push(this.filters.dateTo.toLocaleDateString());
+                if (this.filters.dateFrom) parts.push(formatters_js.formatDateTime(this.filters.dateFrom, { includeTime: false }));
+                if (this.filters.dateTo) parts.push(formatters_js.formatDateTime(this.filters.dateTo, { includeTime: false }));
                 badges.push({
                     label: `Date: ${parts.join(' - ')}`,
                     onRemove: () => {
@@ -27855,7 +27999,7 @@ ${starCSS}
             leftSide.style.cssText = 'display: flex; gap: 8px; align-items: center; color: #aaa;';
 
             const label = document.createElement('span');
-            label.textContent = i18n_js.t('Rows per page:');
+            label.textContent = 'Rows per page:';
 
             const rowsInput = document.createElement('input');
             rowsInput.type = 'number';
@@ -28047,7 +28191,7 @@ ${starCSS}
                 color: #aaa; font-size: 11px; margin-bottom: 10px;
                 padding: 6px; background: #1a1a1a; border-radius: 3px;
             `;
-                rangeInfo.textContent = `Available: ${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`;
+                rangeInfo.textContent = `Available: ${formatters_js.formatDateTime(minDate, { includeTime: false })} - ${formatters_js.formatDateTime(maxDate, { includeTime: false })}`;
                 popup.appendChild(rangeInfo);
             }
 
@@ -28113,7 +28257,7 @@ ${starCSS}
             // Search box
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = i18n_js.t('Search items...');
+            searchInput.placeholder = 'Search items...';
             searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 8px;
             background: #1a1a1a; border: 1px solid #555;
@@ -28190,7 +28334,7 @@ ${starCSS}
 
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = i18n_js.t('Item name...');
+            searchInput.placeholder = 'Item name...';
             searchInput.value = this.filters.resultsSearch;
             searchInput.style.cssText = `
             width: 100%; padding: 6px; margin-bottom: 10px;
@@ -28279,7 +28423,7 @@ ${starCSS}
             row.style.cssText = 'display: flex; gap: 8px; margin-top: 10px;';
 
             const applyBtn = document.createElement('button');
-            applyBtn.textContent = i18n_js.t('Apply');
+            applyBtn.textContent = 'Apply';
             applyBtn.style.cssText = `
             flex: 1; padding: 6px; background: #4a90e2; color: white;
             border: none; border-radius: 3px; cursor: pointer;
@@ -28346,7 +28490,8 @@ ${starCSS}
             if (this.itemNameCache.has(itemHrid)) {
                 return this.itemNameCache.get(itemHrid);
             }
-            const name = itemNameTranslator.getDisplayName(itemHrid);
+            const details = dataManager.getItemDetails(itemHrid);
+            const name = details?.name || itemHrid.split('/').pop().replace(/_/g, ' ');
             this.itemNameCache.set(itemHrid, name);
             return name;
         }
@@ -28407,7 +28552,7 @@ ${starCSS}
             ];
 
             const rows = this.sessions.map((session) => {
-                const start = new Date(session.startTime).toLocaleString();
+                const start = formatters_js.formatDateTime(new Date(session.startTime));
                 const inputName = this.getItemName(session.inputItemHrid);
                 const failures = session.totalAttempts - session.totalSuccesses;
                 const rate =
@@ -28504,6 +28649,7 @@ ${starCSS}
             this.timerRegistry = timerRegistry_js.createTimerRegistry();
             this.handlers = {};
             this.pinChangeListeners = [];
+            this.sortModeListeners = [];
         }
 
         /**
@@ -28534,6 +28680,7 @@ ${starCSS}
             this.pinnedActions = new Set(pinnedData);
             this.sortMode = await storage.get(this._getSortStorageKey(), 'settings', 'default');
             this.initialized = true;
+            this._notifySortModeListeners();
 
             // Listen for character switch to clear character-specific data
             if (!this.handlers.characterSwitch) {
@@ -28568,6 +28715,7 @@ ${starCSS}
             this.pinnedActions = new Set(pinnedData);
             this.sortMode = await storage.get(this._getSortStorageKey(), 'settings', 'default');
             this.initialized = true;
+            this._notifySortModeListeners();
         }
 
         /**
@@ -28635,6 +28783,7 @@ ${starCSS}
         setSortMode(mode) {
             this.sortMode = mode;
             storage.set(this._getSortStorageKey(), mode, 'settings');
+            this._notifySortModeListeners();
         }
 
         /**
@@ -28643,6 +28792,14 @@ ${starCSS}
          */
         getSortMode() {
             return this.sortMode;
+        }
+
+        onSortModeChange(callback) {
+            this.sortModeListeners.push(callback);
+        }
+
+        _notifySortModeListeners() {
+            for (const cb of this.sortModeListeners) cb(this.sortMode);
         }
 
         /**
@@ -28966,7 +29123,7 @@ ${starCSS}
                 alchemyPanel.dataset.mwiAlchemyLocked = '1';
 
                 const categoryName = this._getCategoryDisplayName(categoryHrid);
-                this._showWarning(alchemyPanel, i18n_js.t('Protected category ({0})! Unlocks in 3s...', categoryName));
+                this._showWarning(alchemyPanel, t('Protected category ({0})! Unlocks in 3s...', categoryName));
 
                 if (this.lockdownTimer) clearTimeout(this.lockdownTimer);
                 if (this.confirmTimer) clearTimeout(this.confirmTimer);
@@ -28974,7 +29131,7 @@ ${starCSS}
                 this.lockdownTimer = setTimeout(() => {
                     alchemyPanel.dataset.mwiAlchemyLocked = '';
                     alchemyPanel.dataset.mwiAlchemyConfirmed = '1';
-                    this._showWarning(alchemyPanel, i18n_js.t('Click again to confirm.'));
+                    this._showWarning(alchemyPanel, t('Click again to confirm.'));
 
                     this.confirmTimer = setTimeout(() => {
                         alchemyPanel.dataset.mwiAlchemyConfirmed = '';
@@ -28993,7 +29150,7 @@ ${starCSS}
                 'SkillActionDetail_primaryItemSelectorContainer',
                 (itemSelectorContainer) => {
                     this._injectShieldButton(itemSelectorContainer);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
             this.unregisterHandlers.push(unregister);
 
@@ -29034,7 +29191,7 @@ ${starCSS}
             pinIcon.innerHTML = '\u{1F4CC}';
             pinIcon.style.cssText =
                 'cursor:pointer; font-size:16px; transition:all 0.2s; text-align:center; filter: grayscale(100%) brightness(0.7); display:none;';
-            pinIcon.title = i18n_js.t('Pin this action');
+            pinIcon.title = t('Pin this action');
 
             const updatePinIcon = () => {
                 const alchemyType = this._getAlchemyType();
@@ -29049,11 +29206,11 @@ ${starCSS}
                 if (isPinned) {
                     pinIcon.style.filter = 'grayscale(0%) brightness(1.2) drop-shadow(0 0 3px rgba(255, 100, 0, 0.8))';
                     pinIcon.style.transform = 'scale(1.1)';
-                    pinIcon.title = i18n_js.t('Unpin this action');
+                    pinIcon.title = t('Unpin this action');
                 } else {
                     pinIcon.style.filter = 'grayscale(100%) brightness(0.7)';
                     pinIcon.style.transform = 'scale(1)';
-                    pinIcon.title = i18n_js.t('Pin this action');
+                    pinIcon.title = t('Pin this action');
                 }
             };
 
@@ -29250,7 +29407,7 @@ ${starCSS}
             }
 
             const color = hasEnough ? '#4caf50' : '#ff6b6b';
-            const text = i18n_js.t('Gold for {0}: {1} / {2}', label, formatters_js.formatLargeNumber(goldNeeded), formatters_js.formatLargeNumber(goldBalance));
+            const text = t('Gold for {0}: {1} / {2}', label, formatters_js.formatLargeNumber(goldNeeded), formatters_js.formatLargeNumber(goldBalance));
             if (summaryDiv.textContent === text && summaryDiv.style.display === 'block') return;
             summaryDiv.style.display = 'block';
             summaryDiv.style.color = color;
@@ -29321,7 +29478,7 @@ ${starCSS}
 
             const header = document.createElement('div');
             header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;';
-            header.innerHTML = `<h3 style="margin:0; font-size:16px; color:#eee;">${i18n_js.t('Alchemy Action Protection')}</h3>`;
+            header.innerHTML = `<h3 style="margin:0; font-size:16px; color:#eee;">${t('Alchemy Action Protection')}</h3>`;
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '\u2715';
@@ -29333,7 +29490,7 @@ ${starCSS}
 
             const desc = document.createElement('p');
             desc.style.cssText = 'color:#999; margin:0 0 10px 0; font-size:12px;';
-            desc.textContent = i18n_js.t(
+            desc.textContent = t(
                 'Select which item categories to protect from each alchemy action. Protected items require a 3-second confirmation before the action proceeds.'
             );
             popup.appendChild(desc);
@@ -29471,7 +29628,7 @@ ${starCSS}
     const alchemyActionProtection = new AlchemyActionProtection();
 
     var alchemyActionProtection$1 = {
-        name: i18n_js.t('Alchemy Action Protection'),
+        name: t('Alchemy Action Protection'),
         initialize: async () => {
             await alchemyActionProtection.initialize();
         },
@@ -30912,7 +31069,7 @@ ${starCSS}
             titleContainer.style.textOverflow = 'ellipsis';
 
             const title = document.createElement('span');
-            title.textContent = i18n_js.t('Enhancement Tracker');
+            title.textContent = 'Enhancement Tracker';
             title.style.fontWeight = 'bold';
 
             const sessionCounter = document.createElement('span');
@@ -30993,7 +31150,7 @@ ${starCSS}
         createClearButton() {
             const button = document.createElement('button');
             button.innerHTML = '🗑️';
-            button.title = i18n_js.t('Clear all sessions');
+            button.title = 'Clear all sessions';
             Object.assign(button.style, {
                 background: 'none',
                 border: 'none',
@@ -31016,7 +31173,7 @@ ${starCSS}
             });
             button.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (confirm(i18n_js.t('Clear all enhancement sessions?'))) {
+                if (confirm('Clear all enhancement sessions?')) {
                     this.clearAllSessions();
                 }
             });
@@ -31031,7 +31188,7 @@ ${starCSS}
             const button = document.createElement('button');
             button.id = 'enhancementCollapseButton';
             button.innerHTML = '▼';
-            button.title = i18n_js.t('Collapse panel');
+            button.title = 'Collapse panel';
             Object.assign(button.style, {
                 background: 'none',
                 border: 'none',
@@ -31126,7 +31283,7 @@ ${starCSS}
                 content.style.opacity = '0';
                 content.style.padding = '0 15px';
                 button.innerHTML = '▶';
-                button.title = i18n_js.t('Expand panel');
+                button.title = 'Expand panel';
                 this.floatingUI.style.width = '250px';
 
                 // Show compact summary after content fades
@@ -31141,7 +31298,7 @@ ${starCSS}
                 content.style.opacity = '1';
                 content.style.padding = '15px';
                 button.innerHTML = '▼';
-                button.title = i18n_js.t('Collapse panel');
+                button.title = 'Collapse panel';
                 this.floatingUI.style.width = '350px';
             }
         }
@@ -31160,7 +31317,9 @@ ${starCSS}
 
             if (sessions.length === 0 || !session) return;
 
-            const itemName = itemNameTranslator.getDisplayName(session.itemHrid);
+            const gameData = dataManager.getInitClientData();
+            const itemDetails = gameData?.itemDetailMap?.[session.itemHrid];
+            const itemName = itemDetails?.name || 'Unknown Item';
 
             const totalAttempts = session.totalAttempts;
             const totalSuccess = session.totalSuccesses;
@@ -31269,13 +31428,13 @@ ${starCSS}
                 content.innerHTML = `
                 <div style="text-align: center; padding: 40px 20px; color: ${STYLE.colors.textSecondary};">
                     <div style="font-size: 32px; margin-bottom: 10px;">✧</div>
-                    <div style="font-size: 14px;">${i18n_js.t('Begin enhancing to populate data')}</div>
+                    <div style="font-size: 14px;">Begin enhancing to populate data</div>
                 </div>
             `;
                 return;
             }
             if (!session) {
-                content.innerHTML = `<div style="text-align: center; color: ${STYLE.colors.danger};">${i18n_js.t('Invalid session')}</div>`;
+                content.innerHTML = '<div style="text-align: center; color: ${STYLE.colors.danger};">Invalid session</div>';
                 return;
             }
 
@@ -31320,7 +31479,9 @@ ${starCSS}
          * Generate HTML for session display
          */
         generateSessionHTML(session) {
-            const itemName = itemNameTranslator.getDisplayName(session.itemHrid);
+            const gameData = dataManager.getInitClientData();
+            const itemDetails = gameData?.itemDetailMap?.[session.itemHrid];
+            const itemName = itemDetails?.name || 'Unknown Item';
 
             // Calculate stats
             const totalAttempts = session.totalAttempts;
@@ -31336,25 +31497,25 @@ ${starCSS}
 
             // Status display
             const statusColor = session.state === SessionState.COMPLETED ? STYLE.colors.success : STYLE.colors.accent;
-            const statusText = session.state === SessionState.COMPLETED ? i18n_js.t('Completed') : i18n_js.t('In Progress');
+            const statusText = session.state === SessionState.COMPLETED ? 'Completed' : 'In Progress';
 
             // Build HTML
             let html = `
             <div style="margin-bottom: 10px; font-size: 13px;">
                 <div style="display: flex; justify-content: space-between;">
-                    <span>${i18n_js.t('Item')}:</span>
+                    <span>Item:</span>
                     <strong>${itemName}</strong>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
-                    <span>${i18n_js.t('Target')}:</span>
+                    <span>Target:</span>
                     <span>+${session.targetLevel}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
-                    <span>${i18n_js.t('Prot')}:</span>
+                    <span>Prot:</span>
                     <span>+${session.protectFrom}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; margin-top: 5px; color: ${statusColor};">
-                    <span>${i18n_js.t('Status')}:</span>
+                    <span>Status:</span>
                     <strong>${statusText}</strong>
                 </div>
             </div>
@@ -31368,11 +31529,11 @@ ${starCSS}
             <div style="margin-top: 8px;">
                 <div style="display: flex; justify-content: space-between; font-size: 13px;">
                     <div>
-                        <span>${i18n_js.t('Total Attempts')}:</span>
+                        <span>Total Attempts:</span>
                         <strong> ${totalAttempts}</strong>
                     </div>
                     <div>
-                        <span>${i18n_js.t('Prots Used')}:</span>
+                        <span>Prots Used:</span>
                         <strong> ${session.protectionCount || 0}</strong>
                     </div>
                 </div>
@@ -31403,11 +31564,11 @@ ${starCSS}
                 html += `
             <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px;">
                 <div style="color: ${STYLE.colors.textSecondary};">
-                    <span>${i18n_js.t('Expected Attempts')}:</span>
+                    <span>Expected Attempts:</span>
                     <span> ${expAtt}</span>
                 </div>
                 <div style="color: ${STYLE.colors.textSecondary};">
-                    <span>${i18n_js.t('Expected Prots')}:</span>
+                    <span>Expected Prots:</span>
                     <span> ${expProt}</span>
                 </div>
             </div>`;
@@ -31416,11 +31577,11 @@ ${starCSS}
                     html += `
             <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px; color: ${STYLE.colors.textSecondary};">
                 <div>
-                    <span>${i18n_js.t('Attempt Factor')}:</span>
+                    <span>Attempt Factor:</span>
                     <strong> ${attFactor ? attFactor + 'x' : '—'}</strong>
                 </div>
                 <div>
-                    <span>${i18n_js.t('Prot Factor')}:</span>
+                    <span>Prot Factor:</span>
                     <strong> ${protFactor ? protFactor + 'x' : '—'}</strong>
                 </div>
             </div>`;
@@ -31429,18 +31590,18 @@ ${starCSS}
 
             html += `
             <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 13px;">
-                <span>${i18n_js.t('Total XP Gained')}:</span>
+                <span>Total XP Gained:</span>
                 <strong>${this.formatNumber(session.totalXP)}</strong>
             </div>
 
             <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 13px;">
-                <span>${i18n_js.t('Session Duration')}:</span>
+                <span>Session Duration:</span>
                 <strong>${durationText}</strong>
             </div>
 
             <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 13px;">
-                <span>${i18n_js.t('XP/Hour')}:</span>
-                <strong>${xpPerHour > 0 ? this.formatNumber(xpPerHour) : i18n_js.t('Calculating...')}</strong>
+                <span>XP/Hour:</span>
+                <strong>${xpPerHour > 0 ? this.formatNumber(xpPerHour) : 'Calculating...'}</strong>
             </div>
         `;
 
@@ -31465,7 +31626,7 @@ ${starCSS}
             const levels = Array.from(levelSet).sort((a, b) => b - a);
 
             if (levels.length === 0) {
-                return `<div style="text-align: center; padding: 20px; color: ${STYLE.colors.textSecondary};">${i18n_js.t('No attempts recorded yet')}</div>`;
+                return '<div style="text-align: center; padding: 20px; color: ${STYLE.colors.textSecondary};">No attempts recorded yet</div>';
             }
 
             let rows = '';
@@ -31497,10 +31658,10 @@ ${starCSS}
             <table style="${compactTableStyle}">
                 <thead>
                     <tr>
-                        <th style="${compactHeaderStyle}">${i18n_js.t('Lvl')}</th>
-                        <th style="${compactHeaderStyle}">${i18n_js.t('Success')}</th>
-                        <th style="${compactHeaderStyle}">${i18n_js.t('Fail')}</th>
-                        <th style="${compactHeaderStyle}">${i18n_js.t('%')}</th>
+                        <th style="${compactHeaderStyle}">Lvl</th>
+                        <th style="${compactHeaderStyle}">Success</th>
+                        <th style="${compactHeaderStyle}">Fail</th>
+                        <th style="${compactHeaderStyle}">%</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -31523,6 +31684,7 @@ ${starCSS}
                 return '';
             }
 
+            const gameData = dataManager.getInitClientData();
             const detailsId = `cost-details-${session.id}`;
 
             let html = '<div style="margin-top: 12px; font-size: 13px;">';
@@ -31531,7 +31693,7 @@ ${starCSS}
             html += `
             <div style="display: flex; justify-content: space-between; cursor: pointer; font-weight: bold; padding: 5px 0;"
                  onclick="document.getElementById('${detailsId}').style.display = document.getElementById('${detailsId}').style.display === 'none' ? 'block' : 'none'">
-                <span>${i18n_js.t('Total Cost (click for details)')}</span>
+                <span>💰 Total Cost (click for details)</span>
                 <span style="color: ${STYLE.colors.gold};">${this.formatNumber(session.totalCost)}</span>
             </div>
         `;
@@ -31544,12 +31706,11 @@ ${starCSS}
                 html +=
                     '<div style="margin-bottom: 8px; padding: 5px; background: rgba(0, 255, 234, 0.05); border-radius: 4px;">';
                 html +=
-                    '<div style="font-weight: bold; margin-bottom: 3px; color: ${STYLE.colors.textSecondary};">' +
-                    i18n_js.t('Materials') +
-                    ':</div>';
+                    '<div style="font-weight: bold; margin-bottom: 3px; color: ${STYLE.colors.textSecondary};">Materials:</div>';
 
                 for (const [itemHrid, data] of Object.entries(session.materialCosts)) {
-                    const itemName = itemNameTranslator.getDisplayName(itemHrid);
+                    const itemDetails = gameData?.itemDetailMap?.[itemHrid];
+                    const itemName = itemDetails?.name || itemHrid;
                     const unitCost = Math.floor(data.totalCost / data.count);
 
                     html += `
@@ -31566,7 +31727,7 @@ ${starCSS}
             if (hasCoins) {
                 html += `
                 <div style="display: flex; justify-content: space-between; margin-top: 2px; padding: 5px; background: rgba(0, 255, 234, 0.05); border-radius: 4px;">
-                    <span style="font-weight: bold; color: ${STYLE.colors.textSecondary};">${i18n_js.t('Coins')} (${session.coinCount || 0}×):</span>
+                    <span style="font-weight: bold; color: ${STYLE.colors.textSecondary};">Coins (${session.coinCount || 0}×):</span>
                     <span style="color: ${STYLE.colors.gold};">${this.formatNumber(session.coinCost)}</span>
                 </div>
             `;
@@ -31575,8 +31736,8 @@ ${starCSS}
             // Protection costs
             if (hasProtection) {
                 const protectionItemName = session.protectionItemHrid
-                    ? itemNameTranslator.getDisplayName(session.protectionItemHrid) || i18n_js.t('Protection')
-                    : i18n_js.t('Protection');
+                    ? gameData?.itemDetailMap?.[session.protectionItemHrid]?.name || 'Protection'
+                    : 'Protection';
 
                 html += `
                 <div style="display: flex; justify-content: space-between; margin-top: 2px; padding: 5px; background: rgba(0, 255, 234, 0.05); border-radius: 4px;">
@@ -31596,7 +31757,7 @@ ${starCSS}
          * Format number with commas
          */
         formatNumber(num) {
-            return Math.floor(num).toLocaleString();
+            return formatters_js.formatLargeNumber(Math.floor(num));
         }
 
         /**
@@ -32523,7 +32684,7 @@ ${starCSS}
 
             const btn = document.createElement('button');
             btn.className = BTN_CLASS;
-            btn.textContent = i18n_js.t('XPH Calc');
+            btn.textContent = t('XPH Calc');
             btn.style.cssText = `
             background: linear-gradient(180deg, rgba(0,200,150,0.2) 0%, rgba(0,200,150,0.1) 100%);
             color: #e0e0e0;
@@ -32582,7 +32743,7 @@ ${starCSS}
             flex-shrink: 0;
         `;
             header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:#00c896;">${i18n_js.t('Enhancement XPH Calculator')}</span>
+            <span style="font-weight:700; font-size:14px; color:#00c896;">${t('Enhancement XPH Calculator')}</span>
             <button id="mwi-xph-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">×</button>
@@ -32607,9 +32768,9 @@ ${starCSS}
                 'width:46px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444; border-radius:4px; padding:3px 6px; font-size:12px; text-align:center;';
 
             controls.innerHTML = `
-            <label style="color:#888; font-size:12px;">${i18n_js.t('Max level')}</label>
+            <label style="color:#888; font-size:12px;">${t('Max level')}</label>
             <input id="mwi-xph-maxlevel" type="number" min="1" max="20" value="${defaultMax}" style="${inputStyle}">
-            <label style="color:#888; font-size:12px; margin-left:6px;">${i18n_js.t('Protect from')}</label>
+            <label style="color:#888; font-size:12px; margin-left:6px;">${t('Protect from')}</label>
             <input id="mwi-xph-protect" type="number" min="0" max="19" value="${defaultProtect}" style="${inputStyle}">
             <button id="mwi-xph-run" style="
                 margin-left: auto;
@@ -32620,7 +32781,7 @@ ${starCSS}
                 padding: 5px 14px;
                 font-size: 12px;
                 font-weight: 600;
-                cursor: pointer;">${i18n_js.t('Calculate')}</button>
+                cursor: pointer;">${t('Calculate')}</button>
         `;
 
             // Table container
@@ -32633,10 +32794,10 @@ ${starCSS}
             <table style="width:100%; border-collapse:collapse;">
                 <thead style="position:sticky; top:0; background:#0a0a14; z-index:1;">
                     <tr>
-                        <th id="mwi-xph-th-name" style="${thBase} text-align:left;">${i18n_js.t('# Item')}</th>
-                        <th id="mwi-xph-th-xph"  style="${thBase} text-align:right;">${i18n_js.t('XP/hr')} ▼</th>
-                        <th id="mwi-xph-th-gpx"  style="${thBase} text-align:right;">${i18n_js.t('Gold/XP')}</th>
-                        <th id="mwi-xph-th-cphr" style="${thBase} text-align:right;">${i18n_js.t('Cost/hr')}</th>
+                        <th id="mwi-xph-th-name" style="${thBase} text-align:left;">${t('# Item')}</th>
+                        <th id="mwi-xph-th-xph"  style="${thBase} text-align:right;">${t('XP/hr')} ▼</th>
+                        <th id="mwi-xph-th-gpx"  style="${thBase} text-align:right;">${t('Gold/XP')}</th>
+                        <th id="mwi-xph-th-cphr" style="${thBase} text-align:right;">${t('Cost/hr')}</th>
                     </tr>
                 </thead>
                 <tbody id="mwi-xph-tbody"></tbody>
@@ -32648,7 +32809,7 @@ ${starCSS}
             status.id = 'mwi-xph-status';
             status.style.cssText =
                 'padding:6px 14px; color:#555; font-size:11px; border-top:1px solid #1a1a1a; flex-shrink:0; text-align:center;';
-            status.textContent = i18n_js.t('Enter parameters and click Calculate.');
+            status.textContent = t('Enter parameters and click Calculate.');
 
             this.panel.appendChild(header);
             this.panel.appendChild(controls);
@@ -32722,7 +32883,7 @@ ${starCSS}
             const gameData = dataManager.getInitClientData();
             const status = this.panel.querySelector('#mwi-xph-status');
             if (!gameData) {
-                status.textContent = i18n_js.t('No game data available.');
+                status.textContent = t('No game data available.');
                 return;
             }
 
@@ -32742,9 +32903,9 @@ ${starCSS}
             this._updateSortIndicators();
 
             const withCost = results.filter((r) => r.costPerHour !== null).length;
-            const partialNote = results.some((r) => r.costPartial) ? ` ${i18n_js.t('* = partial price data.')}` : '';
+            const partialNote = results.some((r) => r.costPartial) ? ` ${t('* = partial price data.')}` : '';
             status.textContent =
-                i18n_js.t('{count} items · {withCost} with cost data', { count: results.length, withCost }) + partialNote;
+                t('{count} items · {withCost} with cost data', { count: results.length, withCost }) + partialNote;
         }
 
         _sort(col) {
@@ -32833,7 +32994,7 @@ ${starCSS}
      */
 
 
-    const STORE_NAME$1 = 'guildHistory';
+    const STORE_NAME$2 = 'guildHistory';
     const WINDOW_10M = 10 * 60 * 1000;
     const WINDOW_1H = 60 * 60 * 1000;
     const WINDOW_1D = 24 * 60 * 60 * 1000;
@@ -33073,7 +33234,7 @@ ${starCSS}
             }
 
             // Load persisted player leaderboard history
-            this.playerXPHistory = await storage.get('playerXP_leaderboard', STORE_NAME$1, {});
+            this.playerXPHistory = await storage.get('playerXP_leaderboard', STORE_NAME$2, {});
 
             this.initialized = true;
         }
@@ -33114,9 +33275,9 @@ ${starCSS}
             }
 
             // Load persisted histories
-            this.guildXPHistory = await storage.get(`guildXP_${guildName}`, STORE_NAME$1, {});
+            this.guildXPHistory = await storage.get(`guildXP_${guildName}`, STORE_NAME$2, {});
             if (this.ownGuildID) {
-                this.memberXPHistory = await storage.get(`memberXP_${this.ownGuildID}`, STORE_NAME$1, {});
+                this.memberXPHistory = await storage.get(`memberXP_${this.ownGuildID}`, STORE_NAME$2, {});
             }
 
             const t = data.currentTimestamp ? +new Date(data.currentTimestamp) : Date.now();
@@ -33136,9 +33297,9 @@ ${starCSS}
             }
 
             // Persist
-            await storage.set(`guildXP_${guildName}`, this.guildXPHistory, STORE_NAME$1);
+            await storage.set(`guildXP_${guildName}`, this.guildXPHistory, STORE_NAME$2);
             if (this.ownGuildID) {
-                await storage.set(`memberXP_${this.ownGuildID}`, this.memberXPHistory, STORE_NAME$1);
+                await storage.set(`memberXP_${this.ownGuildID}`, this.memberXPHistory, STORE_NAME$2);
             }
         }
 
@@ -33160,7 +33321,7 @@ ${starCSS}
 
             const t = Date.now();
             pushXP(this.guildXPHistory[name], { t, xp: guild.experience });
-            storage.set(`guildXP_${name}`, this.guildXPHistory, STORE_NAME$1);
+            storage.set(`guildXP_${name}`, this.guildXPHistory, STORE_NAME$2);
         }
 
         /**
@@ -33177,7 +33338,7 @@ ${starCSS}
 
             if (newGuildID && this.ownGuildID && newGuildID !== this.ownGuildID) {
                 // Guild switched — clear stale member data and load fresh from storage
-                this.memberXPHistory = await storage.get(`memberXP_${newGuildID}`, STORE_NAME$1, {});
+                this.memberXPHistory = await storage.get(`memberXP_${newGuildID}`, STORE_NAME$2, {});
                 this.memberMeta = {};
             }
 
@@ -33207,7 +33368,7 @@ ${starCSS}
             }
 
             if (this.ownGuildID) {
-                storage.set(`memberXP_${this.ownGuildID}`, this.memberXPHistory, STORE_NAME$1);
+                storage.set(`memberXP_${this.ownGuildID}`, this.memberXPHistory, STORE_NAME$2);
             }
         }
 
@@ -33236,7 +33397,7 @@ ${starCSS}
 
                 // Persist using own guild name as key (all guild histories stored together)
                 if (this.ownGuildName) {
-                    storage.set(`guildXP_${this.ownGuildName}`, this.guildXPHistory, STORE_NAME$1);
+                    storage.set(`guildXP_${this.ownGuildName}`, this.guildXPHistory, STORE_NAME$2);
                 }
             } else {
                 for (const row of rows) {
@@ -33250,7 +33411,7 @@ ${starCSS}
                     pushXP(this.playerXPHistory[name], { t, xp });
                 }
 
-                storage.set('playerXP_leaderboard', this.playerXPHistory, STORE_NAME$1);
+                storage.set('playerXP_leaderboard', this.playerXPHistory, STORE_NAME$2);
             }
         }
 
@@ -33378,7 +33539,7 @@ ${starCSS}
         async resetMemberData() {
             if (!this.ownGuildID) return;
             this.memberXPHistory = {};
-            await storage.set(`memberXP_${this.ownGuildID}`, {}, STORE_NAME$1);
+            await storage.set(`memberXP_${this.ownGuildID}`, {}, STORE_NAME$2);
         }
 
         /**
@@ -33417,7 +33578,7 @@ ${starCSS}
      */
 
 
-    const CSS_PREFIX = 'mwi-guild-xp';
+    const CSS_PREFIX$1 = 'mwi-guild-xp';
 
     // ─── Formatting helpers ─────────────────────────────────────────────────────
 
@@ -33440,12 +33601,12 @@ ${starCSS}
         const s = (n) => (n === 1 ? '' : 's');
         const parts = [];
 
-        if (w >= 1) parts.push(`${w} ${i18n_js.t('week')}${s(w)}`);
-        if (d >= 1) parts.push(`${d} ${i18n_js.t('day')}${s(d)}`);
-        if (ms < w1 && h >= 1) parts.push(`${h} ${i18n_js.t('hour')}${s(h)}`);
-        if (ms < 6 * h1 && m >= 1) parts.push(`${m} ${i18n_js.t('minute')}${s(m)}`);
+        if (w >= 1) parts.push(`${w} ${t('week')}${s(w)}`);
+        if (d >= 1) parts.push(`${d} ${t('day')}${s(d)}`);
+        if (ms < w1 && h >= 1) parts.push(`${h} ${t('hour')}${s(h)}`);
+        if (ms < 6 * h1 && m >= 1) parts.push(`${m} ${t('minute')}${s(m)}`);
 
-        return parts.join(' ') || i18n_js.t('< 1 minute');
+        return parts.join(' ') || t('< 1 minute');
     }
 
     /**
@@ -33477,7 +33638,7 @@ ${starCSS}
      * @returns {string} HTML
      */
     function buildChart(chart) {
-        if (chart.length === 0) return `<div style="color: var(--color-disabled);">${i18n_js.t('Not enough data for chart')}</div>`;
+        if (chart.length === 0) return `<div style="color: var(--color-disabled);">${t('Not enough data for chart')}</div>`;
 
         // Truncate outliers at 2x the median
         let maxXPH = 0;
@@ -33544,7 +33705,7 @@ ${starCSS}
                 ? 'background-image: linear-gradient(45deg, var(--color-space-300) 25%, transparent 25%, transparent 50%, var(--color-space-300) 50%, var(--color-space-300) 75%, transparent 75%); background-size: 10px 10px;'
                 : 'background-color: var(--color-space-300);';
 
-            barsHTML += `<div class="${CSS_PREFIX}__bar"
+            barsHTML += `<div class="${CSS_PREFIX$1}__bar"
             style="height: ${heightPct}%; width: ${widthPct}%; border-right: 1px solid var(--color-space-700); box-sizing: border-box; ${bgStyle}"
             data-xph="${d.xpH}"
             ${d.truncated ? 'data-truncated="true"' : ''}
@@ -33562,12 +33723,12 @@ ${starCSS}
             else if (i === hLegend.length - 1 && leftPct > 90) labelTransform = 'translate(-100%, 0)';
             legendHTML += `<div style="position: absolute; top: 0; left: ${leftPct}%; flex-direction: column;">
             <div style="width: 1px; height: 8px; background-color: var(--color-space-300);"></div>
-            <div style="font-size: 10px; width: 80px; transform: ${labelTransform};">${new Date(d.t).toLocaleString()}</div>
+            <div style="font-size: 10px; width: 80px; transform: ${labelTransform};">${formatters_js.formatDateTime(new Date(d.t), { includeSeconds: false })}</div>
         </div>`;
         }
 
         return `
-        <div class="${CSS_PREFIX}" style="
+        <div class="${CSS_PREFIX$1}" style="
             display: grid;
             grid-template-columns: auto auto 1fr;
             grid-template-rows: 1fr auto;
@@ -33606,7 +33767,7 @@ ${starCSS}
      * @returns {string} HTML
      */
     function sortIcon(direction) {
-        return `<span class="${CSS_PREFIX}__sort-icon" style="display: inline-flex; flex-direction: column; vertical-align: middle; margin-left: 2px;">
+        return `<span class="${CSS_PREFIX$1}__sort-icon" style="display: inline-flex; flex-direction: column; vertical-align: middle; margin-left: 2px;">
         <span style="font-size: 8px; line-height: 8px;">${direction === 'asc' ? '\u25B2' : '\u25B3'}</span>
         <span style="font-size: 8px; line-height: 8px;">${direction === 'desc' ? '\u25BC' : '\u25BD'}</span>
     </span>`;
@@ -33665,7 +33826,7 @@ ${starCSS}
             // Update all sort icons in this table
             const theadTr = thEl.parentElement;
             for (const th of theadTr.children) {
-                const icon = th.querySelector(`.${CSS_PREFIX}__sort-icon`);
+                const icon = th.querySelector(`.${CSS_PREFIX$1}__sort-icon`);
                 if (icon) {
                     const d = th.dataset.sortId === tableEl.dataset.sortId ? direction : 'none';
                     icon.outerHTML = sortIcon(d);
@@ -33689,7 +33850,7 @@ ${starCSS}
      */
     function addColumn(tableEl, options) {
         // Don't add duplicate columns
-        if (tableEl.querySelector(`th.${CSS_PREFIX}[data-name="${options.name}"]`)) return;
+        if (tableEl.querySelector(`th.${CSS_PREFIX$1}[data-name="${options.name}"]`)) return;
 
         const theadTr = tableEl.querySelector('thead tr');
         if (!theadTr) return;
@@ -33698,7 +33859,7 @@ ${starCSS}
 
         // Add header
         const th = document.createElement('th');
-        th.className = CSS_PREFIX;
+        th.className = CSS_PREFIX$1;
         th.dataset.name = options.name;
         th.textContent = options.name;
 
@@ -33714,7 +33875,7 @@ ${starCSS}
 
         for (let i = 0; i < rows.length; i++) {
             const td = document.createElement('td');
-            td.className = CSS_PREFIX;
+            td.className = CSS_PREFIX$1;
 
             const value = i < options.data.length ? options.data[i] : null;
             if (options.format) {
@@ -33814,7 +33975,7 @@ ${starCSS}
 
         _renderOverview(dataGridEl) {
             // Remove previous injection
-            dataGridEl.querySelectorAll(`.${CSS_PREFIX}`).forEach((el) => el.remove());
+            dataGridEl.querySelectorAll(`.${CSS_PREFIX$1}`).forEach((el) => el.remove());
 
             const guildName = guildXPTracker.getOwnGuildName();
             if (!guildName) return;
@@ -33822,26 +33983,26 @@ ${starCSS}
             const stats = guildXPTracker.getGuildStats(guildName);
 
             // XP/h stats row
-            const rateLabel = stats.lastHourXPH > 0 ? i18n_js.t('Last hour XP/h') : i18n_js.t('Last XP/h');
+            const rateLabel = stats.lastHourXPH > 0 ? t('Last hour XP/h') : t('Last XP/h');
             const rateValue = stats.lastHourXPH > 0 ? stats.lastHourXPH : stats.lastXPH;
 
             const statsHTML = `
-            <div class="GuildPanel_dataBlockGroup__1d2rR ${CSS_PREFIX}">
+            <div class="GuildPanel_dataBlockGroup__1d2rR ${CSS_PREFIX$1}">
                 <div class="GuildPanel_dataBlock__3qVhK">
                     <div class="GuildPanel_label__-A63g">${rateLabel}</div>
                     <div class="GuildPanel_value__Hm2I9">${fNum(rateValue)}</div>
                 </div>
                 <div class="GuildPanel_dataBlock__3qVhK">
-                    <div class="GuildPanel_label__-A63g">${i18n_js.t('Last day XP/h')}</div>
+                    <div class="GuildPanel_label__-A63g">${t('Last day XP/h')}</div>
                     <div class="GuildPanel_value__Hm2I9">${fNum(stats.lastDayXPH)}</div>
                 </div>
             </div>`;
 
             // Chart row
             const chartHTML = `
-            <div class="GuildPanel_dataBlockGroup__1d2rR ${CSS_PREFIX}" style="grid-column: 1 / 3; max-width: none;">
+            <div class="GuildPanel_dataBlockGroup__1d2rR ${CSS_PREFIX$1}" style="grid-column: 1 / 3; max-width: none;">
                 <div class="GuildPanel_dataBlock__3qVhK" style="height: 240px;">
-                    <div class="GuildPanel_label__-A63g">${i18n_js.t('Last week XP/h')}</div>
+                    <div class="GuildPanel_label__-A63g">${t('Last week XP/h')}</div>
                     ${buildChart(stats.chart)}
                 </div>
             </div>`;
@@ -33849,7 +34010,7 @@ ${starCSS}
             dataGridEl.insertAdjacentHTML('beforeend', statsHTML + chartHTML);
 
             // Attach chart bar event listeners
-            dataGridEl.querySelectorAll(`.${CSS_PREFIX}__bar`).forEach((bar) => {
+            dataGridEl.querySelectorAll(`.${CSS_PREFIX$1}__bar`).forEach((bar) => {
                 bar.addEventListener('mouseenter', this._onBarEnter);
                 bar.addEventListener('mouseleave', this._onBarLeave);
             });
@@ -33857,7 +34018,7 @@ ${starCSS}
             // Time to level
             const timeToLevel = guildXPTracker.getTimeToLevel(guildName);
             if (timeToLevel !== null) {
-                const ttlHTML = `<div class="${CSS_PREFIX}" style="color: var(--color-space-300); font-size: 13px;">${formatTimeLeft(timeToLevel)}</div>`;
+                const ttlHTML = `<div class="${CSS_PREFIX$1}" style="color: var(--color-space-300); font-size: 13px;">${formatTimeLeft(timeToLevel)}</div>`;
                 // Find the "Exp to Next Level" data block and append
                 const dataBlocks = dataGridEl.querySelectorAll('.GuildPanel_dataBlock__3qVhK');
                 for (const block of dataBlocks) {
@@ -33881,7 +34042,7 @@ ${starCSS}
 
         _renderMembers(tableEl) {
             // Skip if already rendered
-            if (tableEl.querySelector(`.${CSS_PREFIX}`)) return;
+            if (tableEl.querySelector(`.${CSS_PREFIX$1}`)) return;
 
             const guildID = guildXPTracker.getOwnGuildID();
             if (!guildID) return;
@@ -33942,7 +34103,7 @@ ${starCSS}
 
             // Game Mode column
             addColumn(tableEl, {
-                name: i18n_js.t('Game Mode'),
+                name: t('Game Mode'),
                 insertAfter,
                 data: allStats.map((s) => s.gameMode),
                 format: (v) => gameModes[v] || v || '',
@@ -33953,10 +34114,10 @@ ${starCSS}
 
             // Joined column
             addColumn(tableEl, {
-                name: i18n_js.t('Joined'),
+                name: t('Joined'),
                 insertAfter: insertAfter + 1,
                 data: allStats.map((s) => s.joinTime),
-                format: (v) => (v ? new Date(v).toLocaleDateString() : ''),
+                format: (v) => (v ? formatters_js.formatDateTime(new Date(v), { includeTime: false }) : ''),
                 makeSortable: true,
                 sortId: 'joinTime',
                 sortData: allStats.map((s) => (s.joinTime ? +new Date(s.joinTime) : 0)),
@@ -33964,7 +34125,7 @@ ${starCSS}
 
             // Last XP/h column
             addColumn(tableEl, {
-                name: i18n_js.t('Last XP/h'),
+                name: t('Last XP/h'),
                 insertAfter: insertAfter + 2,
                 data: allStats.map((s) => s.lastXPH),
                 format: (v, i) => {
@@ -33978,7 +34139,7 @@ ${starCSS}
 
             // Last day XP/h column
             addColumn(tableEl, {
-                name: i18n_js.t('Last day XP/h'),
+                name: t('Last day XP/h'),
                 insertAfter: insertAfter + 3,
                 data: allStats.map((s) => s.lastDayXPH),
                 format: (v, i) => {
@@ -33992,7 +34153,7 @@ ${starCSS}
 
             // Make existing columns sortable
             const nameHeader = theadTr.children[0];
-            if (nameHeader && !nameHeader.querySelector(`.${CSS_PREFIX}__sort-icon`)) {
+            if (nameHeader && !nameHeader.querySelector(`.${CSS_PREFIX$1}__sort-icon`)) {
                 makeColumnSortable(nameHeader, {
                     sortId: 'name',
                     valueGetter: (trEl) => trEl.children[0]?.textContent?.trim() || '',
@@ -34001,7 +34162,7 @@ ${starCSS}
 
             // Guild Exp column
             const expHeader = theadTr.children[4];
-            if (expHeader && !expHeader.querySelector(`.${CSS_PREFIX}__sort-icon`)) {
+            if (expHeader && !expHeader.querySelector(`.${CSS_PREFIX$1}__sort-icon`)) {
                 makeColumnSortable(expHeader, {
                     sortId: 'xp',
                     valueGetter: (trEl) => {
@@ -34015,7 +34176,7 @@ ${starCSS}
             // Role column
             const rolePriority = { Leader: 1, General: 2, Officer: 3, Member: 4 };
             const roleHeader = theadTr.children[5];
-            if (roleHeader && !roleHeader.querySelector(`.${CSS_PREFIX}__sort-icon`)) {
+            if (roleHeader && !roleHeader.querySelector(`.${CSS_PREFIX$1}__sort-icon`)) {
                 const roleColIndex = Array.from(theadTr.children).indexOf(roleHeader);
                 makeColumnSortable(roleHeader, {
                     sortId: 'role',
@@ -34028,7 +34189,7 @@ ${starCSS}
 
             // Activity column
             const activityHeader = theadTr.children[3];
-            if (activityHeader && !activityHeader.querySelector(`.${CSS_PREFIX}__sort-icon`)) {
+            if (activityHeader && !activityHeader.querySelector(`.${CSS_PREFIX$1}__sort-icon`)) {
                 const activityColIndex = Array.from(theadTr.children).indexOf(activityHeader);
                 makeColumnSortable(activityHeader, {
                     sortId: 'activity',
@@ -34053,7 +34214,7 @@ ${starCSS}
 
             // Status column
             const statusHeader = theadTr.children[1];
-            if (statusHeader && !statusHeader.querySelector(`.${CSS_PREFIX}__sort-icon`)) {
+            if (statusHeader && !statusHeader.querySelector(`.${CSS_PREFIX$1}__sort-icon`)) {
                 const statusColIndex = Array.from(theadTr.children).indexOf(statusHeader);
                 makeColumnSortable(statusHeader, {
                     sortId: 'status',
@@ -34106,7 +34267,7 @@ ${starCSS}
 
         _renderLeaderboard(tableEl) {
             // Skip if already rendered
-            if (tableEl.querySelector(`.${CSS_PREFIX}`)) return;
+            if (tableEl.querySelector(`.${CSS_PREFIX$1}`)) return;
 
             const isGuildLeaderboard = !!tableEl.closest('[class*="GuildPanel"]');
 
@@ -34155,7 +34316,7 @@ ${starCSS}
 
             // Last XP/h
             addColumn(tableEl, {
-                name: i18n_js.t('Last XP/h'),
+                name: t('Last XP/h'),
                 insertAfter,
                 data: allStats.map((s) => s.lastXPH),
                 format: (v, i) => {
@@ -34170,7 +34331,7 @@ ${starCSS}
 
             // Last day XP/h
             addColumn(tableEl, {
-                name: i18n_js.t('Last day XP/h'),
+                name: t('Last day XP/h'),
                 insertAfter: insertAfter + 1,
                 data: allStats.map((s) => s.lastDayXPH),
                 format: (v, i) => {
@@ -34185,7 +34346,7 @@ ${starCSS}
 
             // Make Rank column sortable
             const rankHeader = theadTr.children[0];
-            if (rankHeader && !rankHeader.querySelector(`.${CSS_PREFIX}__sort-icon`)) {
+            if (rankHeader && !rankHeader.querySelector(`.${CSS_PREFIX$1}__sort-icon`)) {
                 makeColumnSortable(rankHeader, {
                     sortId: 'rank',
                     skipFirst: true,
@@ -34201,7 +34362,7 @@ ${starCSS}
             const tableEl = document.querySelector('[class*="LeaderboardPanel_leaderboardTable"]');
             if (tableEl) {
                 // Remove existing columns and re-render
-                tableEl.querySelectorAll(`.${CSS_PREFIX}`).forEach((el) => el.remove());
+                tableEl.querySelectorAll(`.${CSS_PREFIX$1}`).forEach((el) => el.remove());
                 this._renderLeaderboard(tableEl);
             }
         }
@@ -34218,13 +34379,13 @@ ${starCSS}
             const dbb = document.body.getBoundingClientRect();
 
             const tooltipHTML = `<div role="tooltip"
-            class="${CSS_PREFIX}__tooltip MuiPopper-root MuiTooltip-popper css-112l0a2"
+            class="${CSS_PREFIX$1}__tooltip MuiPopper-root MuiTooltip-popper css-112l0a2"
             style="position: absolute; inset: auto auto 0px 0px; margin: 0px; transform: translate(${Math.floor(bb.x - dbb.x)}px, ${Math.floor(bb.y - dbb.bottom)}px) translate(-50%, 0);"
             data-popper-placement="top">
             <div class="MuiTooltip-tooltip MuiTooltip-tooltipPlacementTop css-1spb1s5" style="opacity: 1;">
                 <div class="ItemTooltipText_itemTooltipText__zFq3A">
                     <div class="ItemTooltipText_name__2JAHA">
-                        <span>${new Date(t).toLocaleString()}</span>
+                        <span>${formatters_js.formatDateTime(new Date(t), { includeSeconds: false })}</span>
                     </div>
                     <div>
                         <span>${fNum(xpH)} XP/h${truncated ? ' (anomalous)' : ''}</span>
@@ -34234,12 +34395,12 @@ ${starCSS}
         </div>`;
 
             // Remove existing tooltip
-            document.body.querySelectorAll(`.${CSS_PREFIX}__tooltip`).forEach((el) => el.remove());
+            document.body.querySelectorAll(`.${CSS_PREFIX$1}__tooltip`).forEach((el) => el.remove());
             document.body.insertAdjacentHTML('beforeend', tooltipHTML);
         }
 
         _onBarLeave() {
-            document.body.querySelectorAll(`.${CSS_PREFIX}__tooltip`).forEach((el) => el.remove());
+            document.body.querySelectorAll(`.${CSS_PREFIX$1}__tooltip`).forEach((el) => el.remove());
         }
 
         // ─── Cleanup ─────────────────────────────────────────────────────────────
@@ -34252,8 +34413,8 @@ ${starCSS}
             this.timerRegistry.clearAll();
 
             // Remove all injected elements
-            document.querySelectorAll(`.${CSS_PREFIX}`).forEach((el) => el.remove());
-            document.querySelectorAll(`.${CSS_PREFIX}__tooltip`).forEach((el) => el.remove());
+            document.querySelectorAll(`.${CSS_PREFIX$1}`).forEach((el) => el.remove());
+            document.querySelectorAll(`.${CSS_PREFIX$1}__tooltip`).forEach((el) => el.remove());
 
             this.initialized = false;
         }
@@ -34265,6 +34426,1236 @@ ${starCSS}
         name: 'Guild XP Display',
         initialize: () => guildXPDisplay.initialize(),
         cleanup: () => guildXPDisplay.disable(),
+    };
+
+    /**
+     * Guild Activity Tracker
+     * Intercepts guild activity WebSocket messages to track session stats,
+     * budget usage, and calculate projections for guild skilling/combat activities.
+     *
+     * SR Formula: SR = 0.84 + (effectiveLevel - difficulty) * 0.004
+     * where effectiveLevel = skillLevel + floor(drinkLevelBonus * (1 + drinkConcentration))
+     * and difficulty = 100 + tier * 10
+     *
+     * Data sources:
+     * - guild_activity_progress — live session stats (successRate, progressPerAction, etc.)
+     * - guild_activity_member_updated — star completion + budget tracking
+     * - guild_updated — guild-wide star totals
+     * - guild_characters_updated — per-member progress
+     */
+
+
+    const STORE_NAME$1 = 'guildHistory';
+    const SESSION_DURATION_MS = 600_000;
+    const TARGET_WORK_PER_TIER = 300;
+    const BASE_TARGET_WORK = 2700;
+    const GUILD_BASE_TIME_MS = 10_000;
+
+    const SR_BASE = 0.84;
+    const SR_PER_LEVEL = 0.004;
+
+    const ACTIVITY_TO_SKILL = {
+        '/guild_skilling/milking': '/skills/milking',
+        '/guild_skilling/foraging': '/skills/foraging',
+        '/guild_skilling/woodcutting': '/skills/woodcutting',
+        '/guild_skilling/cheesesmithing': '/skills/cheesesmithing',
+        '/guild_skilling/crafting': '/skills/crafting',
+        '/guild_skilling/tailoring': '/skills/tailoring',
+        '/guild_skilling/cooking': '/skills/cooking',
+        '/guild_skilling/brewing': '/skills/brewing',
+        '/guild_skilling/alchemy': '/skills/alchemy',
+        '/guild_skilling/enhancing': '/skills/enhancing',
+    };
+
+    const GATHERING_SKILLS = new Set(['/skills/milking', '/skills/foraging', '/skills/woodcutting']);
+    const GOURMET_SKILLS = new Set(['/skills/cooking', '/skills/brewing']);
+
+    class GuildActivityTracker {
+        constructor() {
+            this.currentSession = null;
+            this.budget = null;
+            this.observedTiers = {};
+            this.guildStars = {};
+            this.memberProgress = {};
+            this.weeklyActivitySet = null;
+            this.unregisterHandlers = [];
+            this._initialized = false;
+        }
+
+        initialize() {
+            if (!config.getSetting('guildActivityCalculator')) return;
+            if (this._initialized) return;
+            this._initialized = true;
+
+            this._boundOnProgress = (data) => this._onActivityProgress(data);
+            this._boundOnMemberUpdated = (data) => this._onMemberUpdated(data);
+            this._boundOnGuildUpdated = (data) => this._onGuildUpdated(data);
+            this._boundOnMembersUpdated = (data) => this._onMembersUpdated(data);
+            this._boundOnCharacterInit = () => this._onCharacterInit();
+
+            webSocketHook.on('guild_activity_progress', this._boundOnProgress);
+            webSocketHook.on('guild_activity_member_updated', this._boundOnMemberUpdated);
+            webSocketHook.on('guild_updated', this._boundOnGuildUpdated);
+            webSocketHook.on('guild_characters_updated', this._boundOnMembersUpdated);
+            dataManager.on('character_initialized', this._boundOnCharacterInit);
+
+            this.unregisterHandlers.push(
+                () => webSocketHook.off('guild_activity_progress', this._boundOnProgress),
+                () => webSocketHook.off('guild_activity_member_updated', this._boundOnMemberUpdated),
+                () => webSocketHook.off('guild_updated', this._boundOnGuildUpdated),
+                () => webSocketHook.off('guild_characters_updated', this._boundOnMembersUpdated),
+                () => dataManager.off('character_initialized', this._boundOnCharacterInit)
+            );
+
+            this._onCharacterInit();
+            this._loadStoredData();
+        }
+
+        disable() {
+            for (const unreg of this.unregisterHandlers) {
+                unreg();
+            }
+            this.unregisterHandlers = [];
+            this.currentSession = null;
+            this._initialized = false;
+        }
+
+        async _loadStoredData() {
+            try {
+                this.observedTiers = await storage.get('observedTiers', STORE_NAME$1, {});
+            } catch (error) {
+                console.error('[GuildActivityTracker] Failed to load stored data:', error);
+                this.observedTiers = {};
+            }
+        }
+
+        async _saveObservedTiers() {
+            try {
+                await storage.set('observedTiers', this.observedTiers, STORE_NAME$1);
+            } catch (error) {
+                console.error('[GuildActivityTracker] Failed to save observed tiers:', error);
+            }
+        }
+
+        _onCharacterInit() {
+            const charData = dataManager.characterData;
+            if (!charData) return;
+
+            if (charData.guildWeeklyActivitySet) {
+                this.weeklyActivitySet = charData.guildWeeklyActivitySet;
+            }
+
+            if (charData.guild) {
+                this._parseGuildStars(charData.guild.currentWeekActivitiesData);
+            }
+
+            if (charData.guildCharacterMap) {
+                this._parseMemberProgress(charData.guildCharacterMap);
+            }
+        }
+
+        _onActivityProgress(data) {
+            const session = {
+                activityHrid: data.activityHrid,
+                tier: data.tier,
+                currentProgress: data.currentProgress,
+                successRate: data.successRate,
+                efficiency: data.efficiency,
+                doubleProgressChance: data.doubleProgressChance,
+                progressPerAction: data.progressPerAction,
+                targetLevel: data.targetLevel,
+                actionTimeMs: data.actionTimeMs,
+                timeoutAt: data.timeoutAt,
+                targetWorkValue: data.targetWorkValue,
+                currentWorkValue: data.currentWorkValue,
+                currentEnhLevel: data.currentEnhLevel,
+                actionCounter: data.actionCounter,
+                lastUpdate: Date.now(),
+            };
+
+            this.currentSession = session;
+
+            const key = `${data.activityHrid}:${data.tier}`;
+            this.observedTiers[key] = {
+                activityHrid: data.activityHrid,
+                tier: data.tier,
+                successRate: data.successRate,
+                efficiency: data.efficiency,
+                doubleProgressChance: data.doubleProgressChance,
+                progressPerAction: data.progressPerAction,
+                targetWorkValue: data.targetWorkValue,
+                targetLevel: data.targetLevel,
+                actionTimeMs: data.actionTimeMs,
+                skillLevel: this._getSkillLevel(data.activityHrid),
+                observedAt: Date.now(),
+            };
+            this._saveObservedTiers();
+
+            this._notifyListeners();
+        }
+
+        _onMemberUpdated(data) {
+            this.budget = {
+                secondsRemaining: data.budgetSecondsRemaining,
+                secondsCap: data.budgetSecondsCap,
+                updatedAt: Date.now(),
+            };
+
+            if (data.progressMap) {
+                this.memberProgress = { ...data.progressMap };
+            }
+
+            this._notifyListeners();
+        }
+
+        _onGuildUpdated(data) {
+            if (data.guild?.currentWeekActivitiesData) {
+                this._parseGuildStars(data.guild.currentWeekActivitiesData);
+            }
+            if (data.guildWeeklyActivitySet) {
+                this.weeklyActivitySet = data.guildWeeklyActivitySet;
+            }
+            this._notifyListeners();
+        }
+
+        _onMembersUpdated(data) {
+            if (data.guildCharacterMap) {
+                this._parseMemberProgress(data.guildCharacterMap);
+            }
+            this._notifyListeners();
+        }
+
+        _parseGuildStars(jsonString) {
+            try {
+                this.guildStars = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString || {};
+            } catch {
+                this.guildStars = {};
+            }
+        }
+
+        _parseMemberProgress(charMap) {
+            const selfId = dataManager.characterData?.character?.id;
+            if (!selfId || !charMap[selfId]) return;
+
+            const self = charMap[selfId];
+            if (self.weeklyActivityProgressData) {
+                try {
+                    this.memberProgress =
+                        typeof self.weeklyActivityProgressData === 'string'
+                            ? JSON.parse(self.weeklyActivityProgressData)
+                            : self.weeklyActivityProgressData;
+                } catch {
+                    this.memberProgress = {};
+                }
+            }
+            if (self.weeklyActivitySecondsUsed !== undefined) {
+                const cap = this.budget?.secondsCap || 7200;
+                this.budget = {
+                    secondsRemaining: cap - self.weeklyActivitySecondsUsed,
+                    secondsCap: cap,
+                    updatedAt: Date.now(),
+                };
+            }
+        }
+
+        // ─── Public API ─────────────────────────────────────────────────────────────
+
+        getCurrentSession() {
+            return this.currentSession;
+        }
+
+        getBudget() {
+            return this.budget;
+        }
+
+        getGuildStars() {
+            return { ...this.guildStars };
+        }
+
+        getMemberProgress() {
+            return { ...this.memberProgress };
+        }
+
+        getWeeklyActivitySet() {
+            return this.weeklyActivitySet;
+        }
+
+        /**
+         * Calculate probability of completing at least 1 star within a 10-minute session.
+         * Uses normal approximation of binomial distribution.
+         * @param {object} stats - Session stats
+         * @returns {number} Probability (0-1)
+         */
+        calculateSessionCompletionChance(stats) {
+            if (!stats || !stats.successRate || !stats.actionTimeMs) return 0;
+
+            const n = Math.floor(SESSION_DURATION_MS / stats.actionTimeMs);
+            const p = Math.min(1, stats.successRate);
+            const isEnhancing = stats.targetLevel != null;
+
+            let needSuccesses;
+            if (isEnhancing) {
+                needSuccesses = stats.targetLevel;
+            } else {
+                if (!stats.progressPerAction || !stats.targetWorkValue) return 0;
+                const progressPerSuccess = stats.progressPerAction * (1 + (stats.doubleProgressChance || 0));
+                needSuccesses = Math.ceil(stats.targetWorkValue / progressPerSuccess);
+            }
+
+            if (needSuccesses <= 0) return 1;
+            if (needSuccesses > n) return 0;
+
+            const mean = n * p;
+            const std = Math.sqrt(n * p * (1 - p));
+            if (std === 0) return mean >= needSuccesses ? 1 : 0;
+
+            const z = (mean - needSuccesses + 0.5) / std;
+            return this._normalCDF(z);
+        }
+
+        _normalCDF(z) {
+            const a1 = 0.254829592;
+            const a2 = -0.284496736;
+            const a3 = 1.421413741;
+            const a4 = -1.453152027;
+            const a5 = 1.061405429;
+            const pp = 0.3275911;
+            const sign = z < 0 ? -1 : 1;
+            const x = Math.abs(z) / Math.SQRT2;
+            const t = 1.0 / (1.0 + pp * x);
+            const y = 1.0 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+            return 0.5 * (1.0 + sign * y);
+        }
+
+        calculateStarsPerSession(stats) {
+            if (!stats || !stats.progressPerAction || !stats.targetWorkValue) return 0;
+
+            const actionsPerSession = SESSION_DURATION_MS / stats.actionTimeMs;
+            const successfulActions = actionsPerSession * stats.successRate;
+            const baseProgress = successfulActions * stats.progressPerAction;
+            const totalProgress = baseProgress * (1 + stats.doubleProgressChance);
+            return totalProgress / stats.targetWorkValue;
+        }
+
+        /**
+         * Calculate projected stars per 10-minute session for enhancing activity.
+         * @param {object} stats - Session stats
+         * @returns {number} Expected stars per session
+         */
+        calculateEnhancingStarsPerSession(stats) {
+            if (!stats || !stats.targetLevel || !stats.successRate) return 0;
+
+            const expectedAttemptsPerStar = stats.targetLevel / stats.successRate;
+            const msPerStar = expectedAttemptsPerStar * stats.actionTimeMs;
+            return SESSION_DURATION_MS / msPerStar;
+        }
+
+        // ─── SR Formula ─────────────────────────────────────────────────────────────
+
+        /**
+         * Compute exact SR for an activity at a given difficulty using the derived formula.
+         * @param {string} activityHrid - Activity hrid
+         * @param {number} difficulty - Difficulty level (100 + tier * 10)
+         * @returns {number} Success rate (clamped to [0.01, 1.0])
+         */
+        _computeSR(activityHrid, difficulty) {
+            const skillLevel = this._getSkillLevel(activityHrid);
+            if (!skillLevel) return 0.5;
+
+            const drinkLevelBonus = this._getDrinkLevelBonus(activityHrid);
+            const drinkConcentration = dataManager.characterData?.noncombatStats?.drinkConcentration || 0;
+            const effectiveLevel = skillLevel + Math.floor(drinkLevelBonus * (1 + drinkConcentration));
+
+            const sr = SR_BASE + (effectiveLevel - difficulty) * SR_PER_LEVEL;
+            return Math.max(0.01, Math.min(1.0, sr));
+        }
+
+        /**
+         * Sum all applicable level buffs from active drinks for a guild activity.
+         * Looks for buff_types/action_level (generic) and buff_types/{skill}_level (specific).
+         * @param {string} activityHrid - Activity hrid
+         * @returns {number} Total drink level bonus (before concentration amplification)
+         */
+        _getDrinkLevelBonus(activityHrid) {
+            const skillHrid = ACTIVITY_TO_SKILL[activityHrid];
+            if (!skillHrid) return 0;
+
+            const actionTypeHrid = skillHrid.replace('/skills/', '/action_types/');
+            const drinks = dataManager.getActionDrinkSlots(actionTypeHrid);
+            const itemDetailMap = dataManager.getInitClientData()?.itemDetailMap;
+            if (!drinks || !itemDetailMap) return 0;
+
+            const skillName = skillHrid.replace('/skills/', '');
+            const skillLevelType = `/buff_types/${skillName}_level`;
+
+            let total = 0;
+            for (const drink of drinks) {
+                if (!drink) continue;
+                const itemHrid = drink.itemHrid || drink;
+                const detail = itemDetailMap[itemHrid];
+                if (!detail?.consumableDetail?.buffs) continue;
+
+                for (const buff of detail.consumableDetail.buffs) {
+                    if (buff.typeHrid === '/buff_types/action_level' || buff.typeHrid === skillLevelType) {
+                        total += buff.flatBoost;
+                    }
+                }
+            }
+
+            return total;
+        }
+
+        /**
+         * Sum a specific buff type from active drinks for a guild activity.
+         * @param {string} activityHrid - Activity hrid
+         * @param {string} buffTypeHrid - Buff type to sum (e.g., '/buff_types/efficiency')
+         * @returns {number} Total buff value (before concentration amplification)
+         */
+        _getDrinkBuffBonus(activityHrid, buffTypeHrid) {
+            const skillHrid = ACTIVITY_TO_SKILL[activityHrid];
+            if (!skillHrid) return 0;
+
+            const actionTypeHrid = skillHrid.replace('/skills/', '/action_types/');
+            const drinks = dataManager.getActionDrinkSlots(actionTypeHrid);
+            const itemDetailMap = dataManager.getInitClientData()?.itemDetailMap;
+            if (!drinks || !itemDetailMap) return 0;
+
+            let total = 0;
+            for (const drink of drinks) {
+                if (!drink) continue;
+                const itemHrid = drink.itemHrid || drink;
+                const detail = itemDetailMap[itemHrid];
+                if (!detail?.consumableDetail?.buffs) continue;
+
+                for (const buff of detail.consumableDetail.buffs) {
+                    if (buff.typeHrid === buffTypeHrid) {
+                        total += buff.flatBoost;
+                    }
+                }
+            }
+
+            return total;
+        }
+
+        /**
+         * Get the house room efficiency bonus for an activity's action type.
+         * @param {string} actionTypeHrid - Action type hrid
+         * @returns {number} House room efficiency bonus
+         */
+        _getHouseRoomEfficiency(actionTypeHrid) {
+            const houseRooms = dataManager.getHouseRooms();
+            const houseRoomDetailMap = dataManager.getInitClientData()?.houseRoomDetailMap;
+            if (!houseRooms || !houseRoomDetailMap) return 0;
+
+            for (const [roomHrid, room] of houseRooms) {
+                if (!room.level || room.level <= 0) continue;
+                const roomDef = houseRoomDetailMap[roomHrid];
+                if (!roomDef?.usableInActionTypeMap?.[actionTypeHrid]) continue;
+
+                const actionBuffs = roomDef.actionBuffs || [];
+                for (const buff of actionBuffs) {
+                    if (buff.typeHrid === '/buff_types/efficiency') {
+                        return buff.flatBoostLevelBonus * room.level;
+                    }
+                }
+            }
+
+            return 0;
+        }
+
+        /**
+         * Get the house room action speed bonus for an activity's action type.
+         * @param {string} actionTypeHrid - Action type hrid
+         * @returns {number} House room speed bonus
+         */
+        _getHouseRoomSpeed(actionTypeHrid) {
+            const houseRooms = dataManager.getHouseRooms();
+            const houseRoomDetailMap = dataManager.getInitClientData()?.houseRoomDetailMap;
+            if (!houseRooms || !houseRoomDetailMap) return 0;
+
+            for (const [roomHrid, room] of houseRooms) {
+                if (!room.level || room.level <= 0) continue;
+                const roomDef = houseRoomDetailMap[roomHrid];
+                if (!roomDef?.usableInActionTypeMap?.[actionTypeHrid]) continue;
+
+                const actionBuffs = roomDef.actionBuffs || [];
+                for (const buff of actionBuffs) {
+                    if (buff.typeHrid === '/buff_types/action_speed') {
+                        return buff.flatBoostLevelBonus * room.level;
+                    }
+                }
+            }
+
+            return 0;
+        }
+
+        /**
+         * Get a community buff value at its current level.
+         * Formula: flatBoost + flatBoostLevelBonus * level
+         * @param {string} communityBuffHrid - Community buff hrid
+         * @returns {number} Total buff value
+         */
+        _getCommunityBuffValue(communityBuffHrid) {
+            const level = dataManager.getCommunityBuffLevel(communityBuffHrid);
+            if (!level) return 0;
+
+            const communityBuffMap = dataManager.getInitClientData()?.communityBuffTypeDetailMap;
+            if (!communityBuffMap) return 0;
+
+            const def = communityBuffMap[communityBuffHrid];
+            if (!def?.buff) return 0;
+
+            return def.buff.flatBoost + def.buff.flatBoostLevelBonus * level;
+        }
+
+        /**
+         * Compute total efficiency for a guild activity from all sources.
+         * efficiency = equipEff + drinkEff*(1+DC) + houseEff + communityEff
+         * @param {string} activityHrid - Activity hrid
+         * @returns {number} Total efficiency
+         */
+        _computeEfficiency(activityHrid) {
+            const skillHrid = ACTIVITY_TO_SKILL[activityHrid];
+            const actionTypeHrid = skillHrid?.replace('/skills/', '/action_types/');
+            if (!actionTypeHrid) return 0;
+
+            const equipment = dataManager.getEquipment();
+            const itemDetailMap = dataManager.getInitClientData()?.itemDetailMap;
+            const drinkConcentration = dataManager.characterData?.noncombatStats?.drinkConcentration || 0;
+
+            const equipEfficiency =
+                equipment && itemDetailMap
+                    ? equipmentParser_js.parseEquipmentEfficiencyBonuses(equipment, actionTypeHrid, itemDetailMap) / 100
+                    : 0;
+
+            const drinkEfficiency = this._getDrinkBuffBonus(activityHrid, '/buff_types/efficiency');
+            const houseEfficiency = this._getHouseRoomEfficiency(actionTypeHrid);
+
+            const isProcessing = !GATHERING_SKILLS.has(skillHrid) && skillHrid !== '/skills/enhancing';
+            const communityEfficiency = isProcessing
+                ? this._getCommunityBuffValue('/community_buff_types/production_efficiency')
+                : 0;
+
+            return equipEfficiency + drinkEfficiency * (1 + drinkConcentration) + houseEfficiency + communityEfficiency;
+        }
+
+        /**
+         * Compute doubleProgressChance for a guild activity.
+         * - Gathering: equipGathering + drinkGathering*(1+DC) + communityGathering
+         * - Cooking/Brewing: drinkGourmet*(1+DC)
+         * - Others: 0
+         * @param {string} activityHrid - Activity hrid
+         * @returns {number} Double progress chance
+         */
+        _computeDoubleProgressChance(activityHrid) {
+            const skillHrid = ACTIVITY_TO_SKILL[activityHrid];
+            if (!skillHrid) return 0;
+
+            const drinkConcentration = dataManager.characterData?.noncombatStats?.drinkConcentration || 0;
+
+            if (GATHERING_SKILLS.has(skillHrid)) {
+                const equipGathering = dataManager.characterData?.noncombatStats?.gatheringQuantity || 0;
+                const drinkGathering = this._getDrinkBuffBonus(activityHrid, '/buff_types/gathering');
+                const communityGathering = this._getCommunityBuffValue('/community_buff_types/gathering_quantity');
+                return equipGathering + drinkGathering * (1 + drinkConcentration) + communityGathering;
+            }
+
+            if (GOURMET_SKILLS.has(skillHrid)) {
+                const drinkGourmet = this._getDrinkBuffBonus(activityHrid, '/buff_types/gourmet');
+                return drinkGourmet * (1 + drinkConcentration);
+            }
+
+            return 0;
+        }
+
+        /**
+         * Compute all stats for a guild activity from current character state.
+         * All values are exact (derived from game formulas).
+         * @param {string} activityHrid - Activity hrid
+         * @returns {object} Computed stats
+         */
+        _computeBaseStats(activityHrid) {
+            const skillHrid = ACTIVITY_TO_SKILL[activityHrid];
+            const actionTypeHrid = skillHrid?.replace('/skills/', '/action_types/');
+            const isEnhancing = activityHrid.includes('enhancing');
+
+            const equipment = dataManager.getEquipment();
+            const itemDetailMap = dataManager.getInitClientData()?.itemDetailMap;
+            const drinkConcentration = dataManager.characterData?.noncombatStats?.drinkConcentration || 0;
+
+            // Speed: equipment + house room + community (enhancing only)
+            let speedBonus =
+                equipment && itemDetailMap && actionTypeHrid
+                    ? equipmentParser_js.parseEquipmentSpeedBonuses(equipment, actionTypeHrid, itemDetailMap)
+                    : 0;
+            if (actionTypeHrid) {
+                speedBonus += this._getHouseRoomSpeed(actionTypeHrid);
+            }
+            if (isEnhancing) {
+                speedBonus += this._getCommunityBuffValue('/community_buff_types/enhancing_speed');
+            }
+            const actionTimeMs = Math.round(GUILD_BASE_TIME_MS / (1 + speedBonus));
+
+            const totalEfficiency = this._computeEfficiency(activityHrid);
+            const doubleProgressChance = this._computeDoubleProgressChance(activityHrid);
+
+            const skillLevel = this._getSkillLevel(activityHrid);
+            const drinkLevelBonus = this._getDrinkLevelBonus(activityHrid);
+            const effectiveLevel = (skillLevel || 1) + Math.floor(drinkLevelBonus * (1 + drinkConcentration));
+
+            const progressPerAction = effectiveLevel * (1 + totalEfficiency);
+
+            return {
+                activityHrid,
+                tier: 0,
+                successRate: 0,
+                efficiency: totalEfficiency,
+                doubleProgressChance,
+                progressPerAction,
+                targetWorkValue: BASE_TARGET_WORK,
+                targetLevel: isEnhancing ? 5 : null,
+                actionTimeMs,
+            };
+        }
+
+        // ─── Tier Comparison ────────────────────────────────────────────────────────
+
+        /**
+         * Get tier comparison data for an activity.
+         * Uses exact SR formula and observed data for tier-independent stats.
+         * Falls back to computed estimates when no observation exists.
+         * @param {string} activityHrid - Activity hrid
+         * @returns {Array} Array of tier data with stars/hr calculations
+         */
+        getTierComparison(activityHrid) {
+            const isEnhancing = activityHrid.includes('enhancing');
+            const baseStats = this._computeBaseStats(activityHrid);
+
+            if (!baseStats.actionTimeMs) return [];
+
+            const results = [];
+
+            for (let tier = 0; tier <= 20; tier++) {
+                const difficulty = 100 + tier * 10;
+                const sr = this._computeSR(activityHrid, difficulty);
+
+                if (sr <= 0) continue;
+
+                const targetWorkValue = isEnhancing
+                    ? baseStats.targetWorkValue
+                    : BASE_TARGET_WORK + tier * TARGET_WORK_PER_TIER;
+
+                const stats = {
+                    ...baseStats,
+                    tier,
+                    successRate: sr,
+                    targetWorkValue,
+                };
+
+                const starsPerSession = isEnhancing
+                    ? this.calculateEnhancingStarsPerSession(stats)
+                    : this.calculateStarsPerSession(stats);
+
+                const sessionsPerHour = 3600_000 / SESSION_DURATION_MS;
+                const starsPerHour = starsPerSession * sessionsPerHour;
+                const tokensPerHour = starsPerHour * (activityHrid.includes('combat') ? 200 : 100);
+
+                results.push({
+                    tier,
+                    difficultyLevel: difficulty,
+                    successRate: sr,
+                    targetWorkValue,
+                    completionChance: this.calculateSessionCompletionChance(stats),
+                    starsPerSession,
+                    starsPerHour,
+                    tokensPerHour,
+                });
+            }
+
+            return results;
+        }
+
+        _getSkillLevel(activityHrid) {
+            const skillHrid = ACTIVITY_TO_SKILL[activityHrid];
+            if (!skillHrid) return null;
+            const skills = dataManager.getSkills();
+            if (!skills) return null;
+            const skill = skills.find((s) => s.skillHrid === skillHrid);
+            return skill?.level || null;
+        }
+
+        _listeners = new Set();
+
+        onUpdate(callback) {
+            this._listeners.add(callback);
+            return () => this._listeners.delete(callback);
+        }
+
+        _notifyListeners() {
+            for (const cb of this._listeners) {
+                try {
+                    cb();
+                } catch (error) {
+                    console.error('[GuildActivityTracker] Listener error:', error);
+                }
+            }
+        }
+    }
+
+    const guildActivityTracker = new GuildActivityTracker();
+
+    var guildActivityCalculator = {
+        name: 'Guild Activity Calculator',
+        initialize: () => guildActivityTracker.initialize(),
+        cleanup: () => guildActivityTracker.disable(),
+    };
+
+    /**
+     * Guild Activity Display
+     * Renders the guild activity calculator panel in the Toolasha settings section.
+     * Shows live session stats, budget tracking, tier comparisons, and guild progress.
+     */
+
+
+    const CSS_PREFIX = 'mwi-guild-activity';
+    const ACTIVITY_NAMES = {
+        '/guild_skilling/milking': 'Milking',
+        '/guild_skilling/foraging': 'Foraging',
+        '/guild_skilling/woodcutting': 'Woodcutting',
+        '/guild_skilling/cheesesmithing': 'Cheesesmithing',
+        '/guild_skilling/crafting': 'Crafting',
+        '/guild_skilling/tailoring': 'Tailoring',
+        '/guild_skilling/cooking': 'Cooking',
+        '/guild_skilling/brewing': 'Brewing',
+        '/guild_skilling/alchemy': 'Alchemy',
+        '/guild_skilling/enhancing': 'Enhancing',
+        '/guild_combat/vanguard': 'Trial Vanguard',
+        '/guild_combat/deadeye': 'Trial Deadeye',
+        '/guild_combat/magus': 'Trial Magus',
+        '/guild_combat/warden': 'Trial Warden',
+        '/guild_combat/swarm': 'Trial Swarm',
+    };
+
+    class GuildActivityDisplay {
+        constructor() {
+            this.timerRegistry = timerRegistry_js.createTimerRegistry();
+            this.unregisterObservers = [];
+            this._unsubTracker = null;
+            this._panelEl = null;
+            this._activeTab = null; // 'calculator' | 'simulator'
+            this._simActivity = null;
+            this._initialized = false;
+        }
+
+        initialize() {
+            if (!config.getSetting('guildActivityCalculator')) return;
+            if (this._initialized) return;
+            this._initialized = true;
+
+            const unregPanel = domObserver.onClass('GuildActivityDisplay-Inject', 'GuildPanel_guildPanel', (el) =>
+                this._injectTab(el)
+            );
+            this.unregisterObservers.push(unregPanel);
+
+            this._unsubTracker = guildActivityTracker.onUpdate(() => this._refresh());
+
+            const intervalId = setInterval(() => this._refreshTimer(), 1000);
+            this.timerRegistry.registerInterval(intervalId);
+
+            const existingPanel = document.querySelector('[class*="GuildPanel_guildPanel"]');
+            if (existingPanel) {
+                this._injectTab(existingPanel);
+            }
+        }
+
+        disable() {
+            for (const unreg of this.unregisterObservers) {
+                unreg();
+            }
+            this.unregisterObservers = [];
+            this.timerRegistry.clearAll();
+            if (this._unsubTracker) {
+                this._unsubTracker();
+                this._unsubTracker = null;
+            }
+            document.querySelectorAll(`.${CSS_PREFIX}`).forEach((el) => el.remove());
+            this._panelEl = null;
+            this._initialized = false;
+        }
+
+        _injectTab(guildPanelEl) {
+            if (guildPanelEl.querySelector(`.${CSS_PREFIX}`)) return;
+
+            const tabRow =
+                guildPanelEl.querySelector('[role="tablist"]') ||
+                guildPanelEl.querySelector('.MuiTabs-flexContainer') ||
+                guildPanelEl.querySelector('[class*="TabsComponent_tabsContainer"]');
+            if (!tabRow) return;
+
+            const calcTab = this._createTab('Calculator');
+            calcTab.addEventListener('click', () => this._showPanel(guildPanelEl, 'calculator'));
+            tabRow.appendChild(calcTab);
+
+            const simTab = this._createTab('Simulator');
+            simTab.classList.add(`${CSS_PREFIX}__tab--sim`);
+            simTab.addEventListener('click', () => this._showPanel(guildPanelEl, 'simulator'));
+            tabRow.appendChild(simTab);
+
+            const otherTabs = tabRow.querySelectorAll('[role="tab"]:not(.' + CSS_PREFIX + '__tab)');
+            for (const otherTab of otherTabs) {
+                otherTab.addEventListener('click', () => this._dismissPanel(guildPanelEl));
+            }
+        }
+
+        _createTab(label) {
+            const tab = document.createElement('button');
+            tab.className = `${CSS_PREFIX} ${CSS_PREFIX}__tab MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary`;
+            tab.setAttribute('role', 'tab');
+            tab.setAttribute('aria-selected', 'false');
+            tab.setAttribute('tabindex', '-1');
+            tab.style.minWidth = '90px';
+            const span = document.createElement('span');
+            span.className = 'MuiTab-wrapper';
+            span.textContent = label;
+            tab.appendChild(span);
+            return tab;
+        }
+
+        _getContentSiblings(guildPanelEl) {
+            const tabRow =
+                guildPanelEl.querySelector('[role="tablist"]') || guildPanelEl.querySelector('.MuiTabs-flexContainer');
+            if (!tabRow) return [];
+
+            const tabContainer = tabRow.closest('[class*="Tabs"]') || tabRow.parentElement;
+            const siblings = [];
+            let el = tabContainer.nextElementSibling;
+            while (el) {
+                if (!el.classList.contains(`${CSS_PREFIX}__panel`)) {
+                    siblings.push(el);
+                }
+                el = el.nextElementSibling;
+            }
+            return siblings;
+        }
+
+        _dismissPanel(guildPanelEl) {
+            const panel = guildPanelEl.querySelector(`.${CSS_PREFIX}__panel`);
+            if (!panel) return;
+            panel.remove();
+            this._panelEl = null;
+            this._activeTab = null;
+
+            for (const el of this._getContentSiblings(guildPanelEl)) {
+                el.style.display = '';
+            }
+
+            for (const tab of guildPanelEl.querySelectorAll(`.${CSS_PREFIX}__tab`)) {
+                tab.classList.remove('Mui-selected');
+                tab.setAttribute('aria-selected', 'false');
+            }
+        }
+
+        _showPanel(guildPanelEl, mode) {
+            const existingPanel = guildPanelEl.querySelector(`.${CSS_PREFIX}__panel`);
+            if (existingPanel && this._activeTab === mode) {
+                this._dismissPanel(guildPanelEl);
+                return;
+            }
+            if (existingPanel) {
+                existingPanel.remove();
+                this._panelEl = null;
+            }
+
+            for (const el of this._getContentSiblings(guildPanelEl)) {
+                el.style.display = 'none';
+            }
+
+            for (const tab of guildPanelEl.querySelectorAll(`.${CSS_PREFIX}__tab`)) {
+                const isSim = tab.classList.contains(`${CSS_PREFIX}__tab--sim`);
+                const isActive = (mode === 'simulator' && isSim) || (mode === 'calculator' && !isSim);
+                tab.classList.toggle('Mui-selected', isActive);
+                tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            }
+
+            const panel = document.createElement('div');
+            panel.className = `${CSS_PREFIX}__panel`;
+            panel.style.cssText = `
+            padding: 12px;
+            color: ${config.COLOR_TEXT_PRIMARY};
+            font-size: 13px;
+        `;
+
+            const tabRow =
+                guildPanelEl.querySelector('[role="tablist"]') || guildPanelEl.querySelector('.MuiTabs-flexContainer');
+            const tabContainer = tabRow?.closest('[class*="Tabs"]') || tabRow?.parentElement;
+            if (tabContainer) {
+                tabContainer.parentElement.appendChild(panel);
+            } else {
+                guildPanelEl.appendChild(panel);
+            }
+
+            this._panelEl = panel;
+            this._activeTab = mode;
+
+            if (mode === 'calculator') {
+                this._renderPanel();
+            } else {
+                this._renderSimulator();
+            }
+        }
+
+        _refresh() {
+            if (!this._panelEl) return;
+            if (this._activeTab === 'simulator') {
+                this._renderSimulator();
+            } else {
+                this._renderPanel();
+            }
+        }
+
+        _refreshTimer() {
+            const timerEl = this._panelEl?.querySelector(`.${CSS_PREFIX}__timer`);
+            if (timerEl) {
+                const session = guildActivityTracker.getCurrentSession();
+                if (!session?.timeoutAt) {
+                    timerEl.textContent = '--:--';
+                } else {
+                    const remaining = new Date(session.timeoutAt).getTime() - Date.now();
+                    if (remaining <= 0) {
+                        timerEl.textContent = '0:00';
+                    } else {
+                        const min = Math.floor(remaining / 60000);
+                        const sec = Math.floor((remaining % 60000) / 1000);
+                        timerEl.textContent = `${min}:${sec.toString().padStart(2, '0')}`;
+                    }
+                }
+            }
+
+            const guildPanelEl = document.querySelector('[class*="GuildPanel_guildPanel"]');
+            if (guildPanelEl && !guildPanelEl.querySelector(`.${CSS_PREFIX}`)) {
+                this._injectTab(guildPanelEl);
+            }
+        }
+
+        _renderPanel() {
+            if (!this._panelEl) return;
+
+            const session = guildActivityTracker.getCurrentSession();
+            const budget = guildActivityTracker.getBudget();
+            const guildStars = guildActivityTracker.getGuildStars();
+            const memberProgress = guildActivityTracker.getMemberProgress();
+            const activitySet = guildActivityTracker.getWeeklyActivitySet();
+
+            let html = `<style>
+            .${CSS_PREFIX}__section { margin-bottom: 16px; }
+            .${CSS_PREFIX}__section-title { font-weight: bold; margin-bottom: 6px; font-size: 13px; }
+            .${CSS_PREFIX}__stat-row { display: flex; justify-content: space-between; padding: 2px 0; }
+        </style>`;
+
+            // ─── Budget Section ──────────────────────────────────────────
+            html += this._renderBudget(budget);
+
+            // ─── Live Session Section ────────────────────────────────────
+            html += this._renderSession(session);
+
+            // ─── Weekly Progress ─────────────────────────────────────────
+            html += this._renderWeeklyProgress(guildStars, memberProgress, activitySet);
+
+            // ─── Tier Comparison ─────────────────────────────────────────
+            if (session) {
+                html += this._renderTierComparison(session);
+            }
+
+            this._panelEl.innerHTML = html;
+        }
+
+        _renderBudget(budget) {
+            if (!budget) {
+                return `<div class="${CSS_PREFIX}__section">
+                <div class="${CSS_PREFIX}__section-title">Weekly Budget</div>
+                <div style="color: ${config.COLOR_TEXT_SECONDARY};">No budget data yet — start a guild activity</div>
+            </div>`;
+            }
+
+            const used = budget.secondsCap - budget.secondsRemaining;
+            const pct = Math.min(100, (used / budget.secondsCap) * 100);
+            const usedMin = Math.floor(used / 60);
+            const capMin = Math.floor(budget.secondsCap / 60);
+            const remainMin = Math.floor(budget.secondsRemaining / 60);
+
+            return `<div class="${CSS_PREFIX}__section">
+            <div class="${CSS_PREFIX}__section-title">Weekly Budget</div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <div style="flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                    <div style="height: 100%; width: ${pct}%; background: ${pct >= 90 ? config.COLOR_LOSS : config.COLOR_ACCENT}; border-radius: 4px;"></div>
+                </div>
+                <span style="white-space: nowrap;">${usedMin}m / ${capMin}m</span>
+            </div>
+            <div style="color: ${config.COLOR_TEXT_SECONDARY};">${remainMin}m remaining</div>
+        </div>`;
+        }
+
+        _renderSession(session) {
+            if (!session) {
+                return `<div class="${CSS_PREFIX}__section">
+                <div class="${CSS_PREFIX}__section-title">Current Session</div>
+                <div style="color: ${config.COLOR_TEXT_SECONDARY};">No active guild activity</div>
+            </div>`;
+            }
+
+            const name = ACTIVITY_NAMES[session.activityHrid] || session.activityHrid;
+            const isEnhancing = session.targetLevel != null;
+            const starsPerSession = isEnhancing
+                ? guildActivityTracker.calculateEnhancingStarsPerSession(session)
+                : guildActivityTracker.calculateStarsPerSession(session);
+            const starsPerHour = starsPerSession * 6;
+            const tokenReward = session.activityHrid.includes('combat') ? 200 : 100;
+            const tokensPerHour = starsPerHour * tokenReward;
+
+            let statsHTML = '';
+            if (isEnhancing) {
+                statsHTML = `
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span>Target Level</span><span>${session.targetLevel}</span>
+                </div>
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span>Current Level</span><span>${session.currentEnhLevel}</span>
+                </div>
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span>Success Rate</span><span>${(session.successRate * 100).toFixed(1)}%</span>
+                </div>
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span>Action Time</span><span>${(session.actionTimeMs / 1000).toFixed(2)}s</span>
+                </div>
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span>Attempts</span><span>${session.actionCounter}</span>
+                </div>`;
+            } else {
+                const progressPct =
+                    session.targetWorkValue > 0
+                        ? ((session.currentWorkValue / session.targetWorkValue) * 100).toFixed(1)
+                        : '0';
+                statsHTML = `
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span>Work Power</span><span>${session.progressPerAction.toFixed(2)}</span>
+                </div>
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span>Success Rate</span><span>${(session.successRate * 100).toFixed(1)}%</span>
+                </div>
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span>Double Progress</span><span>${(session.doubleProgressChance * 100).toFixed(2)}%</span>
+                </div>
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span>Action Time</span><span>${(session.actionTimeMs / 1000).toFixed(2)}s</span>
+                </div>
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span>Progress</span><span>${formatters_js.formatWithSeparator(Math.floor(session.currentWorkValue))} / ${formatters_js.formatWithSeparator(session.targetWorkValue)} (${progressPct}%)</span>
+                </div>`;
+            }
+
+            return `<div class="${CSS_PREFIX}__section">
+            <div class="${CSS_PREFIX}__section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>${name} — Tier ${session.tier} (Lv.${100 + session.tier * 10})</span>
+                <span class="${CSS_PREFIX}__timer" style="font-family: monospace; color: ${config.COLOR_ACCENT};">--:--</span>
+            </div>
+            ${statsHTML}
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span style="color: ${config.COLOR_ACCENT};">Stars/session</span>
+                    <span style="color: ${config.COLOR_ACCENT};">${starsPerSession.toFixed(2)}</span>
+                </div>
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span style="color: ${config.COLOR_ACCENT};">Stars/hr</span>
+                    <span style="color: ${config.COLOR_ACCENT};">${starsPerHour.toFixed(1)}</span>
+                </div>
+                <div class="${CSS_PREFIX}__stat-row">
+                    <span style="color: ${config.COLOR_ACCENT};">Tokens/hr</span>
+                    <span style="color: ${config.COLOR_ACCENT};">${formatters_js.formatWithSeparator(Math.round(tokensPerHour))}</span>
+                </div>
+            </div>
+        </div>`;
+        }
+
+        _renderWeeklyProgress(guildStars, memberProgress, activitySet) {
+            if (!activitySet) return '';
+
+            const allActivities = [...(activitySet.skillHrids || []), ...(activitySet.combatHrids || [])];
+
+            if (allActivities.length === 0) return '';
+
+            let rows = '';
+            for (const hrid of allActivities) {
+                const name = ACTIVITY_NAMES[hrid] || hrid.split('/').pop();
+                const guildCount = guildStars[hrid] || 0;
+                const myCount = memberProgress[hrid] || 0;
+                rows += `<tr>
+                <td style="padding: 3px 8px;">${name}</td>
+                <td style="padding: 3px 8px; text-align: right;">${myCount}</td>
+                <td style="padding: 3px 8px; text-align: right;">${guildCount}</td>
+            </tr>`;
+            }
+
+            return `<div class="${CSS_PREFIX}__section">
+            <div class="${CSS_PREFIX}__section-title">This Week's Activities</div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                <thead>
+                    <tr style="color: ${config.COLOR_TEXT_SECONDARY}; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <th style="padding: 3px 8px; text-align: left;">Activity</th>
+                        <th style="padding: 3px 8px; text-align: right;">My Stars</th>
+                        <th style="padding: 3px 8px; text-align: right;">Guild Stars</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>`;
+        }
+
+        _renderTierComparison(session) {
+            const comparison = guildActivityTracker.getTierComparison(session.activityHrid);
+            if (comparison.length === 0) return '';
+
+            const isEnhancing = session.targetLevel != null;
+            let rows = '';
+            for (const tier of comparison) {
+                const isCurrentTier = tier.tier === session.tier;
+                const rowStyle = isCurrentTier ? `background: rgba(34, 197, 94, 0.1); font-weight: bold;` : '';
+                const goalCell = isEnhancing
+                    ? ''
+                    : `<td style="padding: 3px 6px; text-align: right;">${formatters_js.formatWithSeparator(tier.targetWorkValue)}</td>`;
+                rows += `<tr style="${rowStyle}">
+                <td style="padding: 3px 6px;">${tier.difficultyLevel}</td>
+                <td style="padding: 3px 6px; text-align: right;">${Math.min(100, tier.successRate * 100).toFixed(0)}%</td>
+                <td style="padding: 3px 6px; text-align: right;">${(tier.completionChance * 100).toFixed(0)}%</td>
+                ${goalCell}
+                <td style="padding: 3px 6px; text-align: right;">${tier.starsPerSession.toFixed(2)}</td>
+                <td style="padding: 3px 6px; text-align: right;">${tier.starsPerHour.toFixed(1)}</td>
+                <td style="padding: 3px 6px; text-align: right;">${formatters_js.formatWithSeparator(Math.round(tier.tokensPerHour))}</td>
+            </tr>`;
+            }
+
+            const name = ACTIVITY_NAMES[session.activityHrid] || session.activityHrid.split('/').pop();
+            const goalHeader = isEnhancing ? '' : '<th style="padding: 3px 6px; text-align: right;">Goal</th>';
+
+            return `<div class="${CSS_PREFIX}__section">
+            <div class="${CSS_PREFIX}__section-title">Difficulty Comparison — ${name}</div>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                    <thead>
+                        <tr style="color: ${config.COLOR_TEXT_SECONDARY}; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <th style="padding: 3px 6px; text-align: left;">Lv.</th>
+                            <th style="padding: 3px 6px; text-align: right;">Hit %</th>
+                            <th style="padding: 3px 6px; text-align: right;">Session %</th>
+                            ${goalHeader}
+                            <th style="padding: 3px 6px; text-align: right;">★/sess</th>
+                            <th style="padding: 3px 6px; text-align: right;">★/hr</th>
+                            <th style="padding: 3px 6px; text-align: right;">Tok/hr</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </div>`;
+        }
+
+        _renderSimulator() {
+            if (!this._panelEl) return;
+
+            const allActivities = Object.keys(ACTIVITY_NAMES);
+            const selected = this._simActivity || allActivities[0];
+
+            const comparison = guildActivityTracker.getTierComparison(selected);
+            const name = ACTIVITY_NAMES[selected] || selected;
+            const isEnhancing = selected.includes('enhancing');
+
+            let optionsHTML = '';
+            for (const hrid of allActivities) {
+                const label = ACTIVITY_NAMES[hrid];
+                const sel = hrid === selected ? ' selected' : '';
+                optionsHTML += `<option value="${hrid}"${sel}>${label}</option>`;
+            }
+
+            let html = `<style>
+            .${CSS_PREFIX}__section { margin-bottom: 16px; }
+            .${CSS_PREFIX}__section-title { font-weight: bold; margin-bottom: 6px; font-size: 13px; }
+        </style>`;
+
+            html += `<div class="${CSS_PREFIX}__section">
+            <div class="${CSS_PREFIX}__section-title">Simulator</div>
+            <div style="margin-bottom: 12px;">
+                <select class="${CSS_PREFIX}__sim-select" style="
+                    background: rgba(255,255,255,0.1);
+                    color: ${config.COLOR_TEXT_PRIMARY};
+                    border: 1px solid rgba(255,255,255,0.2);
+                    border-radius: 4px;
+                    padding: 6px 8px;
+                    font-size: 13px;
+                    width: 100%;
+                ">${optionsHTML}</select>
+            </div>
+        </div>`;
+
+            if (comparison.length === 0) {
+                html += `<div style="color: ${config.COLOR_TEXT_SECONDARY};">
+                Unable to compute projections for ${name}. Skill level data not available.
+            </div>`;
+            } else {
+                let rows = '';
+                const goalHeader = isEnhancing ? '' : '<th style="padding: 3px 6px; text-align: right;">Goal</th>';
+
+                for (const tier of comparison) {
+                    const goalCell = isEnhancing
+                        ? ''
+                        : `<td style="padding: 3px 6px; text-align: right;">${formatters_js.formatWithSeparator(tier.targetWorkValue)}</td>`;
+                    rows += `<tr>
+                    <td style="padding: 3px 6px;">${tier.difficultyLevel}</td>
+                    <td style="padding: 3px 6px; text-align: right;">${Math.min(100, tier.successRate * 100).toFixed(0)}%</td>
+                    <td style="padding: 3px 6px; text-align: right;">${(tier.completionChance * 100).toFixed(0)}%</td>
+                    ${goalCell}
+                    <td style="padding: 3px 6px; text-align: right;">${tier.starsPerSession.toFixed(2)}</td>
+                    <td style="padding: 3px 6px; text-align: right;">${tier.starsPerHour.toFixed(1)}</td>
+                    <td style="padding: 3px 6px; text-align: right;">${formatters_js.formatWithSeparator(Math.round(tier.tokensPerHour))}</td>
+                </tr>`;
+                }
+
+                html += `<div class="${CSS_PREFIX}__section">
+                <div class="${CSS_PREFIX}__section-title">Tier Projection — ${name}</div>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead>
+                            <tr style="color: ${config.COLOR_TEXT_SECONDARY}; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                <th style="padding: 3px 6px; text-align: left;">Lv.</th>
+                                <th style="padding: 3px 6px; text-align: right;">Hit %</th>
+                                <th style="padding: 3px 6px; text-align: right;">Session %</th>
+                                ${goalHeader}
+                                <th style="padding: 3px 6px; text-align: right;">★/sess</th>
+                                <th style="padding: 3px 6px; text-align: right;">★/hr</th>
+                                <th style="padding: 3px 6px; text-align: right;">Tok/hr</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            </div>`;
+            }
+
+            this._panelEl.innerHTML = html;
+
+            const select = this._panelEl.querySelector(`.${CSS_PREFIX}__sim-select`);
+            if (select) {
+                select.addEventListener('change', (e) => {
+                    this._simActivity = e.target.value;
+                    this._renderSimulator();
+                });
+            }
+        }
+    }
+
+    const guildActivityDisplay = new GuildActivityDisplay();
+
+    var guildActivityDisplay$1 = {
+        name: 'Guild Activity Display',
+        initialize: () => guildActivityDisplay.initialize(),
+        cleanup: () => guildActivityDisplay.disable(),
     };
 
     /**
@@ -34383,8 +35774,8 @@ ${starCSS}
                 }
 
                 // Use standard Notification API
-                const notification = new Notification(i18n_js.t('Milky Way Idle'), {
-                    body: i18n_js.t('Your action queue is empty!'),
+                const notification = new Notification(t('Milky Way Idle'), {
+                    body: t('Your action queue is empty!'),
                     icon: 'https://www.milkywayidle.com/favicon.ico',
                     tag: 'empty-queue',
                     requireInteraction: false,
@@ -34709,7 +36100,7 @@ ${starCSS}
             user-select: none;
         `;
             header.innerHTML = `
-            <span style="font-weight:600; font-size:12px; color:${ACCENT};">${i18n_js.t('Queue Monitor')}</span>
+            <span style="font-weight:600; font-size:12px; color:${ACCENT};">${t('Queue Monitor')}</span>
             <button id="toolasha-qm-toggle" style="
                 background:none; border:none; color:#aaa; font-size:16px;
                 cursor:pointer; padding:0; line-height:1;">${this.collapsed ? '+' : '−'}</button>
@@ -34790,7 +36181,7 @@ ${starCSS}
 
             if (snapshots.length === 0) {
                 this.bodyEl.innerHTML = `<div style="color:#666; font-size:11px; text-align:center; padding:4px 0;">
-                ${i18n_js.t('No other character data yet.')}<br>${i18n_js.t('Switch characters to capture queue state.')}
+                ${t('No other character data yet.')}<br>${t('Switch characters to capture queue state.')}
             </div>`;
                 return;
             }
@@ -34820,11 +36211,11 @@ ${starCSS}
                 // Time display
                 let timeDisplay;
                 if (snap.actions.length === 0) {
-                    timeDisplay = i18n_js.t('Idle');
+                    timeDisplay = t('Idle');
                 } else if (snap.hasInfiniteAction && remaining <= 0) {
                     timeDisplay = '∞';
                 } else if (remaining <= 0) {
-                    timeDisplay = i18n_js.t('Done');
+                    timeDisplay = t('Done');
                 } else {
                     timeDisplay = formatters_js.timeReadableZh(remaining);
                     if (snap.hasInfiniteAction) {
@@ -34841,7 +36232,7 @@ ${starCSS}
                 html += `</div>`;
 
                 if (isStale) {
-                    html += `<div style="color:#f39c12; font-size:10px; margin-left:14px; margin-top:2px;">${i18n_js.t('Stale')} (>${Math.round((Date.now() - snap.timestamp) / 3600000)}h ago)</div>`;
+                    html += `<div style="color:#f39c12; font-size:10px; margin-left:14px; margin-top:2px;">${t('Stale')} (>${Math.round((Date.now() - snap.timestamp) / 3600000)}h ago)</div>`;
                 }
 
                 // Expanded action details
@@ -34854,7 +36245,7 @@ ${starCSS}
                             actionTimeStr = '∞';
                         } else if (action.estimatedSeconds !== null) {
                             const actionRemaining = Math.max(0, action.estimatedSeconds - Math.max(0, actionElapsed));
-                            actionTimeStr = actionRemaining <= 0 ? i18n_js.t('Done') : formatters_js.timeReadableZh(actionRemaining);
+                            actionTimeStr = actionRemaining <= 0 ? t('Done') : formatters_js.timeReadableZh(actionRemaining);
                         } else {
                             actionTimeStr = '?';
                         }
@@ -35001,6 +36392,8 @@ ${starCSS}
         xphCalculator,
         guildXPTracker: guildXPTracker$1,
         guildXPDisplay: guildXPDisplay$1,
+        guildActivityCalculator,
+        guildActivityDisplay: guildActivityDisplay$1,
         emptyQueueNotification,
         queueMonitor,
         pformancePanel,
@@ -35008,4 +36401,4 @@ ${starCSS}
 
     console.log('[Toolasha] UI library loaded');
 
-})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Utils.formatters, Toolasha.Utils.timerRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Core.i18n, Toolasha.Utils.dom, Toolasha.Core.storage, Toolasha.Core.marketAPI, Toolasha.Utils.efficiency, Toolasha.Core.webSocketHook, Toolasha.Utils.reactInput, Toolasha.Utils.actionPanelHelper, Toolasha.Market.expectedValueCalculator, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.marketData, Toolasha.Utils.profitConstants, Toolasha.Utils.profitHelpers, Toolasha.Market.profitCalculator, Toolasha.Utils.selectors, Toolasha.Utils.cleanupRegistry, Toolasha.Core, Toolasha.Core.settingsStorage, Toolasha.Utils.enhancementConfig, Toolasha.Utils.materialCalculator, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.teaParser, Toolasha.Utils.actionCalculator);
+})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Utils.formatters, Toolasha.Utils.timerRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.dom, Toolasha.Core.storage, Toolasha.Core.marketAPI, Toolasha.Utils.efficiency, Toolasha.Core.webSocketHook, Toolasha.Utils.reactInput, Toolasha.Utils.actionPanelHelper, Toolasha.Market.expectedValueCalculator, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.marketData, Toolasha.Utils.profitConstants, Toolasha.Utils.profitHelpers, Toolasha.Market.profitCalculator, Toolasha.Utils.selectors, Toolasha.Utils.actionCalculator, Toolasha.Utils.equipmentParser, Toolasha.Utils.cleanupRegistry, Toolasha.Core, Toolasha.Core.settingsStorage, Toolasha.Utils.enhancementConfig, Toolasha.Utils.materialCalculator, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.teaParser);

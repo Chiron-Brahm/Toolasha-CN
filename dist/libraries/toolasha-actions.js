@@ -1,1450 +1,12 @@
 /**
  * Toolasha Actions Library
  * Production, gathering, and alchemy features
- * Version: 2.59.10
+ * Version: 2.58.6
  * License: CC-BY-NC-SA-4.0
  */
 
-(function (dataManager, domObserver, i18n_js, config, enhancementConfig_js, enhancementCalculator_js, profitConstants_js, formatters_js, marketAPI, domObserverHelpers_js, storage, bonusRevenueCalculator_js, marketData_js, efficiency_js, profitHelpers_js, profitCalculator, uiComponents_js, actionPanelHelper_js, webSocketHook, dom_js, timerRegistry_js, actionCalculator_js, cleanupRegistry_js, teaParser_js, buffParser_js, expectedValueCalculator, equipmentParser_js, houseEfficiency_js, experienceParser_js, reactInput_js, experienceCalculator_js, materialCalculator_js, alchemyProfitCalculator) {
+(function (dataManager, domObserver, config, enhancementConfig_js, enhancementCalculator_js, profitConstants_js, formatters_js, marketAPI, domObserverHelpers_js, bonusRevenueCalculator_js, marketData_js, efficiency_js, profitHelpers_js, storage, profitCalculator, uiComponents_js, actionPanelHelper_js, webSocketHook, dom_js, timerRegistry_js, actionCalculator_js, cleanupRegistry_js, teaParser_js, buffParser_js, equipmentParser_js, houseEfficiency_js, experienceParser_js, reactInput_js, experienceCalculator_js, materialCalculator_js, expectedValueCalculator, alchemyProfitCalculator) {
     'use strict';
-
-    /**
-     * Enhancement XP Calculations
-     * Based on Ultimate Enhancement Tracker formulas
-     */
-
-
-    /**
-     * Get base item level from item HRID
-     * @param {string} itemHrid - Item HRID
-     * @returns {number} Base item level
-     */
-    function getBaseItemLevel(itemHrid) {
-        try {
-            const gameData = dataManager.getInitClientData();
-            const itemData = gameData?.itemDetailMap?.[itemHrid];
-
-            if (itemData?.itemLevel) {
-                return itemData.itemLevel;
-            }
-
-            return 0;
-        } catch {
-            return 0;
-        }
-    }
-
-    /**
-     * Calculate enhancing action time from the game's buff maps
-     * Reads the pre-computed action_speed flatBoost values from all buff sources
-     * and adds level advantage, matching the game's actual speed calculation
-     * @param {string} itemHrid - Item HRID being enhanced
-     * @returns {number} Per-action time in seconds
-     */
-    function getEnhancingActionTime(itemHrid) {
-        try {
-            const charData = dataManager.characterData;
-            if (!charData) return 12;
-
-            // Get base time from game data
-            const actionDetails = dataManager.getActionDetails('/actions/enhancing/enhance');
-            const baseTime = actionDetails?.baseTimeCost ? actionDetails.baseTimeCost / 1e9 : 12;
-
-            // Get enhancing skill level
-            const enhancingSkill = charData.characterSkills?.find((s) => s.skillHrid === '/skills/enhancing');
-            const baseLevel = enhancingSkill?.level || 1;
-
-            // Get tea level bonus from consumable buff map
-            let teaLevelBonus = 0;
-            const consumableBuffs = charData.consumableActionTypeBuffsMap?.['/action_types/enhancing'];
-            if (Array.isArray(consumableBuffs)) {
-                for (const buff of consumableBuffs) {
-                    if (buff.typeHrid === '/buff_types/enhancing_level') {
-                        teaLevelBonus = buff.flatBoost || 0;
-                    }
-                }
-            }
-
-            // Sum action_speed flatBoost from ALL buff sources (equipment, house, community, tea)
-            let totalSpeedBuff = 0;
-
-            const buffMaps = [
-                charData.equipmentActionTypeBuffsMap,
-                charData.houseActionTypeBuffsMap,
-                charData.communityActionTypeBuffsMap,
-                charData.consumableActionTypeBuffsMap,
-            ];
-
-            for (const buffMap of buffMaps) {
-                const enhancingBuffs = buffMap?.['/action_types/enhancing'];
-                if (!Array.isArray(enhancingBuffs)) continue;
-
-                for (const buff of enhancingBuffs) {
-                    if (buff.typeHrid === '/buff_types/action_speed') {
-                        totalSpeedBuff += buff.flatBoost || 0;
-                    }
-                }
-            }
-
-            // Add personal buffs (Labyrinth seals)
-            totalSpeedBuff += dataManager.getPersonalBuffFlatBoost('/action_types/enhancing', '/buff_types/action_speed');
-
-            // Add level advantage: (effectiveLevel - itemLevel) / 100
-            const effectiveLevel = baseLevel + teaLevelBonus;
-            const itemLevel = getBaseItemLevel(itemHrid);
-            if (effectiveLevel > itemLevel) {
-                totalSpeedBuff += (effectiveLevel - itemLevel) / 100;
-            }
-
-            return Math.max(profitConstants_js.MIN_ACTION_TIME_SECONDS, baseTime / (1 + totalSpeedBuff));
-        } catch {
-            return 12;
-        }
-    }
-
-    /**
-     * Get enhancing speed breakdown from the game's buff maps
-     * Returns per-source speed values and total, matching the game's actual calculation
-     * @param {string} itemHrid - Item HRID being enhanced
-     * @returns {Object} Speed breakdown with total and per-source values (as percentages)
-     */
-    function getEnhancingSpeedBreakdown(itemHrid) {
-        try {
-            const charData = dataManager.characterData;
-            if (!charData)
-                return { total: 0, equipment: 0, house: 0, community: 0, consumable: 0, personal: 0, levelAdvantage: 0 };
-
-            // Get enhancing skill level
-            const enhancingSkill = charData.characterSkills?.find((s) => s.skillHrid === '/skills/enhancing');
-            const baseLevel = enhancingSkill?.level || 1;
-
-            // Get tea level bonus from consumable buff map
-            let teaLevelBonus = 0;
-            const consumableBuffs = charData.consumableActionTypeBuffsMap?.['/action_types/enhancing'];
-            if (Array.isArray(consumableBuffs)) {
-                for (const buff of consumableBuffs) {
-                    if (buff.typeHrid === '/buff_types/enhancing_level') {
-                        teaLevelBonus = buff.flatBoost || 0;
-                    }
-                }
-            }
-
-            // Read action_speed flatBoost from each buff source individually
-            const sources = {
-                equipment: charData.equipmentActionTypeBuffsMap,
-                house: charData.houseActionTypeBuffsMap,
-                community: charData.communityActionTypeBuffsMap,
-                consumable: charData.consumableActionTypeBuffsMap,
-            };
-
-            const breakdown = { equipment: 0, house: 0, community: 0, consumable: 0, personal: 0, levelAdvantage: 0 };
-
-            for (const [source, buffMap] of Object.entries(sources)) {
-                const enhancingBuffs = buffMap?.['/action_types/enhancing'];
-                if (!Array.isArray(enhancingBuffs)) continue;
-
-                for (const buff of enhancingBuffs) {
-                    if (buff.typeHrid === '/buff_types/action_speed') {
-                        breakdown[source] += buff.flatBoost || 0;
-                    }
-                }
-            }
-
-            // Personal buffs (Labyrinth seals)
-            breakdown.personal = dataManager.getPersonalBuffFlatBoost(
-                '/action_types/enhancing',
-                '/buff_types/action_speed'
-            );
-
-            // Level advantage
-            const effectiveLevel = baseLevel + teaLevelBonus;
-            const itemLevel = getBaseItemLevel(itemHrid);
-            if (effectiveLevel > itemLevel) {
-                breakdown.levelAdvantage = (effectiveLevel - itemLevel) / 100;
-            }
-
-            // Total (as decimal, e.g. 1.56 for +156%)
-            breakdown.total =
-                breakdown.equipment +
-                breakdown.house +
-                breakdown.community +
-                breakdown.consumable +
-                breakdown.personal +
-                breakdown.levelAdvantage;
-
-            return breakdown;
-        } catch {
-            return { total: 0, equipment: 0, house: 0, community: 0, consumable: 0, personal: 0, levelAdvantage: 0 };
-        }
-    }
-
-    /**
-     * Calculate enhancement predictions using character stats
-     * @param {string} itemHrid - Item HRID being enhanced
-     * @param {number} startLevel - Starting enhancement level
-     * @param {number} targetLevel - Target enhancement level
-     * @param {number} protectFrom - Level to start using protection
-     * @returns {Object|null} Prediction data or null if cannot calculate
-     */
-    function calculateEnhancementPredictions(itemHrid, startLevel, targetLevel, protectFrom) {
-        try {
-            // Get item level
-            const itemLevel = getBaseItemLevel(itemHrid);
-
-            // Use getEnhancingParams() for all character stats (level, speed, success, teas, etc.)
-            const params = enhancementConfig_js.getEnhancingParams();
-
-            // Check for blessed tea
-            const hasBlessed = params.teas?.blessed || false;
-
-            // Calculate predictions (Markov chain for attempts, protections, success rates)
-            const result = enhancementCalculator_js.calculateEnhancement({
-                enhancingLevel: params.enhancingLevel,
-                houseLevel: params.houseLevel,
-                toolBonus: params.toolBonus,
-                speedBonus: params.speedBonus,
-                itemLevel,
-                targetLevel,
-                startLevel,
-                protectFrom,
-                blessedTea: hasBlessed,
-                guzzlingBonus: params.guzzlingBonus,
-            });
-
-            if (!result) {
-                return null;
-            }
-
-            // Calculate per-action time from the game's buff maps (authoritative source)
-            // instead of the hardcoded formula in calculateEnhancement
-            const perActionTime = getEnhancingActionTime(itemHrid);
-
-            return {
-                expectedAttempts: Math.round(result.attemptsRounded),
-                expectedProtections: Math.round(result.protectionCount),
-                expectedTime: perActionTime * result.attempts,
-                perActionTime,
-                successMultiplier: result.successMultiplier,
-            };
-        } catch {
-            return null;
-        }
-    }
-
-    var itemNamesZh = {
-        Coin: '金币',
-        'Task Token': '任务代币',
-        'Labyrinth Token': '迷宫代币',
-        'Chimerical Token': '奇幻代币',
-        'Sinister Token': '阴森代币',
-        'Enchanted Token': '秘法代币',
-        'Pirate Token': '海盗代币',
-        Cowbell: '牛铃',
-        'Bag Of 10 Cowbells': '牛铃袋 (10个)',
-        "Purple's Gift": '小紫牛的礼物',
-        'Small Meteorite Cache': '小陨石舱',
-        'Medium Meteorite Cache': '中陨石舱',
-        'Large Meteorite Cache': '大陨石舱',
-        "Small Artisan's Crate": '小工匠匣',
-        "Medium Artisan's Crate": '中工匠匣',
-        "Large Artisan's Crate": '大工匠匣',
-        'Small Treasure Chest': '小宝箱',
-        'Medium Treasure Chest': '中宝箱',
-        'Large Treasure Chest': '大宝箱',
-        'Chimerical Chest': '奇幻宝箱',
-        'Sinister Chest': '阴森宝箱',
-        'Enchanted Chest': '秘法宝箱',
-        'Pirate Chest': '海盗宝箱',
-        "Purdora's Box (Skilling)": '紫多拉之盒（生活）',
-        "Purdora's Box (Combat)": '紫多拉之盒（战斗）',
-        'Scroll Of Gathering': '采集卷轴',
-        'Scroll Of Gourmet': '美食卷轴',
-        'Scroll Of Processing': '加工卷轴',
-        'Scroll Of Efficiency': '效率卷轴',
-        'Scroll Of Action Speed': '行动速度卷轴',
-        'Scroll Of Combat Drop': '战斗掉落卷轴',
-        'Scroll Of Attack Speed': '攻击速度卷轴',
-        'Scroll Of Cast Speed': '施法速度卷轴',
-        'Scroll Of Damage': '伤害卷轴',
-        'Scroll Of Critical Rate': '暴击率卷轴',
-        'Scroll Of Wisdom': '经验卷轴',
-        'Scroll Of Rare Find': '稀有发现卷轴',
-        'Blue Key Fragment': '蓝色钥匙碎片',
-        'Green Key Fragment': '绿色钥匙碎片',
-        'Purple Key Fragment': '紫色钥匙碎片',
-        'White Key Fragment': '白色钥匙碎片',
-        'Orange Key Fragment': '橙色钥匙碎片',
-        'Brown Key Fragment': '棕色钥匙碎片',
-        'Stone Key Fragment': '石头钥匙碎片',
-        'Dark Key Fragment': '黑暗钥匙碎片',
-        'Burning Key Fragment': '燃烧钥匙碎片',
-        Donut: '甜甜圈',
-        'Blueberry Donut': '蓝莓甜甜圈',
-        'Blackberry Donut': '黑莓甜甜圈',
-        'Strawberry Donut': '草莓甜甜圈',
-        'Mooberry Donut': '哞莓甜甜圈',
-        'Marsberry Donut': '火星莓甜甜圈',
-        'Spaceberry Donut': '太空莓甜甜圈',
-        Cupcake: '纸杯蛋糕',
-        'Blueberry Cake': '蓝莓蛋糕',
-        'Blackberry Cake': '黑莓蛋糕',
-        'Strawberry Cake': '草莓蛋糕',
-        'Mooberry Cake': '哞莓蛋糕',
-        'Marsberry Cake': '火星莓蛋糕',
-        'Spaceberry Cake': '太空莓蛋糕',
-        Gummy: '软糖',
-        'Apple Gummy': '苹果软糖',
-        'Orange Gummy': '橙子软糖',
-        'Plum Gummy': '李子软糖',
-        'Peach Gummy': '桃子软糖',
-        'Dragon Fruit Gummy': '火龙果软糖',
-        'Star Fruit Gummy': '杨桃软糖',
-        Yogurt: '酸奶',
-        'Apple Yogurt': '苹果酸奶',
-        'Orange Yogurt': '橙子酸奶',
-        'Plum Yogurt': '李子酸奶',
-        'Peach Yogurt': '桃子酸奶',
-        'Dragon Fruit Yogurt': '火龙果酸奶',
-        'Star Fruit Yogurt': '杨桃酸奶',
-        'Milking Tea': '挤奶茶',
-        'Foraging Tea': '采摘茶',
-        'Woodcutting Tea': '伐木茶',
-        'Cooking Tea': '烹饪茶',
-        'Brewing Tea': '冲泡茶',
-        'Alchemy Tea': '炼金茶',
-        'Enhancing Tea': '强化茶',
-        'Cheesesmithing Tea': '奶酪锻造茶',
-        'Crafting Tea': '制作茶',
-        'Tailoring Tea': '缝纫茶',
-        'Super Milking Tea': '超级挤奶茶',
-        'Super Foraging Tea': '超级采摘茶',
-        'Super Woodcutting Tea': '超级伐木茶',
-        'Super Cooking Tea': '超级烹饪茶',
-        'Super Brewing Tea': '超级冲泡茶',
-        'Super Alchemy Tea': '超级炼金茶',
-        'Super Enhancing Tea': '超级强化茶',
-        'Super Crafting Tea': '超级制作茶',
-        'Super Tailoring Tea': '超级缝纫茶',
-        'Ultra Milking Tea': '究极挤奶茶',
-        'Ultra Foraging Tea': '究极采摘茶',
-        'Ultra Woodcutting Tea': '究极伐木茶',
-        'Ultra Cooking Tea': '究极烹饪茶',
-        'Ultra Brewing Tea': '究极冲泡茶',
-        'Ultra Alchemy Tea': '究极炼金茶',
-        'Ultra Enhancing Tea': '究极强化茶',
-        'Ultra Crafting Tea': '究极制作茶',
-        'Ultra Tailoring Tea': '究极缝纫茶',
-        'Gathering Tea': '采集茶',
-        'Gourmet Tea': '美食茶',
-        'Wisdom Tea': '经验茶',
-        'Processing Tea': '加工茶',
-        'Efficiency Tea': '效率茶',
-        'Artisan Tea': '工匠茶',
-        'Catalytic Tea': '催化茶',
-        'Blessed Tea': '福气茶',
-        'Stamina Coffee': '耐力咖啡',
-        'Intelligence Coffee': '智力咖啡',
-        'Defense Coffee': '防御咖啡',
-        'Attack Coffee': '攻击咖啡',
-        'Melee Coffee': '近战咖啡',
-        'Ranged Coffee': '远程咖啡',
-        'Magic Coffee': '魔法咖啡',
-        'Super Stamina Coffee': '超级耐力咖啡',
-        'Super Intelligence Coffee': '超级智力咖啡',
-        'Super Defense Coffee': '超级防御咖啡',
-        'Super Attack Coffee': '超级攻击咖啡',
-        'Super Melee Coffee': '超级近战咖啡',
-        'Super Ranged Coffee': '超级远程咖啡',
-        'Super Magic Coffee': '超级魔法咖啡',
-        'Ultra Stamina Coffee': '究极耐力咖啡',
-        'Ultra Intelligence Coffee': '究极智力咖啡',
-        'Ultra Defense Coffee': '究极防御咖啡',
-        'Ultra Attack Coffee': '究极攻击咖啡',
-        'Ultra Melee Coffee': '究极近战咖啡',
-        'Ultra Ranged Coffee': '究极远程咖啡',
-        'Ultra Magic Coffee': '究极魔法咖啡',
-        'Wisdom Coffee': '经验咖啡',
-        'Lucky Coffee': '幸运咖啡',
-        'Swiftness Coffee': '迅捷咖啡',
-        'Channeling Coffee': '吟唱咖啡',
-        'Critical Coffee': '暴击咖啡',
-        Poke: '破胆之刺',
-        Impale: '透骨之刺',
-        Puncture: '破甲之刺',
-        'Penetrating Strike': '贯心之刺',
-        Scratch: '爪影斩',
-        Cleave: '分裂斩',
-        Maim: '血刃斩',
-        'Crippling Slash': '致残斩',
-        Smack: '重碾',
-        Sweep: '重扫',
-        'Stunning Blow': '重锤',
-        'Fracturing Impact': '碎裂冲击',
-        'Shield Bash': '盾击',
-        'Quick Shot': '快速射击',
-        'Aqua Arrow': '流水箭',
-        'Flame Arrow': '烈焰箭',
-        'Rain Of Arrows': '箭雨',
-        'Silencing Shot': '沉默之箭',
-        'Steady Shot': '稳定射击',
-        'Pestilent Shot': '疫病射击',
-        'Penetrating Shot': '贯穿射击',
-        'Water Strike': '流水冲击',
-        'Ice Spear': '冰枪术',
-        'Frost Surge': '冰霜爆裂',
-        'Mana Spring': '法力喷泉',
-        Entangle: '缠绕',
-        'Toxic Pollen': '剧毒粉尘',
-        "Nature's Veil": '自然菌幕',
-        'Life Drain': '生命吸取',
-        Fireball: '火球',
-        'Flame Blast': '熔岩爆裂',
-        Firestorm: '火焰风暴',
-        'Smoke Burst': '烟爆灭影',
-        'Minor Heal': '初级自愈术',
-        Heal: '自愈术',
-        'Quick Aid': '快速治疗术',
-        Rejuvenate: '群体治疗术',
-        Taunt: '嘲讽',
-        Provoke: '挑衅',
-        Toughness: '坚韧',
-        Elusiveness: '闪避',
-        Precision: '精确',
-        Berserk: '狂暴',
-        'Elemental Affinity': '元素增幅',
-        Frenzy: '狂速',
-        'Spike Shell': '尖刺防护',
-        Retribution: '惩戒',
-        Vampirism: '吸血',
-        Revive: '复活',
-        Insanity: '疯狂',
-        Invincible: '无敌',
-        'Speed Aura': '速度光环',
-        'Guardian Aura': '守护光环',
-        'Fierce Aura': '物理光环',
-        'Critical Aura': '暴击光环',
-        'Mystic Aura': '元素光环',
-        'Gobo Stabber': '哥布林长剑',
-        'Gobo Slasher': '哥布林关刀',
-        'Gobo Smasher': '哥布林狼牙棒',
-        'Spiked Bulwark': '尖刺重盾',
-        'Werewolf Slasher': '狼人关刀',
-        'Griffin Bulwark': '狮鹫重盾',
-        'Griffin Bulwark (R)': '狮鹫重盾（精）',
-        'Gobo Shooter': '哥布林弹弓',
-        'Vampiric Bow': '吸血弓',
-        'Cursed Bow': '咒怨之弓',
-        'Cursed Bow (R)': '咒怨之弓（精）',
-        'Gobo Boomstick': '哥布林火棍',
-        'Cheese Bulwark': '奶酪重盾',
-        'Verdant Bulwark': '翠绿重盾',
-        'Azure Bulwark': '蔚蓝重盾',
-        'Burble Bulwark': '深紫重盾',
-        'Crimson Bulwark': '绛红重盾',
-        'Rainbow Bulwark': '彩虹重盾',
-        'Holy Bulwark': '神圣重盾',
-        'Wooden Bow': '木弓',
-        'Birch Bow': '桦木弓',
-        'Cedar Bow': '雪松弓',
-        'Purpleheart Bow': '紫心弓',
-        'Ginkgo Bow': '银杏弓',
-        'Redwood Bow': '红杉弓',
-        'Arcane Bow': '神秘弓',
-        'Stalactite Spear': '石钟长枪',
-        'Granite Bludgeon': '花岗岩大棒',
-        'Furious Spear': '狂怒长枪',
-        'Furious Spear (R)': '狂怒长枪（精）',
-        'Regal Sword': '君王之剑',
-        'Regal Sword (R)': '君王之剑（精）',
-        'Chaotic Flail': '混沌连枷',
-        'Chaotic Flail (R)': '混沌连枷（精）',
-        'Soul Hunter Crossbow': '灵魂猎手弩',
-        'Sundering Crossbow': '裂空之弩',
-        'Sundering Crossbow (R)': '裂空之弩（精）',
-        'Frost Staff': '冰霜法杖',
-        'Infernal Battlestaff': '炼狱法杖',
-        'Jackalope Staff': '鹿角兔之杖',
-        'Rippling Trident': '涟漪三叉戟',
-        'Rippling Trident (R)': '涟漪三叉戟（精）',
-        'Blooming Trident': '绽放三叉戟',
-        'Blooming Trident (R)': '绽放三叉戟（精）',
-        'Blazing Trident': '炽焰三叉戟',
-        'Blazing Trident (R)': '炽焰三叉戟（精）',
-        'Cheese Sword': '奶酪剑',
-        'Verdant Sword': '翠绿剑',
-        'Azure Sword': '蔚蓝剑',
-        'Burble Sword': '深紫剑',
-        'Crimson Sword': '绛红剑',
-        'Rainbow Sword': '彩虹剑',
-        'Holy Sword': '神圣剑',
-        'Cheese Spear': '奶酪长枪',
-        'Verdant Spear': '翠绿长枪',
-        'Azure Spear': '蔚蓝长枪',
-        'Burble Spear': '深紫长枪',
-        'Crimson Spear': '绛红长枪',
-        'Rainbow Spear': '彩虹长枪',
-        'Holy Spear': '神圣长枪',
-        'Cheese Mace': '奶酪钉头锤',
-        'Verdant Mace': '翠绿钉头锤',
-        'Azure Mace': '蔚蓝钉头锤',
-        'Burble Mace': '深紫钉头锤',
-        'Crimson Mace': '绛红钉头锤',
-        'Rainbow Mace': '彩虹钉头锤',
-        'Holy Mace': '神圣钉头锤',
-        'Wooden Crossbow': '木弩',
-        'Birch Crossbow': '桦木弩',
-        'Cedar Crossbow': '雪松弩',
-        'Purpleheart Crossbow': '紫心弩',
-        'Ginkgo Crossbow': '银杏弩',
-        'Redwood Crossbow': '红杉弩',
-        'Arcane Crossbow': '神秘弩',
-        'Wooden Water Staff': '木制水法杖',
-        'Birch Water Staff': '桦木水法杖',
-        'Cedar Water Staff': '雪松水法杖',
-        'Purpleheart Water Staff': '紫心水法杖',
-        'Ginkgo Water Staff': '银杏水法杖',
-        'Redwood Water Staff': '红杉水法杖',
-        'Arcane Water Staff': '神秘水法杖',
-        'Wooden Nature Staff': '木制自然法杖',
-        'Birch Nature Staff': '桦木自然法杖',
-        'Cedar Nature Staff': '雪松自然法杖',
-        'Purpleheart Nature Staff': '紫心自然法杖',
-        'Ginkgo Nature Staff': '银杏自然法杖',
-        'Redwood Nature Staff': '红杉自然法杖',
-        'Arcane Nature Staff': '神秘自然法杖',
-        'Wooden Fire Staff': '木制火法杖',
-        'Birch Fire Staff': '桦木火法杖',
-        'Cedar Fire Staff': '雪松火法杖',
-        'Purpleheart Fire Staff': '紫心火法杖',
-        'Ginkgo Fire Staff': '银杏火法杖',
-        'Redwood Fire Staff': '红杉火法杖',
-        'Arcane Fire Staff': '神秘火法杖',
-        'Eye Watch': '掌上监工',
-        'Snake Fang Dirk': '蛇牙短剑',
-        'Vision Shield': '视觉盾',
-        'Gobo Defender': '哥布林防御者',
-        'Vampire Fang Dirk': '吸血鬼短剑',
-        "Knight's Aegis": '骑士盾',
-        "Knight's Aegis (R)": '骑士盾（精）',
-        'Treant Shield': '树人盾',
-        'Manticore Shield': '蝎狮盾',
-        'Tome Of Healing': '治疗之书',
-        'Tome Of The Elements': '元素之书',
-        'Watchful Relic': '警戒遗物',
-        "Bishop's Codex": '主教法典',
-        "Bishop's Codex (R)": '主教法典（精）',
-        'Cheese Buckler': '奶酪圆盾',
-        'Verdant Buckler': '翠绿圆盾',
-        'Azure Buckler': '蔚蓝圆盾',
-        'Burble Buckler': '深紫圆盾',
-        'Crimson Buckler': '绛红圆盾',
-        'Rainbow Buckler': '彩虹圆盾',
-        'Holy Buckler': '神圣圆盾',
-        'Wooden Shield': '木盾',
-        'Birch Shield': '桦木盾',
-        'Cedar Shield': '雪松盾',
-        'Purpleheart Shield': '紫心盾',
-        'Ginkgo Shield': '银杏盾',
-        'Redwood Shield': '红杉盾',
-        'Arcane Shield': '神秘盾',
-        'Gatherer Cape': '采集者披风',
-        'Gatherer Cape (R)': '采集者披风（精）',
-        'Artificer Cape': '工匠披风',
-        'Artificer Cape (R)': '工匠披风（精）',
-        'Culinary Cape': '厨师披风',
-        'Culinary Cape (R)': '厨师披风（精）',
-        'Chance Cape': '机缘披风',
-        'Chance Cape (R)': '机缘披风（精）',
-        'Sinister Cape': '阴森披风',
-        'Sinister Cape (R)': '阴森披风（精）',
-        'Chimerical Quiver': '奇幻箭袋',
-        'Chimerical Quiver (R)': '奇幻箭袋（精）',
-        'Enchanted Cloak': '秘法披风',
-        'Enchanted Cloak (R)': '秘法披风（精）',
-        'Red Culinary Hat': '红色厨师帽',
-        'Snail Shell Helmet': '蜗牛壳头盔',
-        'Vision Helmet': '视觉头盔',
-        'Fluffy Red Hat': '蓬松红帽子',
-        'Corsair Helmet': '掠夺者头盔',
-        'Corsair Helmet (R)': '掠夺者头盔（精）',
-        'Acrobatic Hood': '杂技师兜帽',
-        'Acrobatic Hood (R)': '杂技师兜帽（精）',
-        "Magician's Hat": '魔术师帽',
-        "Magician's Hat (R)": '魔术师帽（精）',
-        'Cheese Helmet': '奶酪头盔',
-        'Verdant Helmet': '翠绿头盔',
-        'Azure Helmet': '蔚蓝头盔',
-        'Burble Helmet': '深紫头盔',
-        'Crimson Helmet': '绛红头盔',
-        'Rainbow Helmet': '彩虹头盔',
-        'Holy Helmet': '神圣头盔',
-        'Rough Hood': '粗糙兜帽',
-        'Reptile Hood': '爬行动物兜帽',
-        'Gobo Hood': '哥布林兜帽',
-        'Beast Hood': '野兽兜帽',
-        'Umbral Hood': '暗影兜帽',
-        'Cotton Hat': '棉帽',
-        'Linen Hat': '亚麻帽',
-        'Bamboo Hat': '竹帽',
-        'Silk Hat': '丝帽',
-        'Radiant Hat': '光辉帽',
-        "Dairyhand's Top": '挤奶工上衣',
-        "Forager's Top": '采摘者上衣',
-        "Lumberjack's Top": '伐木工上衣',
-        "Cheesemaker's Top": '奶酪师上衣',
-        "Crafter's Top": '工匠上衣',
-        "Tailor's Top": '裁缝上衣',
-        "Chef's Top": '厨师上衣',
-        "Brewer's Top": '饮品师上衣',
-        "Alchemist's Top": '炼金师上衣',
-        "Enhancer's Top": '强化师上衣',
-        'Gator Vest': '鳄鱼马甲',
-        'Turtle Shell Body': '龟壳胸甲',
-        'Colossus Plate Body': '巨像胸甲',
-        'Demonic Plate Body': '恶魔胸甲',
-        'Anchorbound Plate Body': '锚定胸甲',
-        'Anchorbound Plate Body (R)': '锚定胸甲（精）',
-        'Maelstrom Plate Body': '怒涛胸甲',
-        'Maelstrom Plate Body (R)': '怒涛胸甲（精）',
-        'Marine Tunic': '海洋皮衣',
-        'Revenant Tunic': '亡灵皮衣',
-        'Griffin Tunic': '狮鹫皮衣',
-        'Kraken Tunic': '克拉肯皮衣',
-        'Kraken Tunic (R)': '克拉肯皮衣（精）',
-        'Icy Robe Top': '冰霜袍服',
-        'Flaming Robe Top': '烈焰袍服',
-        'Luna Robe Top': '月神袍服',
-        'Royal Water Robe Top': '皇家水系袍服',
-        'Royal Water Robe Top (R)': '皇家水系袍服（精）',
-        'Royal Nature Robe Top': '皇家自然系袍服',
-        'Royal Nature Robe Top (R)': '皇家自然系袍服（精）',
-        'Royal Fire Robe Top': '皇家火系袍服',
-        'Royal Fire Robe Top (R)': '皇家火系袍服（精）',
-        'Cheese Plate Body': '奶酪胸甲',
-        'Verdant Plate Body': '翠绿胸甲',
-        'Azure Plate Body': '蔚蓝胸甲',
-        'Burble Plate Body': '深紫胸甲',
-        'Crimson Plate Body': '绛红胸甲',
-        'Rainbow Plate Body': '彩虹胸甲',
-        'Holy Plate Body': '神圣胸甲',
-        'Rough Tunic': '粗糙皮衣',
-        'Reptile Tunic': '爬行动物皮衣',
-        'Gobo Tunic': '哥布林皮衣',
-        'Beast Tunic': '野兽皮衣',
-        'Umbral Tunic': '暗影皮衣',
-        'Cotton Robe Top': '棉袍服',
-        'Linen Robe Top': '亚麻袍服',
-        'Bamboo Robe Top': '竹袍服',
-        'Silk Robe Top': '丝绸袍服',
-        'Radiant Robe Top': '光辉袍服',
-        "Dairyhand's Bottoms": '挤奶工下装',
-        "Forager's Bottoms": '采摘者下装',
-        "Lumberjack's Bottoms": '伐木工下装',
-        "Cheesemaker's Bottoms": '奶酪师下装',
-        "Crafter's Bottoms": '工匠下装',
-        "Tailor's Bottoms": '裁缝下装',
-        "Chef's Bottoms": '厨师下装',
-        "Brewer's Bottoms": '饮品师下装',
-        "Alchemist's Bottoms": '炼金师下装',
-        "Enhancer's Bottoms": '强化师下装',
-        'Turtle Shell Legs': '龟壳腿甲',
-        'Colossus Plate Legs': '巨像腿甲',
-        'Demonic Plate Legs': '恶魔腿甲',
-        'Anchorbound Plate Legs': '锚定腿甲',
-        'Anchorbound Plate Legs (R)': '锚定腿甲（精）',
-        'Maelstrom Plate Legs': '怒涛腿甲',
-        'Maelstrom Plate Legs (R)': '怒涛腿甲（精）',
-        'Marine Chaps': '航海皮裤',
-        'Revenant Chaps': '亡灵皮裤',
-        'Griffin Chaps': '狮鹫皮裤',
-        'Kraken Chaps': '克拉肯皮裤',
-        'Kraken Chaps (R)': '克拉肯皮裤（精）',
-        'Icy Robe Bottoms': '冰霜袍裙',
-        'Flaming Robe Bottoms': '烈焰袍裙',
-        'Luna Robe Bottoms': '月神袍裙',
-        'Royal Water Robe Bottoms': '皇家水系袍裙',
-        'Royal Water Robe Bottoms (R)': '皇家水系袍裙（精）',
-        'Royal Nature Robe Bottoms': '皇家自然系袍裙',
-        'Royal Nature Robe Bottoms (R)': '皇家自然系袍裙（精）',
-        'Royal Fire Robe Bottoms': '皇家火系袍裙',
-        'Royal Fire Robe Bottoms (R)': '皇家火系袍裙（精）',
-        'Cheese Plate Legs': '奶酪腿甲',
-        'Verdant Plate Legs': '翠绿腿甲',
-        'Azure Plate Legs': '蔚蓝腿甲',
-        'Burble Plate Legs': '深紫腿甲',
-        'Crimson Plate Legs': '绛红腿甲',
-        'Rainbow Plate Legs': '彩虹腿甲',
-        'Holy Plate Legs': '神圣腿甲',
-        'Rough Chaps': '粗糙皮裤',
-        'Reptile Chaps': '爬行动物皮裤',
-        'Gobo Chaps': '哥布林皮裤',
-        'Beast Chaps': '野兽皮裤',
-        'Umbral Chaps': '暗影皮裤',
-        'Cotton Robe Bottoms': '棉袍裙',
-        'Linen Robe Bottoms': '亚麻袍裙',
-        'Bamboo Robe Bottoms': '竹袍裙',
-        'Silk Robe Bottoms': '丝绸袍裙',
-        'Radiant Robe Bottoms': '光辉袍裙',
-        'Enchanted Gloves': '附魔手套',
-        'Pincer Gloves': '蟹钳手套',
-        'Panda Gloves': '熊猫手套',
-        'Magnetic Gloves': '磁力手套',
-        'Dodocamel Gauntlets': '渡渡驼护手',
-        'Dodocamel Gauntlets (R)': '渡渡驼护手（精）',
-        'Sighted Bracers': '瞄准护腕',
-        'Marksman Bracers': '神射护腕',
-        'Marksman Bracers (R)': '神射护腕（精）',
-        'Chrono Gloves': '时空手套',
-        'Cheese Gauntlets': '奶酪护手',
-        'Verdant Gauntlets': '翠绿护手',
-        'Azure Gauntlets': '蔚蓝护手',
-        'Burble Gauntlets': '深紫护手',
-        'Crimson Gauntlets': '绛红护手',
-        'Rainbow Gauntlets': '彩虹护手',
-        'Holy Gauntlets': '神圣护手',
-        'Rough Bracers': '粗糙护腕',
-        'Reptile Bracers': '爬行动物护腕',
-        'Gobo Bracers': '哥布林护腕',
-        'Beast Bracers': '野兽护腕',
-        'Umbral Bracers': '暗影护腕',
-        'Cotton Gloves': '棉手套',
-        'Linen Gloves': '亚麻手套',
-        'Bamboo Gloves': '竹手套',
-        'Silk Gloves': '丝手套',
-        'Radiant Gloves': '光辉手套',
-        "Collector's Boots": '收藏家靴',
-        'Shoebill Shoes': '鲸头鹳鞋',
-        'Black Bear Shoes': '黑熊鞋',
-        'Grizzly Bear Shoes': '棕熊鞋',
-        'Polar Bear Shoes': '北极熊鞋',
-        'Pathbreaker Boots': '开路者靴',
-        'Pathbreaker Boots (R)': '开路者靴（精）',
-        'Centaur Boots': '半人马靴',
-        'Pathfinder Boots': '探路者靴',
-        'Pathfinder Boots (R)': '探路者靴（精）',
-        'Sorcerer Boots': '巫师靴',
-        'Pathseeker Boots': '寻路者靴',
-        'Pathseeker Boots (R)': '寻路者靴（精）',
-        'Cheese Boots': '奶酪靴',
-        'Verdant Boots': '翠绿靴',
-        'Azure Boots': '蔚蓝靴',
-        'Burble Boots': '深紫靴',
-        'Crimson Boots': '绛红靴',
-        'Rainbow Boots': '彩虹靴',
-        'Holy Boots': '神圣靴',
-        'Rough Boots': '粗糙靴',
-        'Reptile Boots': '爬行动物靴',
-        'Gobo Boots': '哥布林靴',
-        'Beast Boots': '野兽靴',
-        'Umbral Boots': '暗影靴',
-        'Cotton Boots': '棉靴',
-        'Linen Boots': '亚麻靴',
-        'Bamboo Boots': '竹靴',
-        'Silk Boots': '丝靴',
-        'Radiant Boots': '光辉靴',
-        'Small Pouch': '小袋子',
-        'Medium Pouch': '中袋子',
-        'Large Pouch': '大袋子',
-        'Giant Pouch': '巨大袋子',
-        'Gluttonous Pouch': '贪食之袋',
-        'Guzzling Pouch': '暴饮之囊',
-        'Necklace Of Efficiency': '效率项链',
-        'Fighter Necklace': '战士项链',
-        'Ranger Necklace': '射手项链',
-        'Wizard Necklace': '巫师项链',
-        'Necklace Of Wisdom': '经验项链',
-        'Necklace Of Speed': '速度项链',
-        "Philosopher's Necklace": '贤者项链',
-        'Earrings Of Gathering': '采集耳环',
-        'Earrings Of Essence Find': '精华发现耳环',
-        'Earrings Of Armor': '护甲耳环',
-        'Earrings Of Regeneration': '恢复耳环',
-        'Earrings Of Resistance': '抗性耳环',
-        'Earrings Of Rare Find': '稀有发现耳环',
-        'Earrings Of Critical Strike': '暴击耳环',
-        "Philosopher's Earrings": '贤者耳环',
-        'Ring Of Gathering': '采集戒指',
-        'Ring Of Essence Find': '精华发现戒指',
-        'Ring Of Armor': '护甲戒指',
-        'Ring Of Regeneration': '恢复戒指',
-        'Ring Of Resistance': '抗性戒指',
-        'Ring Of Rare Find': '稀有发现戒指',
-        'Ring Of Critical Strike': '暴击戒指',
-        "Philosopher's Ring": '贤者戒指',
-        'Trainee Milking Charm': '实习挤奶护符',
-        'Basic Milking Charm': '基础挤奶护符',
-        'Advanced Milking Charm': '高级挤奶护符',
-        'Expert Milking Charm': '专家挤奶护符',
-        'Master Milking Charm': '大师挤奶护符',
-        'Grandmaster Milking Charm': '宗师挤奶护符',
-        'Trainee Foraging Charm': '实习采摘护符',
-        'Basic Foraging Charm': '基础采摘护符',
-        'Advanced Foraging Charm': '高级采摘护符',
-        'Expert Foraging Charm': '专家采摘护符',
-        'Master Foraging Charm': '大师采摘护符',
-        'Grandmaster Foraging Charm': '宗师采摘护符',
-        'Trainee Woodcutting Charm': '实习伐木护符',
-        'Basic Woodcutting Charm': '基础伐木护符',
-        'Advanced Woodcutting Charm': '高级伐木护符',
-        'Expert Woodcutting Charm': '专家伐木护符',
-        'Master Woodcutting Charm': '大师伐木护符',
-        'Grandmaster Woodcutting Charm': '宗师伐木护符',
-        'Trainee Cheesesmithing Charm': '实习奶酪锻造护符',
-        'Basic Cheesesmithing Charm': '基础奶酪锻造护符',
-        'Advanced Cheesesmithing Charm': '高级奶酪锻造护符',
-        'Expert Cheesesmithing Charm': '专家奶酪锻造护符',
-        'Master Cheesesmithing Charm': '大师奶酪锻造护符',
-        'Grandmaster Cheesesmithing Charm': '宗师奶酪锻造护符',
-        'Trainee Crafting Charm': '实习制作护符',
-        'Basic Crafting Charm': '基础制作护符',
-        'Advanced Crafting Charm': '高级制作护符',
-        'Expert Crafting Charm': '专家制作护符',
-        'Master Crafting Charm': '大师制作护符',
-        'Grandmaster Crafting Charm': '宗师制作护符',
-        'Trainee Tailoring Charm': '实习缝纫护符',
-        'Basic Tailoring Charm': '基础缝纫护符',
-        'Advanced Tailoring Charm': '高级缝纫护符',
-        'Expert Tailoring Charm': '专家缝纫护符',
-        'Master Tailoring Charm': '大师缝纫护符',
-        'Grandmaster Tailoring Charm': '宗师缝纫护符',
-        'Trainee Cooking Charm': '实习烹饪护符',
-        'Basic Cooking Charm': '基础烹饪护符',
-        'Advanced Cooking Charm': '高级烹饪护符',
-        'Expert Cooking Charm': '专家烹饪护符',
-        'Master Cooking Charm': '大师烹饪护符',
-        'Grandmaster Cooking Charm': '宗师烹饪护符',
-        'Trainee Brewing Charm': '实习冲泡护符',
-        'Basic Brewing Charm': '基础冲泡护符',
-        'Advanced Brewing Charm': '高级冲泡护符',
-        'Expert Brewing Charm': '专家冲泡护符',
-        'Master Brewing Charm': '大师冲泡护符',
-        'Grandmaster Brewing Charm': '宗师冲泡护符',
-        'Trainee Alchemy Charm': '实习炼金护符',
-        'Basic Alchemy Charm': '基础炼金护符',
-        'Advanced Alchemy Charm': '高级炼金护符',
-        'Expert Alchemy Charm': '专家炼金护符',
-        'Master Alchemy Charm': '大师炼金护符',
-        'Grandmaster Alchemy Charm': '宗师炼金护符',
-        'Trainee Enhancing Charm': '实习强化护符',
-        'Basic Enhancing Charm': '基础强化护符',
-        'Advanced Enhancing Charm': '高级强化护符',
-        'Expert Enhancing Charm': '专家强化护符',
-        'Master Enhancing Charm': '大师强化护符',
-        'Grandmaster Enhancing Charm': '宗师强化护符',
-        'Trainee Stamina Charm': '实习耐力护符',
-        'Basic Stamina Charm': '基础耐力护符',
-        'Advanced Stamina Charm': '高级耐力护符',
-        'Expert Stamina Charm': '专家耐力护符',
-        'Master Stamina Charm': '大师耐力护符',
-        'Grandmaster Stamina Charm': '宗师耐力护符',
-        'Trainee Intelligence Charm': '实习智力护符',
-        'Basic Intelligence Charm': '基础智力护符',
-        'Advanced Intelligence Charm': '高级智力护符',
-        'Expert Intelligence Charm': '专家智力护符',
-        'Master Intelligence Charm': '大师智力护符',
-        'Grandmaster Intelligence Charm': '宗师智力护符',
-        'Trainee Attack Charm': '实习攻击护符',
-        'Basic Attack Charm': '基础攻击护符',
-        'Advanced Attack Charm': '高级攻击护符',
-        'Expert Attack Charm': '专家攻击护符',
-        'Master Attack Charm': '大师攻击护符',
-        'Grandmaster Attack Charm': '宗师攻击护符',
-        'Trainee Defense Charm': '实习防御护符',
-        'Basic Defense Charm': '基础防御护符',
-        'Advanced Defense Charm': '高级防御护符',
-        'Expert Defense Charm': '专家防御护符',
-        'Master Defense Charm': '大师防御护符',
-        'Grandmaster Defense Charm': '宗师防御护符',
-        'Trainee Melee Charm': '实习近战护符',
-        'Basic Melee Charm': '基础近战护符',
-        'Advanced Melee Charm': '高级近战护符',
-        'Expert Melee Charm': '专家近战护符',
-        'Master Melee Charm': '大师近战护符',
-        'Grandmaster Melee Charm': '宗师近战护符',
-        'Trainee Ranged Charm': '实习远程护符',
-        'Basic Ranged Charm': '基础远程护符',
-        'Advanced Ranged Charm': '高级远程护符',
-        'Expert Ranged Charm': '专家远程护符',
-        'Master Ranged Charm': '大师远程护符',
-        'Grandmaster Ranged Charm': '宗师远程护符',
-        'Trainee Magic Charm': '实习魔法护符',
-        'Basic Magic Charm': '基础魔法护符',
-        'Advanced Magic Charm': '高级魔法护符',
-        'Expert Magic Charm': '专家魔法护符',
-        'Master Magic Charm': '大师魔法护符',
-        'Grandmaster Magic Charm': '宗师魔法护符',
-        'Basic Task Badge': '基础任务徽章',
-        'Advanced Task Badge': '高级任务徽章',
-        'Expert Task Badge': '专家任务徽章',
-        'Celestial Brush': '星空刷子',
-        'Cheese Brush': '奶酪刷子',
-        'Verdant Brush': '翠绿刷子',
-        'Azure Brush': '蔚蓝刷子',
-        'Burble Brush': '深紫刷子',
-        'Crimson Brush': '绛红刷子',
-        'Rainbow Brush': '彩虹刷子',
-        'Holy Brush': '神圣刷子',
-        'Celestial Shears': '星空剪刀',
-        'Cheese Shears': '奶酪剪刀',
-        'Verdant Shears': '翠绿剪刀',
-        'Azure Shears': '蔚蓝剪刀',
-        'Burble Shears': '深紫剪刀',
-        'Crimson Shears': '绛红剪刀',
-        'Rainbow Shears': '彩虹剪刀',
-        'Holy Shears': '神圣剪刀',
-        'Celestial Hatchet': '星空斧头',
-        'Cheese Hatchet': '奶酪斧头',
-        'Verdant Hatchet': '翠绿斧头',
-        'Azure Hatchet': '蔚蓝斧头',
-        'Burble Hatchet': '深紫斧头',
-        'Crimson Hatchet': '绛红斧头',
-        'Rainbow Hatchet': '彩虹斧头',
-        'Holy Hatchet': '神圣斧头',
-        'Celestial Hammer': '星空锤子',
-        'Cheese Hammer': '奶酪锤子',
-        'Verdant Hammer': '翠绿锤子',
-        'Azure Hammer': '蔚蓝锤子',
-        'Burble Hammer': '深紫锤子',
-        'Crimson Hammer': '绛红锤子',
-        'Rainbow Hammer': '彩虹锤子',
-        'Holy Hammer': '神圣锤子',
-        'Celestial Chisel': '星空凿子',
-        'Cheese Chisel': '奶酪凿子',
-        'Verdant Chisel': '翠绿凿子',
-        'Azure Chisel': '蔚蓝凿子',
-        'Burble Chisel': '深紫凿子',
-        'Crimson Chisel': '绛红凿子',
-        'Rainbow Chisel': '彩虹凿子',
-        'Holy Chisel': '神圣凿子',
-        'Celestial Needle': '星空针',
-        'Cheese Needle': '奶酪针',
-        'Verdant Needle': '翠绿针',
-        'Azure Needle': '蔚蓝针',
-        'Burble Needle': '深紫针',
-        'Crimson Needle': '绛红针',
-        'Rainbow Needle': '彩虹针',
-        'Holy Needle': '神圣针',
-        'Celestial Spatula': '星空锅铲',
-        'Cheese Spatula': '奶酪锅铲',
-        'Verdant Spatula': '翠绿锅铲',
-        'Azure Spatula': '蔚蓝锅铲',
-        'Burble Spatula': '深紫锅铲',
-        'Crimson Spatula': '绛红锅铲',
-        'Rainbow Spatula': '彩虹锅铲',
-        'Holy Spatula': '神圣锅铲',
-        'Celestial Pot': '星空壶',
-        'Cheese Pot': '奶酪壶',
-        'Verdant Pot': '翠绿壶',
-        'Azure Pot': '蔚蓝壶',
-        'Burble Pot': '深紫壶',
-        'Crimson Pot': '绛红壶',
-        'Rainbow Pot': '彩虹壶',
-        'Holy Pot': '神圣壶',
-        'Celestial Alembic': '星空蒸馏器',
-        'Cheese Alembic': '奶酪蒸馏器',
-        'Verdant Alembic': '翠绿蒸馏器',
-        'Azure Alembic': '蔚蓝蒸馏器',
-        'Burble Alembic': '深紫蒸馏器',
-        'Crimson Alembic': '绛红蒸馏器',
-        'Rainbow Alembic': '彩虹蒸馏器',
-        'Holy Alembic': '神圣蒸馏器',
-        'Celestial Enhancer': '星空强化器',
-        'Cheese Enhancer': '奶酪强化器',
-        'Verdant Enhancer': '翠绿强化器',
-        'Azure Enhancer': '蔚蓝强化器',
-        'Burble Enhancer': '深紫强化器',
-        'Crimson Enhancer': '绛红强化器',
-        'Rainbow Enhancer': '彩虹强化器',
-        'Holy Enhancer': '神圣强化器',
-        Milk: '牛奶',
-        'Verdant Milk': '翠绿牛奶',
-        'Azure Milk': '蔚蓝牛奶',
-        'Burble Milk': '深紫牛奶',
-        'Crimson Milk': '绛红牛奶',
-        'Rainbow Milk': '彩虹牛奶',
-        'Holy Milk': '神圣牛奶',
-        Cheese: '奶酪',
-        'Verdant Cheese': '翠绿奶酪',
-        'Azure Cheese': '蔚蓝奶酪',
-        'Burble Cheese': '深紫奶酪',
-        'Crimson Cheese': '绛红奶酪',
-        'Rainbow Cheese': '彩虹奶酪',
-        'Holy Cheese': '神圣奶酪',
-        Log: '原木',
-        'Birch Log': '白桦原木',
-        'Cedar Log': '雪松原木',
-        'Purpleheart Log': '紫心原木',
-        'Ginkgo Log': '银杏原木',
-        'Redwood Log': '红杉原木',
-        'Arcane Log': '神秘原木',
-        Lumber: '木板',
-        'Birch Lumber': '白桦木板',
-        'Cedar Lumber': '雪松木板',
-        'Purpleheart Lumber': '紫心木板',
-        'Ginkgo Lumber': '银杏木板',
-        'Redwood Lumber': '红杉木板',
-        'Arcane Lumber': '神秘木板',
-        'Rough Hide': '粗糙兽皮',
-        'Reptile Hide': '爬行动物皮',
-        'Gobo Hide': '哥布林皮',
-        'Beast Hide': '野兽皮',
-        'Umbral Hide': '暗影皮',
-        'Rough Leather': '粗糙皮革',
-        'Reptile Leather': '爬行动物皮革',
-        'Gobo Leather': '哥布林皮革',
-        'Beast Leather': '野兽皮革',
-        'Umbral Leather': '暗影皮革',
-        Cotton: '棉花',
-        Flax: '亚麻',
-        'Bamboo Branch': '竹子',
-        Cocoon: '蚕茧',
-        'Radiant Fiber': '光辉纤维',
-        'Cotton Fabric': '棉花布料',
-        'Linen Fabric': '亚麻布料',
-        'Bamboo Fabric': '竹子布料',
-        'Silk Fabric': '丝绸',
-        'Radiant Fabric': '光辉布料',
-        Egg: '鸡蛋',
-        Wheat: '小麦',
-        Sugar: '糖',
-        Blueberry: '蓝莓',
-        Blackberry: '黑莓',
-        Strawberry: '草莓',
-        Mooberry: '哞莓',
-        Marsberry: '火星莓',
-        Spaceberry: '太空莓',
-        Apple: '苹果',
-        Orange: '橙子',
-        Plum: '李子',
-        Peach: '桃子',
-        'Dragon Fruit': '火龙果',
-        'Star Fruit': '杨桃',
-        'Arabica Coffee Bean': '低级咖啡豆',
-        'Robusta Coffee Bean': '中级咖啡豆',
-        'Liberica Coffee Bean': '高级咖啡豆',
-        'Excelsa Coffee Bean': '特级咖啡豆',
-        'Fieriosa Coffee Bean': '火山咖啡豆',
-        'Spacia Coffee Bean': '太空咖啡豆',
-        'Green Tea Leaf': '绿茶叶',
-        'Black Tea Leaf': '黑茶叶',
-        'Burble Tea Leaf': '紫茶叶',
-        'Moolong Tea Leaf': '哞龙茶叶',
-        'Red Tea Leaf': '红茶叶',
-        'Emp Tea Leaf': '虚空茶叶',
-        'Catalyst Of Coinification': '点金催化剂',
-        'Catalyst Of Decomposition': '分解催化剂',
-        'Catalyst Of Transmutation': '转化催化剂',
-        'Prime Catalyst': '至高催化剂',
-        'Snake Fang': '蛇牙',
-        'Shoebill Feather': '鲸头鹳羽毛',
-        'Snail Shell': '蜗牛壳',
-        'Crab Pincer': '蟹钳',
-        'Turtle Shell': '乌龟壳',
-        'Marine Scale': '海洋鳞片',
-        'Treant Bark': '树皮',
-        'Centaur Hoof': '半人马蹄',
-        'Luna Wing': '月神翼',
-        'Gobo Rag': '哥布林抹布',
-        Goggles: '护目镜',
-        'Magnifying Glass': '放大镜',
-        'Eye Of The Watcher': '观察者之眼',
-        'Icy Cloth': '冰霜织物',
-        'Flaming Cloth': '烈焰织物',
-        "Sorcerer's Sole": '魔法师鞋底',
-        'Chrono Sphere': '时空球',
-        'Frost Sphere': '冰霜球',
-        'Panda Fluff': '熊猫绒',
-        'Black Bear Fluff': '黑熊绒',
-        'Grizzly Bear Fluff': '棕熊绒',
-        'Polar Bear Fluff': '北极熊绒',
-        'Red Panda Fluff': '小熊猫绒',
-        Magnet: '磁铁',
-        'Stalactite Shard': '钟乳石碎片',
-        'Living Granite': '花岗岩',
-        'Colossus Core': '巨像核心',
-        'Vampire Fang': '吸血鬼之牙',
-        'Werewolf Claw': '狼人之爪',
-        'Revenant Anima': '亡者之魂',
-        'Soul Fragment': '灵魂碎片',
-        'Infernal Ember': '地狱余烬',
-        'Demonic Core': '恶魔核心',
-        'Griffin Leather': '狮鹫之皮',
-        'Manticore Sting': '蝎狮之刺',
-        'Jackalope Antler': '鹿角兔之角',
-        'Dodocamel Plume': '渡渡驼之翎',
-        'Griffin Talon': '狮鹫之爪',
-        'Chimerical Refinement Shard': '奇幻精炼碎片',
-        "Acrobat's Ribbon": '杂技师彩带',
-        "Magician's Cloth": '魔术师织物',
-        'Chaotic Chain': '混沌锁链',
-        'Cursed Ball': '诅咒之球',
-        'Sinister Refinement Shard': '阴森精炼碎片',
-        'Royal Cloth': '皇家织物',
-        "Knight's Ingot": '骑士之锭',
-        "Bishop's Scroll": '主教卷轴',
-        'Regal Jewel': '君王宝石',
-        'Sundering Jewel': '裂空宝石',
-        'Enchanted Refinement Shard': '秘法精炼碎片',
-        'Marksman Brooch': '神射胸针',
-        'Corsair Crest': '掠夺者徽章',
-        'Damaged Anchor': '破损船锚',
-        'Maelstrom Plating': '怒涛甲片',
-        'Kraken Leather': '克拉肯皮革',
-        'Kraken Fang': '克拉肯之牙',
-        'Pirate Refinement Shard': '海盗精炼碎片',
-        'Pathbreaker Lodestone': '开路者磁石',
-        'Pathfinder Lodestone': '探路者磁石',
-        'Pathseeker Lodestone': '寻路者磁石',
-        'Labyrinth Refinement Shard': '迷宫精炼碎片',
-        'Butter Of Proficiency': '精通之油',
-        'Thread Of Expertise': '专精之线',
-        'Branch Of Insight': '洞察之枝',
-        'Gluttonous Energy': '贪食能量',
-        'Guzzling Energy': '暴饮能量',
-        'Milking Essence': '挤奶精华',
-        'Foraging Essence': '采摘精华',
-        'Woodcutting Essence': '伐木精华',
-        'Cheesesmithing Essence': '奶酪锻造精华',
-        'Crafting Essence': '制作精华',
-        'Tailoring Essence': '缝纫精华',
-        'Cooking Essence': '烹饪精华',
-        'Brewing Essence': '冲泡精华',
-        'Alchemy Essence': '炼金精华',
-        'Enhancing Essence': '强化精华',
-        'Swamp Essence': '沼泽精华',
-        'Aqua Essence': '海洋精华',
-        'Jungle Essence': '丛林精华',
-        'Gobo Essence': '哥布林精华',
-        Eyessence: '眼精华',
-        'Sorcerer Essence': '法师精华',
-        'Bear Essence': '熊熊精华',
-        'Golem Essence': '魔像精华',
-        'Twilight Essence': '暮光精华',
-        'Abyssal Essence': '地狱精华',
-        'Chimerical Essence': '奇幻精华',
-        'Sinister Essence': '阴森精华',
-        'Enchanted Essence': '秘法精华',
-        'Pirate Essence': '海盗精华',
-        'Labyrinth Essence': '迷宫精华',
-        'Task Crystal': '任务水晶',
-        'Star Fragment': '星光碎片',
-        Pearl: '珍珠',
-        Amber: '琥珀',
-        Garnet: '石榴石',
-        Jade: '翡翠',
-        Amethyst: '紫水晶',
-        Moonstone: '月亮石',
-        Sunstone: '太阳石',
-        "Philosopher's Stone": '贤者之石',
-        'Crushed Pearl': '珍珠碎片',
-        'Crushed Amber': '琥珀碎片',
-        'Crushed Garnet': '石榴石碎片',
-        'Crushed Jade': '翡翠碎片',
-        'Crushed Amethyst': '紫水晶碎片',
-        'Crushed Moonstone': '月亮石碎片',
-        'Crushed Sunstone': '太阳石碎片',
-        "Crushed Philosopher's Stone": '贤者之石碎片',
-        'Shard Of Protection': '保护碎片',
-        'Mirror Of Protection': '保护之镜',
-        "Philosopher's Mirror": '贤者之镜',
-        'Basic Torch': '基础火把',
-        'Advanced Torch': '进阶火把',
-        'Expert Torch': '专家火把',
-        'Basic Shroud': '基础斗篷',
-        'Advanced Shroud': '进阶斗篷',
-        'Expert Shroud': '专家斗篷',
-        'Basic Beacon': '基础探照灯',
-        'Advanced Beacon': '进阶探照灯',
-        'Expert Beacon': '专家探照灯',
-        'Basic Food Crate': '基础食物箱',
-        'Advanced Food Crate': '进阶食物箱',
-        'Expert Food Crate': '专家食物箱',
-        'Basic Tea Crate': '基础茶叶箱',
-        'Advanced Tea Crate': '进阶茶叶箱',
-        'Expert Tea Crate': '专家茶叶箱',
-        'Basic Coffee Crate': '基础咖啡箱',
-        'Advanced Coffee Crate': '进阶咖啡箱',
-        'Expert Coffee Crate': '专家咖啡箱',
-    };
-
-    /**
-     * Auto-discovers Chinese item names from the game DOM and builds a
-     * Chinese → English mapping cached in IndexedDB. Provides a unified
-     * getDisplayName() returning Chinese when available, English otherwise.
-     */
-
-
-    const STORAGE_KEY = 'Toolasha_cnItemNames';
-    const CACHE_VERSION = 2;
-    const DEBOUNCE_DELAY$1 = 5000;
-
-    const MUTATION_SELECTORS = [
-        '[class*="Item_name"]',
-        '[class*="Item_itemName"]',
-        '[class*="ItemTooltipText_name"]',
-        '[class*="Item_craftingItemName"]',
-        'svg[aria-label]',
-    ];
-
-    const ENHANCEMENT_STRIP_REGEX = /\s*\+\d+$/;
-    const CJK_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
-
-    class ItemNameTranslator {
-        constructor() {
-            this.cnNames = {};
-            this.isLoaded = false;
-            this._saveTimer = null;
-            this._dirty = false;
-            this._enToHrid = null;
-            this._hridToEn = null;
-            this._hridToEnSource = null;
-            this._observer = null;
-            this._observerStarted = false;
-        }
-
-        async load() {
-            if (this.isLoaded) return;
-            try {
-                const saved = await storage.get(STORAGE_KEY, 'settings');
-                if (
-                    saved &&
-                    typeof saved === 'object' &&
-                    saved._version === CACHE_VERSION &&
-                    Object.keys(saved).length > 1
-                ) {
-                    this.cnNames = saved;
-                }
-            } catch (_) {
-                /* ignore */
-            }
-            this.isLoaded = true;
-            this._importStaticMapping();
-        }
-
-        captureFromDOM(element, itemHrid) {
-            if (!element || !itemHrid) return;
-            const text = (element.textContent || element.getAttribute('aria-label') || '').trim();
-            if (!text || !CJK_REGEX.test(text)) return;
-            const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-            if (!baseName) return;
-            if (this.cnNames[itemHrid] === baseName) return;
-            this.cnNames[itemHrid] = baseName;
-            this._scheduleSave();
-        }
-
-        _importStaticMapping() {
-            const initData = dataManager.getInitClientData();
-            if (!initData?.itemDetailMap) return;
-            let count = 0;
-            for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                const cnName = itemNamesZh[item.name];
-                if (cnName && !this.cnNames[hrid]) {
-                    this.cnNames[hrid] = cnName;
-                    count++;
-                }
-            }
-            if (count > 0) this._scheduleSave();
-        }
-
-        _scheduleSave() {
-            if (!this.isLoaded) return;
-            this._dirty = true;
-            if (this._saveTimer) return;
-            this._saveTimer = setTimeout(async () => {
-                this._saveTimer = null;
-                if (!this._dirty) return;
-                this._dirty = false;
-                try {
-                    const data = { ...this.cnNames, _version: CACHE_VERSION };
-                    await storage.set(STORAGE_KEY, data, 'settings', true);
-                } catch (error) {
-                    console.warn('[ItemNameTranslator] Failed to save names:', error);
-                }
-            }, DEBOUNCE_DELAY$1);
-        }
-
-        flush() {
-            if (this._saveTimer) {
-                clearTimeout(this._saveTimer);
-                this._saveTimer = null;
-            }
-            if (this._dirty) {
-                this._dirty = false;
-                const data = { ...this.cnNames, _version: CACHE_VERSION };
-                storage.set(STORAGE_KEY, data, 'settings', true).catch(() => {});
-            }
-        }
-
-        _scanDomNow() {
-            for (const selector of MUTATION_SELECTORS) {
-                for (const el of document.querySelectorAll(selector)) {
-                    this._tryCaptureFromElement(el);
-                }
-            }
-        }
-
-        getDisplayName(itemHrid) {
-            if (!itemHrid) return '';
-            if (!this.isLoaded) this._lazyLoad();
-
-            const cached = this.cnNames[itemHrid];
-            if (cached) return cached;
-
-            const item = dataManager.getItemDetails(itemHrid);
-            const enName = item?.name;
-            if (!enName) return itemHrid;
-
-            const staticCn = itemNamesZh[enName];
-            if (staticCn) {
-                this.cnNames[itemHrid] = staticCn;
-                return staticCn;
-            }
-
-            return enName;
-        }
-
-        _lazyLoad() {
-            this.load().catch(() => {});
-        }
-
-        getHridFromChineseName(chineseName) {
-            if (!chineseName) return null;
-            const baseName = chineseName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-            for (const [hrid, cnName] of Object.entries(this.cnNames)) {
-                if (cnName === baseName) return hrid;
-            }
-            for (const [enName, cnName] of Object.entries(itemNamesZh)) {
-                if (cnName === baseName) {
-                    const initData = dataManager.getInitClientData();
-                    if (initData?.itemDetailMap) {
-                        for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                            if (item.name === enName) return hrid;
-                        }
-                    }
-                }
-            }
-            return null;
-        }
-
-        findHridFromDomName(chineseName) {
-            if (!chineseName) return null;
-            for (const [hrid, cnName] of Object.entries(this.cnNames)) {
-                if (cnName === chineseName) return hrid;
-            }
-            for (const [enName, cnName] of Object.entries(itemNamesZh)) {
-                if (cnName === chineseName) {
-                    const initData = dataManager.getInitClientData();
-                    if (initData?.itemDetailMap) {
-                        for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                            if (item.name === enName) return hrid;
-                        }
-                    }
-                }
-            }
-            const initData = dataManager.getInitClientData();
-            if (initData?.itemDetailMap) {
-                for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                    if (item.name === chineseName) return hrid;
-                }
-            }
-            return null;
-        }
-
-        _ensureHRIDMaps() {
-            if (this._hridToEn && this._enToHrid) return;
-            this._enToHrid = {};
-            this._hridToEn = {};
-            const initData = dataManager.getInitClientData();
-            if (!initData?.itemDetailMap) return;
-            for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                this._enToHrid[item.name] = hrid;
-                this._hridToEn[hrid] = item.name;
-            }
-        }
-
-        startObserver() {
-            if (this._observerStarted) return;
-            this._observerStarted = true;
-
-            const processNode = (node) => {
-                if (!node || node.nodeType !== 1) return;
-                for (const selector of MUTATION_SELECTORS) {
-                    if (node.matches(selector)) {
-                        this._tryCaptureFromElement(node);
-                        break;
-                    }
-                }
-                for (const selector of MUTATION_SELECTORS) {
-                    const children = node.querySelectorAll(selector);
-                    for (const child of children) {
-                        this._tryCaptureFromElement(child);
-                    }
-                }
-            };
-
-            for (const selector of MUTATION_SELECTORS) {
-                const elements = document.querySelectorAll(selector);
-                for (const el of elements) {
-                    this._tryCaptureFromElement(el);
-                }
-            }
-
-            this._observer = new MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    for (const node of mutation.addedNodes) {
-                        try {
-                            processNode(node);
-                        } catch (_) {
-                            // Skip errors from processing individual nodes
-                        }
-                    }
-                }
-            });
-
-            this._observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-            });
-        }
-
-        stopObserver() {
-            if (this._observer) {
-                this._observer.disconnect();
-                this._observer = null;
-            }
-            this._observerStarted = false;
-        }
-
-        _tryCaptureFromElement(el) {
-            if (!el) return;
-            const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
-            if (!text) return;
-
-            if (!CJK_REGEX.test(text)) return;
-
-            const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
-            if (!baseName) return;
-
-            for (const [, cnName] of Object.entries(this.cnNames)) {
-                if (cnName === baseName) return;
-            }
-
-            const hrid = this.findHridFromDomName(baseName);
-            if (hrid) {
-                this.cnNames[hrid] = baseName;
-                this._scheduleSave();
-            } else {
-                // Log first 5 failures
-                if (!this._failCount) this._failCount = 0;
-                if (this._failCount < 5) {
-                    console.log('[ItemNameTranslator] CJK text found but no HRID match:', baseName);
-                    this._failCount++;
-                }
-            }
-        }
-    }
-
-    const itemNameTranslator = new ItemNameTranslator();
 
     /**
      * Enhancement Display
@@ -1548,8 +110,28 @@
             // Detect protection item once (avoid repeated DOM queries)
             const protectionItemHrid = getProtectionItemFromUI(panel);
 
-            // Calculate per-action time from game's buff maps (authoritative source)
-            const speedBreakdown = getEnhancingSpeedBreakdown(itemHrid);
+            // Build speed breakdown from params (respects manual override)
+            const itemLevel = dataManager.getInitClientData()?.itemDetailMap?.[itemHrid]?.itemLevel || 0;
+            const levelAdvantage = params.enhancingLevel > itemLevel ? (params.enhancingLevel - itemLevel) / 100 : 0;
+            const autoDetect = config.getSettingValue('enhanceSim_autoDetect', false);
+            const personalSpeed = autoDetect
+                ? dataManager.getPersonalBuffFlatBoost('/action_types/enhancing', '/buff_types/action_speed')
+                : 0;
+            const speedBreakdown = {
+                equipment: (params.equipmentSpeedBonus || 0) / 100,
+                house: (params.houseSpeedBonus || 0) / 100,
+                community: (params.communitySpeedBonus || 0) / 100,
+                consumable: (params.teaSpeedBonus || 0) / 100,
+                personal: personalSpeed,
+                levelAdvantage,
+                total:
+                    (params.equipmentSpeedBonus || 0) / 100 +
+                    (params.houseSpeedBonus || 0) / 100 +
+                    (params.communitySpeedBonus || 0) / 100 +
+                    (params.teaSpeedBonus || 0) / 100 +
+                    personalSpeed +
+                    levelAdvantage,
+            };
             const actionDetails = dataManager.getActionDetails('/actions/enhancing/enhance');
             const baseTime = actionDetails?.baseTimeCost ? actionDetails.baseTimeCost / 1e9 : 12;
             const perActionTime = Math.max(profitConstants_js.MIN_ACTION_TIME_SECONDS, baseTime / (1 + speedBreakdown.total));
@@ -1564,8 +146,7 @@
                 effectiveProtectFrom,
                 itemDetails.enhancementCosts || [],
                 protectionItemHrid,
-                speedBreakdown,
-                itemHrid
+                speedBreakdown
             );
             injectDisplay(panel, html);
 
@@ -1611,11 +192,9 @@
 
         lines.push('<div style="margin-top: 12px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;">');
         lines.push('<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">');
+        lines.push('<div style="color: #ffa500; font-weight: bold; font-size: 0.95em;">Costs by Enhancement Level:</div>');
         lines.push(
-            `<div style="color: #ffa500; font-weight: bold; font-size: 0.95em;">${i18n_js.t('Costs by Enhancement Level:')}</div>`
-        );
-        lines.push(
-            `<button id="mwi-expand-costs-table-btn" style="background: rgba(0, 255, 234, 0.1); border: 1px solid #00ffe7; color: #00ffe7; cursor: pointer; font-size: 18px; font-weight: bold; padding: 4px 10px; border-radius: 4px; transition: all 0.15s ease;" title="${i18n_js.t('View full table')}">⤢</button>`
+            '<button id="mwi-expand-costs-table-btn" style="background: rgba(0, 255, 234, 0.1); border: 1px solid #00ffe7; color: #00ffe7; cursor: pointer; font-size: 18px; font-weight: bold; padding: 4px 10px; border-radius: 4px; transition: all 0.15s ease;" title="View full table">⤢</button>'
         );
         lines.push('</div>');
 
@@ -1662,7 +241,7 @@
                     materialCost += itemCost;
 
                     // Store breakdown by item name with quantity and unit price
-                    const itemName = itemNameTranslator.getDisplayName(cost.itemHrid);
+                    const itemName = itemDetail?.name || cost.itemHrid;
                     materialBreakdown[itemName] = {
                         cost: itemCost,
                         quantity: quantity,
@@ -1685,7 +264,7 @@
                 }
 
                 protectionCost = calc.protectionCount * protectionPrice;
-                const protectionName = itemNameTranslator.getDisplayName(protectionItemHrid);
+                const protectionName = protectionItemDetail?.name || protectionItemHrid;
                 materialBreakdown[protectionName] = {
                     cost: protectionCost,
                     quantity: calc.protectionCount,
@@ -1765,7 +344,7 @@
                 `<div style="color: #fff; font-size: 0.85em; margin-top: 4px;">• Use mirrors starting at <strong>+${mirrorStartLevel}</strong></div>`
             );
             lines.push(
-                `<div style="color: #88ff88; font-size: 0.85em;">• Total savings to +20: <strong>${Math.round(totalSavings).toLocaleString()}</strong> coins</div>`
+                `<div style="color: #88ff88; font-size: 0.85em;">• Total savings to +20: <strong>${formatters_js.formatLargeNumber(Math.round(totalSavings))}</strong> coins</div>`
             );
             lines.push(
                 `<div style="color: #aaa; font-size: 0.75em; margin-top: 4px; font-style: italic;">Rows highlighted in gold show where mirror is cheaper</div>`
@@ -1849,12 +428,12 @@
                 }
             });
 
-            lines.push(`<td style="padding: 6px 4px; text-align: right; color: #ccc;">${formatters_js.timeReadableZh(data.time)}</td>`);
+            lines.push(`<td style="padding: 6px 4px; text-align: right; color: #ccc;">${formatters_js.timeReadable(data.time)}</td>`);
             lines.push(
-                `<td style="padding: 6px 4px; text-align: right; color: ${config.COLOR_XP_RATE};">${data.xpPerHour > 0 ? data.xpPerHour.toLocaleString() : '-'}</td>`
+                `<td style="padding: 6px 4px; text-align: right; color: ${config.COLOR_XP_RATE};">${data.xpPerHour > 0 ? formatters_js.formatLargeNumber(data.xpPerHour) : '-'}</td>`
             );
             lines.push(
-                `<td style="padding: 6px 4px; text-align: right; color: #ffa500;">${Math.round(data.cost).toLocaleString()}</td>`
+                `<td style="padding: 6px 4px; text-align: right; color: #ffa500;">${formatters_js.formatLargeNumber(Math.round(data.cost))}</td>`
             );
 
             // Add Mirror Cost column if Philosopher's Mirror is equipped
@@ -1889,9 +468,14 @@
      * @returns {number} Protect from level (0 = never, 1-20)
      */
     function getProtectFromLevelFromUI(panel) {
-        const inputs = Array.from(panel.querySelectorAll('input[type="number"]'));
-        if (inputs.length > 2) {
-            const input = inputs[2]; // Protect From Level is the third number input
+        // Find the "Protect From Level" input
+        const labels = Array.from(panel.querySelectorAll('*')).filter(
+            (el) => el.textContent.trim() === 'Protect From Level' && el.children.length === 0
+        );
+
+        if (labels.length > 0) {
+            const parent = labels[0].parentElement;
+            const input = parent.querySelector('input[type="number"], input[type="text"]');
             if (input && input.value) {
                 const value = parseInt(input.value, 10);
                 return Math.max(0, Math.min(20, value)); // Clamp 0-20
@@ -1922,8 +506,7 @@
         protectFromLevel,
         enhancementCosts,
         protectionItemHrid,
-        speedBreakdown,
-        itemHrid
+        speedBreakdown
     ) {
         const lines = [];
 
@@ -1934,20 +517,20 @@
         const isAutoDetect = config.getSettingValue('enhanceSim_autoDetect', false);
         lines.push(
             '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">' +
-                `<button id="mwi-enhance-mode-toggle" style="font-size: 0.7em; padding: 2px 7px; border-radius: 3px; border: 1px solid #888; background: rgba(0,0,0,0.3); color: #ccc; cursor: pointer;" title="${i18n_js.t('Toggle between Auto-Detect and Manual modes')}">${isAutoDetect ? i18n_js.t('🔍 Auto') : i18n_js.t('✏️ Manual')}</button>` +
-                `<span style="color: #ffa500; font-weight: bold; font-size: 1.1em;">${i18n_js.t('⚙️ ENHANCEMENT CALCULATOR')}</span>` +
+                `<button id="mwi-enhance-mode-toggle" style="font-size: 0.7em; padding: 2px 7px; border-radius: 3px; border: 1px solid #888; background: rgba(0,0,0,0.3); color: #ccc; cursor: pointer;" title="Toggle between Auto-Detect and Manual modes">${isAutoDetect ? '🔍 Auto' : '✏️ Manual'}</button>` +
+                '<span style="color: #ffa500; font-weight: bold; font-size: 1.1em;">⚙️ ENHANCEMENT CALCULATOR</span>' +
                 '</div>'
         );
 
         // Item info
         lines.push(
-            `<div style="color: #ddd; margin-bottom: 12px; font-weight: bold;">${itemNameTranslator.getDisplayName(itemHrid)} <span style="color: #888;">(Item Level ${itemDetails.itemLevel})</span></div>`
+            `<div style="color: #ddd; margin-bottom: 12px; font-weight: bold;">${itemDetails.name} <span style="color: #888;">(Item Level ${itemDetails.itemLevel})</span></div>`
         );
 
         // Current stats section
         lines.push('<div style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; margin-bottom: 12px;">');
         lines.push(
-            `<div style="color: #ffa500; font-weight: bold; margin-bottom: 6px; font-size: 0.95em;">${i18n_js.t('Your Enhancing Stats:')}</div>`
+            '<div style="color: #ffa500; font-weight: bold; margin-bottom: 6px; font-size: 0.95em;">Your Enhancing Stats:</div>'
         );
 
         // Two column layout for stats
@@ -1956,31 +539,31 @@
         // Left column
         lines.push('<div>');
         lines.push(
-            `<div style="color: #ccc;"><span style="color: #888;">${i18n_js.t('Level:')}</span> ${Math.round(params.enhancingLevel - params.detectedTeaBonus)}${params.detectedTeaBonus > 0 ? ` <span style="color: #88ff88;">(+${params.detectedTeaBonus.toFixed(1)} ${i18n_js.t('tea')})</span>` : ''}</div>`
+            `<div style="color: #ccc;"><span style="color: #888;">Level:</span> ${Math.round(params.enhancingLevel - params.detectedTeaBonus)}${params.detectedTeaBonus > 0 ? ` <span style="color: #88ff88;">(+${params.detectedTeaBonus.toFixed(1)} tea)</span>` : ''}</div>`
         );
         lines.push(
-            `<div style="color: #ccc;"><span style="color: #888;">${i18n_js.t('House:')}</span> ${i18n_js.t('Observatory Lvl {0}', params.houseLevel)}</div>`
+            `<div style="color: #ccc;"><span style="color: #888;">House:</span> Observatory Lvl ${params.houseLevel}</div>`
         );
 
         // Display each equipment slot
         if (params.toolSlot) {
             lines.push(
-                `<div style="color: #ccc;"><span style="color: #888;">${i18n_js.t('Tool:')}</span> ${itemNameTranslator.getDisplayName(params.toolSlot.hrid)}${params.toolSlot.enhancementLevel > 0 ? ` +${params.toolSlot.enhancementLevel}` : ''}</div>`
+                `<div style="color: #ccc;"><span style="color: #888;">Tool:</span> ${params.toolSlot.name}${params.toolSlot.enhancementLevel > 0 ? ` +${params.toolSlot.enhancementLevel}` : ''}</div>`
             );
         }
         if (params.bodySlot) {
             lines.push(
-                `<div style="color: #ccc;"><span style="color: #888;">${i18n_js.t('Body:')}</span> ${itemNameTranslator.getDisplayName(params.bodySlot.hrid)}${params.bodySlot.enhancementLevel > 0 ? ` +${params.bodySlot.enhancementLevel}` : ''}</div>`
+                `<div style="color: #ccc;"><span style="color: #888;">Body:</span> ${params.bodySlot.name}${params.bodySlot.enhancementLevel > 0 ? ` +${params.bodySlot.enhancementLevel}` : ''}</div>`
             );
         }
         if (params.legsSlot) {
             lines.push(
-                `<div style="color: #ccc;"><span style="color: #888;">${i18n_js.t('Legs:')}</span> ${itemNameTranslator.getDisplayName(params.legsSlot.hrid)}${params.legsSlot.enhancementLevel > 0 ? ` +${params.legsSlot.enhancementLevel}` : ''}</div>`
+                `<div style="color: #ccc;"><span style="color: #888;">Legs:</span> ${params.legsSlot.name}${params.legsSlot.enhancementLevel > 0 ? ` +${params.legsSlot.enhancementLevel}` : ''}</div>`
             );
         }
         if (params.handsSlot) {
             lines.push(
-                `<div style="color: #ccc;"><span style="color: #888;">${i18n_js.t('Hands:')}</span> ${itemNameTranslator.getDisplayName(params.handsSlot.hrid)}${params.handsSlot.enhancementLevel > 0 ? ` +${params.handsSlot.enhancementLevel}` : ''}</div>`
+                `<div style="color: #ccc;"><span style="color: #888;">Hands:</span> ${params.handsSlot.name}${params.handsSlot.enhancementLevel > 0 ? ` +${params.handsSlot.enhancementLevel}` : ''}</div>`
             );
         }
         lines.push('</div>');
@@ -2000,7 +583,7 @@
 
         if (totalSuccess > 0) {
             lines.push(
-                `<div class="mwi-enh-toggle" data-target="mwi-enh-success" style="color: #88ff88; cursor: pointer;"><span style="color: #888;">${i18n_js.t('Success:')}</span> +${totalSuccess.toFixed(2)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
+                `<div class="mwi-enh-toggle" data-target="mwi-enh-success" style="color: #88ff88; cursor: pointer;"><span style="color: #888;">Success:</span> +${totalSuccess.toFixed(2)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
             );
             lines.push('<div id="mwi-enh-success" style="display: none;">');
 
@@ -2044,23 +627,30 @@
 
             if (equipmentSuccess > 0) {
                 lines.push(
-                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Equipment:')}</span> +${equipmentSuccess.toFixed(2)}%</div>`
+                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Equipment:</span> +${equipmentSuccess.toFixed(2)}%</div>`
                 );
+                const successSlots = (params.slotBreakdown || []).filter((s) => s.success > 0);
+                for (const slot of successSlots) {
+                    const label = slot.enhancementLevel > 0 ? `${slot.name} +${slot.enhancementLevel}` : slot.name;
+                    lines.push(
+                        `<div style="color: #88ff88; font-size: 0.75em; padding-left: 20px;"><span style="color: #555;">└</span> ${label}: +${slot.success.toFixed(2)}%</div>`
+                    );
+                }
             }
             if (houseSuccess > 0) {
                 lines.push(
-                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('House (Observatory):')}</span> +${houseSuccess.toFixed(2)}%</div>`
+                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">House (Observatory):</span> +${houseSuccess.toFixed(2)}%</div>`
                 );
             }
             const achievementSuccess = params.achievementSuccessBonus || 0;
             if (achievementSuccess > 0) {
                 lines.push(
-                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Achievement:')}</span> +${achievementSuccess.toFixed(2)}%</div>`
+                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Achievement:</span> +${achievementSuccess.toFixed(2)}%</div>`
                 );
             }
             if (successLevelAdvantage > 0) {
                 lines.push(
-                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Level advantage:')}</span> +${successLevelAdvantage.toFixed(2)}%</div>`
+                    `<div style="color: #88ff88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Level advantage:</span> +${successLevelAdvantage.toFixed(2)}%</div>`
                 );
             }
             lines.push('</div>');
@@ -2071,90 +661,108 @@
 
         if (totalSpeed > 0) {
             lines.push(
-                `<div class="mwi-enh-toggle" data-target="mwi-enh-speed" style="color: #88ccff; cursor: pointer;"><span style="color: #888;">${i18n_js.t('Speed:')}</span> +${totalSpeed.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
+                `<div class="mwi-enh-toggle" data-target="mwi-enh-speed" style="color: #88ccff; cursor: pointer;"><span style="color: #888;">Speed:</span> +${totalSpeed.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
             );
             lines.push('<div id="mwi-enh-speed" style="display: none;">');
 
             // Show breakdown from buff maps (each value is decimal, convert to %)
             if (speedBreakdown.equipment > 0) {
                 lines.push(
-                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Equipment:')}</span> +${(speedBreakdown.equipment * 100).toFixed(1)}%</div>`
+                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Equipment:</span> +${(speedBreakdown.equipment * 100).toFixed(1)}%</div>`
                 );
+                const speedSlots = (params.slotBreakdown || []).filter((s) => s.speed > 0);
+                for (const slot of speedSlots) {
+                    const label = slot.enhancementLevel > 0 ? `${slot.name} +${slot.enhancementLevel}` : slot.name;
+                    lines.push(
+                        `<div style="color: #aaddff; font-size: 0.75em; padding-left: 20px;"><span style="color: #555;">└</span> ${label}: +${slot.speed.toFixed(1)}%</div>`
+                    );
+                }
             }
             if (speedBreakdown.house > 0) {
                 lines.push(
-                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('House (Observatory):')}</span> +${(speedBreakdown.house * 100).toFixed(1)}%</div>`
+                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">House (Observatory):</span> +${(speedBreakdown.house * 100).toFixed(1)}%</div>`
                 );
             }
             if (speedBreakdown.community > 0) {
                 lines.push(
-                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Community:')}</span> +${(speedBreakdown.community * 100).toFixed(1)}%</div>`
+                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Community:</span> +${(speedBreakdown.community * 100).toFixed(1)}%</div>`
                 );
             }
             if (speedBreakdown.consumable > 0) {
                 lines.push(
-                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Tea:')}</span> +${(speedBreakdown.consumable * 100).toFixed(1)}%</div>`
+                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Tea:</span> +${(speedBreakdown.consumable * 100).toFixed(1)}%</div>`
                 );
             }
             if (speedBreakdown.personal > 0) {
                 lines.push(
-                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Labyrinth:')}</span> +${(speedBreakdown.personal * 100).toFixed(1)}%</div>`
+                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Labyrinth:</span> +${(speedBreakdown.personal * 100).toFixed(1)}%</div>`
                 );
             }
             if (speedBreakdown.levelAdvantage > 0) {
                 lines.push(
-                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Level advantage:')}</span> +${(speedBreakdown.levelAdvantage * 100).toFixed(1)}%</div>`
+                    `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Level advantage:</span> +${(speedBreakdown.levelAdvantage * 100).toFixed(1)}%</div>`
                 );
             }
             lines.push('</div>');
         } else {
-            lines.push(`<div style="color: #88ccff;"><span style="color: #888;">${i18n_js.t('Speed:')}</span> +0.0%</div>`);
+            lines.push(`<div style="color: #88ccff;"><span style="color: #888;">Speed:</span> +0.0%</div>`);
         }
 
         // Base → effective action time
         lines.push(
-            `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Base:')}</span> ${baseTime.toFixed(2)}s → ${perActionTime.toFixed(2)}s</div>`
+            `<div style="color: #aaddff; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Base:</span> ${baseTime.toFixed(2)}s → ${perActionTime.toFixed(2)}s</div>`
         );
 
         if (params.teas.blessed) {
-            // Calculate Blessed Tea bonus with Guzzling Pouch concentration
-            const blessedBonus = 1.1; // Base 1.1% from Blessed Tea
+            const blessedBonus = 1.1;
             lines.push(
-                `<div style="color: #ffdd88;"><span style="color: #888;">${i18n_js.t('Blessed:')}</span> +${blessedBonus.toFixed(1)}%</div>`
+                `<div class="mwi-enh-toggle" data-target="mwi-enh-blessed" style="color: #ffdd88; cursor: pointer;"><span style="color: #888;">Blessed:</span> +${blessedBonus.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
             );
+            lines.push('<div id="mwi-enh-blessed" style="display: none;">');
+            lines.push(
+                `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Blessed Tea:</span> ${blessedBonus}% chance to skip a level</div>`
+            );
+            lines.push('</div>');
         }
         if (params.rareFindBonus > 0) {
             lines.push(
-                `<div class="mwi-enh-toggle" data-target="mwi-enh-rarefind" style="color: #ffaa55; cursor: pointer;"><span style="color: #888;">${i18n_js.t('Rare Find:')}</span> +${params.rareFindBonus.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
+                `<div class="mwi-enh-toggle" data-target="mwi-enh-rarefind" style="color: #ffaa55; cursor: pointer;"><span style="color: #888;">Rare Find:</span> +${params.rareFindBonus.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
             );
             lines.push('<div id="mwi-enh-rarefind" style="display: none;">');
 
-            // Show breakdown if available
+            // Show breakdown
             const achievementRareFind = params.achievementRareFindBonus || 0;
-            if (params.houseRareFindBonus > 0 || achievementRareFind > 0) {
-                const equipmentRareFind = Math.max(
-                    0,
-                    params.rareFindBonus - params.houseRareFindBonus - achievementRareFind
-                );
-                if (equipmentRareFind > 0) {
-                    lines.push(
-                        `<div style="color: #ffaa55; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Equipment:')}</span> +${equipmentRareFind.toFixed(1)}%</div>`
-                    );
-                }
+            const equipmentRareFind = Math.max(
+                0,
+                params.rareFindBonus - (params.houseRareFindBonus || 0) - achievementRareFind
+            );
+            if (equipmentRareFind > 0) {
                 lines.push(
-                    `<div style="color: #ffaa55; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('House Rooms:')}</span> +${params.houseRareFindBonus.toFixed(1)}%</div>`
+                    `<div style="color: #ffaa55; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Equipment:</span> +${equipmentRareFind.toFixed(1)}%</div>`
                 );
-                if (achievementRareFind > 0) {
+                const rfSlots = (params.slotBreakdown || []).filter((s) => s.rareFind > 0);
+                for (const slot of rfSlots) {
+                    const label = slot.enhancementLevel > 0 ? `${slot.name} +${slot.enhancementLevel}` : slot.name;
                     lines.push(
-                        `<div style="color: #ffaa55; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Achievement:')}</span> +${achievementRareFind.toFixed(1)}%</div>`
+                        `<div style="color: #ffaa55; font-size: 0.75em; padding-left: 20px;"><span style="color: #555;">└</span> ${label}: +${slot.rareFind.toFixed(1)}%</div>`
                     );
                 }
+            }
+            if (params.houseRareFindBonus > 0) {
+                lines.push(
+                    `<div style="color: #ffaa55; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">House Rooms:</span> +${params.houseRareFindBonus.toFixed(1)}%</div>`
+                );
+            }
+            if (achievementRareFind > 0) {
+                lines.push(
+                    `<div style="color: #ffaa55; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Achievement:</span> +${achievementRareFind.toFixed(1)}%</div>`
+                );
             }
             lines.push('</div>');
         }
         if (params.experienceBonus > 0) {
             lines.push(
-                `<div class="mwi-enh-toggle" data-target="mwi-enh-experience" style="color: #ffdd88; cursor: pointer;"><span style="color: #888;">${i18n_js.t('Experience:')}</span> +${params.experienceBonus.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
+                `<div class="mwi-enh-toggle" data-target="mwi-enh-experience" style="color: #ffdd88; cursor: pointer;"><span style="color: #888;">Experience:</span> +${params.experienceBonus.toFixed(1)}% <span class="mwi-enh-arrow" style="color: #666; font-size: 0.8em;">▸</span></div>`
             );
             lines.push('<div id="mwi-enh-experience" style="display: none;">');
 
@@ -2170,28 +778,35 @@
 
             if (equipmentExperience > 0) {
                 lines.push(
-                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Equipment:')}</span> +${equipmentExperience.toFixed(1)}%</div>`
+                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Equipment:</span> +${equipmentExperience.toFixed(1)}%</div>`
                 );
+                const expSlots = (params.slotBreakdown || []).filter((s) => s.experience > 0);
+                for (const slot of expSlots) {
+                    const label = slot.enhancementLevel > 0 ? `${slot.name} +${slot.enhancementLevel}` : slot.name;
+                    lines.push(
+                        `<div style="color: #ffdd88; font-size: 0.75em; padding-left: 20px;"><span style="color: #555;">└</span> ${label}: +${slot.experience.toFixed(1)}%</div>`
+                    );
+                }
             }
             if (houseWisdom > 0) {
                 lines.push(
-                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('House Rooms (Wisdom):')}</span> +${houseWisdom.toFixed(1)}%</div>`
+                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">House Rooms (Wisdom):</span> +${houseWisdom.toFixed(1)}%</div>`
                 );
             }
             if (communityWisdom > 0) {
                 const wisdomLevel = params.communityWisdomLevel || 0;
                 lines.push(
-                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Community (Wisdom T{0}):', wisdomLevel)}</span> +${communityWisdom.toFixed(1)}%</div>`
+                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Community (Wisdom T${wisdomLevel}):</span> +${communityWisdom.toFixed(1)}%</div>`
                 );
             }
             if (teaWisdom > 0) {
                 lines.push(
-                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Wisdom Tea:')}</span> +${teaWisdom.toFixed(1)}%</div>`
+                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Wisdom Tea:</span> +${teaWisdom.toFixed(1)}%</div>`
                 );
             }
             if (achievementWisdom > 0) {
                 lines.push(
-                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">${i18n_js.t('Achievement:')}</span> +${achievementWisdom.toFixed(1)}%</div>`
+                    `<div style="color: #ffdd88; font-size: 0.8em; padding-left: 10px;"><span style="color: #666;">Achievement:</span> +${achievementWisdom.toFixed(1)}%</div>`
                 );
             }
             lines.push('</div>');
@@ -2217,7 +832,7 @@
         if (enhancementCosts && enhancementCosts.length > 0) {
             lines.push('<div style="margin-top: 12px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;">');
             lines.push(
-                `<div style="color: #ffa500; font-weight: bold; margin-bottom: 6px; font-size: 0.95em;">${i18n_js.t('Materials Per Attempt:')}</div>`
+                '<div style="color: #ffa500; font-weight: bold; margin-bottom: 6px; font-size: 0.95em;">Materials Per Attempt:</div>'
             );
 
             // Get game data for item names
@@ -2226,7 +841,7 @@
             // Materials per attempt with pricing
             enhancementCosts.forEach((cost) => {
                 const itemDetail = gameData.itemDetailMap[cost.itemHrid];
-                const itemName = itemNameTranslator.getDisplayName(cost.itemHrid);
+                const itemName = itemDetail ? itemDetail.name : cost.itemHrid;
 
                 // Get price
                 let itemPrice = 0;
@@ -2253,7 +868,8 @@
             // Show protection item cost if protection is active (level 2+) AND item is equipped
             if (protectFromLevel >= 2) {
                 if (protectionItemHrid) {
-                    const protectionItemName = itemNameTranslator.getDisplayName(protectionItemHrid);
+                    const protectionItemDetail = gameData.itemDetailMap[protectionItemHrid];
+                    const protectionItemName = protectionItemDetail?.name || protectionItemHrid;
 
                     // Get protection item price
                     let protectionPrice = 0;
@@ -2261,12 +877,11 @@
                     if (protectionMarketData && protectionMarketData.ask) {
                         protectionPrice = protectionMarketData.ask;
                     } else {
-                        const protectionItemDetail = gameData.itemDetailMap[protectionItemHrid];
                         protectionPrice = protectionItemDetail?.sellPrice || 0;
                     }
 
                     lines.push(
-                        `<div style="font-size: 0.85em; color: #ffa500; margin-top: 4px;">1× ${protectionItemName} <span style="color: #888;">${i18n_js.t('(if used)')} (@${protectionPrice.toLocaleString()})</span></div>`
+                        `<div style="font-size: 0.85em; color: #ffa500; margin-top: 4px;">1× ${protectionItemName} <span style="color: #888;">(if used) (@${protectionPrice.toLocaleString()})</span></div>`
                     );
                 }
             }
@@ -2279,19 +894,15 @@
 
         // Only show protection note if actually using protection
         if (protectFromLevel >= 2) {
-            lines.push(i18n_js.t('• Protection active from +{0} onwards (enhancement level -1 on failure)<br>', protectFromLevel));
+            lines.push(`• Protection active from +${protectFromLevel} onwards (enhancement level -1 on failure)<br>`);
         } else {
-            lines.push(i18n_js.t('• No protection used (all failures return to +0)<br>'));
+            lines.push('• No protection used (all failures return to +0)<br>');
         }
 
-        lines.push(i18n_js.t('• Attempts and time are statistical averages<br>'));
+        lines.push('• Attempts and time are statistical averages<br>');
 
         lines.push(
-            i18n_js.t(
-                '• Action time: {0}s (includes {1}% speed bonus)',
-                perActionTime.toFixed(2),
-                (speedBreakdown.total * 100).toFixed(1)
-            )
+            `• Action time: ${perActionTime.toFixed(2)}s (includes ${(speedBreakdown.total * 100).toFixed(1)}% speed bonus)`
         );
         lines.push('</div>');
 
@@ -2319,7 +930,7 @@
 
         while (current && depth < maxDepth) {
             const buttons = Array.from(current.querySelectorAll('button[role="tab"]'));
-            const currentActionTab = buttons[0]; // Current Action is the first tab
+            const currentActionTab = buttons.find((btn) => btn.textContent.trim() === 'Current Action');
 
             if (currentActionTab) {
                 // Cache it on the panel for future lookups
@@ -2355,14 +966,21 @@
             }
         }
 
-        // Save scroll position before removing existing display
+        // Save scroll position and expand state before removing existing display
         let savedScrollTop = 0;
+        const expandedSections = new Set();
         const existing = panel.querySelector('#mwi-enhancement-stats');
         if (existing) {
             const scrollContainer = existing.querySelector('#mwi-enhancement-table-scroll');
             if (scrollContainer) {
                 savedScrollTop = scrollContainer.scrollTop;
             }
+            existing.querySelectorAll('.mwi-enh-toggle').forEach((toggle) => {
+                const target = existing.querySelector(`#${toggle.dataset.target}`);
+                if (target && target.style.display !== 'none') {
+                    expandedSections.add(toggle.dataset.target);
+                }
+            });
             existing.remove();
         }
 
@@ -2406,6 +1024,15 @@
                 target.style.display = isHidden ? '' : 'none';
                 if (arrow) arrow.textContent = isHidden ? '▾' : '▸';
             });
+            // Restore previously expanded sections
+            if (expandedSections.has(toggle.dataset.target)) {
+                const target = container.querySelector(`#${toggle.dataset.target}`);
+                if (target) {
+                    target.style.display = '';
+                    const arrow = toggle.querySelector('.mwi-enh-arrow');
+                    if (arrow) arrow.textContent = '▾';
+                }
+            }
         });
 
         // Attach event listener to expand costs table button
@@ -2484,7 +1111,7 @@
 
         modal.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(0, 255, 234, 0.4); padding-bottom: 10px;">
-            <h2 style="margin: 0; color: #00ffe7; font-size: 20px;">${i18n_js.t('📊 Costs by Enhancement Level')}</h2>
+            <h2 style="margin: 0; color: #00ffe7; font-size: 20px;">📊 Costs by Enhancement Level</h2>
             <button id="mwi-close-costs-modal" style="
                 background: none;
                 border: none;
@@ -2494,10 +1121,10 @@
                 padding: 0 8px;
                 line-height: 1;
                 transition: all 0.15s ease;
-            " title="${i18n_js.t('Close')}">×</button>
+            " title="Close">×</button>
         </div>
         <div style="color: #9b9bff; font-size: 0.9em; margin-bottom: 15px;">
-            ${i18n_js.t('Full breakdown of enhancement costs for all levels')}
+            Full breakdown of enhancement costs for all levels
         </div>
     `;
 
@@ -2547,6 +1174,1205 @@
             { childList: true }
         );
     }
+
+    /**
+     * Internationalization (i18n) Module
+     * Lightweight translation layer with English-as-key fallback.
+     *
+     * Usage:
+     *   import { t, registerLocale } from '../core/i18n.js';
+     *   t('Market Prices in Tooltips')  →  '市场价格提示' (if translated)
+     *   t('Market Prices in Tooltips')  →  'Market Prices in Tooltips' (fallback)
+     *   t('Cost: {0}/hr', '100K')       →  '花费: 100K/时'
+     */
+
+    /** @type {Record<string, string>} */
+    const translations = {};
+
+    /**
+     * Translate a string. Returns the Chinese translation if available, otherwise the English key itself.
+     * Supports positional interpolation with {0}, {1}, etc.
+     *
+     * @param {string} str - English key string
+     * @param {...(string|number)} args - Positional arguments for interpolation
+     * @returns {string} Translated or fallback string
+     *
+     * @example
+     *   t('Hello')                          // '你好'
+     *   t('Unknown key')                    // 'Unknown key' (fallback)
+     *   t('Profit: {0}/hr', '12.3K')        // '利润: 12.3K/时'
+     */
+    function t(str, ...args) {
+        const translated = translations[str] !== undefined ? translations[str] : str;
+
+        if (args.length === 0) {
+            return translated;
+        }
+
+        return translated.replace(/\{(\d+)\}/g, (_, index) => {
+            const arg = args[parseInt(index, 10)];
+            return arg !== undefined ? String(arg) : `{${index}}`;
+        });
+    }
+
+    var itemNamesZh = {
+      "Coin": "金币",
+      "Task Token": "任务代币",
+      "Labyrinth Token": "迷宫代币",
+      "Chimerical Token": "奇幻代币",
+      "Sinister Token": "阴森代币",
+      "Enchanted Token": "秘法代币",
+      "Pirate Token": "海盗代币",
+      "Cowbell": "牛铃",
+      "Bag Of 10 Cowbells": "牛铃袋 (10个)",
+      "Purple's Gift": "小紫牛的礼物",
+      "Small Meteorite Cache": "小陨石舱",
+      "Medium Meteorite Cache": "中陨石舱",
+      "Large Meteorite Cache": "大陨石舱",
+      "Small Artisan's Crate": "小工匠匣",
+      "Medium Artisan's Crate": "中工匠匣",
+      "Large Artisan's Crate": "大工匠匣",
+      "Small Treasure Chest": "小宝箱",
+      "Medium Treasure Chest": "中宝箱",
+      "Large Treasure Chest": "大宝箱",
+      "Chimerical Chest": "奇幻宝箱",
+      "Sinister Chest": "阴森宝箱",
+      "Enchanted Chest": "秘法宝箱",
+      "Pirate Chest": "海盗宝箱",
+      "Purdora's Box (Skilling)": "紫多拉之盒（生活）",
+      "Purdora's Box (Combat)": "紫多拉之盒（战斗）",
+      "Scroll Of Gathering": "采集卷轴",
+      "Scroll Of Gourmet": "美食卷轴",
+      "Scroll Of Processing": "加工卷轴",
+      "Scroll Of Efficiency": "效率卷轴",
+      "Scroll Of Action Speed": "行动速度卷轴",
+      "Scroll Of Combat Drop": "战斗掉落卷轴",
+      "Scroll Of Attack Speed": "攻击速度卷轴",
+      "Scroll Of Cast Speed": "施法速度卷轴",
+      "Scroll Of Damage": "伤害卷轴",
+      "Scroll Of Critical Rate": "暴击率卷轴",
+      "Scroll Of Wisdom": "经验卷轴",
+      "Scroll Of Rare Find": "稀有发现卷轴",
+      "Blue Key Fragment": "蓝色钥匙碎片",
+      "Green Key Fragment": "绿色钥匙碎片",
+      "Purple Key Fragment": "紫色钥匙碎片",
+      "White Key Fragment": "白色钥匙碎片",
+      "Orange Key Fragment": "橙色钥匙碎片",
+      "Brown Key Fragment": "棕色钥匙碎片",
+      "Stone Key Fragment": "石头钥匙碎片",
+      "Dark Key Fragment": "黑暗钥匙碎片",
+      "Burning Key Fragment": "燃烧钥匙碎片",
+      "Donut": "甜甜圈",
+      "Blueberry Donut": "蓝莓甜甜圈",
+      "Blackberry Donut": "黑莓甜甜圈",
+      "Strawberry Donut": "草莓甜甜圈",
+      "Mooberry Donut": "哞莓甜甜圈",
+      "Marsberry Donut": "火星莓甜甜圈",
+      "Spaceberry Donut": "太空莓甜甜圈",
+      "Cupcake": "纸杯蛋糕",
+      "Blueberry Cake": "蓝莓蛋糕",
+      "Blackberry Cake": "黑莓蛋糕",
+      "Strawberry Cake": "草莓蛋糕",
+      "Mooberry Cake": "哞莓蛋糕",
+      "Marsberry Cake": "火星莓蛋糕",
+      "Spaceberry Cake": "太空莓蛋糕",
+      "Gummy": "软糖",
+      "Apple Gummy": "苹果软糖",
+      "Orange Gummy": "橙子软糖",
+      "Plum Gummy": "李子软糖",
+      "Peach Gummy": "桃子软糖",
+      "Dragon Fruit Gummy": "火龙果软糖",
+      "Star Fruit Gummy": "杨桃软糖",
+      "Yogurt": "酸奶",
+      "Apple Yogurt": "苹果酸奶",
+      "Orange Yogurt": "橙子酸奶",
+      "Plum Yogurt": "李子酸奶",
+      "Peach Yogurt": "桃子酸奶",
+      "Dragon Fruit Yogurt": "火龙果酸奶",
+      "Star Fruit Yogurt": "杨桃酸奶",
+      "Milking Tea": "挤奶茶",
+      "Foraging Tea": "采摘茶",
+      "Woodcutting Tea": "伐木茶",
+      "Cooking Tea": "烹饪茶",
+      "Brewing Tea": "冲泡茶",
+      "Alchemy Tea": "炼金茶",
+      "Enhancing Tea": "强化茶",
+      "Cheesesmithing Tea": "奶酪锻造茶",
+      "Crafting Tea": "制作茶",
+      "Tailoring Tea": "缝纫茶",
+      "Super Milking Tea": "超级挤奶茶",
+      "Super Foraging Tea": "超级采摘茶",
+      "Super Woodcutting Tea": "超级伐木茶",
+      "Super Cooking Tea": "超级烹饪茶",
+      "Super Brewing Tea": "超级冲泡茶",
+      "Super Alchemy Tea": "超级炼金茶",
+      "Super Enhancing Tea": "超级强化茶",
+      "Super Crafting Tea": "超级制作茶",
+      "Super Tailoring Tea": "超级缝纫茶",
+      "Ultra Milking Tea": "究极挤奶茶",
+      "Ultra Foraging Tea": "究极采摘茶",
+      "Ultra Woodcutting Tea": "究极伐木茶",
+      "Ultra Cooking Tea": "究极烹饪茶",
+      "Ultra Brewing Tea": "究极冲泡茶",
+      "Ultra Alchemy Tea": "究极炼金茶",
+      "Ultra Enhancing Tea": "究极强化茶",
+      "Ultra Crafting Tea": "究极制作茶",
+      "Ultra Tailoring Tea": "究极缝纫茶",
+      "Gathering Tea": "采集茶",
+      "Gourmet Tea": "美食茶",
+      "Wisdom Tea": "经验茶",
+      "Processing Tea": "加工茶",
+      "Efficiency Tea": "效率茶",
+      "Artisan Tea": "工匠茶",
+      "Catalytic Tea": "催化茶",
+      "Blessed Tea": "福气茶",
+      "Stamina Coffee": "耐力咖啡",
+      "Intelligence Coffee": "智力咖啡",
+      "Defense Coffee": "防御咖啡",
+      "Attack Coffee": "攻击咖啡",
+      "Melee Coffee": "近战咖啡",
+      "Ranged Coffee": "远程咖啡",
+      "Magic Coffee": "魔法咖啡",
+      "Super Stamina Coffee": "超级耐力咖啡",
+      "Super Intelligence Coffee": "超级智力咖啡",
+      "Super Defense Coffee": "超级防御咖啡",
+      "Super Attack Coffee": "超级攻击咖啡",
+      "Super Melee Coffee": "超级近战咖啡",
+      "Super Ranged Coffee": "超级远程咖啡",
+      "Super Magic Coffee": "超级魔法咖啡",
+      "Ultra Stamina Coffee": "究极耐力咖啡",
+      "Ultra Intelligence Coffee": "究极智力咖啡",
+      "Ultra Defense Coffee": "究极防御咖啡",
+      "Ultra Attack Coffee": "究极攻击咖啡",
+      "Ultra Melee Coffee": "究极近战咖啡",
+      "Ultra Ranged Coffee": "究极远程咖啡",
+      "Ultra Magic Coffee": "究极魔法咖啡",
+      "Wisdom Coffee": "经验咖啡",
+      "Lucky Coffee": "幸运咖啡",
+      "Swiftness Coffee": "迅捷咖啡",
+      "Channeling Coffee": "吟唱咖啡",
+      "Critical Coffee": "暴击咖啡",
+      "Poke": "破胆之刺",
+      "Impale": "透骨之刺",
+      "Puncture": "破甲之刺",
+      "Penetrating Strike": "贯心之刺",
+      "Scratch": "爪影斩",
+      "Cleave": "分裂斩",
+      "Maim": "血刃斩",
+      "Crippling Slash": "致残斩",
+      "Smack": "重碾",
+      "Sweep": "重扫",
+      "Stunning Blow": "重锤",
+      "Fracturing Impact": "碎裂冲击",
+      "Shield Bash": "盾击",
+      "Quick Shot": "快速射击",
+      "Aqua Arrow": "流水箭",
+      "Flame Arrow": "烈焰箭",
+      "Rain Of Arrows": "箭雨",
+      "Silencing Shot": "沉默之箭",
+      "Steady Shot": "稳定射击",
+      "Pestilent Shot": "疫病射击",
+      "Penetrating Shot": "贯穿射击",
+      "Water Strike": "流水冲击",
+      "Ice Spear": "冰枪术",
+      "Frost Surge": "冰霜爆裂",
+      "Mana Spring": "法力喷泉",
+      "Entangle": "缠绕",
+      "Toxic Pollen": "剧毒粉尘",
+      "Nature's Veil": "自然菌幕",
+      "Life Drain": "生命吸取",
+      "Fireball": "火球",
+      "Flame Blast": "熔岩爆裂",
+      "Firestorm": "火焰风暴",
+      "Smoke Burst": "烟爆灭影",
+      "Minor Heal": "初级自愈术",
+      "Heal": "自愈术",
+      "Quick Aid": "快速治疗术",
+      "Rejuvenate": "群体治疗术",
+      "Taunt": "嘲讽",
+      "Provoke": "挑衅",
+      "Toughness": "坚韧",
+      "Elusiveness": "闪避",
+      "Precision": "精确",
+      "Berserk": "狂暴",
+      "Elemental Affinity": "元素增幅",
+      "Frenzy": "狂速",
+      "Spike Shell": "尖刺防护",
+      "Retribution": "惩戒",
+      "Vampirism": "吸血",
+      "Revive": "复活",
+      "Insanity": "疯狂",
+      "Invincible": "无敌",
+      "Speed Aura": "速度光环",
+      "Guardian Aura": "守护光环",
+      "Fierce Aura": "物理光环",
+      "Critical Aura": "暴击光环",
+      "Mystic Aura": "元素光环",
+      "Gobo Stabber": "哥布林长剑",
+      "Gobo Slasher": "哥布林关刀",
+      "Gobo Smasher": "哥布林狼牙棒",
+      "Spiked Bulwark": "尖刺重盾",
+      "Werewolf Slasher": "狼人关刀",
+      "Griffin Bulwark": "狮鹫重盾",
+      "Griffin Bulwark (R)": "狮鹫重盾（精）",
+      "Gobo Shooter": "哥布林弹弓",
+      "Vampiric Bow": "吸血弓",
+      "Cursed Bow": "咒怨之弓",
+      "Cursed Bow (R)": "咒怨之弓（精）",
+      "Gobo Boomstick": "哥布林火棍",
+      "Cheese Bulwark": "奶酪重盾",
+      "Verdant Bulwark": "翠绿重盾",
+      "Azure Bulwark": "蔚蓝重盾",
+      "Burble Bulwark": "深紫重盾",
+      "Crimson Bulwark": "绛红重盾",
+      "Rainbow Bulwark": "彩虹重盾",
+      "Holy Bulwark": "神圣重盾",
+      "Wooden Bow": "木弓",
+      "Birch Bow": "桦木弓",
+      "Cedar Bow": "雪松弓",
+      "Purpleheart Bow": "紫心弓",
+      "Ginkgo Bow": "银杏弓",
+      "Redwood Bow": "红杉弓",
+      "Arcane Bow": "神秘弓",
+      "Stalactite Spear": "石钟长枪",
+      "Granite Bludgeon": "花岗岩大棒",
+      "Furious Spear": "狂怒长枪",
+      "Furious Spear (R)": "狂怒长枪（精）",
+      "Regal Sword": "君王之剑",
+      "Regal Sword (R)": "君王之剑（精）",
+      "Chaotic Flail": "混沌连枷",
+      "Chaotic Flail (R)": "混沌连枷（精）",
+      "Soul Hunter Crossbow": "灵魂猎手弩",
+      "Sundering Crossbow": "裂空之弩",
+      "Sundering Crossbow (R)": "裂空之弩（精）",
+      "Frost Staff": "冰霜法杖",
+      "Infernal Battlestaff": "炼狱法杖",
+      "Jackalope Staff": "鹿角兔之杖",
+      "Rippling Trident": "涟漪三叉戟",
+      "Rippling Trident (R)": "涟漪三叉戟（精）",
+      "Blooming Trident": "绽放三叉戟",
+      "Blooming Trident (R)": "绽放三叉戟（精）",
+      "Blazing Trident": "炽焰三叉戟",
+      "Blazing Trident (R)": "炽焰三叉戟（精）",
+      "Cheese Sword": "奶酪剑",
+      "Verdant Sword": "翠绿剑",
+      "Azure Sword": "蔚蓝剑",
+      "Burble Sword": "深紫剑",
+      "Crimson Sword": "绛红剑",
+      "Rainbow Sword": "彩虹剑",
+      "Holy Sword": "神圣剑",
+      "Cheese Spear": "奶酪长枪",
+      "Verdant Spear": "翠绿长枪",
+      "Azure Spear": "蔚蓝长枪",
+      "Burble Spear": "深紫长枪",
+      "Crimson Spear": "绛红长枪",
+      "Rainbow Spear": "彩虹长枪",
+      "Holy Spear": "神圣长枪",
+      "Cheese Mace": "奶酪钉头锤",
+      "Verdant Mace": "翠绿钉头锤",
+      "Azure Mace": "蔚蓝钉头锤",
+      "Burble Mace": "深紫钉头锤",
+      "Crimson Mace": "绛红钉头锤",
+      "Rainbow Mace": "彩虹钉头锤",
+      "Holy Mace": "神圣钉头锤",
+      "Wooden Crossbow": "木弩",
+      "Birch Crossbow": "桦木弩",
+      "Cedar Crossbow": "雪松弩",
+      "Purpleheart Crossbow": "紫心弩",
+      "Ginkgo Crossbow": "银杏弩",
+      "Redwood Crossbow": "红杉弩",
+      "Arcane Crossbow": "神秘弩",
+      "Wooden Water Staff": "木制水法杖",
+      "Birch Water Staff": "桦木水法杖",
+      "Cedar Water Staff": "雪松水法杖",
+      "Purpleheart Water Staff": "紫心水法杖",
+      "Ginkgo Water Staff": "银杏水法杖",
+      "Redwood Water Staff": "红杉水法杖",
+      "Arcane Water Staff": "神秘水法杖",
+      "Wooden Nature Staff": "木制自然法杖",
+      "Birch Nature Staff": "桦木自然法杖",
+      "Cedar Nature Staff": "雪松自然法杖",
+      "Purpleheart Nature Staff": "紫心自然法杖",
+      "Ginkgo Nature Staff": "银杏自然法杖",
+      "Redwood Nature Staff": "红杉自然法杖",
+      "Arcane Nature Staff": "神秘自然法杖",
+      "Wooden Fire Staff": "木制火法杖",
+      "Birch Fire Staff": "桦木火法杖",
+      "Cedar Fire Staff": "雪松火法杖",
+      "Purpleheart Fire Staff": "紫心火法杖",
+      "Ginkgo Fire Staff": "银杏火法杖",
+      "Redwood Fire Staff": "红杉火法杖",
+      "Arcane Fire Staff": "神秘火法杖",
+      "Eye Watch": "掌上监工",
+      "Snake Fang Dirk": "蛇牙短剑",
+      "Vision Shield": "视觉盾",
+      "Gobo Defender": "哥布林防御者",
+      "Vampire Fang Dirk": "吸血鬼短剑",
+      "Knight's Aegis": "骑士盾",
+      "Knight's Aegis (R)": "骑士盾（精）",
+      "Treant Shield": "树人盾",
+      "Manticore Shield": "蝎狮盾",
+      "Tome Of Healing": "治疗之书",
+      "Tome Of The Elements": "元素之书",
+      "Watchful Relic": "警戒遗物",
+      "Bishop's Codex": "主教法典",
+      "Bishop's Codex (R)": "主教法典（精）",
+      "Cheese Buckler": "奶酪圆盾",
+      "Verdant Buckler": "翠绿圆盾",
+      "Azure Buckler": "蔚蓝圆盾",
+      "Burble Buckler": "深紫圆盾",
+      "Crimson Buckler": "绛红圆盾",
+      "Rainbow Buckler": "彩虹圆盾",
+      "Holy Buckler": "神圣圆盾",
+      "Wooden Shield": "木盾",
+      "Birch Shield": "桦木盾",
+      "Cedar Shield": "雪松盾",
+      "Purpleheart Shield": "紫心盾",
+      "Ginkgo Shield": "银杏盾",
+      "Redwood Shield": "红杉盾",
+      "Arcane Shield": "神秘盾",
+      "Gatherer Cape": "采集者披风",
+      "Gatherer Cape (R)": "采集者披风（精）",
+      "Artificer Cape": "工匠披风",
+      "Artificer Cape (R)": "工匠披风（精）",
+      "Culinary Cape": "厨师披风",
+      "Culinary Cape (R)": "厨师披风（精）",
+      "Chance Cape": "机缘披风",
+      "Chance Cape (R)": "机缘披风（精）",
+      "Sinister Cape": "阴森披风",
+      "Sinister Cape (R)": "阴森披风（精）",
+      "Chimerical Quiver": "奇幻箭袋",
+      "Chimerical Quiver (R)": "奇幻箭袋（精）",
+      "Enchanted Cloak": "秘法披风",
+      "Enchanted Cloak (R)": "秘法披风（精）",
+      "Red Culinary Hat": "红色厨师帽",
+      "Snail Shell Helmet": "蜗牛壳头盔",
+      "Vision Helmet": "视觉头盔",
+      "Fluffy Red Hat": "蓬松红帽子",
+      "Corsair Helmet": "掠夺者头盔",
+      "Corsair Helmet (R)": "掠夺者头盔（精）",
+      "Acrobatic Hood": "杂技师兜帽",
+      "Acrobatic Hood (R)": "杂技师兜帽（精）",
+      "Magician's Hat": "魔术师帽",
+      "Magician's Hat (R)": "魔术师帽（精）",
+      "Cheese Helmet": "奶酪头盔",
+      "Verdant Helmet": "翠绿头盔",
+      "Azure Helmet": "蔚蓝头盔",
+      "Burble Helmet": "深紫头盔",
+      "Crimson Helmet": "绛红头盔",
+      "Rainbow Helmet": "彩虹头盔",
+      "Holy Helmet": "神圣头盔",
+      "Rough Hood": "粗糙兜帽",
+      "Reptile Hood": "爬行动物兜帽",
+      "Gobo Hood": "哥布林兜帽",
+      "Beast Hood": "野兽兜帽",
+      "Umbral Hood": "暗影兜帽",
+      "Cotton Hat": "棉帽",
+      "Linen Hat": "亚麻帽",
+      "Bamboo Hat": "竹帽",
+      "Silk Hat": "丝帽",
+      "Radiant Hat": "光辉帽",
+      "Dairyhand's Top": "挤奶工上衣",
+      "Forager's Top": "采摘者上衣",
+      "Lumberjack's Top": "伐木工上衣",
+      "Cheesemaker's Top": "奶酪师上衣",
+      "Crafter's Top": "工匠上衣",
+      "Tailor's Top": "裁缝上衣",
+      "Chef's Top": "厨师上衣",
+      "Brewer's Top": "饮品师上衣",
+      "Alchemist's Top": "炼金师上衣",
+      "Enhancer's Top": "强化师上衣",
+      "Gator Vest": "鳄鱼马甲",
+      "Turtle Shell Body": "龟壳胸甲",
+      "Colossus Plate Body": "巨像胸甲",
+      "Demonic Plate Body": "恶魔胸甲",
+      "Anchorbound Plate Body": "锚定胸甲",
+      "Anchorbound Plate Body (R)": "锚定胸甲（精）",
+      "Maelstrom Plate Body": "怒涛胸甲",
+      "Maelstrom Plate Body (R)": "怒涛胸甲（精）",
+      "Marine Tunic": "海洋皮衣",
+      "Revenant Tunic": "亡灵皮衣",
+      "Griffin Tunic": "狮鹫皮衣",
+      "Kraken Tunic": "克拉肯皮衣",
+      "Kraken Tunic (R)": "克拉肯皮衣（精）",
+      "Icy Robe Top": "冰霜袍服",
+      "Flaming Robe Top": "烈焰袍服",
+      "Luna Robe Top": "月神袍服",
+      "Royal Water Robe Top": "皇家水系袍服",
+      "Royal Water Robe Top (R)": "皇家水系袍服（精）",
+      "Royal Nature Robe Top": "皇家自然系袍服",
+      "Royal Nature Robe Top (R)": "皇家自然系袍服（精）",
+      "Royal Fire Robe Top": "皇家火系袍服",
+      "Royal Fire Robe Top (R)": "皇家火系袍服（精）",
+      "Cheese Plate Body": "奶酪胸甲",
+      "Verdant Plate Body": "翠绿胸甲",
+      "Azure Plate Body": "蔚蓝胸甲",
+      "Burble Plate Body": "深紫胸甲",
+      "Crimson Plate Body": "绛红胸甲",
+      "Rainbow Plate Body": "彩虹胸甲",
+      "Holy Plate Body": "神圣胸甲",
+      "Rough Tunic": "粗糙皮衣",
+      "Reptile Tunic": "爬行动物皮衣",
+      "Gobo Tunic": "哥布林皮衣",
+      "Beast Tunic": "野兽皮衣",
+      "Umbral Tunic": "暗影皮衣",
+      "Cotton Robe Top": "棉袍服",
+      "Linen Robe Top": "亚麻袍服",
+      "Bamboo Robe Top": "竹袍服",
+      "Silk Robe Top": "丝绸袍服",
+      "Radiant Robe Top": "光辉袍服",
+      "Dairyhand's Bottoms": "挤奶工下装",
+      "Forager's Bottoms": "采摘者下装",
+      "Lumberjack's Bottoms": "伐木工下装",
+      "Cheesemaker's Bottoms": "奶酪师下装",
+      "Crafter's Bottoms": "工匠下装",
+      "Tailor's Bottoms": "裁缝下装",
+      "Chef's Bottoms": "厨师下装",
+      "Brewer's Bottoms": "饮品师下装",
+      "Alchemist's Bottoms": "炼金师下装",
+      "Enhancer's Bottoms": "强化师下装",
+      "Turtle Shell Legs": "龟壳腿甲",
+      "Colossus Plate Legs": "巨像腿甲",
+      "Demonic Plate Legs": "恶魔腿甲",
+      "Anchorbound Plate Legs": "锚定腿甲",
+      "Anchorbound Plate Legs (R)": "锚定腿甲（精）",
+      "Maelstrom Plate Legs": "怒涛腿甲",
+      "Maelstrom Plate Legs (R)": "怒涛腿甲（精）",
+      "Marine Chaps": "航海皮裤",
+      "Revenant Chaps": "亡灵皮裤",
+      "Griffin Chaps": "狮鹫皮裤",
+      "Kraken Chaps": "克拉肯皮裤",
+      "Kraken Chaps (R)": "克拉肯皮裤（精）",
+      "Icy Robe Bottoms": "冰霜袍裙",
+      "Flaming Robe Bottoms": "烈焰袍裙",
+      "Luna Robe Bottoms": "月神袍裙",
+      "Royal Water Robe Bottoms": "皇家水系袍裙",
+      "Royal Water Robe Bottoms (R)": "皇家水系袍裙（精）",
+      "Royal Nature Robe Bottoms": "皇家自然系袍裙",
+      "Royal Nature Robe Bottoms (R)": "皇家自然系袍裙（精）",
+      "Royal Fire Robe Bottoms": "皇家火系袍裙",
+      "Royal Fire Robe Bottoms (R)": "皇家火系袍裙（精）",
+      "Cheese Plate Legs": "奶酪腿甲",
+      "Verdant Plate Legs": "翠绿腿甲",
+      "Azure Plate Legs": "蔚蓝腿甲",
+      "Burble Plate Legs": "深紫腿甲",
+      "Crimson Plate Legs": "绛红腿甲",
+      "Rainbow Plate Legs": "彩虹腿甲",
+      "Holy Plate Legs": "神圣腿甲",
+      "Rough Chaps": "粗糙皮裤",
+      "Reptile Chaps": "爬行动物皮裤",
+      "Gobo Chaps": "哥布林皮裤",
+      "Beast Chaps": "野兽皮裤",
+      "Umbral Chaps": "暗影皮裤",
+      "Cotton Robe Bottoms": "棉袍裙",
+      "Linen Robe Bottoms": "亚麻袍裙",
+      "Bamboo Robe Bottoms": "竹袍裙",
+      "Silk Robe Bottoms": "丝绸袍裙",
+      "Radiant Robe Bottoms": "光辉袍裙",
+      "Enchanted Gloves": "附魔手套",
+      "Pincer Gloves": "蟹钳手套",
+      "Panda Gloves": "熊猫手套",
+      "Magnetic Gloves": "磁力手套",
+      "Dodocamel Gauntlets": "渡渡驼护手",
+      "Dodocamel Gauntlets (R)": "渡渡驼护手（精）",
+      "Sighted Bracers": "瞄准护腕",
+      "Marksman Bracers": "神射护腕",
+      "Marksman Bracers (R)": "神射护腕（精）",
+      "Chrono Gloves": "时空手套",
+      "Cheese Gauntlets": "奶酪护手",
+      "Verdant Gauntlets": "翠绿护手",
+      "Azure Gauntlets": "蔚蓝护手",
+      "Burble Gauntlets": "深紫护手",
+      "Crimson Gauntlets": "绛红护手",
+      "Rainbow Gauntlets": "彩虹护手",
+      "Holy Gauntlets": "神圣护手",
+      "Rough Bracers": "粗糙护腕",
+      "Reptile Bracers": "爬行动物护腕",
+      "Gobo Bracers": "哥布林护腕",
+      "Beast Bracers": "野兽护腕",
+      "Umbral Bracers": "暗影护腕",
+      "Cotton Gloves": "棉手套",
+      "Linen Gloves": "亚麻手套",
+      "Bamboo Gloves": "竹手套",
+      "Silk Gloves": "丝手套",
+      "Radiant Gloves": "光辉手套",
+      "Collector's Boots": "收藏家靴",
+      "Shoebill Shoes": "鲸头鹳鞋",
+      "Black Bear Shoes": "黑熊鞋",
+      "Grizzly Bear Shoes": "棕熊鞋",
+      "Polar Bear Shoes": "北极熊鞋",
+      "Pathbreaker Boots": "开路者靴",
+      "Pathbreaker Boots (R)": "开路者靴（精）",
+      "Centaur Boots": "半人马靴",
+      "Pathfinder Boots": "探路者靴",
+      "Pathfinder Boots (R)": "探路者靴（精）",
+      "Sorcerer Boots": "巫师靴",
+      "Pathseeker Boots": "寻路者靴",
+      "Pathseeker Boots (R)": "寻路者靴（精）",
+      "Cheese Boots": "奶酪靴",
+      "Verdant Boots": "翠绿靴",
+      "Azure Boots": "蔚蓝靴",
+      "Burble Boots": "深紫靴",
+      "Crimson Boots": "绛红靴",
+      "Rainbow Boots": "彩虹靴",
+      "Holy Boots": "神圣靴",
+      "Rough Boots": "粗糙靴",
+      "Reptile Boots": "爬行动物靴",
+      "Gobo Boots": "哥布林靴",
+      "Beast Boots": "野兽靴",
+      "Umbral Boots": "暗影靴",
+      "Cotton Boots": "棉靴",
+      "Linen Boots": "亚麻靴",
+      "Bamboo Boots": "竹靴",
+      "Silk Boots": "丝靴",
+      "Radiant Boots": "光辉靴",
+      "Small Pouch": "小袋子",
+      "Medium Pouch": "中袋子",
+      "Large Pouch": "大袋子",
+      "Giant Pouch": "巨大袋子",
+      "Gluttonous Pouch": "贪食之袋",
+      "Guzzling Pouch": "暴饮之囊",
+      "Necklace Of Efficiency": "效率项链",
+      "Fighter Necklace": "战士项链",
+      "Ranger Necklace": "射手项链",
+      "Wizard Necklace": "巫师项链",
+      "Necklace Of Wisdom": "经验项链",
+      "Necklace Of Speed": "速度项链",
+      "Philosopher's Necklace": "贤者项链",
+      "Earrings Of Gathering": "采集耳环",
+      "Earrings Of Essence Find": "精华发现耳环",
+      "Earrings Of Armor": "护甲耳环",
+      "Earrings Of Regeneration": "恢复耳环",
+      "Earrings Of Resistance": "抗性耳环",
+      "Earrings Of Rare Find": "稀有发现耳环",
+      "Earrings Of Critical Strike": "暴击耳环",
+      "Philosopher's Earrings": "贤者耳环",
+      "Ring Of Gathering": "采集戒指",
+      "Ring Of Essence Find": "精华发现戒指",
+      "Ring Of Armor": "护甲戒指",
+      "Ring Of Regeneration": "恢复戒指",
+      "Ring Of Resistance": "抗性戒指",
+      "Ring Of Rare Find": "稀有发现戒指",
+      "Ring Of Critical Strike": "暴击戒指",
+      "Philosopher's Ring": "贤者戒指",
+      "Trainee Milking Charm": "实习挤奶护符",
+      "Basic Milking Charm": "基础挤奶护符",
+      "Advanced Milking Charm": "高级挤奶护符",
+      "Expert Milking Charm": "专家挤奶护符",
+      "Master Milking Charm": "大师挤奶护符",
+      "Grandmaster Milking Charm": "宗师挤奶护符",
+      "Trainee Foraging Charm": "实习采摘护符",
+      "Basic Foraging Charm": "基础采摘护符",
+      "Advanced Foraging Charm": "高级采摘护符",
+      "Expert Foraging Charm": "专家采摘护符",
+      "Master Foraging Charm": "大师采摘护符",
+      "Grandmaster Foraging Charm": "宗师采摘护符",
+      "Trainee Woodcutting Charm": "实习伐木护符",
+      "Basic Woodcutting Charm": "基础伐木护符",
+      "Advanced Woodcutting Charm": "高级伐木护符",
+      "Expert Woodcutting Charm": "专家伐木护符",
+      "Master Woodcutting Charm": "大师伐木护符",
+      "Grandmaster Woodcutting Charm": "宗师伐木护符",
+      "Trainee Cheesesmithing Charm": "实习奶酪锻造护符",
+      "Basic Cheesesmithing Charm": "基础奶酪锻造护符",
+      "Advanced Cheesesmithing Charm": "高级奶酪锻造护符",
+      "Expert Cheesesmithing Charm": "专家奶酪锻造护符",
+      "Master Cheesesmithing Charm": "大师奶酪锻造护符",
+      "Grandmaster Cheesesmithing Charm": "宗师奶酪锻造护符",
+      "Trainee Crafting Charm": "实习制作护符",
+      "Basic Crafting Charm": "基础制作护符",
+      "Advanced Crafting Charm": "高级制作护符",
+      "Expert Crafting Charm": "专家制作护符",
+      "Master Crafting Charm": "大师制作护符",
+      "Grandmaster Crafting Charm": "宗师制作护符",
+      "Trainee Tailoring Charm": "实习缝纫护符",
+      "Basic Tailoring Charm": "基础缝纫护符",
+      "Advanced Tailoring Charm": "高级缝纫护符",
+      "Expert Tailoring Charm": "专家缝纫护符",
+      "Master Tailoring Charm": "大师缝纫护符",
+      "Grandmaster Tailoring Charm": "宗师缝纫护符",
+      "Trainee Cooking Charm": "实习烹饪护符",
+      "Basic Cooking Charm": "基础烹饪护符",
+      "Advanced Cooking Charm": "高级烹饪护符",
+      "Expert Cooking Charm": "专家烹饪护符",
+      "Master Cooking Charm": "大师烹饪护符",
+      "Grandmaster Cooking Charm": "宗师烹饪护符",
+      "Trainee Brewing Charm": "实习冲泡护符",
+      "Basic Brewing Charm": "基础冲泡护符",
+      "Advanced Brewing Charm": "高级冲泡护符",
+      "Expert Brewing Charm": "专家冲泡护符",
+      "Master Brewing Charm": "大师冲泡护符",
+      "Grandmaster Brewing Charm": "宗师冲泡护符",
+      "Trainee Alchemy Charm": "实习炼金护符",
+      "Basic Alchemy Charm": "基础炼金护符",
+      "Advanced Alchemy Charm": "高级炼金护符",
+      "Expert Alchemy Charm": "专家炼金护符",
+      "Master Alchemy Charm": "大师炼金护符",
+      "Grandmaster Alchemy Charm": "宗师炼金护符",
+      "Trainee Enhancing Charm": "实习强化护符",
+      "Basic Enhancing Charm": "基础强化护符",
+      "Advanced Enhancing Charm": "高级强化护符",
+      "Expert Enhancing Charm": "专家强化护符",
+      "Master Enhancing Charm": "大师强化护符",
+      "Grandmaster Enhancing Charm": "宗师强化护符",
+      "Trainee Stamina Charm": "实习耐力护符",
+      "Basic Stamina Charm": "基础耐力护符",
+      "Advanced Stamina Charm": "高级耐力护符",
+      "Expert Stamina Charm": "专家耐力护符",
+      "Master Stamina Charm": "大师耐力护符",
+      "Grandmaster Stamina Charm": "宗师耐力护符",
+      "Trainee Intelligence Charm": "实习智力护符",
+      "Basic Intelligence Charm": "基础智力护符",
+      "Advanced Intelligence Charm": "高级智力护符",
+      "Expert Intelligence Charm": "专家智力护符",
+      "Master Intelligence Charm": "大师智力护符",
+      "Grandmaster Intelligence Charm": "宗师智力护符",
+      "Trainee Attack Charm": "实习攻击护符",
+      "Basic Attack Charm": "基础攻击护符",
+      "Advanced Attack Charm": "高级攻击护符",
+      "Expert Attack Charm": "专家攻击护符",
+      "Master Attack Charm": "大师攻击护符",
+      "Grandmaster Attack Charm": "宗师攻击护符",
+      "Trainee Defense Charm": "实习防御护符",
+      "Basic Defense Charm": "基础防御护符",
+      "Advanced Defense Charm": "高级防御护符",
+      "Expert Defense Charm": "专家防御护符",
+      "Master Defense Charm": "大师防御护符",
+      "Grandmaster Defense Charm": "宗师防御护符",
+      "Trainee Melee Charm": "实习近战护符",
+      "Basic Melee Charm": "基础近战护符",
+      "Advanced Melee Charm": "高级近战护符",
+      "Expert Melee Charm": "专家近战护符",
+      "Master Melee Charm": "大师近战护符",
+      "Grandmaster Melee Charm": "宗师近战护符",
+      "Trainee Ranged Charm": "实习远程护符",
+      "Basic Ranged Charm": "基础远程护符",
+      "Advanced Ranged Charm": "高级远程护符",
+      "Expert Ranged Charm": "专家远程护符",
+      "Master Ranged Charm": "大师远程护符",
+      "Grandmaster Ranged Charm": "宗师远程护符",
+      "Trainee Magic Charm": "实习魔法护符",
+      "Basic Magic Charm": "基础魔法护符",
+      "Advanced Magic Charm": "高级魔法护符",
+      "Expert Magic Charm": "专家魔法护符",
+      "Master Magic Charm": "大师魔法护符",
+      "Grandmaster Magic Charm": "宗师魔法护符",
+      "Basic Task Badge": "基础任务徽章",
+      "Advanced Task Badge": "高级任务徽章",
+      "Expert Task Badge": "专家任务徽章",
+      "Celestial Brush": "星空刷子",
+      "Cheese Brush": "奶酪刷子",
+      "Verdant Brush": "翠绿刷子",
+      "Azure Brush": "蔚蓝刷子",
+      "Burble Brush": "深紫刷子",
+      "Crimson Brush": "绛红刷子",
+      "Rainbow Brush": "彩虹刷子",
+      "Holy Brush": "神圣刷子",
+      "Celestial Shears": "星空剪刀",
+      "Cheese Shears": "奶酪剪刀",
+      "Verdant Shears": "翠绿剪刀",
+      "Azure Shears": "蔚蓝剪刀",
+      "Burble Shears": "深紫剪刀",
+      "Crimson Shears": "绛红剪刀",
+      "Rainbow Shears": "彩虹剪刀",
+      "Holy Shears": "神圣剪刀",
+      "Celestial Hatchet": "星空斧头",
+      "Cheese Hatchet": "奶酪斧头",
+      "Verdant Hatchet": "翠绿斧头",
+      "Azure Hatchet": "蔚蓝斧头",
+      "Burble Hatchet": "深紫斧头",
+      "Crimson Hatchet": "绛红斧头",
+      "Rainbow Hatchet": "彩虹斧头",
+      "Holy Hatchet": "神圣斧头",
+      "Celestial Hammer": "星空锤子",
+      "Cheese Hammer": "奶酪锤子",
+      "Verdant Hammer": "翠绿锤子",
+      "Azure Hammer": "蔚蓝锤子",
+      "Burble Hammer": "深紫锤子",
+      "Crimson Hammer": "绛红锤子",
+      "Rainbow Hammer": "彩虹锤子",
+      "Holy Hammer": "神圣锤子",
+      "Celestial Chisel": "星空凿子",
+      "Cheese Chisel": "奶酪凿子",
+      "Verdant Chisel": "翠绿凿子",
+      "Azure Chisel": "蔚蓝凿子",
+      "Burble Chisel": "深紫凿子",
+      "Crimson Chisel": "绛红凿子",
+      "Rainbow Chisel": "彩虹凿子",
+      "Holy Chisel": "神圣凿子",
+      "Celestial Needle": "星空针",
+      "Cheese Needle": "奶酪针",
+      "Verdant Needle": "翠绿针",
+      "Azure Needle": "蔚蓝针",
+      "Burble Needle": "深紫针",
+      "Crimson Needle": "绛红针",
+      "Rainbow Needle": "彩虹针",
+      "Holy Needle": "神圣针",
+      "Celestial Spatula": "星空锅铲",
+      "Cheese Spatula": "奶酪锅铲",
+      "Verdant Spatula": "翠绿锅铲",
+      "Azure Spatula": "蔚蓝锅铲",
+      "Burble Spatula": "深紫锅铲",
+      "Crimson Spatula": "绛红锅铲",
+      "Rainbow Spatula": "彩虹锅铲",
+      "Holy Spatula": "神圣锅铲",
+      "Celestial Pot": "星空壶",
+      "Cheese Pot": "奶酪壶",
+      "Verdant Pot": "翠绿壶",
+      "Azure Pot": "蔚蓝壶",
+      "Burble Pot": "深紫壶",
+      "Crimson Pot": "绛红壶",
+      "Rainbow Pot": "彩虹壶",
+      "Holy Pot": "神圣壶",
+      "Celestial Alembic": "星空蒸馏器",
+      "Cheese Alembic": "奶酪蒸馏器",
+      "Verdant Alembic": "翠绿蒸馏器",
+      "Azure Alembic": "蔚蓝蒸馏器",
+      "Burble Alembic": "深紫蒸馏器",
+      "Crimson Alembic": "绛红蒸馏器",
+      "Rainbow Alembic": "彩虹蒸馏器",
+      "Holy Alembic": "神圣蒸馏器",
+      "Celestial Enhancer": "星空强化器",
+      "Cheese Enhancer": "奶酪强化器",
+      "Verdant Enhancer": "翠绿强化器",
+      "Azure Enhancer": "蔚蓝强化器",
+      "Burble Enhancer": "深紫强化器",
+      "Crimson Enhancer": "绛红强化器",
+      "Rainbow Enhancer": "彩虹强化器",
+      "Holy Enhancer": "神圣强化器",
+      "Milk": "牛奶",
+      "Verdant Milk": "翠绿牛奶",
+      "Azure Milk": "蔚蓝牛奶",
+      "Burble Milk": "深紫牛奶",
+      "Crimson Milk": "绛红牛奶",
+      "Rainbow Milk": "彩虹牛奶",
+      "Holy Milk": "神圣牛奶",
+      "Cheese": "奶酪",
+      "Verdant Cheese": "翠绿奶酪",
+      "Azure Cheese": "蔚蓝奶酪",
+      "Burble Cheese": "深紫奶酪",
+      "Crimson Cheese": "绛红奶酪",
+      "Rainbow Cheese": "彩虹奶酪",
+      "Holy Cheese": "神圣奶酪",
+      "Log": "原木",
+      "Birch Log": "白桦原木",
+      "Cedar Log": "雪松原木",
+      "Purpleheart Log": "紫心原木",
+      "Ginkgo Log": "银杏原木",
+      "Redwood Log": "红杉原木",
+      "Arcane Log": "神秘原木",
+      "Lumber": "木板",
+      "Birch Lumber": "白桦木板",
+      "Cedar Lumber": "雪松木板",
+      "Purpleheart Lumber": "紫心木板",
+      "Ginkgo Lumber": "银杏木板",
+      "Redwood Lumber": "红杉木板",
+      "Arcane Lumber": "神秘木板",
+      "Rough Hide": "粗糙兽皮",
+      "Reptile Hide": "爬行动物皮",
+      "Gobo Hide": "哥布林皮",
+      "Beast Hide": "野兽皮",
+      "Umbral Hide": "暗影皮",
+      "Rough Leather": "粗糙皮革",
+      "Reptile Leather": "爬行动物皮革",
+      "Gobo Leather": "哥布林皮革",
+      "Beast Leather": "野兽皮革",
+      "Umbral Leather": "暗影皮革",
+      "Cotton": "棉花",
+      "Flax": "亚麻",
+      "Bamboo Branch": "竹子",
+      "Cocoon": "蚕茧",
+      "Radiant Fiber": "光辉纤维",
+      "Cotton Fabric": "棉花布料",
+      "Linen Fabric": "亚麻布料",
+      "Bamboo Fabric": "竹子布料",
+      "Silk Fabric": "丝绸",
+      "Radiant Fabric": "光辉布料",
+      "Egg": "鸡蛋",
+      "Wheat": "小麦",
+      "Sugar": "糖",
+      "Blueberry": "蓝莓",
+      "Blackberry": "黑莓",
+      "Strawberry": "草莓",
+      "Mooberry": "哞莓",
+      "Marsberry": "火星莓",
+      "Spaceberry": "太空莓",
+      "Apple": "苹果",
+      "Orange": "橙子",
+      "Plum": "李子",
+      "Peach": "桃子",
+      "Dragon Fruit": "火龙果",
+      "Star Fruit": "杨桃",
+      "Arabica Coffee Bean": "低级咖啡豆",
+      "Robusta Coffee Bean": "中级咖啡豆",
+      "Liberica Coffee Bean": "高级咖啡豆",
+      "Excelsa Coffee Bean": "特级咖啡豆",
+      "Fieriosa Coffee Bean": "火山咖啡豆",
+      "Spacia Coffee Bean": "太空咖啡豆",
+      "Green Tea Leaf": "绿茶叶",
+      "Black Tea Leaf": "黑茶叶",
+      "Burble Tea Leaf": "紫茶叶",
+      "Moolong Tea Leaf": "哞龙茶叶",
+      "Red Tea Leaf": "红茶叶",
+      "Emp Tea Leaf": "虚空茶叶",
+      "Catalyst Of Coinification": "点金催化剂",
+      "Catalyst Of Decomposition": "分解催化剂",
+      "Catalyst Of Transmutation": "转化催化剂",
+      "Prime Catalyst": "至高催化剂",
+      "Snake Fang": "蛇牙",
+      "Shoebill Feather": "鲸头鹳羽毛",
+      "Snail Shell": "蜗牛壳",
+      "Crab Pincer": "蟹钳",
+      "Turtle Shell": "乌龟壳",
+      "Marine Scale": "海洋鳞片",
+      "Treant Bark": "树皮",
+      "Centaur Hoof": "半人马蹄",
+      "Luna Wing": "月神翼",
+      "Gobo Rag": "哥布林抹布",
+      "Goggles": "护目镜",
+      "Magnifying Glass": "放大镜",
+      "Eye Of The Watcher": "观察者之眼",
+      "Icy Cloth": "冰霜织物",
+      "Flaming Cloth": "烈焰织物",
+      "Sorcerer's Sole": "魔法师鞋底",
+      "Chrono Sphere": "时空球",
+      "Frost Sphere": "冰霜球",
+      "Panda Fluff": "熊猫绒",
+      "Black Bear Fluff": "黑熊绒",
+      "Grizzly Bear Fluff": "棕熊绒",
+      "Polar Bear Fluff": "北极熊绒",
+      "Red Panda Fluff": "小熊猫绒",
+      "Magnet": "磁铁",
+      "Stalactite Shard": "钟乳石碎片",
+      "Living Granite": "花岗岩",
+      "Colossus Core": "巨像核心",
+      "Vampire Fang": "吸血鬼之牙",
+      "Werewolf Claw": "狼人之爪",
+      "Revenant Anima": "亡者之魂",
+      "Soul Fragment": "灵魂碎片",
+      "Infernal Ember": "地狱余烬",
+      "Demonic Core": "恶魔核心",
+      "Griffin Leather": "狮鹫之皮",
+      "Manticore Sting": "蝎狮之刺",
+      "Jackalope Antler": "鹿角兔之角",
+      "Dodocamel Plume": "渡渡驼之翎",
+      "Griffin Talon": "狮鹫之爪",
+      "Chimerical Refinement Shard": "奇幻精炼碎片",
+      "Acrobat's Ribbon": "杂技师彩带",
+      "Magician's Cloth": "魔术师织物",
+      "Chaotic Chain": "混沌锁链",
+      "Cursed Ball": "诅咒之球",
+      "Sinister Refinement Shard": "阴森精炼碎片",
+      "Royal Cloth": "皇家织物",
+      "Knight's Ingot": "骑士之锭",
+      "Bishop's Scroll": "主教卷轴",
+      "Regal Jewel": "君王宝石",
+      "Sundering Jewel": "裂空宝石",
+      "Enchanted Refinement Shard": "秘法精炼碎片",
+      "Marksman Brooch": "神射胸针",
+      "Corsair Crest": "掠夺者徽章",
+      "Damaged Anchor": "破损船锚",
+      "Maelstrom Plating": "怒涛甲片",
+      "Kraken Leather": "克拉肯皮革",
+      "Kraken Fang": "克拉肯之牙",
+      "Pirate Refinement Shard": "海盗精炼碎片",
+      "Pathbreaker Lodestone": "开路者磁石",
+      "Pathfinder Lodestone": "探路者磁石",
+      "Pathseeker Lodestone": "寻路者磁石",
+      "Labyrinth Refinement Shard": "迷宫精炼碎片",
+      "Butter Of Proficiency": "精通之油",
+      "Thread Of Expertise": "专精之线",
+      "Branch Of Insight": "洞察之枝",
+      "Gluttonous Energy": "贪食能量",
+      "Guzzling Energy": "暴饮能量",
+      "Milking Essence": "挤奶精华",
+      "Foraging Essence": "采摘精华",
+      "Woodcutting Essence": "伐木精华",
+      "Cheesesmithing Essence": "奶酪锻造精华",
+      "Crafting Essence": "制作精华",
+      "Tailoring Essence": "缝纫精华",
+      "Cooking Essence": "烹饪精华",
+      "Brewing Essence": "冲泡精华",
+      "Alchemy Essence": "炼金精华",
+      "Enhancing Essence": "强化精华",
+      "Swamp Essence": "沼泽精华",
+      "Aqua Essence": "海洋精华",
+      "Jungle Essence": "丛林精华",
+      "Gobo Essence": "哥布林精华",
+      "Eyessence": "眼精华",
+      "Sorcerer Essence": "法师精华",
+      "Bear Essence": "熊熊精华",
+      "Golem Essence": "魔像精华",
+      "Twilight Essence": "暮光精华",
+      "Abyssal Essence": "地狱精华",
+      "Chimerical Essence": "奇幻精华",
+      "Sinister Essence": "阴森精华",
+      "Enchanted Essence": "秘法精华",
+      "Pirate Essence": "海盗精华",
+      "Labyrinth Essence": "迷宫精华",
+      "Task Crystal": "任务水晶",
+      "Star Fragment": "星光碎片",
+      "Pearl": "珍珠",
+      "Amber": "琥珀",
+      "Garnet": "石榴石",
+      "Jade": "翡翠",
+      "Amethyst": "紫水晶",
+      "Moonstone": "月亮石",
+      "Sunstone": "太阳石",
+      "Philosopher's Stone": "贤者之石",
+      "Crushed Pearl": "珍珠碎片",
+      "Crushed Amber": "琥珀碎片",
+      "Crushed Garnet": "石榴石碎片",
+      "Crushed Jade": "翡翠碎片",
+      "Crushed Amethyst": "紫水晶碎片",
+      "Crushed Moonstone": "月亮石碎片",
+      "Crushed Sunstone": "太阳石碎片",
+      "Crushed Philosopher's Stone": "贤者之石碎片",
+      "Shard Of Protection": "保护碎片",
+      "Mirror Of Protection": "保护之镜",
+      "Philosopher's Mirror": "贤者之镜",
+      "Basic Torch": "基础火把",
+      "Advanced Torch": "进阶火把",
+      "Expert Torch": "专家火把",
+      "Basic Shroud": "基础斗篷",
+      "Advanced Shroud": "进阶斗篷",
+      "Expert Shroud": "专家斗篷",
+      "Basic Beacon": "基础探照灯",
+      "Advanced Beacon": "进阶探照灯",
+      "Expert Beacon": "专家探照灯",
+      "Basic Food Crate": "基础食物箱",
+      "Advanced Food Crate": "进阶食物箱",
+      "Expert Food Crate": "专家食物箱",
+      "Basic Tea Crate": "基础茶叶箱",
+      "Advanced Tea Crate": "进阶茶叶箱",
+      "Expert Tea Crate": "专家茶叶箱",
+      "Basic Coffee Crate": "基础咖啡箱",
+      "Advanced Coffee Crate": "进阶咖啡箱",
+      "Expert Coffee Crate": "专家咖啡箱"
+    };
+
+    /**
+     * Auto-discovers Chinese item names from the game DOM and builds a
+     * Chinese → English mapping cached in IndexedDB. Provides a unified
+     * getDisplayName() returning Chinese when available, English otherwise.
+     */
+
+
+    const STORAGE_KEY = 'Toolasha_cnItemNames';
+    const CACHE_VERSION = 2;
+    const DEBOUNCE_DELAY$1 = 5000;
+
+    const MUTATION_SELECTORS = [
+        '[class*="Item_name"]',
+        '[class*="Item_itemName"]',
+        '[class*="ItemTooltipText_name"]',
+        '[class*="Item_craftingItemName"]',
+        'svg[aria-label]',
+    ];
+
+    const ENHANCEMENT_STRIP_REGEX = /\s*\+\d+$/;
+    const CJK_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
+
+    class ItemNameTranslator {
+        constructor() {
+            this.cnNames = {};
+            this.isLoaded = false;
+            this._saveTimer = null;
+            this._dirty = false;
+            this._enToHrid = null;
+            this._hridToEn = null;
+            this._hridToEnSource = null;
+            this._observer = null;
+            this._observerStarted = false;
+        }
+
+        async load() {
+            if (this.isLoaded) return;
+            try {
+                const saved = await storage.get(STORAGE_KEY, 'settings');
+                if (saved && typeof saved === 'object' && saved._version === CACHE_VERSION && Object.keys(saved).length > 1) {
+                    this.cnNames = saved;
+                }
+            } catch { /* ignore */ }
+            this.isLoaded = true;
+
+            // Bulk import from static Chinese name mapping (Edible Tools translations)
+            if (Object.keys(this.cnNames).length <= 1) {
+                this._importStaticMapping();
+            }
+        }
+
+        captureFromDOM(element, itemHrid) {
+            if (!element || !itemHrid) return;
+            const text = (element.textContent || element.getAttribute('aria-label') || '').trim();
+            if (!text || !CJK_REGEX.test(text)) return;
+            const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+            if (!baseName) return;
+            if (this.cnNames[itemHrid] === baseName) return;
+            this.cnNames[itemHrid] = baseName;
+            this._scheduleSave();
+        }
+
+        _importStaticMapping() {
+            const initData = dataManager.getInitClientData();
+            if (!initData?.itemDetailMap) return;
+            let count = 0;
+            for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
+                const cnName = itemNamesZh[item.name];
+                if (cnName && !this.cnNames[hrid]) {
+                    this.cnNames[hrid] = cnName;
+                    count++;
+                }
+            }
+            if (count > 0) this._scheduleSave();
+        }
+
+        _scheduleSave() {
+            if (!this.isLoaded) return;
+            this._dirty = true;
+            if (this._saveTimer) return;
+            this._saveTimer = setTimeout(async () => {
+                this._saveTimer = null;
+                if (!this._dirty) return;
+                this._dirty = false;
+                try {
+                    const data = { ...this.cnNames, _version: CACHE_VERSION };
+                    await storage.set(STORAGE_KEY, data, 'settings', true);
+                } catch (error) {
+                    console.warn('[ItemNameTranslator] Failed to save names:', error);
+                }
+            }, DEBOUNCE_DELAY$1);
+        }
+
+        flush() {
+            if (this._saveTimer) {
+                clearTimeout(this._saveTimer);
+                this._saveTimer = null;
+            }
+            if (this._dirty) {
+                this._dirty = false;
+                const data = { ...this.cnNames, _version: CACHE_VERSION };
+                storage.set(STORAGE_KEY, data, 'settings', true).catch(() => {});
+            }
+        }
+
+        _scanDomNow() {
+            for (const selector of MUTATION_SELECTORS) {
+                for (const el of document.querySelectorAll(selector)) {
+                    this._tryCaptureFromElement(el);
+                }
+            }
+        }
+
+        getHridFromChineseName(chineseName) {
+            if (!chineseName) return null;
+            const baseName = chineseName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+            for (const [hrid, cnName] of Object.entries(this.cnNames)) {
+                if (cnName === baseName) return hrid;
+            }
+            return null;
+        }
+
+        startObserver() {
+            if (this._observerStarted) return;
+            this._observerStarted = true;
+            console.log('[ItemNameTranslator] Observer starting, selectors:', MUTATION_SELECTORS);
+
+            const processNode = (node) => {
+                if (!node || node.nodeType !== 1) return;
+                for (const selector of MUTATION_SELECTORS) {
+                    if (node.matches(selector)) {
+                        this._tryCaptureFromElement(node);
+                        break;
+                    }
+                }
+                for (const selector of MUTATION_SELECTORS) {
+                    const children = node.querySelectorAll(selector);
+                    for (const child of children) {
+                        this._tryCaptureFromElement(child);
+                    }
+                }
+            };
+
+            for (const selector of MUTATION_SELECTORS) {
+                const elements = document.querySelectorAll(selector);
+                for (const el of elements) {
+                    this._tryCaptureFromElement(el);
+                }
+            }
+
+            this._observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    for (const node of mutation.addedNodes) {
+                        try {
+                            processNode(node);
+                        } catch {
+                            // Skip errors from processing individual nodes
+                        }
+                    }
+                }
+            });
+
+            this._observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+            });
+        }
+
+        stopObserver() {
+            if (this._observer) {
+                this._observer.disconnect();
+                this._observer = null;
+            }
+            this._observerStarted = false;
+        }
+
+        _tryCaptureFromElement(el) {
+            if (!el) return;
+            const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
+            if (!text) return;
+
+            if (!CJK_REGEX.test(text)) return;
+
+            const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
+            if (!baseName) return;
+
+            for (const [, cnName] of Object.entries(this.cnNames)) {
+                if (cnName === baseName) return;
+            }
+
+            const hrid = this.findHridFromDomName(baseName);
+            if (hrid) {
+                this.cnNames[hrid] = baseName;
+                this._scheduleSave();
+            } else {
+                // Log first 5 failures
+                if (!this._failCount) this._failCount = 0;
+                if (this._failCount < 5) {
+                    console.log('[ItemNameTranslator] CJK text found but no HRID match:', baseName);
+                    this._failCount++;
+                }
+            }
+        }
+
+        /**
+         * Get the display name for an item.
+         * Returns the Chinese name if cached, otherwise the English name from game data,
+         * and as a final fallback parses the HRID into a readable label.
+         * @param {string} itemHrid - Item HRID (e.g., '/items/essence')
+         * @returns {string} Display name
+         */
+        getDisplayName(itemHrid) {
+            const cnName = this.cnNames[itemHrid];
+            if (cnName) return cnName;
+            const enName = dataManager.getItemDetails(itemHrid)?.name;
+            if (enName) return enName;
+            return itemHrid.split('/').pop().replace(/_/g, ' ');
+        }
+
+    }
+
+    const itemNameTranslator = new ItemNameTranslator();
 
     /**
      * Gathering Profit Calculator
@@ -3487,7 +3313,7 @@
         const costs = Math.round(profitData.drinkCostPerHour + marketTax);
         const summary = formatMissingLabel(
             netMissing,
-            `${formatters_js.formatLargeNumber(profit)}/hr, ${formatters_js.formatLargeNumber(profitPerDay)}/day | ${i18n_js.t('Total profit: 0')}`
+            `${formatters_js.formatLargeNumber(profit)}/hr, ${formatters_js.formatLargeNumber(profitPerDay)}/day | ${t('Total profit: 0')}`
         );
 
         const detailsContent = document.createElement('div');
@@ -3495,7 +3321,7 @@
         // Revenue Section
         const revenueDiv = document.createElement('div');
         const revenueLabel = formatMissingLabel(revenueMissing, `${formatters_js.formatLargeNumber(revenue)}/hr`);
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${i18n_js.t('Revenue: ') + revenueLabel}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${t('Revenue: ') + revenueLabel}</div>`;
 
         // Primary Outputs subsection
         const primaryDropsContent = document.createElement('div');
@@ -3649,7 +3475,7 @@
         // Costs Section
         const costsDiv = document.createElement('div');
         const costsLabel = formatMissingLabel(costsMissing, `${formatters_js.formatLargeNumber(costs)}/hr`);
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: ') + costsLabel}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${t('Costs: ') + costsLabel}</div>`;
 
         // Drink Costs subsection
         const drinkCostsContent = document.createElement('div');
@@ -3681,13 +3507,13 @@
         const marketTaxLine = document.createElement('div');
         marketTaxLine.style.marginLeft = '8px';
         const marketTaxLabel = marketTaxMissing ? '-- ⚠' : `${formatters_js.formatLargeNumber(marketTax)}/hr`;
-        marketTaxLine.textContent = i18n_js.t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
+        marketTaxLine.textContent = t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
         marketTaxContent.appendChild(marketTaxLine);
 
         const marketTaxHeader = marketTaxMissing ? '-- ⚠' : `${formatters_js.formatLargeNumber(marketTax)}/hr`;
         const marketTaxSection = uiComponents_js.createCollapsibleSection(
             '',
-            i18n_js.t('Market Tax: {0} (2%)', marketTaxHeader),
+            t('Market Tax: {0} (2%)', marketTaxHeader),
             null,
             marketTaxContent,
             false,
@@ -3808,7 +3634,7 @@
             }
             const modifiersSection = uiComponents_js.createCollapsibleSection(
                 '⚙️',
-                i18n_js.t('Modifiers'),
+                t('Modifiers'),
                 modifierSummaryParts.join(' | '),
                 modifierContent,
                 false,
@@ -3820,7 +3646,7 @@
         // Create "Detailed Breakdown" collapsible
         const topLevelContent = document.createElement('div');
         topLevelContent.innerHTML = `
-        <div style="margin-bottom: 4px;">${i18n_js.t('Actions: {0}/hr | Efficiency: +{1}%', profitData.actionsPerHour.toFixed(2), profitData.totalEfficiency.toFixed(2))}</div>
+        <div style="margin-bottom: 4px;">${t('Actions: {0}/hr | Efficiency: +{1}%', profitData.actionsPerHour.toFixed(2), profitData.totalEfficiency.toFixed(2))}</div>
     `;
 
         // Add Net Profit line at top level (always visible when Profitability is expanded)
@@ -3832,8 +3658,8 @@
         margin-bottom: 8px;
     `;
         netProfitLine.textContent = netMissing
-            ? i18n_js.t('Net Profit: -- ⚠')
-            : i18n_js.t('Net Profit: {0}/hr, {1}/day', formatters_js.formatLargeNumber(profit), formatters_js.formatLargeNumber(profitPerDay));
+            ? t('Net Profit: -- ⚠')
+            : t('Net Profit: {0}/hr, {1}/day', formatters_js.formatLargeNumber(profit), formatters_js.formatLargeNumber(profitPerDay));
         topLevelContent.appendChild(netProfitLine);
 
         // Add pricing mode label
@@ -3850,15 +3676,15 @@
             ? loadoutSnapshot.getSnapshotInfoForSkill(gatheringActionType)
             : null;
         const gatheringLoadoutLabel = gatheringSnapshotInfo
-            ? `${gatheringSnapshotInfo.name}${gatheringSnapshotInfo.isDefault ? i18n_js.t(' (Default)') : ''}`
-            : i18n_js.t('Equipped');
-        modeDiv.textContent = i18n_js.t('Pricing Mode: ') + modeLabel + ' • ' + i18n_js.t('Loadout: ') + gatheringLoadoutLabel;
+            ? `${gatheringSnapshotInfo.name}${gatheringSnapshotInfo.isDefault ? t(' (Default)') : ''}`
+            : t('Equipped');
+        modeDiv.textContent = t('Pricing Mode: ') + modeLabel + ' • ' + t('Loadout: ') + gatheringLoadoutLabel;
 
         topLevelContent.appendChild(modeDiv);
 
         const detailedBreakdownSection = uiComponents_js.createCollapsibleSection(
             '📊',
-            i18n_js.t('Per hour breakdown'),
+            t('Per hour breakdown'),
             null,
             detailsContent,
             false,
@@ -3899,7 +3725,7 @@
         }
 
         // Create main profit section
-        const profitSection = uiComponents_js.createCollapsibleSection('💰', i18n_js.t('Profitability'), summary, topLevelContent, false, 0);
+        const profitSection = uiComponents_js.createCollapsibleSection('💰', t('Profitability'), summary, topLevelContent, false, 0);
         profitSection.id = 'mwi-foraging-profit';
         profitSection.setAttribute('data-mwi-profit-display', 'true');
         profitSection.dataset.mwiActionHrid = actionHrid;
@@ -3917,13 +3743,13 @@
 
             const updateSummary = (newValue) => {
                 if (netMissing) {
-                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: -- ⚠')}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: -- ⚠')}`;
                     return;
                 }
                 const inputValue = inputField.value;
 
                 if (inputValue === '∞') {
-                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: {0}', i18n_js.t('[infinite]'))}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: {0}', t('[infinite]'))}`;
                 } else if (newValue > 0) {
                     const totals = profitHelpers_js.calculateGatheringActionTotalsFromBase({
                         actionsCount: newValue,
@@ -3936,9 +3762,9 @@
                         efficiencyMultiplier: profitData.efficiencyMultiplier || 1,
                     });
                     const totalProfit = Math.round(totals.totalProfit);
-                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: {0}', formatters_js.formatLargeNumber(totalProfit))}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: {0}', formatters_js.formatLargeNumber(totalProfit))}`;
                 } else {
-                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: 0')}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: 0')}`;
                 }
             };
 
@@ -4101,7 +3927,7 @@
             : revenueEstimated
               ? `${formatters_js.formatLargeNumber(revenue)}/hr ⚠`
               : `${formatters_js.formatLargeNumber(revenue)}/hr`;
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${i18n_js.t('Revenue: ') + revenueLabel}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${t('Revenue: ') + revenueLabel}</div>`;
 
         // Primary Outputs subsection
         const primaryOutputContent = document.createElement('div');
@@ -4215,7 +4041,7 @@
             : costsEstimated
               ? `${formatters_js.formatLargeNumber(costs)}/hr ⚠`
               : `${formatters_js.formatLargeNumber(costs)}/hr`;
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: ') + costsLabel}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${t('Costs: ') + costsLabel}</div>`;
 
         // Material Costs subsection
         const materialCostsContent = document.createElement('div');
@@ -4295,13 +4121,13 @@
             : marketTaxEstimated
               ? `${formatters_js.formatLargeNumber(marketTax)}/hr ⚠`
               : `${formatters_js.formatLargeNumber(marketTax)}/hr`;
-        marketTaxLine.textContent = i18n_js.t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
+        marketTaxLine.textContent = t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
         marketTaxContent.appendChild(marketTaxLine);
 
         const marketTaxHeader = marketTaxLabel;
         const marketTaxSection = uiComponents_js.createCollapsibleSection(
             '',
-            i18n_js.t('Market Tax: {0} (2%)', marketTaxHeader),
+            t('Market Tax: {0} (2%)', marketTaxHeader),
             null,
             marketTaxContent,
             false,
@@ -4435,7 +4261,7 @@
             }
             const modifiersSection = uiComponents_js.createCollapsibleSection(
                 '⚙️',
-                i18n_js.t('Modifiers'),
+                t('Modifiers'),
                 modifierSummaryParts.join(' | '),
                 modifierContent,
                 false,
@@ -4448,7 +4274,7 @@
         const topLevelContent = document.createElement('div');
         const effectiveActionsPerHour = profitData.actionsPerHour * profitData.efficiencyMultiplier;
         topLevelContent.innerHTML = `
-        <div style="margin-bottom: 4px;">${i18n_js.t('Actions: {0}/hr', effectiveActionsPerHour.toFixed(2))}</div>
+        <div style="margin-bottom: 4px;">${t('Actions: {0}/hr', effectiveActionsPerHour.toFixed(2))}</div>
     `;
 
         // Add Net Profit line at top level (always visible when Profitability is expanded)
@@ -4460,10 +4286,10 @@
         margin-bottom: 8px;
     `;
         netProfitLine.textContent = netMissing
-            ? i18n_js.t('Net Profit: -- ⚠')
+            ? t('Net Profit: -- ⚠')
             : netEstimated
-              ? i18n_js.t('Net Profit: {0}/hr ⚠, {1}/day ⚠', formatters_js.formatLargeNumber(profit), formatters_js.formatLargeNumber(profitPerDay))
-              : i18n_js.t('Net Profit: {0}/hr, {1}/day', formatters_js.formatLargeNumber(profit), formatters_js.formatLargeNumber(profitPerDay));
+              ? t('Net Profit: {0}/hr ⚠, {1}/day ⚠', formatters_js.formatLargeNumber(profit), formatters_js.formatLargeNumber(profitPerDay))
+              : t('Net Profit: {0}/hr, {1}/day', formatters_js.formatLargeNumber(profit), formatters_js.formatLargeNumber(profitPerDay));
         topLevelContent.appendChild(netProfitLine);
 
         // Add pricing mode label
@@ -4480,14 +4306,14 @@
             ? loadoutSnapshot.getSnapshotInfoForSkill(productionActionType)
             : null;
         const productionLoadoutLabel = productionSnapshotInfo
-            ? `${productionSnapshotInfo.name}${productionSnapshotInfo.isDefault ? i18n_js.t(' (Default)') : ''}`
-            : i18n_js.t('Equipped');
-        modeDiv.textContent = i18n_js.t('Pricing Mode: ') + modeLabel + ' • ' + i18n_js.t('Loadout: ') + productionLoadoutLabel;
+            ? `${productionSnapshotInfo.name}${productionSnapshotInfo.isDefault ? t(' (Default)') : ''}`
+            : t('Equipped');
+        modeDiv.textContent = t('Pricing Mode: ') + modeLabel + ' • ' + t('Loadout: ') + productionLoadoutLabel;
         topLevelContent.appendChild(modeDiv);
 
         const detailedBreakdownSection = uiComponents_js.createCollapsibleSection(
             '📊',
-            i18n_js.t('Per hour breakdown'),
+            t('Per hour breakdown'),
             null,
             detailsContent,
             false,
@@ -4528,7 +4354,7 @@
         }
 
         // Create main profit section
-        const profitSection = uiComponents_js.createCollapsibleSection('💰', i18n_js.t('Profitability'), summary, topLevelContent, false, 0);
+        const profitSection = uiComponents_js.createCollapsibleSection('💰', t('Profitability'), summary, topLevelContent, false, 0);
         profitSection.id = 'mwi-production-profit';
         profitSection.setAttribute('data-mwi-profit-display', 'true');
         profitSection.dataset.mwiActionHrid = actionHrid;
@@ -4544,13 +4370,13 @@
 
             const updateSummary = (newValue) => {
                 if (netMissing) {
-                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: -- ⚠')}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: -- ⚠')}`;
                     return;
                 }
                 const inputValue = inputField.value;
 
                 if (inputValue === '∞') {
-                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: {0}', i18n_js.t('[infinite]'))}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: {0}', t('[infinite]'))}`;
                 } else if (newValue > 0) {
                     const totals = profitHelpers_js.calculateProductionActionTotalsFromBase({
                         actionsCount: newValue,
@@ -4564,9 +4390,9 @@
                         efficiencyMultiplier: profitData.efficiencyMultiplier || 1,
                     });
                     const totalProfit = Math.round(totals.totalProfit);
-                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: {0}', formatters_js.formatLargeNumber(totalProfit))}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: {0}', formatters_js.formatLargeNumber(totalProfit))}`;
                 } else {
-                    profitSummaryDiv.textContent = `${baseSummary} | ${i18n_js.t('Total profit: 0')}`;
+                    profitSummaryDiv.textContent = `${baseSummary} | ${t('Total profit: 0')}`;
                 }
             };
 
@@ -4657,7 +4483,7 @@
         // Revenue Section
         const revenueDiv = document.createElement('div');
         const revenueLabel = formatMissingLabel(revenueMissing, `${formatPerAction(revenuePerAction)}/action`);
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${i18n_js.t('Revenue: ') + revenueLabel}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${t('Revenue: ') + revenueLabel}</div>`;
 
         // Primary Outputs subsection
         const primaryDropsContent = document.createElement('div');
@@ -4830,7 +4656,7 @@
         // Costs Section
         const costsDiv = document.createElement('div');
         const costsLabel = formatMissingLabel(costsMissing, `${formatPerAction(costsPerAction)}/action`);
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: ') + costsLabel}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${t('Costs: ') + costsLabel}</div>`;
 
         // Drink Costs subsection
         const drinkCostsContent = document.createElement('div');
@@ -4864,12 +4690,12 @@
         const marketTaxLine = document.createElement('div');
         marketTaxLine.style.marginLeft = '8px';
         const marketTaxLabel = formatMissingLabel(marketTaxMissing, `${formatPerAction(marketTaxPerAction)}/action`);
-        marketTaxLine.textContent = i18n_js.t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
+        marketTaxLine.textContent = t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
         marketTaxContent.appendChild(marketTaxLine);
 
         const marketTaxSection = uiComponents_js.createCollapsibleSection(
             '',
-            i18n_js.t('Market Tax: {0} (2%)', marketTaxLabel),
+            t('Market Tax: {0} (2%)', marketTaxLabel),
             null,
             marketTaxContent,
             false,
@@ -4892,8 +4718,8 @@
         margin-bottom: 8px;
     `;
         netProfitLine.textContent = netMissing
-            ? i18n_js.t('Net Profit: -- ⚠')
-            : i18n_js.t('Net Profit: {0}/action', formatPerAction(profitPerAction));
+            ? t('Net Profit: -- ⚠')
+            : t('Net Profit: {0}/action', formatPerAction(profitPerAction));
         topLevelContent.appendChild(netProfitLine);
 
         const summarySection = uiComponents_js.createCollapsibleSection(
@@ -4906,7 +4732,7 @@
         );
         topLevelContent.appendChild(summarySection);
 
-        return uiComponents_js.createCollapsibleSection('🔢', i18n_js.t('Per action breakdown'), null, topLevelContent, false, 0);
+        return uiComponents_js.createCollapsibleSection('🔢', t('Per action breakdown'), null, topLevelContent, false, 0);
     }
 
     /**
@@ -4957,7 +4783,7 @@
             : revenueEstimated
               ? `${formatPerAction(revenuePerAction)}/action ⚠`
               : `${formatPerAction(revenuePerAction)}/action`;
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${i18n_js.t('Revenue: ') + revenueLabel}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${t('Revenue: ') + revenueLabel}</div>`;
 
         // Primary Outputs subsection
         const primaryOutputContent = document.createElement('div');
@@ -5080,7 +4906,7 @@
             : costsEstimated
               ? `${formatPerAction(costsPerAction)}/action ⚠`
               : `${formatPerAction(costsPerAction)}/action`;
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: ') + costsLabel}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${t('Costs: ') + costsLabel}</div>`;
 
         // Material Costs subsection
         const materialCostsContent = document.createElement('div');
@@ -5154,12 +4980,12 @@
             : marketTaxEstimated
               ? `${formatPerAction(marketTaxPerAction)}/action ⚠`
               : `${formatPerAction(marketTaxPerAction)}/action`;
-        marketTaxLine.textContent = i18n_js.t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
+        marketTaxLine.textContent = t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
         marketTaxContent.appendChild(marketTaxLine);
 
         const marketTaxSection = uiComponents_js.createCollapsibleSection(
             '',
-            i18n_js.t('Market Tax: {0} (2%)', marketTaxLabel),
+            t('Market Tax: {0} (2%)', marketTaxLabel),
             null,
             marketTaxContent,
             false,
@@ -5182,10 +5008,10 @@
         margin-bottom: 8px;
     `;
         netProfitLine.textContent = netMissing
-            ? i18n_js.t('Net Profit: -- ⚠')
+            ? t('Net Profit: -- ⚠')
             : netEstimated
-              ? i18n_js.t('Net Profit: {0}/action ⚠', formatPerAction(profitPerAction))
-              : i18n_js.t('Net Profit: {0}/action', formatPerAction(profitPerAction));
+              ? t('Net Profit: {0}/action ⚠', formatPerAction(profitPerAction))
+              : t('Net Profit: {0}/action', formatPerAction(profitPerAction));
         topLevelContent.appendChild(netProfitLine);
 
         const revenueSummaryLabel = revenueMissing
@@ -5208,7 +5034,7 @@
         );
         topLevelContent.appendChild(summarySection);
 
-        return uiComponents_js.createCollapsibleSection('🔢', i18n_js.t('Per action breakdown'), null, topLevelContent, false, 0);
+        return uiComponents_js.createCollapsibleSection('🔢', t('Per action breakdown'), null, topLevelContent, false, 0);
     }
 
     /**
@@ -5252,7 +5078,7 @@
         // Revenue Section
         const revenueDiv = document.createElement('div');
         const revenueLabel = formatMissingLabel(revenueMissing, formatters_js.formatLargeNumber(totalRevenue));
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${i18n_js.t('Revenue: ') + revenueLabel}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${t('Revenue: ') + revenueLabel}</div>`;
 
         // Primary Outputs subsection
         const primaryDropsContent = document.createElement('div');
@@ -5426,7 +5252,7 @@
         // Costs Section
         const costsDiv = document.createElement('div');
         const costsLabel = costsMissing ? '-- ⚠' : formatters_js.formatLargeNumber(totalCosts);
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: ') + costsLabel}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${t('Costs: ') + costsLabel}</div>`;
 
         // Drink Costs subsection
         const drinkCostsContent = document.createElement('div');
@@ -5460,13 +5286,13 @@
         const marketTaxLine = document.createElement('div');
         marketTaxLine.style.marginLeft = '8px';
         const marketTaxLabel = marketTaxMissing ? '-- ⚠' : formatters_js.formatLargeNumber(totalMarketTax);
-        marketTaxLine.textContent = i18n_js.t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
+        marketTaxLine.textContent = t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
         marketTaxContent.appendChild(marketTaxLine);
 
         const marketTaxHeader = marketTaxMissing ? '-- ⚠' : formatters_js.formatLargeNumber(totalMarketTax);
         const marketTaxSection = uiComponents_js.createCollapsibleSection(
             '',
-            i18n_js.t('Market Tax: {0} (2%)', marketTaxHeader),
+            t('Market Tax: {0} (2%)', marketTaxHeader),
             null,
             marketTaxContent,
             false,
@@ -5489,8 +5315,8 @@
         margin-bottom: 8px;
     `;
         netProfitLine.textContent = netMissing
-            ? i18n_js.t('Net Profit: -- ⚠')
-            : i18n_js.t('Net Profit: {0}', formatters_js.formatLargeNumber(totalProfit));
+            ? t('Net Profit: -- ⚠')
+            : t('Net Profit: {0}', formatters_js.formatLargeNumber(totalProfit));
         topLevelContent.appendChild(netProfitLine);
 
         const actionsSummary = `Revenue: ${formatMissingLabel(revenueMissing, formatters_js.formatLargeNumber(totalRevenue))} | Costs: ${formatMissingLabel(
@@ -5561,7 +5387,7 @@
             : revenueEstimated
               ? `${formatters_js.formatLargeNumber(totalRevenue)} ⚠`
               : formatters_js.formatLargeNumber(totalRevenue);
-        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${i18n_js.t('Revenue: ') + revenueLabel}</div>`;
+        revenueDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_PROFIT}; margin-bottom: 4px;">${t('Revenue: ') + revenueLabel}</div>`;
 
         // Primary Outputs subsection
         const primaryOutputContent = document.createElement('div');
@@ -5692,7 +5518,7 @@
             : costsEstimated
               ? `${formatters_js.formatLargeNumber(totalCosts)} ⚠`
               : formatters_js.formatLargeNumber(totalCosts);
-        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: ') + costsLabel}</div>`;
+        costsDiv.innerHTML = `<div style="font-weight: 500; color: ${config.COLOR_TOOLTIP_LOSS}; margin-top: 12px; margin-bottom: 4px;">${t('Costs: ') + costsLabel}</div>`;
 
         // Material Costs subsection
         const materialCostsContent = document.createElement('div');
@@ -5769,13 +5595,13 @@
             : marketTaxEstimated
               ? `${formatters_js.formatLargeNumber(totalMarketTax)} ⚠`
               : formatters_js.formatLargeNumber(totalMarketTax);
-        marketTaxLine.textContent = i18n_js.t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
+        marketTaxLine.textContent = t('• Market Tax: 2% of revenue → {0}', marketTaxLabel);
         marketTaxContent.appendChild(marketTaxLine);
 
         const marketTaxHeader = marketTaxLabel;
         const marketTaxSection = uiComponents_js.createCollapsibleSection(
             '',
-            i18n_js.t('Market Tax: {0} (2%)', marketTaxHeader),
+            t('Market Tax: {0} (2%)', marketTaxHeader),
             null,
             marketTaxContent,
             false,
@@ -5798,10 +5624,10 @@
         margin-bottom: 8px;
     `;
         netProfitLine.textContent = netMissing
-            ? i18n_js.t('Net Profit: -- ⚠')
+            ? t('Net Profit: -- ⚠')
             : netEstimated
-              ? i18n_js.t('Net Profit: {0} ⚠', formatters_js.formatLargeNumber(totalProfit))
-              : i18n_js.t('Net Profit: {0}', formatters_js.formatLargeNumber(totalProfit));
+              ? t('Net Profit: {0} ⚠', formatters_js.formatLargeNumber(totalProfit))
+              : t('Net Profit: {0}', formatters_js.formatLargeNumber(totalProfit));
         topLevelContent.appendChild(netProfitLine);
 
         const revenueDisplay = revenueMissing
@@ -5851,6 +5677,7 @@
             this.timerRegistry = timerRegistry_js.createTimerRegistry();
             this.handlers = {};
             this.pinChangeListeners = [];
+            this.sortModeListeners = [];
         }
 
         /**
@@ -5881,6 +5708,7 @@
             this.pinnedActions = new Set(pinnedData);
             this.sortMode = await storage.get(this._getSortStorageKey(), 'settings', 'default');
             this.initialized = true;
+            this._notifySortModeListeners();
 
             // Listen for character switch to clear character-specific data
             if (!this.handlers.characterSwitch) {
@@ -5915,6 +5743,7 @@
             this.pinnedActions = new Set(pinnedData);
             this.sortMode = await storage.get(this._getSortStorageKey(), 'settings', 'default');
             this.initialized = true;
+            this._notifySortModeListeners();
         }
 
         /**
@@ -5982,6 +5811,7 @@
         setSortMode(mode) {
             this.sortMode = mode;
             storage.set(this._getSortStorageKey(), mode, 'settings');
+            this._notifySortModeListeners();
         }
 
         /**
@@ -5990,6 +5820,14 @@
          */
         getSortMode() {
             return this.sortMode;
+        }
+
+        onSortModeChange(callback) {
+            this.sortModeListeners.push(callback);
+        }
+
+        _notifySortModeListeners() {
+            for (const cb of this.sortModeListeners) cb(this.sortMode);
         }
 
         /**
@@ -6224,21 +6062,6 @@
      */
 
 
-    // Chinese locale support: translate Chinese skill names to English
-    const SKILL_ZH_TO_EN$1 = {
-        挤奶: 'milking',
-        采集: 'foraging',
-        伐木: 'woodcutting',
-        奶酪锻造: 'cheesesmithing',
-        制作: 'crafting',
-        缝纫: 'tailoring',
-        编织: 'weaving',
-        烹饪: 'cooking',
-        酿造: 'brewing',
-        炼金: 'alchemy',
-        强化: 'enhancing',
-    };
-
     class ActionFilter {
         constructor() {
             this.panels = new Map(); // actionPanel → {actionName, container}
@@ -6252,6 +6075,9 @@
             this.filterTimeout = null;
             this.unregisterHandlers = [];
             this.currentTitleElement = null; // Track which title we're attached to
+            this._updateModeBtn = null;
+            this._updateCraftBtn = null;
+            this._updateSortBtn = null;
         }
 
         /**
@@ -6266,10 +6092,22 @@
                 'GatheringProductionSkillPanel_title__3VihQ',
                 (titleElement) => {
                     this.injectFilterInput(titleElement);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             this.unregisterHandlers.push(unregisterTitleObserver);
+
+            // Re-update button labels when config finishes loading from storage
+            config.onSettingChange('profitCalc_pricingMode', () => {
+                if (this._updateModeBtn) this._updateModeBtn();
+            });
+            config.onSettingChange('profitCalc_craftUpgradeItems', () => {
+                if (this._updateCraftBtn) this._updateCraftBtn();
+            });
+            actionPanelSort.onSortModeChange(() => {
+                if (this._updateSortBtn) this._updateSortBtn();
+            });
+
             this.initialized = true;
         }
 
@@ -6291,9 +6129,9 @@
             // Track the new title element
             this.currentTitleElement = titleElement;
 
-            // Reset filter state for new page
+            // Reset UI refs for new page (panels are NOT cleared — they may have been
+            // registered before this title appeared in the same mutation batch)
             this.filterValue = '';
-            this.panels.clear();
             this.filterInput = null;
             this.sortButton = null;
             this.modeButton = null;
@@ -6317,7 +6155,7 @@
             const input = document.createElement('input');
             input.id = 'mwi-action-filter';
             input.type = 'text';
-            input.placeholder = i18n_js.t('Filter actions...');
+            input.placeholder = t('Filter actions...');
             input.className = 'MuiInputBase-input'; // Use game's input class
             input.style.padding = '8px 12px';
             input.style.fontSize = '14px';
@@ -6357,16 +6195,16 @@
             // Create sort toggle button
             const SORT_MODES = ['default', 'profit', 'xp', 'coinsPerXp'];
             const SORT_LABELS = {
-                default: i18n_js.t('Sort: Default'),
-                profit: i18n_js.t('Sort: Profit'),
-                xp: i18n_js.t('Sort: XP'),
-                coinsPerXp: i18n_js.t('Sort: Profit/XP'),
+                default: t('Sort: Default'),
+                profit: t('Sort: Profit'),
+                xp: t('Sort: XP'),
+                coinsPerXp: t('Sort: Profit/XP'),
             };
             const sortBtn = document.createElement('button');
             sortBtn.id = 'mwi-action-sort-toggle';
             const updateSortBtn = () => {
                 const mode = actionPanelSort.getSortMode();
-                sortBtn.textContent = SORT_LABELS[mode] || i18n_js.t('Sort: Default');
+                sortBtn.textContent = SORT_LABELS[mode] || t('Sort: Default');
                 const isActive = mode !== 'default';
                 sortBtn.style.borderColor = isActive ? config.COLOR_ACCENT : 'rgba(255, 255, 255, 0.23)';
                 sortBtn.style.color = isActive ? config.COLOR_ACCENT : 'inherit';
@@ -6382,6 +6220,7 @@
             flex-shrink: 0;
         `;
             updateSortBtn();
+            this._updateSortBtn = updateSortBtn;
             sortBtn.addEventListener('click', () => {
                 const current = actionPanelSort.getSortMode();
                 const nextIndex = (SORT_MODES.indexOf(current) + 1) % SORT_MODES.length;
@@ -6402,7 +6241,7 @@
             modeBtn.id = 'mwi-action-profit-mode';
             const updateModeBtn = () => {
                 const mode = config.getSettingValue('profitCalc_pricingMode', 'hybrid');
-                modeBtn.textContent = i18n_js.t('Mode: {0}', config.getPricingModeLabel(mode));
+                modeBtn.textContent = t('Mode: {0}', config.getPricingModeLabel(mode));
             };
             modeBtn.style.cssText = `
             padding: 8px 12px;
@@ -6415,6 +6254,7 @@
             flex-shrink: 0;
         `;
             updateModeBtn();
+            this._updateModeBtn = updateModeBtn;
             modeBtn.addEventListener('click', async () => {
                 const current = config.getSettingValue('profitCalc_pricingMode', 'hybrid');
                 const nextIndex = (PROFIT_MODES.indexOf(current) + 1) % PROFIT_MODES.length;
@@ -6432,12 +6272,12 @@
             // Create craft toggle button
             const craftBtn = document.createElement('button');
             craftBtn.id = 'mwi-action-craft-toggle';
-            craftBtn.title = i18n_js.t(
+            craftBtn.title = t(
                 'When on, uses crafting cost for upgrade items if cheaper than market, and includes crafting time in profit/hr'
             );
             const updateCraftBtn = () => {
                 const enabled = config.getSetting('profitCalc_craftUpgradeItems');
-                craftBtn.textContent = enabled ? i18n_js.t('Craft: On') : i18n_js.t('Craft: Off');
+                craftBtn.textContent = enabled ? t('Craft: On') : t('Craft: Off');
             };
             craftBtn.style.cssText = `
             padding: 8px 12px;
@@ -6450,6 +6290,7 @@
             flex-shrink: 0;
         `;
             updateCraftBtn();
+            this._updateCraftBtn = updateCraftBtn;
             craftBtn.addEventListener('click', async () => {
                 const current = config.getSetting('profitCalc_craftUpgradeItems');
                 config.setSetting('profitCalc_craftUpgradeItems', !current);
@@ -6489,7 +6330,7 @@
                     message.style.padding = '40px 20px';
                     message.style.color = 'rgba(255, 255, 255, 0.6)';
                     message.style.fontSize = '16px';
-                    message.textContent = i18n_js.t('No matching actions');
+                    message.textContent = t('No matching actions');
 
                     // Insert after the title
                     titleElement.parentElement.insertBefore(message, titleElement.nextSibling);
@@ -6539,6 +6380,9 @@
             // Apply current filter if one is active
             if (this.filterValue) {
                 this.applyFilterToPanel(actionPanel);
+                if (actionPanel.dataset.mwiFilterHidden === 'true') {
+                    actionPanel.style.display = 'none';
+                }
             }
         }
 
@@ -6644,18 +6488,19 @@
             // Reset filter value
             this.filterValue = '';
 
-            // Clear all panel filter states
-            for (const actionPanel of this.panels.keys()) {
-                actionPanel.dataset.mwiFilterHidden = 'false';
+            // Reset filter attributes on still-attached panels; purge detached ones
+            for (const [actionPanel] of this.panels.entries()) {
+                if (!actionPanel.parentElement) {
+                    this.panels.delete(actionPanel);
+                } else {
+                    actionPanel.dataset.mwiFilterHidden = 'false';
+                }
             }
 
             // Hide "No results" message
             if (this.noResultsMessage) {
                 this.noResultsMessage.style.display = 'none';
             }
-
-            // Clear panels registry
-            this.panels.clear();
 
             // Remove injected input
             if (this.filterInput && this.filterInput.parentElement) {
@@ -6672,6 +6517,15 @@
                 this.modeButton.remove();
                 this.modeButton = null;
             }
+
+            if (this.craftButton && this.craftButton.parentElement) {
+                this.craftButton.remove();
+                this.craftButton = null;
+            }
+
+            this._updateModeBtn = null;
+            this._updateCraftBtn = null;
+            this._updateSortBtn = null;
 
             if (this.noResultsMessage && this.noResultsMessage.parentElement) {
                 this.noResultsMessage.remove();
@@ -6706,17 +6560,6 @@
             }
 
             return text || null;
-        }
-
-        /**
-         * Get the current skill name translated to English for game data lookups.
-         * Handles Chinese locale by mapping Chinese skill names to English.
-         * @returns {string|null} English skill name (e.g., "foraging") or null
-         */
-        getCurrentSkillEnglishName() {
-            const displayName = this.getCurrentSkillName();
-            if (!displayName) return null;
-            return SKILL_ZH_TO_EN$1[displayName] || displayName;
         }
 
         /**
@@ -6765,6 +6608,7 @@
 
             // Clear filter
             this.clearFilter();
+            this.panels.clear();
 
             this.initialized = false;
         }
@@ -6992,7 +6836,7 @@
                 if (panel) {
                     handleActionPanel(panel);
                 }
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
 
         domObserver.onClass(
@@ -7001,7 +6845,7 @@
             (panel) => {
                 handleEnhancingPanel(panel);
                 registerEnhancingPanelWatcher(panel);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
 
         // NEW: Observe for skill action grid tiles (the clickable action tiles on gathering/production pages)
@@ -7010,7 +6854,7 @@
             'SkillAction_skillAction__1esCp',
             (actionTile) => {
                 handleSkillActionTile(actionTile);
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
     }
 
@@ -7091,7 +6935,7 @@
                 subtree: true,
                 attributes: true,
                 attributeOldValue: true,
-            }
+            }, { debounce: true, debounceDelay: 150 }
         );
 
         observedEnhancingPanels.add(panel);
@@ -7563,817 +7407,151 @@
 
     const tooltipObserver = new TooltipObserver();
 
-    var WORKER_SCRIPT = "(function () {\n    'use strict';\n\n    /**\n     * Game Data Singleton\n     *\n     * Replaces static JSON imports across the ported combat simulator engine.\n     * Game data maps are set once per simulation run from Toolasha's live data.\n     */\n\n    let _gameData = null;\n\n    /**\n     * Set all game data maps for the simulation.\n     * @param {Object} data - Game data maps from dataManager.getInitClientData()\n     */\n    function setGameData(data) {\n        _gameData = data;\n    }\n\n    /**\n     * Get the current game data maps.\n     * @returns {Object} Game data maps\n     */\n    function getGameData() {\n        return _gameData;\n    }\n\n    class CombatUtilities {\n        static getTarget(enemies) {\n            if (!enemies) {\n                return null;\n            }\n            const target = enemies.find((enemy) => enemy.combatDetails.currentHitpoints > 0);\n\n            return target ?? null;\n        }\n\n        static randomInt(min, max) {\n            if (max < min) {\n                const temp = min;\n                min = max;\n                max = temp;\n            }\n\n            const minCeil = Math.ceil(min);\n            const maxFloor = Math.floor(max);\n\n            if (Math.floor(min) === maxFloor) {\n                return Math.floor((min + max) / 2 + Math.random());\n            }\n\n            const minTail = -1 * (min - minCeil);\n            const maxTail = max - maxFloor;\n\n            const balancedWeight = 2 * minTail + (maxFloor - minCeil);\n            const balancedAverage = (maxFloor + minCeil) / 2;\n            const average = (max + min) / 2;\n            const extraTailWeight = (balancedWeight * (average - balancedAverage)) / (maxFloor + 1 - average);\n            const extraTailChance = Math.abs(extraTailWeight / (extraTailWeight + balancedWeight));\n\n            if (Math.random() < extraTailChance) {\n                if (maxTail > minTail) {\n                    return Math.floor(maxFloor + 1);\n                } else {\n                    return Math.floor(minCeil - 1);\n                }\n            }\n\n            if (maxTail > minTail) {\n                return Math.floor(min + Math.random() * (maxFloor + minTail - min + 1));\n            } else {\n                return Math.floor(minCeil - maxTail + Math.random() * (max - (minCeil - maxTail) + 1));\n            }\n        }\n\n        static processAttack(source, target, abilityEffect = null) {\n            const combatStyle = abilityEffect\n                ? abilityEffect.combatStyleHrid\n                : source.combatDetails.combatStats.combatStyleHrid;\n            const damageType = abilityEffect ? abilityEffect.damageType : source.combatDetails.combatStats.damageType;\n\n            let sourceAccuracyRating = 1;\n            let sourceAutoAttackMaxDamage = 1;\n            let targetEvasionRating = 1;\n\n            switch (combatStyle) {\n                case '/combat_styles/stab':\n                    sourceAccuracyRating = source.combatDetails.stabAccuracyRating;\n                    sourceAutoAttackMaxDamage = source.combatDetails.stabMaxDamage;\n                    targetEvasionRating = target.combatDetails.stabEvasionRating;\n                    break;\n                case '/combat_styles/slash':\n                    sourceAccuracyRating = source.combatDetails.slashAccuracyRating;\n                    sourceAutoAttackMaxDamage = source.combatDetails.slashMaxDamage;\n                    targetEvasionRating = target.combatDetails.slashEvasionRating;\n                    break;\n                case '/combat_styles/smash':\n                    sourceAccuracyRating = source.combatDetails.smashAccuracyRating;\n                    sourceAutoAttackMaxDamage = source.combatDetails.smashMaxDamage;\n                    targetEvasionRating = target.combatDetails.smashEvasionRating;\n                    break;\n                case '/combat_styles/ranged':\n                    sourceAccuracyRating = source.combatDetails.rangedAccuracyRating;\n                    sourceAutoAttackMaxDamage = source.combatDetails.rangedMaxDamage;\n                    targetEvasionRating = target.combatDetails.rangedEvasionRating;\n                    break;\n                case '/combat_styles/magic':\n                    sourceAccuracyRating = source.combatDetails.magicAccuracyRating;\n                    sourceAutoAttackMaxDamage = source.combatDetails.magicMaxDamage;\n                    targetEvasionRating = target.combatDetails.magicEvasionRating;\n                    break;\n                default:\n                    throw new Error('Unknown combat style: ' + combatStyle);\n            }\n\n            let sourceDamageMultiplier = 1;\n            let sourceResistance = 0;\n            let sourcePenetration = 0;\n            let targetResistance = 0;\n            let targetThornPower = 0;\n            let targetPenetration = 0;\n            let thornType;\n\n            switch (damageType) {\n                case '/damage_types/physical':\n                    sourceDamageMultiplier = 1 + source.combatDetails.combatStats.physicalAmplify;\n                    sourceResistance = source.combatDetails.totalArmor;\n                    sourcePenetration = source.combatDetails.combatStats.armorPenetration;\n                    targetResistance = target.combatDetails.totalArmor;\n                    targetThornPower = target.combatDetails.combatStats.physicalThorns;\n                    targetPenetration = target.combatDetails.combatStats.armorPenetration;\n                    thornType = 'physicalThorns';\n                    break;\n                case '/damage_types/water':\n                    sourceDamageMultiplier = 1 + source.combatDetails.combatStats.waterAmplify;\n                    sourceResistance = source.combatDetails.totalWaterResistance;\n                    sourcePenetration = source.combatDetails.combatStats.waterPenetration;\n                    targetResistance = target.combatDetails.totalWaterResistance;\n                    targetThornPower = target.combatDetails.combatStats.elementalThorns;\n                    targetPenetration = target.combatDetails.combatStats.waterPenetration;\n                    thornType = 'elementalThorns';\n                    break;\n                case '/damage_types/nature':\n                    sourceDamageMultiplier = 1 + source.combatDetails.combatStats.natureAmplify;\n                    sourceResistance = source.combatDetails.totalNatureResistance;\n                    sourcePenetration = source.combatDetails.combatStats.naturePenetration;\n                    targetResistance = target.combatDetails.totalNatureResistance;\n                    targetThornPower = target.combatDetails.combatStats.elementalThorns;\n                    targetPenetration = target.combatDetails.combatStats.naturePenetration;\n                    thornType = 'elementalThorns';\n                    break;\n                case '/damage_types/fire':\n                    sourceDamageMultiplier = 1 + source.combatDetails.combatStats.fireAmplify;\n                    sourceResistance = source.combatDetails.totalFireResistance;\n                    sourcePenetration = source.combatDetails.combatStats.firePenetration;\n                    targetResistance = target.combatDetails.totalFireResistance;\n                    targetThornPower = target.combatDetails.combatStats.elementalThorns;\n                    targetPenetration = target.combatDetails.combatStats.firePenetration;\n                    thornType = 'elementalThorns';\n                    break;\n                default:\n                    throw new Error('Unknown damage type: ' + damageType);\n            }\n\n            let hitChance = 1;\n            let critChance = 0;\n            let isCrit = false;\n            const bonusCritChance = source.combatDetails.combatStats.criticalRate;\n            const bonusCritDamage = source.combatDetails.combatStats.criticalDamage;\n\n            if (abilityEffect) {\n                sourceAccuracyRating *= 1 + abilityEffect.bonusAccuracyRatio;\n            }\n\n            if (source.isWeakened) {\n                sourceAccuracyRating = sourceAccuracyRating - source.weakenPercentage * sourceAccuracyRating;\n            }\n\n            hitChance =\n                Math.pow(sourceAccuracyRating, 1.4) /\n                (Math.pow(sourceAccuracyRating, 1.4) + Math.pow(targetEvasionRating, 1.4));\n\n            if (combatStyle === '/combat_styles/ranged') {\n                critChance = 0.3 * hitChance;\n            }\n\n            critChance = critChance + bonusCritChance;\n\n            const baseDamageFlat = abilityEffect ? abilityEffect.damageFlat : 0;\n            const baseDamageRatio = abilityEffect ? abilityEffect.damageRatio : 1;\n\n            const armorDamageRatioFlat = abilityEffect\n                ? abilityEffect.armorDamageRatio * source.combatDetails.totalArmor\n                : 0;\n\n            let sourceMinDamage = sourceDamageMultiplier * (1 + baseDamageFlat + armorDamageRatioFlat);\n            let sourceMaxDamage =\n                sourceDamageMultiplier *\n                (baseDamageRatio * sourceAutoAttackMaxDamage + baseDamageFlat + armorDamageRatioFlat);\n\n            if (Math.random() < critChance) {\n                sourceMaxDamage = sourceMaxDamage * (1 + bonusCritDamage);\n                sourceMinDamage = sourceMaxDamage;\n                isCrit = true;\n            }\n\n            let damageRoll = CombatUtilities.randomInt(sourceMinDamage, sourceMaxDamage);\n            // taskDamage intentionally excluded — trinket slot not exported by reference sims\n            // damageRoll *= 1 + source.combatDetails.combatStats.taskDamage;\n            damageRoll *= 1 + target.combatDetails.combatStats.damageTaken;\n            if (!abilityEffect) {\n                damageRoll += damageRoll * source.combatDetails.combatStats.autoAttackDamage;\n            } else {\n                damageRoll *= 1 + source.combatDetails.combatStats.abilityDamage;\n            }\n\n            let damageDone = 0;\n            let thornDamageDone = 0;\n\n            let didHit = false;\n            if (Math.random() < hitChance) {\n                didHit = true;\n                let penetratedTargetResistance = targetResistance;\n\n                if (sourcePenetration > 0 && targetResistance > 0) {\n                    penetratedTargetResistance = targetResistance / (1 + sourcePenetration);\n                }\n\n                let targetDamageTakenRatio = 100 / (100 + penetratedTargetResistance);\n                if (penetratedTargetResistance < 0) {\n                    targetDamageTakenRatio = (100 - penetratedTargetResistance) / 100;\n                }\n\n                const mitigatedDamage = Math.ceil(targetDamageTakenRatio * damageRoll);\n                damageDone = Math.min(mitigatedDamage, target.combatDetails.currentHitpoints);\n                target.combatDetails.currentHitpoints -= damageDone;\n            }\n\n            if (targetThornPower > 0.0 && targetResistance > -99) {\n                let penetratedSourceResistance = sourceResistance;\n\n                if (sourceResistance > 0) {\n                    penetratedSourceResistance = sourceResistance / (1 + targetPenetration);\n                }\n\n                let sourceDamageTakenRatio = 100.0 / (100 + penetratedSourceResistance);\n                if (penetratedSourceResistance < 0) {\n                    sourceDamageTakenRatio = (100 - penetratedSourceResistance) / 100;\n                }\n\n                const targetTaskDamageMultiplier = 1.0 + target.combatDetails.combatStats.taskDamage;\n                const sourceDamageTakenMultiplier = 1.0 + source.combatDetails.combatStats.damageTaken;\n                const targetDamageMultiplier = targetTaskDamageMultiplier * sourceDamageTakenMultiplier;\n\n                const thornsDamageRoll = CombatUtilities.randomInt(\n                    1,\n                    targetDamageMultiplier *\n                        target.combatDetails.defensiveMaxDamage *\n                        (1.0 + targetResistance / 100.0) *\n                        targetThornPower\n                );\n\n                const mitigatedThornsDamage = Math.ceil(sourceDamageTakenRatio * thornsDamageRoll);\n\n                thornDamageDone = Math.min(mitigatedThornsDamage, source.combatDetails.currentHitpoints);\n                source.combatDetails.currentHitpoints -= thornDamageDone;\n            }\n\n            let retaliationDamageDone = 0;\n            if (target.combatDetails.combatStats.retaliation > 0) {\n                const retaliationHitChance =\n                    Math.pow(target.combatDetails.smashAccuracyRating, 1.4) /\n                    (Math.pow(target.combatDetails.smashAccuracyRating, 1.4) +\n                        Math.pow(source.combatDetails.smashEvasionRating, 1.4));\n\n                if (retaliationHitChance > Math.random()) {\n                    let sourceEffectiveArmor = source.combatDetails.totalArmor;\n                    if (sourceEffectiveArmor > 0) {\n                        sourceEffectiveArmor =\n                            sourceEffectiveArmor / (1.0 + target.combatDetails.combatStats.armorPenetration);\n                    }\n\n                    let sourceDamageTakenRatio = 100.0 / (100.0 + sourceEffectiveArmor);\n                    if (sourceEffectiveArmor < 0) {\n                        sourceDamageTakenRatio = (100.0 - sourceEffectiveArmor) / 100.0;\n                    }\n\n                    const targetTaskDamageMultiplier = 1.0 + target.combatDetails.combatStats.taskDamage;\n                    const sourceDamageTakenMultiplier = 1.0 + source.combatDetails.combatStats.damageTaken;\n                    const retaliationDamageMultiplier = targetTaskDamageMultiplier * sourceDamageTakenMultiplier;\n\n                    let premitigatedDamage = damageRoll;\n                    premitigatedDamage = Math.min(premitigatedDamage, target.combatDetails.defensiveMaxDamage * 5);\n\n                    const retaliationMinDamage =\n                        retaliationDamageMultiplier * target.combatDetails.combatStats.retaliation * premitigatedDamage;\n                    const retaliationMaxDamage =\n                        retaliationDamageMultiplier *\n                        target.combatDetails.combatStats.retaliation *\n                        (target.combatDetails.defensiveMaxDamage + premitigatedDamage);\n\n                    const retaliationDamageRoll = CombatUtilities.randomInt(retaliationMinDamage, retaliationMaxDamage);\n                    const mitigatedRetaliationDamage = Math.ceil(sourceDamageTakenRatio * retaliationDamageRoll);\n                    retaliationDamageDone = Math.min(mitigatedRetaliationDamage, source.combatDetails.currentHitpoints);\n                    source.combatDetails.currentHitpoints -= retaliationDamageDone;\n                }\n            }\n\n            let lifeStealHeal = 0;\n            if (!abilityEffect && didHit && source.combatDetails.combatStats.lifeSteal > 0) {\n                lifeStealHeal = source.addHitpoints(Math.floor(source.combatDetails.combatStats.lifeSteal * damageDone));\n            }\n\n            let hpDrain = 0;\n            if (abilityEffect && didHit && abilityEffect.hpDrainRatio > 0) {\n                const healingAmplify = 1 + source.combatDetails.combatStats.healingAmplify;\n                hpDrain = source.addHitpoints(Math.floor(abilityEffect.hpDrainRatio * damageDone * healingAmplify));\n            }\n\n            let manaLeechMana = 0;\n            if (!abilityEffect && didHit && source.combatDetails.combatStats.manaLeech > 0) {\n                manaLeechMana = source.addManapoints(Math.floor(source.combatDetails.combatStats.manaLeech * damageDone));\n            }\n\n            return {\n                damageDone,\n                didHit,\n                thornDamageDone,\n                thornType,\n                retaliationDamageDone,\n                lifeStealHeal,\n                hpDrain,\n                manaLeechMana,\n                isCrit,\n            };\n        }\n\n        static processHeal(source, abilityEffect, target) {\n            if (abilityEffect.combatStyleHrid !== '/combat_styles/magic') {\n                throw new Error('Heal ability effect not supported for combat style: ' + abilityEffect.combatStyleHrid);\n            }\n\n            const healingAmplify = 1 + source.combatDetails.combatStats.healingAmplify;\n            const magicMaxDamage = source.combatDetails.magicMaxDamage;\n\n            const baseHealFlat = abilityEffect.damageFlat;\n            const baseHealRatio = abilityEffect.damageRatio;\n\n            const minHeal = healingAmplify * (1 + baseHealFlat);\n            const maxHeal = healingAmplify * (baseHealRatio * magicMaxDamage + baseHealFlat);\n\n            const heal = this.randomInt(minHeal, maxHeal);\n            const amountHealed = target.addHitpoints(heal);\n\n            return amountHealed;\n        }\n\n        static processRevive(source, abilityEffect, target) {\n            if (abilityEffect.combatStyleHrid !== '/combat_styles/magic') {\n                throw new Error('Heal ability effect not supported for combat style: ' + abilityEffect.combatStyleHrid);\n            }\n\n            const healingAmplify = 1 + source.combatDetails.combatStats.healingAmplify;\n            const magicMaxDamage = source.combatDetails.magicMaxDamage;\n\n            const baseHealFlat = abilityEffect.damageFlat;\n            const baseHealRatio = abilityEffect.damageRatio;\n\n            const minHeal = healingAmplify * (1 + baseHealFlat);\n            const maxHeal = healingAmplify * (baseHealRatio * magicMaxDamage + baseHealFlat);\n\n            const heal = this.randomInt(minHeal, maxHeal);\n            const amountHealed = target.addHitpoints(heal);\n            target.combatDetails.currentManapoints = target.combatDetails.maxManapoints;\n            target.clearCCs();\n\n            // target.clearBuffs();\n\n            return amountHealed;\n        }\n\n        static processSpendHp(source, abilityEffect) {\n            const currentHp = source.combatDetails.currentHitpoints;\n            const spendHpRatio = abilityEffect.spendHpRatio;\n\n            const spentHp = Math.floor(currentHp * spendHpRatio);\n\n            source.combatDetails.currentHitpoints -= spentHp;\n\n            return spentHp;\n        }\n\n        static calculateTickValue(totalValue, totalTicks, currentTick) {\n            const currentSum = Math.floor((currentTick * totalValue) / totalTicks);\n            const previousSum = Math.floor(((currentTick - 1) * totalValue) / totalTicks);\n\n            return currentSum - previousSum;\n        }\n    }\n\n    class CombatEvent {\n        constructor(type, time) {\n            this.type = type;\n            this.time = time;\n        }\n    }\n\n    class AutoAttackEvent extends CombatEvent {\n        static type = 'autoAttack';\n\n        constructor(time, source) {\n            super(AutoAttackEvent.type, time);\n\n            this.source = source;\n        }\n    }\n\n    class DamageOverTimeEvent extends CombatEvent {\n        static type = 'damageOverTime';\n\n        constructor(time, sourceRef, target, damage, totalTicks, currentTick, combatStyleHrid) {\n            super(DamageOverTimeEvent.type, time);\n\n            // Calling it 'source' would wrongly clear Damage Over Time when the source dies\n            this.sourceRef = sourceRef;\n            this.target = target;\n            this.damage = damage;\n            this.totalTicks = totalTicks;\n            this.currentTick = currentTick;\n            this.combatStyleHrid = combatStyleHrid;\n        }\n    }\n\n    class CheckBuffExpirationEvent extends CombatEvent {\n        static type = 'checkBuffExpiration';\n\n        constructor(time, source) {\n            super(CheckBuffExpirationEvent.type, time);\n\n            this.source = source;\n        }\n    }\n\n    class CombatStartEvent extends CombatEvent {\n        static type = 'combatStart';\n\n        constructor(time) {\n            super(CombatStartEvent.type, time);\n        }\n    }\n\n    class ConsumableTickEvent extends CombatEvent {\n        static type = 'consumableTick';\n\n        constructor(time, source, consumable, totalTicks, currentTick) {\n            super(ConsumableTickEvent.type, time);\n\n            this.source = source;\n            this.consumable = consumable;\n            this.totalTicks = totalTicks;\n            this.currentTick = currentTick;\n        }\n    }\n\n    class CooldownReadyEvent extends CombatEvent {\n        static type = 'cooldownReady';\n\n        constructor(time) {\n            super(CooldownReadyEvent.type, time);\n        }\n    }\n\n    class EnemyRespawnEvent extends CombatEvent {\n        static type = 'enemyRespawn';\n\n        constructor(time) {\n            super(EnemyRespawnEvent.type, time);\n        }\n    }\n\n    /**\n     * EventQueue — simple binary min-heap with linear scan queries.\n     *\n     * Optimized for the combat sim's access pattern: frequent add/remove (every tick)\n     * with rare queries (a few per encounter). The heap typically holds 10-30 events,\n     * making linear scans trivially fast and eliminating the overhead of maintaining\n     * secondary indexes on every mutation.\n     */\n\n    /**\n     * Binary min-heap with O(log n) removal via position tracking.\n     */\n    class IndexedMinHeap {\n        constructor() {\n            this.data = [];\n        }\n\n        get size() {\n            return this.data.length;\n        }\n\n        push(event) {\n            event._heapIndex = this.data.length;\n            this.data.push(event);\n            this._siftUp(this.data.length - 1);\n        }\n\n        pop() {\n            if (this.data.length === 0) return undefined;\n            const top = this.data[0];\n            const last = this.data.pop();\n            if (this.data.length > 0) {\n                last._heapIndex = 0;\n                this.data[0] = last;\n                this._siftDown(0);\n            }\n            top._heapIndex = -1;\n            return top;\n        }\n\n        remove(event) {\n            const idx = event._heapIndex;\n            if (idx === undefined || idx < 0 || idx >= this.data.length || this.data[idx] !== event) {\n                return false;\n            }\n\n            if (idx === this.data.length - 1) {\n                this.data.pop();\n                event._heapIndex = -1;\n                return true;\n            }\n\n            const last = this.data.pop();\n            last._heapIndex = idx;\n            this.data[idx] = last;\n            event._heapIndex = -1;\n\n            this._siftUp(idx);\n            this._siftDown(idx);\n            return true;\n        }\n\n        _siftUp(idx) {\n            const data = this.data;\n            while (idx > 0) {\n                const parent = (idx - 1) >> 1;\n                if (data[idx].time >= data[parent].time) break;\n                const tmp = data[parent];\n                data[parent] = data[idx];\n                data[idx] = tmp;\n                data[parent]._heapIndex = parent;\n                data[idx]._heapIndex = idx;\n                idx = parent;\n            }\n        }\n\n        _siftDown(idx) {\n            const data = this.data;\n            const len = data.length;\n            while (true) {\n                let smallest = idx;\n                const left = 2 * idx + 1;\n                const right = 2 * idx + 2;\n\n                if (left < len && data[left].time < data[smallest].time) smallest = left;\n                if (right < len && data[right].time < data[smallest].time) smallest = right;\n\n                if (smallest === idx) break;\n\n                const tmp = data[smallest];\n                data[smallest] = data[idx];\n                data[idx] = tmp;\n                data[smallest]._heapIndex = smallest;\n                data[idx]._heapIndex = idx;\n                idx = smallest;\n            }\n        }\n    }\n\n    /**\n     * EventQueue with O(log n) add/remove and linear scan queries.\n     */\n    class EventQueue {\n        constructor() {\n            this.minHeap = new IndexedMinHeap();\n        }\n\n        /**\n         * Add event to the queue.\n         * @param {Object} event\n         */\n        addEvent(event) {\n            this.minHeap.push(event);\n        }\n\n        /**\n         * Pop the earliest event.\n         * @returns {Object|undefined}\n         */\n        getNextEvent() {\n            return this.minHeap.pop();\n        }\n\n        /**\n         * Check if any event of the given type exists.\n         * @param {string} type\n         * @returns {boolean}\n         */\n        containsEventOfType(type) {\n            const data = this.minHeap.data;\n            for (let i = 0; i < data.length; i++) {\n                if (data[i].type === type) return true;\n            }\n            return false;\n        }\n\n        /**\n         * Check if an event of the given type and hrid exists.\n         * @param {string} type\n         * @param {string} hrid\n         * @returns {boolean}\n         */\n        containsEventOfTypeAndHrid(type, hrid) {\n            const data = this.minHeap.data;\n            for (let i = 0; i < data.length; i++) {\n                if (data[i].type === type && data[i].hrid === hrid) return true;\n            }\n            return false;\n        }\n\n        /**\n         * Get an event matching type + source.\n         * @param {string} type\n         * @param {Object} source\n         * @returns {Object|null}\n         */\n        getByTypeAndSource(type, source) {\n            const data = this.minHeap.data;\n            for (let i = 0; i < data.length; i++) {\n                if (data[i].type === type && data[i].source === source) return data[i];\n            }\n            return null;\n        }\n\n        /**\n         * Clear all events matching type + source.\n         * @param {string} type\n         * @param {Object} source\n         * @returns {boolean} true if any events were cleared\n         */\n        clearByTypeAndSource(type, source) {\n            let cleared = false;\n            const data = this.minHeap.data;\n            for (let i = data.length - 1; i >= 0; i--) {\n                if (data[i].type === type && data[i].source === source) {\n                    this.minHeap.remove(data[i]);\n                    cleared = true;\n                }\n            }\n            return cleared;\n        }\n\n        /**\n         * Clear all events matching type + hrid.\n         * @param {string} type\n         * @param {string} hrid\n         * @returns {boolean}\n         */\n        clearByTypeAndHrid(type, hrid) {\n            let cleared = false;\n            const data = this.minHeap.data;\n            for (let i = data.length - 1; i >= 0; i--) {\n                if (data[i].type === type && data[i].hrid === hrid) {\n                    this.minHeap.remove(data[i]);\n                    cleared = true;\n                }\n            }\n            return cleared;\n        }\n\n        /**\n         * Clear all events for a unit (as source OR target).\n         * @param {Object} unit\n         */\n        clearEventsForUnit(unit) {\n            const data = this.minHeap.data;\n            for (let i = data.length - 1; i >= 0; i--) {\n                if (data[i].source === unit || data[i].target === unit) {\n                    this.minHeap.remove(data[i]);\n                }\n            }\n        }\n\n        /**\n         * Clear all events of a given type.\n         * @param {string} type\n         */\n        clearEventsOfType(type) {\n            const data = this.minHeap.data;\n            for (let i = data.length - 1; i >= 0; i--) {\n                if (data[i].type === type) {\n                    this.minHeap.remove(data[i]);\n                }\n            }\n        }\n\n        /**\n         * Clear all events and reset.\n         */\n        clear() {\n            this.minHeap = new IndexedMinHeap();\n        }\n\n        /**\n         * Generic clearMatching for complex predicates.\n         * @param {Function} fn - Predicate\n         * @returns {boolean}\n         */\n        clearMatching(fn) {\n            let cleared = false;\n            const data = this.minHeap.data;\n            for (let i = data.length - 1; i >= 0; i--) {\n                if (fn(data[i])) {\n                    this.minHeap.remove(data[i]);\n                    cleared = true;\n                }\n            }\n            return cleared;\n        }\n\n        /**\n         * Generic getMatching for complex predicates.\n         * @param {Function} fn - Predicate\n         * @returns {Object|null}\n         */\n        getMatching(fn) {\n            const data = this.minHeap.data;\n            for (let i = 0; i < data.length; i++) {\n                if (fn(data[i])) return data[i];\n            }\n            return null;\n        }\n    }\n\n    class PlayerRespawnEvent extends CombatEvent {\n        static type = 'playerRespawn';\n\n        constructor(time, hrid) {\n            super(PlayerRespawnEvent.type, time);\n            this.hrid = hrid;\n        }\n    }\n\n    class RegenTickEvent extends CombatEvent {\n        static type = 'regenTick';\n\n        constructor(time) {\n            super(RegenTickEvent.type, time);\n        }\n    }\n\n    class StunExpirationEvent extends CombatEvent {\n        static type = 'stunExpiration';\n\n        constructor(time, source) {\n            super(StunExpirationEvent.type, time);\n\n            this.source = source;\n        }\n    }\n\n    class BlindExpirationEvent extends CombatEvent {\n        static type = 'blindExpiration';\n\n        constructor(time, source) {\n            super(BlindExpirationEvent.type, time);\n\n            this.source = source;\n        }\n    }\n\n    class SilenceExpirationEvent extends CombatEvent {\n        static type = 'silenceExpiration';\n\n        constructor(time, source) {\n            super(SilenceExpirationEvent.type, time);\n\n            this.source = source;\n        }\n    }\n\n    class CurseExpirationEvent extends CombatEvent {\n        static type = 'curseExpiration';\n        static maxCurseStacks = 5;\n\n        constructor(time, curseAmount, source) {\n            super(CurseExpirationEvent.type, time);\n\n            this.curseAmount = Math.min(curseAmount + 1, CurseExpirationEvent.maxCurseStacks);\n\n            this.source = source;\n        }\n    }\n\n    class WeakenExpirationEvent extends CombatEvent {\n        static type = 'weakenExpiration';\n        static maxWeakenStacks = 5;\n\n        constructor(time, weakenAmount, source) {\n            super(WeakenExpirationEvent.type, time);\n            this.weakenAmount = Math.min(weakenAmount + 1, WeakenExpirationEvent.maxWeakenStacks);\n            this.source = source;\n        }\n    }\n\n    class FuryExpirationEvent extends CombatEvent {\n        static type = 'furyExpiration';\n\n        constructor(time, furyAmount, source) {\n            super(FuryExpirationEvent.type, time);\n\n            this.furyAmount = furyAmount;\n            this.source = source;\n        }\n    }\n\n    class EnrageTickEvent extends CombatEvent {\n        static type = 'enrageTick';\n\n        constructor(time, encounterTime) {\n            super(EnrageTickEvent.type, time);\n\n            this.encounterTime = encounterTime;\n        }\n    }\n\n    class SimResult {\n        constructor(zone, numberOfPlayers) {\n            this.deaths = {};\n            this.experienceGained = {};\n            this.encounters = 0;\n            this.attacks = {};\n            this.consumablesUsed = {};\n            this.hitpointsGained = {};\n            this.manapointsGained = {};\n            this.debuffOnLevelGap = {};\n            this.dropRateMultiplier = {};\n            this.rareFindMultiplier = {};\n            this.combatDropQuantity = {};\n            this.playerRanOutOfMana = {\n                player1: false,\n                player2: false,\n                player3: false,\n                player4: false,\n                player5: false,\n            };\n            this.playerRanOutOfManaTime = {};\n            this.manaUsed = {};\n            this.timeSpentAlive = [];\n            this.bossSpawns = [];\n            this.hitpointsSpent = {};\n            this.zoneName = zone.hrid;\n            this.difficultyTier = zone.difficultyTier;\n            this.isDungeon = false;\n            this.dungeonsCompleted = 0;\n            this.dungeonsFailed = 0;\n            this.maxWaveReached = 0;\n            this.numberOfPlayers = numberOfPlayers;\n            this.maxEnrageStack = 0;\n\n            this.wipeEvents = [];\n        }\n\n        addWipeEvent(logs, simulationTime, wave) {\n            this.wipeEvents.push({\n                simulationTime: simulationTime,\n                logs: logs,\n                wave: wave,\n                timestamp: new Date().toISOString(),\n            });\n        }\n\n        addDeath(unit) {\n            if (!this.deaths[unit.hrid]) {\n                this.deaths[unit.hrid] = 0;\n            }\n\n            this.deaths[unit.hrid] += 1;\n        }\n\n        updateTimeSpentAlive(name, alive, time) {\n            const i = this.timeSpentAlive.findIndex((e) => e.name === name);\n            if (alive) {\n                if (i !== -1) {\n                    this.timeSpentAlive[i].alive = true;\n                    this.timeSpentAlive[i].spawnedAt = time;\n                } else {\n                    this.timeSpentAlive.push({ name: name, timeSpentAlive: 0, spawnedAt: time, alive: true, count: 0 });\n                }\n            } else {\n                const timeAlive = time - this.timeSpentAlive[i].spawnedAt;\n                this.timeSpentAlive[i].alive = false;\n                this.timeSpentAlive[i].timeSpentAlive += timeAlive;\n                this.timeSpentAlive[i].count += 1;\n            }\n        }\n\n        addExperienceGain(unit, experience) {\n            if (!unit.isPlayer) {\n                return;\n            }\n\n            if (!this.experienceGained[unit.hrid]) {\n                this.experienceGained[unit.hrid] = {\n                    stamina: 0,\n                    intelligence: 0,\n                    attack: 0,\n                    melee: 0,\n                    defense: 0,\n                    ranged: 0,\n                    magic: 0,\n                };\n            }\n\n            const experienceGainedRate = {\n                stamina: 0,\n                intelligence: 0,\n                attack: 0,\n                melee: 0,\n                defense: 0,\n                ranged: 0,\n                magic: 0,\n            };\n\n            const primaryTraining = unit.combatDetails.combatStats.primaryTraining;\n            experienceGainedRate[primaryTraining.split('/')[2]] = 0.3;\n\n            const combatStyleDetailMap = getGameData().combatStyleDetailMap;\n            const skillExpMap = combatStyleDetailMap[unit.combatDetails.combatStats.combatStyleHrid].skillExpMap;\n            const skillExpMapLength = Object.keys(skillExpMap).length;\n\n            const focusTraining = unit.combatDetails.combatStats.focusTraining;\n            if (focusTraining && skillExpMap[focusTraining]) {\n                experienceGainedRate[focusTraining.split('/')[2]] += 0.7;\n            } else {\n                Object.keys(skillExpMap).forEach((skillHrid) => {\n                    experienceGainedRate[skillHrid.split('/')[2]] += 0.7 / skillExpMapLength;\n                });\n            }\n\n            for (const [type, rate] of Object.entries(experienceGainedRate)) {\n                if (rate <= 0) continue;\n\n                const skillExperience = rate * (1 + unit.combatDetails.combatStats[type + 'Experience']);\n\n                this.experienceGained[unit.hrid][type] +=\n                    experience *\n                    (1 + unit.combatDetails.combatStats.combatExperience) *\n                    skillExperience *\n                    (1 + unit.debuffOnLevelGap);\n            }\n        }\n\n        addEncounterEnd() {\n            this.encounters++;\n        }\n\n        addAttack(source, target, ability, hit) {\n            if (!this.attacks[source.hrid]) {\n                this.attacks[source.hrid] = {};\n            }\n            if (!this.attacks[source.hrid][target.hrid]) {\n                this.attacks[source.hrid][target.hrid] = {};\n            }\n            if (!this.attacks[source.hrid][target.hrid][ability]) {\n                this.attacks[source.hrid][target.hrid][ability] = {};\n            }\n\n            if (!this.attacks[source.hrid][target.hrid][ability][hit]) {\n                this.attacks[source.hrid][target.hrid][ability][hit] = 0;\n            }\n\n            this.attacks[source.hrid][target.hrid][ability][hit] += 1;\n        }\n\n        addConsumableUse(unit, consumable) {\n            if (!this.consumablesUsed[unit.hrid]) {\n                this.consumablesUsed[unit.hrid] = {};\n            }\n            if (!this.consumablesUsed[unit.hrid][consumable.hrid]) {\n                this.consumablesUsed[unit.hrid][consumable.hrid] = 0;\n            }\n\n            this.consumablesUsed[unit.hrid][consumable.hrid] += 1;\n        }\n\n        addHitpointsGained(unit, source, amount) {\n            if (!this.hitpointsGained[unit.hrid]) {\n                this.hitpointsGained[unit.hrid] = {};\n            }\n            if (!this.hitpointsGained[unit.hrid][source]) {\n                this.hitpointsGained[unit.hrid][source] = 0;\n            }\n\n            this.hitpointsGained[unit.hrid][source] += amount;\n        }\n\n        addManapointsGained(unit, source, amount) {\n            if (!this.manapointsGained[unit.hrid]) {\n                this.manapointsGained[unit.hrid] = {};\n            }\n            if (!this.manapointsGained[unit.hrid][source]) {\n                this.manapointsGained[unit.hrid][source] = 0;\n            }\n\n            this.manapointsGained[unit.hrid][source] += amount;\n        }\n\n        setDropRateMultipliers(unit) {\n            if (!this.dropRateMultiplier[unit.hrid]) {\n                this.dropRateMultiplier[unit.hrid] = {};\n            }\n            this.dropRateMultiplier[unit.hrid] = 1 + unit.combatDetails.combatStats.combatDropRate;\n\n            if (!this.rareFindMultiplier[unit.hrid]) {\n                this.rareFindMultiplier[unit.hrid] = {};\n            }\n            this.rareFindMultiplier[unit.hrid] = 1 + unit.combatDetails.combatStats.combatRareFind;\n\n            if (!this.combatDropQuantity[unit.hrid]) {\n                this.combatDropQuantity[unit.hrid] = {};\n            }\n            this.combatDropQuantity[unit.hrid] = unit.combatDetails.combatStats.combatDropQuantity;\n\n            if (!this.debuffOnLevelGap[unit.hrid]) {\n                this.debuffOnLevelGap[unit.hrid] = {};\n            }\n            this.debuffOnLevelGap[unit.hrid] = unit.debuffOnLevelGap;\n        }\n\n        setManaUsed(unit) {\n            this.manaUsed[unit.hrid] = {};\n            for (const [key, value] of unit.abilityManaCosts.entries()) {\n                this.manaUsed[unit.hrid][key] = value;\n            }\n        }\n\n        addHitpointsSpent(unit, source, amount) {\n            if (!this.hitpointsSpent[unit.hrid]) {\n                this.hitpointsSpent[unit.hrid] = {};\n            }\n            if (!this.hitpointsSpent[unit.hrid][source]) {\n                this.hitpointsSpent[unit.hrid][source] = 0;\n            }\n\n            this.hitpointsSpent[unit.hrid][source] += amount;\n        }\n\n        addRanOutOfManaCount(unit, isOutOfMana, time) {\n            if (isOutOfMana) this.playerRanOutOfMana[unit.hrid] = true;\n\n            if (!this.playerRanOutOfManaTime[unit.hrid]) {\n                this.playerRanOutOfManaTime[unit.hrid] = {\n                    isOutOfMana: false,\n                    startTimeForOutOfMana: 0,\n                    totalTimeForOutOfMana: 0,\n                };\n            }\n\n            if (isOutOfMana) {\n                if (!this.playerRanOutOfManaTime[unit.hrid].isOutOfMana) {\n                    this.playerRanOutOfManaTime[unit.hrid].isOutOfMana = true;\n                    this.playerRanOutOfManaTime[unit.hrid].startTimeForOutOfMana = time;\n                }\n            } else if (this.playerRanOutOfManaTime[unit.hrid].isOutOfMana) {\n                this.playerRanOutOfManaTime[unit.hrid].isOutOfMana = false;\n                this.playerRanOutOfManaTime[unit.hrid].totalTimeForOutOfMana +=\n                    time - this.playerRanOutOfManaTime[unit.hrid].startTimeForOutOfMana;\n            }\n        }\n    }\n\n    class AbilityCastEndEvent extends CombatEvent {\n        static type = 'abilityCastEndEvent';\n\n        constructor(time, source, ability) {\n            super(AbilityCastEndEvent.type, time);\n\n            this.source = source;\n            this.ability = ability;\n        }\n    }\n\n    class AwaitCooldownEvent extends CombatEvent {\n        static type = 'awaitCooldownEvent';\n\n        constructor(time, source) {\n            super(AwaitCooldownEvent.type, time);\n\n            this.source = source;\n        }\n    }\n\n    class Buff {\n        startTime;\n\n        constructor(buff, level = 1) {\n            this.uniqueHrid = buff.uniqueHrid;\n            this.typeHrid = buff.typeHrid;\n            this.ratioBoost = buff.ratioBoost + (level - 1) * buff.ratioBoostLevelBonus;\n            this.flatBoost = buff.flatBoost + (level - 1) * buff.flatBoostLevelBonus;\n            this.duration = buff.duration;\n            this.multiplierForSkillHrid = buff.multiplierForSkillHrid ?? '';\n            this.multiplierPerSkillLevel = buff.multiplierPerSkillLevel ?? 0;\n        }\n    }\n\n    class Trigger {\n        constructor(dependencyHrid, conditionHrid, comparatorHrid, value = 0) {\n            this.dependencyHrid = dependencyHrid;\n            this.conditionHrid = conditionHrid;\n            this.comparatorHrid = comparatorHrid;\n            this.value = value;\n        }\n\n        static createFromDTO(dto) {\n            const trigger = new Trigger(dto.dependencyHrid, dto.conditionHrid, dto.comparatorHrid, dto.value);\n\n            return trigger;\n        }\n\n        isActive(source, target, friendlies, enemies, currentTime) {\n            const combatTriggerDependencyDetailMap = getGameData().combatTriggerDependencyDetailMap;\n            if (combatTriggerDependencyDetailMap[this.dependencyHrid].isSingleTarget) {\n                return this.isActiveSingleTarget(source, target, currentTime);\n            } else {\n                return this.isActiveMultiTarget(friendlies, enemies, currentTime);\n            }\n        }\n\n        isActiveSingleTarget(source, target, currentTime) {\n            let dependencyValue;\n            switch (this.dependencyHrid) {\n                case '/combat_trigger_dependencies/self':\n                    dependencyValue = this.getDependencyValue(source, currentTime);\n                    break;\n                case '/combat_trigger_dependencies/targeted_enemy':\n                    if (!target) {\n                        return false;\n                    }\n                    dependencyValue = this.getDependencyValue(target, currentTime);\n                    break;\n                default:\n                    throw new Error('Unknown dependencyHrid in trigger: ' + this.dependencyHrid);\n            }\n\n            return this.compareValue(dependencyValue);\n        }\n\n        isActiveMultiTarget(friendlies, enemies, currentTime) {\n            let dependency;\n            switch (this.dependencyHrid) {\n                case '/combat_trigger_dependencies/all_allies':\n                    if (!friendlies) {\n                        return false;\n                    }\n                    dependency = friendlies;\n                    break;\n                case '/combat_trigger_dependencies/all_enemies':\n                    if (!enemies) {\n                        return false;\n                    }\n                    dependency = enemies;\n                    break;\n                default:\n                    throw new Error('Unknown dependencyHrid in trigger: ' + this.dependencyHrid);\n            }\n\n            if (!dependency) {\n                return false;\n            }\n\n            let dependencyValue;\n            switch (this.conditionHrid) {\n                case '/combat_trigger_conditions/number_of_active_units':\n                    dependencyValue = dependency.filter((unit) => unit.combatDetails.currentHitpoints > 0).length;\n                    break;\n                case '/combat_trigger_conditions/number_of_dead_units':\n                    dependencyValue = dependency.filter((unit) => unit.combatDetails.currentHitpoints <= 0).length;\n                    break;\n                case '/combat_trigger_conditions/lowest_hp_percentage':\n                    dependencyValue =\n                        dependency\n                            .filter((unit) => unit.combatDetails.currentHitpoints > 0)\n                            .reduce((prev, curr) => {\n                                const currentHpPercentage =\n                                    curr.combatDetails.currentHitpoints / curr.combatDetails.maxHitpoints;\n                                return currentHpPercentage < prev ? currentHpPercentage : prev;\n                            }, 2) * 100;\n                    break;\n                default:\n                    dependencyValue = dependency\n                        .filter((unit) => unit.combatDetails.currentHitpoints > 0)\n                        .map((unit) => this.getDependencyValue(unit, currentTime))\n                        .reduce((prev, cur) => prev + cur, 0);\n                    break;\n            }\n\n            return this.compareValue(dependencyValue);\n        }\n\n        getDependencyValue(source, currentTime) {\n            switch (this.conditionHrid) {\n                case '/combat_trigger_conditions/berserk':\n                case '/combat_trigger_conditions/frenzy':\n                case '/combat_trigger_conditions/precision':\n                case '/combat_trigger_conditions/vampirism':\n                case '/combat_trigger_conditions/attack_coffee':\n                case '/combat_trigger_conditions/defense_coffee':\n                case '/combat_trigger_conditions/lucky_coffee':\n                case '/combat_trigger_conditions/magic_coffee':\n                case '/combat_trigger_conditions/melee_coffee':\n                case '/combat_trigger_conditions/ranged_coffee':\n                case '/combat_trigger_conditions/swiftness_coffee':\n                case '/combat_trigger_conditions/wisdom_coffee':\n                case '/combat_trigger_conditions/ice_spear':\n                case '/combat_trigger_conditions/puncture':\n                case '/combat_trigger_conditions/frost_surge':\n                case '/combat_trigger_conditions/elusiveness':\n                case '/combat_trigger_conditions/channeling_coffee':\n                case '/combat_trigger_conditions/fierce_aura':\n                case '/combat_trigger_conditions/invincible_armor':\n                case '/combat_trigger_conditions/invincible_fire_resistance':\n                case '/combat_trigger_conditions/invincible_nature_resistance':\n                case '/combat_trigger_conditions/invincible_water_resistance':\n                case '/combat_trigger_conditions/provoke':\n                case '/combat_trigger_conditions/taunt':\n                case '/combat_trigger_conditions/crippling_slash':\n                case '/combat_trigger_conditions/mana_spring':\n                case '/combat_trigger_conditions/retribution':\n                case '/combat_trigger_conditions/fracturing_impact':\n                case '/combat_trigger_conditions/maim':\n                case '/combat_trigger_conditions/curse':\n                case '/combat_trigger_conditions/weaken': {\n                    const buffHrid = '/buff_uniques' + this.conditionHrid.slice(this.conditionHrid.lastIndexOf('/'));\n                    return source.combatBuffs[buffHrid];\n                }\n                case '/combat_trigger_conditions/critical_aura':\n                case '/combat_trigger_conditions/critical_coffee':\n                case '/combat_trigger_conditions/intelligence_coffee':\n                case '/combat_trigger_conditions/stamina_coffee':\n                case '/combat_trigger_conditions/elemental_affinity':\n                case '/combat_trigger_conditions/fury':\n                case '/combat_trigger_conditions/guardian_aura':\n                case '/combat_trigger_conditions/insanity':\n                case '/combat_trigger_conditions/spike_shell':\n                case '/combat_trigger_conditions/toxic_pollen':\n                case '/combat_trigger_conditions/invincible':\n                case '/combat_trigger_conditions/mystic_aura':\n                case '/combat_trigger_conditions/pestilent_shot':\n                case '/combat_trigger_conditions/smoke_burst':\n                case '/combat_trigger_conditions/speed_aura':\n                case '/combat_trigger_conditions/toughness':\n                case '/combat_trigger_conditions/enrage': {\n                    const buffPrefix = '/buff_uniques' + this.conditionHrid.slice(this.conditionHrid.lastIndexOf('/'));\n                    const buffs = Object.keys(source.combatBuffs).filter((buff) => buff.startsWith(buffPrefix));\n                    return source.combatBuffs[buffs?.[0]];\n                }\n                case '/combat_trigger_conditions/current_hp':\n                    return source.combatDetails.currentHitpoints;\n                case '/combat_trigger_conditions/current_mp':\n                    return source.combatDetails.currentManapoints;\n                case '/combat_trigger_conditions/missing_hp':\n                    return source.combatDetails.maxHitpoints - source.combatDetails.currentHitpoints;\n                case '/combat_trigger_conditions/missing_mp':\n                    return source.combatDetails.maxManapoints - source.combatDetails.currentManapoints;\n                case '/combat_trigger_conditions/stun_status':\n                    // Replicate the game's behaviour of \"stun status active\" triggers activating\n                    // immediately after the stun has worn off\n                    return source.isStunned || source.stunExpireTime === currentTime;\n                case '/combat_trigger_conditions/blind_status':\n                    return source.isBlinded || source.blindExpireTime === currentTime;\n                case '/combat_trigger_conditions/silence_status':\n                    return source.isSilenced || source.silenceExpireTime === currentTime;\n                default:\n                    throw new Error('Unknown conditionHrid in trigger: ' + this.conditionHrid);\n            }\n        }\n\n        compareValue(dependencyValue) {\n            switch (this.comparatorHrid) {\n                case '/combat_trigger_comparators/greater_than_equal':\n                    return dependencyValue >= this.value;\n                case '/combat_trigger_comparators/less_than_equal':\n                    return dependencyValue <= this.value;\n                case '/combat_trigger_comparators/is_active':\n                    return !!dependencyValue;\n                case '/combat_trigger_comparators/is_inactive':\n                    return !dependencyValue;\n                default:\n                    throw new Error('Unknown comparatorHrid in trigger: ' + this.comparatorHrid);\n            }\n        }\n    }\n\n    const abilityFromCombatStat = {\n        blaze: {\n            hrid: '/abilities/blaze',\n            name: 'Blaze',\n            description: '',\n            isSpecialAbility: false,\n            manaCost: 0,\n            cooldownDuration: 0,\n            castDuration: 0,\n            abilityEffects: [\n                {\n                    targetType: 'allEnemies',\n                    effectType: '/ability_effect_types/damage',\n                    combatStyleHrid: '/combat_styles/magic',\n                    damageType: '/damage_types/fire',\n                    baseDamageFlat: 0,\n                    baseDamageFlatLevelBonus: 0.0,\n                    baseDamageRatio: 0.3,\n                    baseDamageRatioLevelBonus: 0,\n                    bonusAccuracyRatio: 0,\n                    bonusAccuracyRatioLevelBonus: 0,\n                    damageOverTimeRatio: 0,\n                    damageOverTimeDuration: 0,\n                    armorDamageRatio: 0,\n                    armorDamageRatioLevelBonus: 0,\n                    hpDrainRatio: 0,\n                    pierceChance: 0,\n                    blindChance: 0,\n                    blindDuration: 0,\n                    silenceChance: 0,\n                    silenceDuration: 0,\n                    stunChance: 0,\n                    stunDuration: 0,\n                    spendHpRatio: 0,\n                    buffs: null,\n                },\n            ],\n            defaultCombatTriggers: [\n                {\n                    dependencyHrid: '/combat_trigger_dependencies/all_enemies',\n                    conditionHrid: '/combat_trigger_conditions/number_of_active_units',\n                    comparatorHrid: '/combat_trigger_comparators/greater_than_equal',\n                    value: 1,\n                },\n                {\n                    dependencyHrid: '/combat_trigger_dependencies/all_enemies',\n                    conditionHrid: '/combat_trigger_conditions/current_hp',\n                    comparatorHrid: '/combat_trigger_comparators/greater_than_equal',\n                    value: 1,\n                },\n            ],\n        },\n        bloom: {\n            hrid: '/abilities/bloom',\n            name: 'Bloom',\n            description: '',\n            isSpecialAbility: false,\n            manaCost: 0,\n            cooldownDuration: 0,\n            castDuration: 0,\n            abilityEffects: [\n                {\n                    targetType: 'lowestHpAlly',\n                    effectType: '/ability_effect_types/heal',\n                    combatStyleHrid: '/combat_styles/magic',\n                    damageType: '',\n                    baseDamageFlat: 10,\n                    baseDamageFlatLevelBonus: 0,\n                    baseDamageRatio: 0.15,\n                    baseDamageRatioLevelBonus: 0,\n                    bonusAccuracyRatio: 0,\n                    bonusAccuracyRatioLevelBonus: 0,\n                    damageOverTimeRatio: 0,\n                    damageOverTimeDuration: 0,\n                    armorDamageRatio: 0,\n                    armorDamageRatioLevelBonus: 0,\n                    hpDrainRatio: 0,\n                    pierceChance: 0,\n                    blindChance: 0,\n                    blindDuration: 0,\n                    silenceChance: 0,\n                    silenceDuration: 0,\n                    stunChance: 0,\n                    stunDuration: 0,\n                    spendHpRatio: 0,\n                    buffs: null,\n                },\n            ],\n            defaultCombatTriggers: [\n                {\n                    dependencyHrid: '/combat_trigger_dependencies/all_allies',\n                    conditionHrid: '/combat_trigger_conditions/lowest_hp_percentage',\n                    comparatorHrid: '/combat_trigger_comparators/less_than_equal',\n                    value: 100,\n                },\n            ],\n        },\n    };\n\n    class Ability {\n        constructor(hrid, level = 1, triggers = null) {\n            this.hrid = hrid;\n            this.level = level;\n\n            const abilityDetailMap = getGameData().abilityDetailMap;\n            let gameAbility = abilityDetailMap[hrid];\n            if (!gameAbility) {\n                gameAbility = abilityFromCombatStat[hrid];\n            }\n            if (!gameAbility) {\n                throw new Error('No ability found for hrid: ' + this.hrid);\n            }\n\n            this.manaCost = gameAbility.manaCost;\n            this.cooldownDuration = gameAbility.cooldownDuration;\n            this.castDuration = gameAbility.castDuration;\n            this.isSpecialAbility = gameAbility.isSpecialAbility;\n\n            this.abilityEffects = [];\n\n            for (const effect of gameAbility.abilityEffects) {\n                const abilityEffect = {\n                    targetType: effect.targetType,\n                    effectType: effect.effectType,\n                    combatStyleHrid: effect.combatStyleHrid,\n                    damageType: effect.damageType,\n                    damageFlat: effect.baseDamageFlat + (this.level - 1) * effect.baseDamageFlatLevelBonus,\n                    damageRatio: effect.baseDamageRatio + (this.level - 1) * effect.baseDamageRatioLevelBonus,\n                    bonusAccuracyRatio: effect.bonusAccuracyRatio + (this.level - 1) * effect.bonusAccuracyRatioLevelBonus,\n                    damageOverTimeRatio: effect.damageOverTimeRatio,\n                    damageOverTimeDuration: effect.damageOverTimeDuration,\n                    armorDamageRatio: effect.armorDamageRatio + (this.level - 1) * effect.armorDamageRatioLevelBonus,\n                    hpDrainRatio: effect.hpDrainRatio,\n                    pierceChance: effect.pierceChance,\n                    blindChance: effect.blindChance,\n                    blindDuration: effect.blindDuration,\n                    silenceChance: effect.silenceChance,\n                    silenceDuration: effect.silenceDuration,\n                    stunChance: effect.stunChance,\n                    stunDuration: effect.stunDuration,\n                    spendHpRatio: effect.spendHpRatio,\n                    buffs: null,\n                };\n                if (effect.buffs) {\n                    abilityEffect.buffs = [];\n                    for (const buff of effect.buffs) {\n                        abilityEffect.buffs.push(new Buff(buff, this.level));\n                    }\n                }\n                this.abilityEffects.push(abilityEffect);\n            }\n\n            if (triggers) {\n                this.triggers = triggers;\n            } else {\n                this.triggers = [];\n                for (const defaultTrigger of gameAbility.defaultCombatTriggers) {\n                    const trigger = new Trigger(\n                        defaultTrigger.dependencyHrid,\n                        defaultTrigger.conditionHrid,\n                        defaultTrigger.comparatorHrid,\n                        defaultTrigger.value\n                    );\n                    this.triggers.push(trigger);\n                }\n            }\n\n            this.lastUsed = Number.MIN_SAFE_INTEGER;\n        }\n\n        static createFromDTO(dto) {\n            const triggers = dto.triggers ? dto.triggers.map((trigger) => Trigger.createFromDTO(trigger)) : null;\n            const ability = new Ability(dto.hrid, dto.level, triggers);\n\n            return ability;\n        }\n\n        shouldTrigger(currentTime, source, target, friendlies, enemies) {\n            if (source.isStunned) {\n                return false;\n            }\n\n            if (source.isSilenced) {\n                return false;\n            }\n\n            const haste = source.combatDetails.combatStats.abilityHaste;\n            let cooldownDuration = this.cooldownDuration;\n            if (haste > 0) {\n                cooldownDuration = (cooldownDuration * 100) / (100 + haste);\n            }\n\n            if (this.lastUsed + cooldownDuration > currentTime) {\n                return false;\n            }\n\n            if (this.triggers.length === 0) {\n                return true;\n            }\n\n            let shouldTrigger = true;\n            for (const trigger of this.triggers) {\n                if (!trigger.isActive(source, target, friendlies, enemies, currentTime)) {\n                    shouldTrigger = false;\n                }\n            }\n\n            return shouldTrigger;\n        }\n    }\n\n    class CombatUnit {\n        isPlayer;\n        isStunned = false;\n        stunExpireTime = null;\n        isBlinded = false;\n        blindExpireTime = null;\n        isSilenced = false;\n        silenceExpireTime = null;\n\n        isOutOfMana = false;\n\n        // Base levels which don't change after initialization\n        staminaLevel = 1;\n        intelligenceLevel = 1;\n        attackLevel = 1;\n        meleeLevel = 1;\n        defenseLevel = 1;\n        rangedLevel = 1;\n        magicLevel = 1;\n\n        experience = 0;\n        experienceRate = 0;\n        enrageTime = 0;\n\n        abilities = [null, null, null, null];\n        food = [null, null, null];\n        drinks = [null, null, null];\n        houseRooms = [];\n        dropTable = [];\n        rareDropTable = [];\n        abilityManaCosts = new Map();\n\n        // Calculated combat stats including temporary buffs\n        combatDetails = {\n            staminaLevel: 1,\n            intelligenceLevel: 1,\n            attackLevel: 1,\n            meleeLevel: 1,\n            defenseLevel: 1,\n            rangedLevel: 1,\n            magicLevel: 1,\n            maxHitpoints: 110,\n            currentHitpoints: 110,\n            maxManapoints: 110,\n            currentManapoints: 110,\n            stabAccuracyRating: 11,\n            slashAccuracyRating: 11,\n            smashAccuracyRating: 11,\n            rangedAccuracyRating: 11,\n            magicAccuracyRating: 11,\n            stabMaxDamage: 11,\n            slashMaxDamage: 11,\n            smashMaxDamage: 11,\n            rangedMaxDamage: 11,\n            magicMaxDamage: 11,\n            stabEvasionRating: 11,\n            slashEvasionRating: 11,\n            smashEvasionRating: 11,\n            rangedEvasionRating: 11,\n            magicEvasionRating: 11,\n            defensiveMaxDamage: 0,\n            totalArmor: 0.2,\n            totalWaterResistance: 0.4,\n            totalNatureResistance: 0.4,\n            totalFireResistance: 0.4,\n            abilityHaste: 0,\n            tenacity: 0,\n            totalThreat: 100,\n            combatStats: {\n                combatStyleHrid: '/combat_styles/smash',\n                damageType: '/damage_types/physical',\n                attackInterval: 3000000000,\n                autoAttackDamage: 0,\n                abilityDamage: 0,\n                criticalRate: 0,\n                criticalDamage: 0,\n                stabAccuracy: 0,\n                slashAccuracy: 0,\n                smashAccuracy: 0,\n                rangedAccuracy: 0,\n                magicAccuracy: 0,\n                stabDamage: 0,\n                slashDamage: 0,\n                smashDamage: 0,\n                rangedDamage: 0,\n                magicDamage: 0,\n                defensiveDamage: 0,\n                taskDamage: 0,\n                physicalAmplify: 0,\n                waterAmplify: 0,\n                natureAmplify: 0,\n                fireAmplify: 0,\n                healingAmplify: 0,\n                physicalThorns: 0,\n                elementalThorns: 0,\n                maxHitpoints: 0,\n                maxManapoints: 0,\n                stabEvasion: 0,\n                slashEvasion: 0,\n                smashEvasion: 0,\n                rangedEvasion: 0,\n                magicEvasion: 0,\n                armor: 0,\n                waterResistance: 0,\n                natureResistance: 0,\n                fireResistance: 0,\n                lifeSteal: 0,\n                hpRegenPer10: 0.01,\n                mpRegenPer10: 0.01,\n                combatDropRate: 0,\n                combatDropQuantity: 0,\n                combatRareFind: 0,\n                combatExperience: 0,\n                maxHitpointsRatio: 0,\n                maxManapointsRatio: 0,\n                foodSlots: 1,\n                drinkSlots: 1,\n                armorPenetration: 0,\n                waterPenetration: 0,\n                naturePenetration: 0,\n                firePenetration: 0,\n                manaLeech: 0,\n                castSpeed: 0,\n                threat: 100,\n                parry: 0,\n                mayhem: 0,\n                pierce: 0,\n                curse: 0,\n                ripple: 0,\n                bloom: 0,\n                blaze: 0,\n                weaken: 0,\n                fury: 0,\n                foodHaste: 0,\n                drinkConcentration: 0,\n                damageTaken: 0,\n                attackSpeed: 0,\n                armorDamageRatio: 0,\n                hpDrainRatio: 0,\n                primaryTraining: '',\n                focusTraining: '',\n                staminaExperience: 0,\n                intelligenceExperience: 0,\n                attackExperience: 0,\n                defenseExperience: 0,\n                meleeExperience: 0,\n                rangedExperience: 0,\n                magicExperience: 0,\n                retaliation: 0,\n            },\n        };\n        combatBuffs = {};\n        permanentBuffs = {};\n        zoneBuffs = {};\n        extraBuffs = {};\n        furyAmount = 0;\n        furyExpireTime = 0;\n\n        constructor() {}\n\n        updateCombatDetails() {\n            if (this.isPlayer) {\n                if (this.combatDetails.combatStats.hpRegenPer10 === 0) {\n                    this.combatDetails.combatStats.hpRegenPer10 = 0.01;\n                } else {\n                    this.combatDetails.combatStats.hpRegenPer10 = 0.01 + this.combatDetails.combatStats.hpRegenPer10;\n                }\n                if (this.combatDetails.combatStats.mpRegenPer10 === 0) {\n                    this.combatDetails.combatStats.mpRegenPer10 = 0.01;\n                } else {\n                    this.combatDetails.combatStats.mpRegenPer10 = 0.01 + this.combatDetails.combatStats.mpRegenPer10;\n                }\n            }\n\n            ['stamina', 'intelligence', 'attack', 'melee', 'defense', 'ranged', 'magic'].forEach((stat) => {\n                this.combatDetails[stat + 'Level'] = this[stat + 'Level'];\n                const boosts = this.getBuffBoosts('/buff_types/' + stat + '_level');\n                boosts.forEach((buff) => {\n                    this.combatDetails[stat + 'Level'] += this[stat + 'Level'] * buff.ratioBoost;\n                    this.combatDetails[stat + 'Level'] += buff.flatBoost;\n                });\n            });\n\n            this.combatDetails.maxHitpoints = Math.floor(\n                (10 * (10 + this.combatDetails.staminaLevel) + this.combatDetails.combatStats.maxHitpoints) *\n                    (1 + this.combatDetails.combatStats.maxHitpointsRatio)\n            );\n            this.combatDetails.maxManapoints = Math.floor(\n                (10 * (10 + this.combatDetails.intelligenceLevel) + this.combatDetails.combatStats.maxManapoints) *\n                    (1 + this.combatDetails.combatStats.maxManapointsRatio)\n            );\n\n            const accuracyRatioBoostFromFury = this.getBuffBoost('/buff_types/fury_accuracy').ratioBoost;\n            const damageRatioBoostFromFury = this.getBuffBoost('/buff_types/fury_damage').ratioBoost;\n\n            const accuracyRatioBoost = this.getBuffBoost('/buff_types/accuracy').ratioBoost;\n            const damageRatioBoost = this.getBuffBoost('/buff_types/damage').ratioBoost;\n\n            ['stab', 'slash', 'smash'].forEach((style) => {\n                this.combatDetails[style + 'AccuracyRating'] =\n                    (10 + this.combatDetails.attackLevel) *\n                    (1 + this.combatDetails.combatStats[style + 'Accuracy']) *\n                    (1 + accuracyRatioBoost) *\n                    (1 + accuracyRatioBoostFromFury);\n                this.combatDetails[style + 'MaxDamage'] =\n                    (10 + this.combatDetails.meleeLevel) *\n                    (1 + this.combatDetails.combatStats[style + 'Damage']) *\n                    (1 + damageRatioBoost) *\n                    (1 + damageRatioBoostFromFury);\n                const baseEvasion =\n                    (10 + this.combatDetails.defenseLevel) * (1 + this.combatDetails.combatStats[style + 'Evasion']);\n                this.combatDetails[style + 'EvasionRating'] = baseEvasion;\n                const evasionBoosts = this.getBuffBoosts('/buff_types/evasion');\n                for (const boost of evasionBoosts) {\n                    this.combatDetails[style + 'EvasionRating'] += boost.flatBoost;\n                    this.combatDetails[style + 'EvasionRating'] += baseEvasion * boost.ratioBoost;\n                }\n            });\n\n            this.combatDetails.defensiveMaxDamage =\n                (10 + this.combatDetails.defenseLevel) *\n                (1 + this.combatDetails.combatStats.defensiveDamage) *\n                (1 + damageRatioBoost) *\n                (1 + damageRatioBoostFromFury);\n\n            // when equiped bulwark\n            if (this.equipment?.['/equipment_types/two_hand']?.hrid.includes('bulwark')) {\n                this.combatDetails.smashMaxDamage += this.combatDetails.defensiveMaxDamage;\n            }\n\n            this.combatDetails.rangedAccuracyRating =\n                (10 + this.combatDetails.attackLevel) *\n                (1 + this.combatDetails.combatStats.rangedAccuracy) *\n                (1 + accuracyRatioBoost) *\n                (1 + accuracyRatioBoostFromFury);\n            this.combatDetails.rangedMaxDamage =\n                (10 + this.combatDetails.rangedLevel) *\n                (1 + this.combatDetails.combatStats.rangedDamage) *\n                (1 + damageRatioBoost) *\n                (1 + damageRatioBoostFromFury);\n\n            const baseRangedEvasion =\n                (10 + this.combatDetails.defenseLevel) * (1 + this.combatDetails.combatStats.rangedEvasion);\n            this.combatDetails.rangedEvasionRating = baseRangedEvasion;\n            const evasionBoosts = this.getBuffBoosts('/buff_types/evasion');\n            for (const boost of evasionBoosts) {\n                this.combatDetails.rangedEvasionRating += boost.flatBoost;\n                this.combatDetails.rangedEvasionRating += baseRangedEvasion * boost.ratioBoost;\n            }\n\n            this.combatDetails.combatStats.damageTaken = this.getBuffBoost('/buff_types/damage_taken').flatBoost;\n\n            this.combatDetails.magicAccuracyRating =\n                (10 + this.combatDetails.attackLevel) *\n                (1 + this.combatDetails.combatStats.magicAccuracy) *\n                (1 + accuracyRatioBoost) *\n                (1 + accuracyRatioBoostFromFury);\n            this.combatDetails.magicMaxDamage =\n                (10 + this.combatDetails.magicLevel) *\n                (1 + this.combatDetails.combatStats.magicDamage) *\n                (1 + damageRatioBoost) *\n                (1 + damageRatioBoostFromFury);\n\n            const baseMagicEvasion =\n                (10 + this.combatDetails.defenseLevel) * (1 + this.combatDetails.combatStats.magicEvasion);\n            this.combatDetails.magicEvasionRating = baseMagicEvasion;\n            for (const boost of evasionBoosts) {\n                this.combatDetails.magicEvasionRating += boost.flatBoost;\n                this.combatDetails.magicEvasionRating += baseMagicEvasion * boost.ratioBoost;\n            }\n\n            this.combatDetails.combatStats.physicalAmplify += this.getBuffBoost('/buff_types/physical_amplify').flatBoost;\n            this.combatDetails.combatStats.waterAmplify += this.getBuffBoost('/buff_types/water_amplify').flatBoost;\n            this.combatDetails.combatStats.natureAmplify += this.getBuffBoost('/buff_types/nature_amplify').flatBoost;\n            this.combatDetails.combatStats.fireAmplify += this.getBuffBoost('/buff_types/fire_amplify').flatBoost;\n            this.combatDetails.combatStats.healingAmplify += this.getBuffBoost('/buff_types/healing_amplify').flatBoost;\n\n            this.combatDetails.combatStats.attackInterval /= 1 + this.combatDetails.attackLevel / 2000;\n\n            const baseAttackSpeed = this.combatDetails.combatStats.attackSpeed;\n            this.combatDetails.combatStats.attackInterval /= 1 + baseAttackSpeed;\n            const attackIntervalBoosts = this.getBuffBoosts('/buff_types/attack_speed');\n            const attackIntervalRatioBoost = attackIntervalBoosts\n                .map((boost) => boost.ratioBoost)\n                .reduce((prev, cur) => prev + cur, 0);\n            this.combatDetails.combatStats.attackInterval /= 1 + attackIntervalRatioBoost;\n\n            const baseArmor = 0.2 * this.combatDetails.defenseLevel + this.combatDetails.combatStats.armor;\n            this.combatDetails.totalArmor = baseArmor;\n            const armorBoosts = this.getBuffBoosts('/buff_types/armor');\n            for (const boost of armorBoosts) {\n                this.combatDetails.totalArmor += boost.flatBoost;\n                this.combatDetails.totalArmor += baseArmor * boost.ratioBoost;\n            }\n\n            const baseWaterResistance =\n                0.2 * this.combatDetails.defenseLevel + this.combatDetails.combatStats.waterResistance;\n            this.combatDetails.totalWaterResistance = baseWaterResistance;\n            const waterResistanceBoosts = this.getBuffBoosts('/buff_types/water_resistance');\n            for (const boost of waterResistanceBoosts) {\n                this.combatDetails.totalWaterResistance += boost.flatBoost;\n                this.combatDetails.totalWaterResistance += baseWaterResistance * boost.ratioBoost;\n            }\n\n            const baseNatureResistance =\n                0.2 * this.combatDetails.defenseLevel + this.combatDetails.combatStats.natureResistance;\n            this.combatDetails.totalNatureResistance = baseNatureResistance;\n            const natureResistanceBoosts = this.getBuffBoosts('/buff_types/nature_resistance');\n            for (const boost of natureResistanceBoosts) {\n                this.combatDetails.totalNatureResistance += boost.flatBoost;\n                this.combatDetails.totalNatureResistance += baseNatureResistance * boost.ratioBoost;\n            }\n\n            const baseFireResistance =\n                0.2 * this.combatDetails.defenseLevel + this.combatDetails.combatStats.fireResistance;\n            this.combatDetails.totalFireResistance = baseFireResistance;\n            const fireResistanceBoosts = this.getBuffBoosts('/buff_types/fire_resistance');\n            for (const boost of fireResistanceBoosts) {\n                this.combatDetails.totalFireResistance += boost.flatBoost;\n                this.combatDetails.totalFireResistance += baseFireResistance * boost.ratioBoost;\n            }\n\n            const hpRegenBoosts = this.getBuffBoost('/buff_types/hp_regen');\n            this.combatDetails.combatStats.hpRegenPer10 +=\n                this.combatDetails.combatStats.hpRegenPer10 * hpRegenBoosts.ratioBoost;\n            this.combatDetails.combatStats.hpRegenPer10 += hpRegenBoosts.flatBoost;\n\n            const mpRegenBoosts = this.getBuffBoost('/buff_types/mp_regen');\n            this.combatDetails.combatStats.mpRegenPer10 +=\n                this.combatDetails.combatStats.mpRegenPer10 * mpRegenBoosts.ratioBoost;\n            this.combatDetails.combatStats.mpRegenPer10 += mpRegenBoosts.flatBoost;\n\n            this.combatDetails.combatStats.lifeSteal += this.getBuffBoost('/buff_types/life_steal').flatBoost;\n            this.combatDetails.combatStats.physicalThorns += this.getBuffBoost('/buff_types/physical_thorns').flatBoost;\n            this.combatDetails.combatStats.elementalThorns += this.getBuffBoost('/buff_types/elemental_thorns').flatBoost;\n            this.combatDetails.combatStats.combatExperience += this.getBuffBoost('/buff_types/wisdom').flatBoost;\n            this.combatDetails.combatStats.criticalRate += this.getBuffBoost('/buff_types/critical_rate').flatBoost;\n            this.combatDetails.combatStats.criticalDamage += this.getBuffBoost('/buff_types/critical_damage').flatBoost;\n\n            this.combatDetails.combatStats.castSpeed += this.getBuffBoost('/buff_types/cast_speed').flatBoost;\n            this.combatDetails.combatStats.castSpeed += this.combatDetails['attackLevel'] / 2000;\n\n            const combatDropRateBoosts = this.getBuffBoost('/buff_types/combat_drop_rate');\n            this.combatDetails.combatStats.combatDropRate +=\n                (1 + this.combatDetails.combatStats.combatDropRate) * combatDropRateBoosts.ratioBoost;\n            this.combatDetails.combatStats.combatDropRate += combatDropRateBoosts.flatBoost;\n            const combatRareFindBoosts = this.getBuffBoost('/buff_types/rare_find');\n            this.combatDetails.combatStats.combatRareFind +=\n                (1 + this.combatDetails.combatStats.combatRareFind) * combatRareFindBoosts.ratioBoost;\n            this.combatDetails.combatStats.combatRareFind += combatRareFindBoosts.flatBoost;\n            const combatDropQuantityBoosts = this.getBuffBoost('/buff_types/combat_drop_quantity');\n            this.combatDetails.combatStats.combatDropQuantity +=\n                (1 + this.combatDetails.combatStats.combatDropQuantity) * combatDropQuantityBoosts.ratioBoost;\n            this.combatDetails.combatStats.combatDropQuantity += combatDropQuantityBoosts.flatBoost;\n\n            const baseThreat = 100 + this.combatDetails.combatStats.threat;\n            this.combatDetails.totalThreat = baseThreat;\n            const threatBoosts = this.getBuffBoost('/buff_types/threat');\n            if (threatBoosts.ratioBoost !== 0) {\n                this.combatDetails.combatStats.threat += baseThreat * threatBoosts.ratioBoost;\n            } else {\n                this.combatDetails.combatStats.threat = baseThreat;\n            }\n            this.combatDetails.combatStats.threat += threatBoosts.flatBoost;\n\n            this.combatDetails.combatStats.retaliation += this.getBuffBoost('/buff_types/retaliation').flatBoost;\n            this.combatDetails.combatStats.tenacity += this.getBuffBoost('/buff_types/tenacity').flatBoost;\n        }\n\n        addBuff(buff, currentTime) {\n            buff.startTime = currentTime;\n            this.combatBuffs[buff.uniqueHrid] = buff;\n\n            this.updateCombatDetails();\n        }\n\n        removeBuff(buff) {\n            if (!this.combatBuffs[buff.uniqueHrid]) {\n                return;\n            }\n            delete this.combatBuffs[buff.uniqueHrid];\n\n            this.updateCombatDetails();\n        }\n\n        /**\n         * Update fury accuracy and damage buffs in a single batch, calling updateCombatDetails() once.\n         * @param {number} furyAmount - Current fury stack count (0-5)\n         * @param {number} furyStat - Fury combat stat value\n         * @param {number} currentTime - Simulation time for buff start\n         * @param {number} duration - Buff duration (fury expire time)\n         */\n        updateFuryBuffs(furyAmount, furyStat, currentTime, duration) {\n            if (furyAmount > 0) {\n                this.combatBuffs['/buff_uniques/fury_accuracy'] = {\n                    uniqueHrid: '/buff_uniques/fury_accuracy',\n                    typeHrid: '/buff_types/fury_accuracy',\n                    ratioBoost: furyAmount * furyStat,\n                    ratioBoostLevelBonus: 0,\n                    flatBoost: 0,\n                    flatBoostLevelBonus: 0,\n                    startTime: currentTime,\n                    duration: duration,\n                };\n                this.combatBuffs['/buff_uniques/fury_damage'] = {\n                    uniqueHrid: '/buff_uniques/fury_damage',\n                    typeHrid: '/buff_types/fury_damage',\n                    ratioBoost: furyAmount * furyStat,\n                    ratioBoostLevelBonus: 0,\n                    flatBoost: 0,\n                    flatBoostLevelBonus: 0,\n                    startTime: currentTime,\n                    duration: duration,\n                };\n            } else {\n                delete this.combatBuffs['/buff_uniques/fury_accuracy'];\n                delete this.combatBuffs['/buff_uniques/fury_damage'];\n            }\n            this.updateCombatDetails();\n        }\n\n        addPermanentBuff(buff) {\n            if (this.permanentBuffs[buff.typeHrid]) {\n                this.permanentBuffs[buff.typeHrid].flatBoost += buff.flatBoost;\n                this.permanentBuffs[buff.typeHrid].ratioBoost += buff.ratioBoost;\n            } else {\n                this.permanentBuffs[buff.typeHrid] = buff;\n            }\n        }\n\n        generatePermanentBuffs() {\n            for (let i = 0; i < this.houseRooms.length; i++) {\n                const houseRoom = this.houseRooms[i];\n                houseRoom.buffs.forEach((buff) => {\n                    this.addPermanentBuff(buff);\n                });\n            }\n            if (this.zoneBuffs) {\n                this.zoneBuffs.forEach((buff) => {\n                    this.addPermanentBuff(buff);\n                });\n            }\n            if (this.extraBuffs) {\n                this.extraBuffs.forEach((buff) => {\n                    this.addPermanentBuff(buff);\n                });\n            }\n        }\n\n        removeExpiredBuffs(currentTime) {\n            const expiredBuffs = Object.values(this.combatBuffs).filter(\n                (buff) => buff.startTime + buff.duration <= currentTime\n            );\n            expiredBuffs.forEach((buff) => {\n                delete this.combatBuffs[buff.uniqueHrid];\n            });\n\n            this.updateCombatDetails();\n        }\n\n        clearBuffs() {\n            this.combatBuffs = structuredClone(this.permanentBuffs);\n            this.furyAmount = 0;\n            this.furyExpireTime = 0;\n            this.updateCombatDetails();\n        }\n\n        clearCCs() {\n            this.isStunned = false;\n            this.stunExpireTime = null;\n            this.isSilenced = false;\n            this.silenceExpireTime = null;\n            this.isBlinded = false;\n            this.blindExpireTime = null;\n            this.combatDetails.combatStats.damageTaken = 0;\n        }\n\n        getBuffBoosts(type) {\n            const boosts = [];\n            Object.values(this.combatBuffs)\n                .filter((buff) => buff.typeHrid === type)\n                .forEach((buff) => {\n                    boosts.push({ ratioBoost: buff.ratioBoost, flatBoost: buff.flatBoost });\n                });\n\n            return boosts;\n        }\n\n        getBuffBoost(type) {\n            const boosts = this.getBuffBoosts(type);\n\n            const boost = {\n                ratioBoost: 0,\n                flatBoost: 0,\n            };\n\n            for (let i = 0; i < boosts.length; i++) {\n                boost.ratioBoost += boosts[i]?.ratioBoost ?? 0;\n                boost.flatBoost += boosts[i]?.flatBoost ?? 0;\n            }\n\n            return boost;\n        }\n\n        reset(currentTime = 0) {\n            this.clearCCs();\n\n            if (currentTime === 0 || !this.isPlayer) {\n                // First combat start or enemy reset: full reset\n                this.clearBuffs();\n                this.resetCooldowns(currentTime);\n            } else {\n                // Dungeon wipe restart (players only): remove expired buffs, keep cooldowns\n                this.removeExpiredBuffs(currentTime);\n            }\n\n            this.updateCombatDetails();\n            this.combatDetails.currentHitpoints = this.combatDetails.maxHitpoints;\n            this.combatDetails.currentManapoints = this.combatDetails.maxManapoints;\n        }\n\n        resetCooldowns(currentTime = 0) {\n            this.food.filter((food) => food !== null).forEach((food) => (food.lastUsed = Number.MIN_SAFE_INTEGER));\n            this.drinks.filter((drink) => drink !== null).forEach((drink) => (drink.lastUsed = Number.MIN_SAFE_INTEGER));\n\n            const haste = this.combatDetails.combatStats.abilityHaste;\n\n            this.abilities\n                .filter((ability) => ability !== null)\n                .forEach((ability) => {\n                    if (this.isPlayer) {\n                        ability.lastUsed = Number.MIN_SAFE_INTEGER;\n                    } else {\n                        let cooldownDuration = ability.cooldownDuration;\n                        if (haste > 0) {\n                            cooldownDuration = (cooldownDuration * 100) / (100 + haste);\n                        }\n                        ability.lastUsed =\n                            currentTime -\n                            Math.floor(cooldownDuration * 0.5) +\n                            Math.floor(Math.random() * cooldownDuration * 0.5);\n                    }\n                });\n        }\n\n        addHitpoints(hitpoints) {\n            let hitpointsAdded = 0;\n\n            if (this.combatDetails.currentHitpoints >= this.combatDetails.maxHitpoints) {\n                return hitpointsAdded;\n            }\n\n            const newHitpoints = Math.min(this.combatDetails.currentHitpoints + hitpoints, this.combatDetails.maxHitpoints);\n            hitpointsAdded = newHitpoints - this.combatDetails.currentHitpoints;\n            this.combatDetails.currentHitpoints = newHitpoints;\n\n            return hitpointsAdded;\n        }\n\n        addManapoints(manapoints) {\n            let manapointsAdded = 0;\n\n            if (this.combatDetails.currentManapoints >= this.combatDetails.maxManapoints) {\n                return manapointsAdded;\n            }\n\n            const newManapoints = Math.min(\n                this.combatDetails.currentManapoints + manapoints,\n                this.combatDetails.maxManapoints\n            );\n            manapointsAdded = newManapoints - this.combatDetails.currentManapoints;\n            this.combatDetails.currentManapoints = newManapoints;\n\n            return manapointsAdded;\n        }\n    }\n\n    class Drops {\n        constructor(itemHrid, dropRate, minCount, maxCount, difficultyTier) {\n            this.itemHrid = itemHrid;\n            this.dropRate = dropRate;\n            this.minCount = minCount;\n            this.maxCount = maxCount;\n            this.difficultyTier = difficultyTier;\n        }\n    }\n\n    const LABYRINTH_BASE_ROOM_LEVEL = 100;\n\n    class Monster extends CombatUnit {\n        difficultyTier = 0;\n        roomLevel = 0;\n\n        constructor(hrid, difficultyTier = 0, roomLevel = 0) {\n            super();\n\n            this.isPlayer = false;\n            this.hrid = hrid;\n            this.difficultyTier = difficultyTier;\n            this.roomLevel = roomLevel;\n\n            const combatMonsterDetailMap = getGameData().combatMonsterDetailMap;\n            const gameMonster = combatMonsterDetailMap[this.hrid];\n            if (!gameMonster) {\n                throw new Error('No monster found for hrid: ' + this.hrid);\n            }\n\n            this.enrageTime = gameMonster.enrageTime;\n\n            // Labyrinth scaling: ability levels scale by roomLevel / 100\n            const labyrinthScaleFactor = this.roomLevel > 0 ? this.roomLevel / LABYRINTH_BASE_ROOM_LEVEL : 1;\n\n            for (let i = 0; i < gameMonster.abilities.length; i++) {\n                if (gameMonster.abilities[i].minDifficultyTier > this.difficultyTier) {\n                    continue;\n                }\n                const baseLevel = gameMonster.abilities[i].level;\n                const scaledLevel = this.roomLevel > 0 ? Math.floor(baseLevel * labyrinthScaleFactor) : baseLevel;\n                this.abilities[i] = new Ability(gameMonster.abilities[i].abilityHrid, scaledLevel);\n            }\n            if (gameMonster.dropTable) {\n                for (let i = 0; i < gameMonster.dropTable.length; i++) {\n                    this.dropTable[i] = new Drops(\n                        gameMonster.dropTable[i].itemHrid,\n                        gameMonster.dropTable[i].dropRate,\n                        gameMonster.dropTable[i].minCount,\n                        gameMonster.dropTable[i].maxCount,\n                        gameMonster.dropTable[i].difficultyTier\n                    );\n                }\n            }\n            for (let i = 0; i < gameMonster.rareDropTable.length; i++) {\n                const dropTableItem =\n                    gameMonster.dropTable && i < gameMonster.dropTable.length ? gameMonster.dropTable[i] : null;\n                const difficultyTier = dropTableItem?.difficultyTier ?? gameMonster.rareDropTable[i].minDifficultyTier;\n\n                this.rareDropTable[i] = new Drops(\n                    gameMonster.rareDropTable[i].itemHrid,\n                    gameMonster.rareDropTable[i].dropRate,\n                    gameMonster.rareDropTable[i].minCount,\n                    difficultyTier\n                );\n            }\n        }\n\n        updateCombatDetails() {\n            const combatMonsterDetailMap = getGameData().combatMonsterDetailMap;\n            const gameMonster = combatMonsterDetailMap[this.hrid];\n\n            const levelMultiplier = 1.0 + 0.25 * this.difficultyTier;\n            const defLevelMultiplier = 1.0 + 0.15 * this.difficultyTier;\n            const levelBonus = 20.0 * this.difficultyTier;\n\n            // Labyrinth scaling: all levels multiply by roomLevel / 100\n            const labyrinthScaleFactor = this.roomLevel > 0 ? this.roomLevel / LABYRINTH_BASE_ROOM_LEVEL : 1;\n\n            this.staminaLevel =\n                levelMultiplier * (gameMonster.combatDetails.staminaLevel + levelBonus) * labyrinthScaleFactor;\n            this.intelligenceLevel =\n                levelMultiplier * (gameMonster.combatDetails.intelligenceLevel + levelBonus) * labyrinthScaleFactor;\n            this.attackLevel =\n                levelMultiplier * (gameMonster.combatDetails.attackLevel + levelBonus) * labyrinthScaleFactor;\n            this.meleeLevel = levelMultiplier * (gameMonster.combatDetails.meleeLevel + levelBonus) * labyrinthScaleFactor;\n            this.defenseLevel =\n                defLevelMultiplier * (gameMonster.combatDetails.defenseLevel + levelBonus) * labyrinthScaleFactor;\n            this.rangedLevel =\n                levelMultiplier * (gameMonster.combatDetails.rangedLevel + levelBonus) * labyrinthScaleFactor;\n            this.magicLevel = levelMultiplier * (gameMonster.combatDetails.magicLevel + levelBonus) * labyrinthScaleFactor;\n\n            const expMultiplier = 1.0 + 0.5 * this.difficultyTier;\n            const expBonus = 5.0 * this.difficultyTier;\n\n            this.experience = expMultiplier * (gameMonster.experience + expBonus);\n\n            this.combatDetails.combatStats.combatStyleHrid = gameMonster.combatDetails.combatStats.combatStyleHrids[0];\n\n            for (const [key, value] of Object.entries(gameMonster.combatDetails.combatStats)) {\n                this.combatDetails.combatStats[key] = value;\n            }\n\n            [\n                'stabAccuracy',\n                'slashAccuracy',\n                'smashAccuracy',\n                'rangedAccuracy',\n                'magicAccuracy',\n                'stabDamage',\n                'slashDamage',\n                'smashDamage',\n                'rangedDamage',\n                'magicDamage',\n                'defensiveDamage',\n                'taskDamage',\n                'physicalAmplify',\n                'waterAmplify',\n                'natureAmplify',\n                'fireAmplify',\n                'healingAmplify',\n                'stabEvasion',\n                'slashEvasion',\n                'smashEvasion',\n                'rangedEvasion',\n                'magicEvasion',\n                'armor',\n                'waterResistance',\n                'natureResistance',\n                'fireResistance',\n                'maxHitpoints',\n                'maxManapoints',\n                'lifeSteal',\n                'hpRegenPer10',\n                'mpRegenPer10',\n                'physicalThorns',\n                'elementalThorns',\n                'combatDropRate',\n                'combatRareFind',\n                'combatDropQuantity',\n                'combatExperience',\n                'criticalRate',\n                'criticalDamage',\n                'armorPenetration',\n                'waterPenetration',\n                'naturePenetration',\n                'firePenetration',\n                'abilityHaste',\n                'tenacity',\n                'manaLeech',\n                'castSpeed',\n                'threat',\n                'parry',\n                'mayhem',\n                'pierce',\n                'curse',\n                'fury',\n                'weaken',\n                'ripple',\n                'bloom',\n                'blaze',\n                'attackSpeed',\n                'foodHaste',\n                'drinkConcentration',\n                'autoAttackDamage',\n                'abilityDamage',\n                'retaliation',\n            ].forEach((stat) => {\n                if (gameMonster.combatDetails.combatStats[stat] == null) {\n                    this.combatDetails.combatStats[stat] = 0;\n                }\n            });\n\n            if (this.combatDetails.combatStats.attackInterval === 0) {\n                this.combatDetails.combatStats.attackInterval = gameMonster.combatDetails.attackInterval;\n            }\n\n            super.updateCombatDetails();\n\n            // Labyrinth: scale armor and resistances after combat details are calculated\n            if (this.roomLevel > 0) {\n                const scaleFactor = this.roomLevel / LABYRINTH_BASE_ROOM_LEVEL;\n                this.combatDetails.totalArmor *= scaleFactor;\n                this.combatDetails.totalWaterResistance *= scaleFactor;\n                this.combatDetails.totalNatureResistance *= scaleFactor;\n                this.combatDetails.totalFireResistance *= scaleFactor;\n            }\n        }\n    }\n\n    const ONE_SECOND = 1e9;\n    const HOT_TICK_INTERVAL = 5 * ONE_SECOND;\n    const DOT_TICK_INTERVAL = 3 * ONE_SECOND;\n    const REGEN_TICK_INTERVAL = 10 * ONE_SECOND;\n    const ENEMY_RESPAWN_INTERVAL = 3 * ONE_SECOND;\n    const PLAYER_RESPAWN_INTERVAL = 150 * ONE_SECOND;\n    const RESTART_INTERVAL = 3 * ONE_SECOND;\n    const ENRAGE_TICK_INTERVAL = 60 * ONE_SECOND;\n\n    class CombatSimulator {\n        /**\n         * @param {Array} players\n         * @param {Object} zone\n         * @param {Function} [onProgress] - Optional progress callback receiving { zone, difficultyTier, progress }\n         * @param {Labyrinth} [labyrinth] - Optional labyrinth encounter manager (replaces zone encounter logic)\n         */\n        constructor(players, zone, onProgress, labyrinth) {\n            this.players = players;\n            this.zone = zone;\n            this.labyrinth = labyrinth || null;\n            this.onProgress = onProgress;\n            this.eventQueue = new EventQueue();\n            this.simResult = new SimResult(zone, players.length);\n            this.allPlayersDead = false;\n\n            this.wipeLogs = {\n                buffer: new Array(200),\n                index: 0,\n                count: 0,\n                maxSize: 200,\n            };\n        }\n\n        addToWipeLogs(logEntry) {\n            const { buffer, maxSize } = this.wipeLogs;\n\n            buffer[this.wipeLogs.index] = logEntry;\n            this.wipeLogs.index = (this.wipeLogs.index + 1) % maxSize;\n            this.wipeLogs.count = Math.min(this.wipeLogs.count + 1, maxSize);\n        }\n\n        logAndResetWipeLogs() {\n            const logs = this.getOrderedWipeLogs();\n\n            logs.forEach((log) => {\n                if (log.error) {\n                    console.log(log.error);\n                }\n            });\n\n            this.wipeLogs.index = 0;\n            this.wipeLogs.count = 0;\n        }\n\n        buildCombatLog(source, ability, target, damageDone) {\n            try {\n                const sourceHrid = source?.hrid || 'UNKNOWN_SOURCE';\n                const targetHrid = target?.hrid || 'UNKNOWN_TARGET';\n\n                const afterHp = target?.combatDetails?.currentHitpoints || 0;\n                const beforeHp = Math.max(0, afterHp + damageDone);\n\n                const playersHp = this.players.map((p) => ({\n                    hrid: p.hrid || 'UNKNOWN_PLAYER',\n                    current: p.combatDetails?.currentHitpoints ?? 0,\n                    max: p.combatDetails?.maxHitpoints ?? 0,\n                }));\n\n                return {\n                    time: this.simulationTime,\n                    wave: this.zone.encountersKilled - 1,\n                    source: sourceHrid,\n                    ability: ability,\n                    target: targetHrid,\n                    damage: damageDone,\n                    beforeHp: beforeHp,\n                    afterHp: afterHp,\n                    playersHp: playersHp,\n                    isCrit: false,\n                };\n            } catch (e) {\n                return {\n                    error: `[Log generation error] ${e.message}`,\n                };\n            }\n        }\n\n        generateCombatLog(source, ability, target, attackResult) {\n            try {\n                const sourceHrid = source?.hrid || 'UNKNOWN_SOURCE';\n                const targetHrid = target?.hrid || 'UNKNOWN_TARGET';\n                const damage = attackResult?.damageDone || 0;\n\n                const afterHp = target?.combatDetails?.currentHitpoints || 0;\n                const beforeHp = Math.max(0, afterHp + damage);\n\n                const playersHp = this.players.map((p) => ({\n                    hrid: p.hrid || 'UNKNOWN_PLAYER',\n                    current: p.combatDetails?.currentHitpoints ?? 0,\n                    max: p.combatDetails?.maxHitpoints ?? 0,\n                }));\n\n                return {\n                    time: this.simulationTime,\n                    wave: this.zone.encountersKilled - 1,\n                    source: sourceHrid,\n                    ability: ability,\n                    target: targetHrid,\n                    damage: damage,\n                    beforeHp: beforeHp,\n                    afterHp: afterHp,\n                    playersHp: playersHp,\n                    isCrit: attackResult?.isCrit || false,\n                };\n            } catch (e) {\n                return {\n                    error: `[Log generation error] ${e.message}`,\n                };\n            }\n        }\n\n        getOrderedWipeLogs() {\n            const { buffer, maxSize, count } = this.wipeLogs;\n            const logs = [];\n\n            for (let i = 0; i < count; i++) {\n                const idx = (this.wipeLogs.index - count + maxSize + i) % maxSize;\n                logs.push(buffer[idx]);\n            }\n\n            return logs;\n        }\n\n        saveWipeLogsToSimResult(wave) {\n            const logs = this.getOrderedWipeLogs();\n            this.simResult.addWipeEvent(logs, this.simulationTime, wave);\n        }\n\n        /**\n         * Run the combat simulation synchronously.\n         * @param {number} simulationTimeLimit - Simulation time limit in nanoseconds\n         * @returns {SimResult}\n         */\n        simulate(simulationTimeLimit) {\n            this.reset();\n\n            let ticks = 0;\n\n            const combatStartEvent = new CombatStartEvent(0);\n            this.eventQueue.addEvent(combatStartEvent);\n\n            while (this.simulationTime < simulationTimeLimit) {\n                const nextEvent = this.eventQueue.getNextEvent();\n                this.processEvent(nextEvent);\n\n                ticks++;\n                if (ticks === 50000) {\n                    ticks = 0;\n                    if (this.onProgress) {\n                        this.onProgress({\n                            zone: this.zone.hrid,\n                            difficultyTier: this.zone.difficultyTier,\n                            progress: Math.min(this.simulationTime / simulationTimeLimit, 1),\n                        });\n                    }\n                }\n            }\n\n            this.simResult.isDungeon = this.zone.isDungeon;\n            if (this.simResult.isDungeon) {\n                this.simResult.dungeonsCompleted = this.zone.dungeonsCompleted;\n                this.simResult.dungeonsFailed = this.zone.dungeonsFailed;\n                if (this.simResult.dungeonsCompleted < 1) {\n                    this.simResult.maxWaveReached = 0;\n                    for (let i = 0; i <= this.zone.dungeonSpawnInfo.maxWaves; i++) {\n                        const waveName = '#' + i.toString();\n                        const idx = this.simResult.timeSpentAlive.findIndex((e) => e.name === waveName);\n                        if (idx === -1 || this.simResult.timeSpentAlive[idx].count === 0) {\n                            break;\n                        }\n                        this.simResult.maxWaveReached = i;\n                    }\n                } else {\n                    this.simResult.maxWaveReached = this.zone.dungeonSpawnInfo.maxWaves;\n                }\n            }\n\n            // Labyrinth result tracking\n            if (this.labyrinth) {\n                this.simResult.isLabyrinth = true;\n                this.simResult.labyAttemptCount = this.labyrinth.attemptCount;\n                this.simResult.labyrinthMonsterHrid = this.labyrinth.monsterHrid;\n                this.simResult.roomLevel = this.labyrinth.roomLevel;\n            }\n\n            this.simResult.simulatedTime = this.simulationTime;\n\n            for (let i = 0; i < this.players.length; i++) {\n                this.simResult.setDropRateMultipliers(this.players[i]);\n                this.simResult.setManaUsed(this.players[i]);\n            }\n\n            if (this.zone.isDungeon) {\n                Object.entries(this.zone.dungeonSpawnInfo.fixedSpawnsMap).forEach(([wave, monsters]) => {\n                    let waveName = '#' + wave.toString();\n                    monsters.forEach((monster) => {\n                        waveName += ',' + monster.combatMonsterHrid;\n                    });\n                    this.simResult.bossSpawns.push(waveName);\n                });\n            }\n            if (this.zone.monsterSpawnInfo.bossSpawns) {\n                for (const boss of this.zone.monsterSpawnInfo.bossSpawns) {\n                    this.simResult.bossSpawns.push(boss.combatMonsterHrid);\n                }\n            }\n\n            return this.simResult;\n        }\n\n        reset() {\n            this.tempDungeonCount = 0;\n            this.simulationTime = 0;\n            this.eventQueue.clear();\n            this.simResult = new SimResult(this.zone, this.players.length);\n        }\n\n        processEvent(event) {\n            this.simulationTime = event.time;\n\n            switch (event.type) {\n                case CombatStartEvent.type:\n                    this.processCombatStartEvent(event);\n                    break;\n                case PlayerRespawnEvent.type:\n                    this.processPlayerRespawnEvent(event);\n                    break;\n                case EnemyRespawnEvent.type:\n                    this.processEnemyRespawnEvent(event);\n                    break;\n                case AutoAttackEvent.type:\n                    this.processAutoAttackEvent(event);\n                    break;\n                case ConsumableTickEvent.type:\n                    this.processConsumableTickEvent(event);\n                    break;\n                case DamageOverTimeEvent.type:\n                    this.processDamageOverTimeTickEvent(event);\n                    break;\n                case CheckBuffExpirationEvent.type:\n                    this.processCheckBuffExpirationEvent(event);\n                    break;\n                case RegenTickEvent.type:\n                    this.processRegenTickEvent(event);\n                    break;\n                case StunExpirationEvent.type:\n                    this.processStunExpirationEvent(event);\n                    break;\n                case BlindExpirationEvent.type:\n                    this.processBlindExpirationEvent(event);\n                    break;\n                case SilenceExpirationEvent.type:\n                    this.processSilenceExpirationEvent(event);\n                    break;\n                case CurseExpirationEvent.type:\n                    this.processCurseExpirationEvent(event);\n                    break;\n                case WeakenExpirationEvent.type:\n                    this.processWeakenExpirationEvent(event);\n                    break;\n                case FuryExpirationEvent.type:\n                    this.processFuryExpirationEvent(event);\n                    break;\n                case EnrageTickEvent.type:\n                    this.processEnrageTickEvent(event);\n                    break;\n                case AbilityCastEndEvent.type:\n                    this.tryUseAbility(event.source, event.ability);\n                    break;\n                case AwaitCooldownEvent.type:\n                    this.addNextAttackEvent(event.source);\n                    break;\n            }\n\n            this.checkTriggers();\n        }\n\n        processCombatStartEvent(event) {\n            for (let i = 0; i < this.players.length; i++) {\n                if (event.time === 0) {\n                    // First combat start event\n                    this.players[i].generatePermanentBuffs();\n                }\n                if (this.labyrinth) {\n                    // Labyrinth: full reset every encounter (independent fights)\n                    this.players[i].reset(0);\n                } else {\n                    this.players[i].reset(this.simulationTime);\n                }\n            }\n\n            const regenTickEvent = new RegenTickEvent(this.simulationTime + REGEN_TICK_INTERVAL);\n            this.eventQueue.addEvent(regenTickEvent);\n\n            this.startNewEncounter();\n        }\n\n        processPlayerRespawnEvent(event) {\n            const respawningPlayer = this.players.find((player) => player.hrid === event.hrid);\n            respawningPlayer.combatDetails.currentHitpoints = respawningPlayer.combatDetails.maxHitpoints;\n            respawningPlayer.combatDetails.currentManapoints = respawningPlayer.combatDetails.maxManapoints;\n            respawningPlayer.clearBuffs();\n            respawningPlayer.clearCCs();\n            if (this.allPlayersDead) {\n                this.allPlayersDead = false;\n                this.startAttacks();\n            } else {\n                this.addNextAttackEvent(respawningPlayer);\n            }\n        }\n\n        processEnemyRespawnEvent(_event) {\n            this.startNewEncounter();\n        }\n\n        startNewEncounter() {\n            if (this.allPlayersDead) {\n                this.allPlayersDead = false;\n                if (!this.labyrinth) {\n                    this.zone.failWave();\n                }\n            }\n\n            if (this.labyrinth) {\n                this.enemies = this.labyrinth.getMonster();\n                this.labyrinth.updateEncounterStartTime(this.simulationTime);\n            } else if (!this.zone.isDungeon) {\n                this.enemies = this.zone.getRandomEncounter();\n            } else {\n                this.enemies = this.zone.getNextWave();\n                this.simResult.updateTimeSpentAlive(\n                    '#' + (this.zone.encountersKilled - 1).toString(),\n                    true,\n                    this.simulationTime\n                );\n                const currentDungeonCount = this.zone.dungeonsCompleted;\n                if (currentDungeonCount > this.tempDungeonCount) {\n                    this.tempDungeonCount = currentDungeonCount;\n                    for (let i = 0; i < this.players.length; i++) {\n                        this.players[i].combatDetails.currentHitpoints = this.players[i].combatDetails.maxHitpoints;\n                        this.players[i].combatDetails.currentManapoints = this.players[i].combatDetails.maxManapoints;\n                    }\n                }\n            }\n\n            this.enemies.forEach((enemy) => {\n                enemy.reset(this.simulationTime);\n                this.simResult.updateTimeSpentAlive(enemy.hrid, true, this.simulationTime);\n            });\n\n            this.eventQueue.clearEventsOfType(EnrageTickEvent.type);\n            const enrageTickEvent = new EnrageTickEvent(this.simulationTime + ENRAGE_TICK_INTERVAL, ENRAGE_TICK_INTERVAL);\n            this.eventQueue.addEvent(enrageTickEvent);\n            this.enrageBeginTime = this.simulationTime;\n\n            this.eventQueue.clearEventsOfType(AbilityCastEndEvent.type);\n\n            this.checkTriggers();\n            this.startAttacks();\n        }\n\n        startAttacks() {\n            const units = [...this.players];\n            if (this.enemies) {\n                units.push(...this.enemies);\n            }\n\n            for (const unit of units) {\n                if (unit.combatDetails.currentHitpoints <= 0) {\n                    continue;\n                }\n\n                this.addNextAttackEvent(unit);\n            }\n        }\n\n        checkParry(targets) {\n            const parryUnits = targets.filter(\n                (unit) => unit && unit.combatDetails.currentHitpoints > 0 && unit.combatDetails.combatStats.parry > 0\n            );\n            if (parryUnits.length <= 0) {\n                return undefined;\n            }\n            const randomIndex = Math.floor(Math.random() * parryUnits.length);\n            if (parryUnits[randomIndex].combatDetails.combatStats.parry > Math.random()) {\n                return parryUnits[randomIndex];\n            }\n            return undefined;\n        }\n\n        processAutoAttackEvent(event) {\n            const targets = event.source.isPlayer ? this.enemies : this.players;\n\n            if (!targets) {\n                return;\n            }\n\n            const aliveTargets = targets.filter((unit) => unit && unit.combatDetails.currentHitpoints > 0);\n\n            for (let i = 0; i < aliveTargets.length; i++) {\n                let target = aliveTargets[i];\n                if (!event.source.isPlayer && aliveTargets.length > 1) {\n                    let cumulativeThreat = 0;\n                    const cumulativeRanges = [];\n                    aliveTargets.forEach((player) => {\n                        const playerThreat = player.combatDetails.combatStats.threat;\n                        cumulativeThreat += playerThreat;\n                        cumulativeRanges.push({\n                            player: player,\n                            rangeStart: cumulativeThreat - playerThreat,\n                            rangeEnd: cumulativeThreat,\n                        });\n                    });\n                    const randomValueHit = Math.random() * cumulativeThreat;\n                    target = cumulativeRanges.find(\n                        (range) => randomValueHit >= range.rangeStart && randomValueHit < range.rangeEnd\n                    ).player;\n                }\n                let source = event.source;\n\n                const parryTarget = this.checkParry(targets);\n                if (parryTarget) {\n                    target = source;\n                    source = parryTarget;\n                }\n\n                const attackResult = CombatUtilities.processAttack(source, target);\n                if (this.zone.isDungeon && target.isPlayer && attackResult.didHit && attackResult.damageDone > 0) {\n                    const log = this.generateCombatLog(source, 'autoAttack', target, attackResult);\n                    this.addToWipeLogs(log);\n                }\n\n                const mayhem = source.combatDetails.combatStats.mayhem > Math.random();\n\n                if (attackResult.didHit && source.combatDetails.combatStats.curse > 0) {\n                    const curseExpireTime = 15000000000;\n                    const currentCurseEvent = this.eventQueue.getByTypeAndSource(CurseExpirationEvent.type, target);\n                    let currentCurseAmount = 0;\n                    if (currentCurseEvent) currentCurseAmount = currentCurseEvent.curseAmount;\n                    this.eventQueue.clearByTypeAndSource(CurseExpirationEvent.type, target);\n\n                    const curseExpirationEvent = new CurseExpirationEvent(\n                        this.simulationTime + curseExpireTime,\n                        currentCurseAmount,\n                        target\n                    );\n                    const curseBuff = {\n                        uniqueHrid: '/buff_uniques/curse',\n                        typeHrid: '/buff_types/damage_taken',\n                        ratioBoost: 0,\n                        ratioBoostLevelBonus: 0,\n                        flatBoost: source.combatDetails.combatStats.curse * curseExpirationEvent.curseAmount,\n                        flatBoostLevelBonus: 0,\n                        startTime: '0001-01-01T00:00:00Z',\n                        duration: curseExpireTime,\n                    };\n                    target.addBuff(curseBuff);\n                    this.eventQueue.addEvent(curseExpirationEvent);\n                }\n\n                if (source.combatDetails.combatStats.fury > 0) {\n                    this._processFuryUpdate(source, attackResult.didHit);\n                }\n\n                if (target.combatDetails.combatStats.weaken > 0) {\n                    const weakenExpireTime = 15000000000;\n                    const currentWeakenEvent = this.eventQueue.getByTypeAndSource(WeakenExpirationEvent.type, source);\n                    let weakenAmount = 0;\n                    if (currentWeakenEvent) weakenAmount = currentWeakenEvent.weakenAmount;\n                    this.eventQueue.clearByTypeAndSource(WeakenExpirationEvent.type, source);\n                    const weakenExpirationEvent = new WeakenExpirationEvent(\n                        this.simulationTime + 15000000000,\n                        weakenAmount,\n                        source\n                    );\n                    const weakenBuff = {\n                        uniqueHrid: '/buff_uniques/weaken',\n                        typeHrid: '/buff_types/damage',\n                        ratioBoost: -1 * target.combatDetails.combatStats.weaken * weakenExpirationEvent.weakenAmount,\n                        ratioBoostLevelBonus: 0,\n                        flatBoost: 0,\n                        flatBoostLevelBonus: 0,\n                        startTime: '0001-01-01T00:00:00Z',\n                        duration: weakenExpireTime,\n                    };\n                    source.addBuff(weakenBuff);\n                    this.eventQueue.addEvent(weakenExpirationEvent);\n                }\n\n                if (!mayhem || (mayhem && attackResult.didHit) || (mayhem && i === aliveTargets.length - 1)) {\n                    this.simResult.addAttack(\n                        source,\n                        target,\n                        'autoAttack',\n                        attackResult.didHit ? attackResult.damageDone : 'miss'\n                    );\n                }\n\n                if (attackResult.lifeStealHeal > 0) {\n                    this.simResult.addHitpointsGained(source, 'lifesteal', attackResult.lifeStealHeal);\n                }\n\n                if (attackResult.manaLeechMana > 0) {\n                    this.simResult.addManapointsGained(source, 'manaLeech', attackResult.manaLeechMana);\n                }\n\n                if (attackResult.thornDamageDone > 0) {\n                    this.simResult.addAttack(target, source, attackResult.thornType, attackResult.thornDamageDone);\n                }\n                if (this.zone.isDungeon && attackResult.thornDamageDone > 0 && source.isPlayer) {\n                    const log = this.buildCombatLog(target, attackResult.thornType, source, attackResult.thornDamageDone);\n                    this.addToWipeLogs(log);\n                }\n\n                if (target.combatDetails.combatStats.retaliation > 0) {\n                    this.simResult.addAttack(\n                        target,\n                        source,\n                        'retaliation',\n                        attackResult.retaliationDamageDone > 0 ? attackResult.retaliationDamageDone : 'miss'\n                    );\n                }\n                if (this.zone.isDungeon && attackResult.retaliationDamageDone > 0 && source.isPlayer) {\n                    const log = this.buildCombatLog(target, 'retaliation', source, attackResult.retaliationDamageDone);\n                    this.addToWipeLogs(log);\n                }\n\n                if (target.combatDetails.currentHitpoints === 0) {\n                    this.eventQueue.clearEventsForUnit(target);\n                    this.simResult.addDeath(target);\n                    if (!target.isPlayer) {\n                        this.simResult.updateTimeSpentAlive(target.hrid, false, this.simulationTime);\n                    }\n                }\n\n                // Could die from reflect damage\n                if (\n                    source.combatDetails.currentHitpoints === 0 &&\n                    (attackResult.thornDamageDone !== 0 || attackResult.retaliationDamageDone !== 0)\n                ) {\n                    this.eventQueue.clearEventsForUnit(source);\n                    this.simResult.addDeath(source);\n                    if (!source.isPlayer) {\n                        this.simResult.updateTimeSpentAlive(source.hrid, false, this.simulationTime);\n                    }\n                    break;\n                }\n\n                if (mayhem && !attackResult.didHit) {\n                    continue;\n                }\n\n                if (!attackResult.didHit || parryTarget || source.combatDetails.combatStats.pierce <= Math.random()) {\n                    break;\n                }\n            }\n\n            if (!this.checkEncounterEnd()) {\n                this.addNextAttackEvent(event.source);\n            }\n        }\n\n        checkEncounterEnd() {\n            // Labyrinth timeout check\n            if (this.labyrinth && this.enemies && this.labyrinth.checkTimeout(this.simulationTime)) {\n                // Timeout = loss. Clear everything and immediately restart.\n                this.enemies = null;\n                this.eventQueue.clear();\n                const combatStartEvent = new CombatStartEvent(this.simulationTime);\n                this.eventQueue.addEvent(combatStartEvent);\n                return true;\n            }\n\n            if (this.enemies) {\n                const deadEnemies = this.enemies.filter(\n                    (enemy) => enemy.combatDetails.currentHitpoints <= 0 && enemy.experienceRate === 0\n                );\n                if (deadEnemies.length > 0) {\n                    deadEnemies.forEach((enemy) => {\n                        let aliveDuration = this.simulationTime - this.enrageBeginTime;\n                        if (aliveDuration > enemy.enrageTime) {\n                            aliveDuration = enemy.enrageTime;\n                        }\n                        enemy.experienceRate = 1.0 + aliveDuration / enemy.enrageTime;\n                    });\n                }\n            }\n\n            let encounterEnded = false;\n\n            if (this.enemies && !this.enemies.some((enemy) => enemy.combatDetails.currentHitpoints > 0)) {\n                this.eventQueue.clearEventsOfType(AutoAttackEvent.type);\n\n                if (this.labyrinth) {\n                    // Labyrinth win: immediate restart (no respawn delay)\n                    this.enemies = null;\n                    this.simResult.addEncounterEnd();\n                    this.eventQueue.clear();\n                    const combatStartEvent = new CombatStartEvent(this.simulationTime);\n                    this.eventQueue.addEvent(combatStartEvent);\n                    return true;\n                }\n\n                const enemyRespawnEvent = new EnemyRespawnEvent(this.simulationTime + ENEMY_RESPAWN_INTERVAL);\n                this.eventQueue.addEvent(enemyRespawnEvent);\n\n                // calc exp before clear\n                if (this.enemies.some((enemy) => enemy.experienceRate <= 0)) {\n                    console.warn('[CombatSimulator] Some enemies have no experience rate');\n                }\n\n                const totalExp = this.enemies\n                    .map((enemy) => enemy.experience * enemy.experienceRate)\n                    .reduce((a, b) => a + b, 0);\n                this.players.forEach((player) => {\n                    this.simResult.addExperienceGain(player, totalExp / this.players.length);\n                });\n\n                this.enemies = null;\n\n                if (this.zone.isDungeon) {\n                    this.simResult.updateTimeSpentAlive(\n                        '#' + (this.zone.encountersKilled - 1).toString(),\n                        false,\n                        this.simulationTime\n                    );\n                }\n                this.simResult.addEncounterEnd();\n\n                encounterEnded = true;\n            }\n\n            this.players.forEach((player) => {\n                if (\n                    player.combatDetails.currentHitpoints <= 0 &&\n                    !this.eventQueue.containsEventOfTypeAndHrid(PlayerRespawnEvent.type, player.hrid)\n                ) {\n                    if (!this.zone.isDungeon && !this.labyrinth) {\n                        const playerRespawnEvent = new PlayerRespawnEvent(\n                            this.simulationTime + PLAYER_RESPAWN_INTERVAL,\n                            player.hrid\n                        );\n                        this.eventQueue.addEvent(playerRespawnEvent);\n                    }\n                    this.simResult.addRanOutOfManaCount(player, false, this.simulationTime);\n                }\n            });\n\n            if (!this.players.some((player) => player.combatDetails.currentHitpoints > 0)) {\n                if (this.labyrinth) {\n                    // Labyrinth death = loss. Immediate restart.\n                    this.enemies = null;\n                    this.eventQueue.clear();\n                    const combatStartEvent = new CombatStartEvent(this.simulationTime);\n                    this.eventQueue.addEvent(combatStartEvent);\n                    return true;\n                } else if (this.zone.isDungeon) {\n                    this.saveWipeLogsToSimResult(this.zone.encountersKilled - 1);\n                    this.wipeLogs.index = 0;\n                    this.wipeLogs.count = 0;\n\n                    // Clear combat events but preserve buff expiration and cooldown events\n                    this.eventQueue.clearEventsOfType(AutoAttackEvent.type);\n                    this.eventQueue.clearEventsOfType(AbilityCastEndEvent.type);\n                    this.eventQueue.clearEventsOfType(DamageOverTimeEvent.type);\n                    this.eventQueue.clearEventsOfType(ConsumableTickEvent.type);\n                    this.eventQueue.clearEventsOfType(RegenTickEvent.type);\n                    this.eventQueue.clearEventsOfType(EnrageTickEvent.type);\n                    this.eventQueue.clearEventsOfType(StunExpirationEvent.type);\n                    this.eventQueue.clearEventsOfType(BlindExpirationEvent.type);\n                    this.eventQueue.clearEventsOfType(SilenceExpirationEvent.type);\n                    this.eventQueue.clearEventsOfType(AwaitCooldownEvent.type);\n                    this.enemies = null;\n\n                    const combatStartEvent = new CombatStartEvent(this.simulationTime + RESTART_INTERVAL);\n                    this.eventQueue.addEvent(combatStartEvent);\n                } else {\n                    this.eventQueue.clearEventsOfType(AutoAttackEvent.type);\n                    this.eventQueue.clearEventsOfType(AbilityCastEndEvent.type);\n                }\n                encounterEnded = true;\n                this.allPlayersDead = true;\n            }\n\n            return encounterEnded;\n        }\n\n        addNextAttackEvent(source) {\n            // Check both event types via indexed lookups instead of O(n) getMatching\n            if (\n                this.eventQueue.getByTypeAndSource(AbilityCastEndEvent.type, source) ||\n                this.eventQueue.getByTypeAndSource(AutoAttackEvent.type, source)\n            ) {\n                return;\n            }\n\n            let target;\n            let friendlies;\n            let enemies;\n            if (source.isPlayer) {\n                target = CombatUtilities.getTarget(this.enemies);\n                friendlies = this.players;\n                enemies = this.enemies;\n            } else {\n                target = CombatUtilities.getTarget(this.players);\n                friendlies = this.enemies;\n                enemies = this.players;\n            }\n\n            let usedAbility = false;\n            let skipNextAbility = false;\n\n            source.abilities\n                .filter((ability) => ability != null)\n                .forEach((ability) => {\n                    if (\n                        !usedAbility &&\n                        !skipNextAbility &&\n                        ability.shouldTrigger(this.simulationTime, source, target, friendlies, enemies)\n                    ) {\n                        if (!this.canUseAbility(source, ability, true)) {\n                            skipNextAbility = true;\n                        }\n\n                        if (!skipNextAbility) {\n                            let castDuration = ability.castDuration;\n                            castDuration /= 1 + source.combatDetails.combatStats.castSpeed;\n                            const abilityCastEndEvent = new AbilityCastEndEvent(\n                                this.simulationTime + castDuration,\n                                source,\n                                ability\n                            );\n                            this.eventQueue.addEvent(abilityCastEndEvent);\n                            usedAbility = true;\n                        }\n                    }\n                });\n\n            if (usedAbility) {\n                source.isOutOfMana = false;\n                return;\n            }\n\n            if (!enemies) {\n                return;\n            }\n\n            if (!source.isBlinded) {\n                const autoAttackEvent = new AutoAttackEvent(\n                    this.simulationTime + source.combatDetails.combatStats.attackInterval,\n                    source\n                );\n                this.eventQueue.addEvent(autoAttackEvent);\n            } else {\n                source.isOutOfMana = true;\n            }\n        }\n\n        processConsumableTickEvent(event) {\n            if (event.consumable.hitpointRestore > 0) {\n                const tickValue = CombatUtilities.calculateTickValue(\n                    event.consumable.hitpointRestore,\n                    event.totalTicks,\n                    event.currentTick\n                );\n                const hitpointsAdded = event.source.addHitpoints(tickValue);\n                this.simResult.addHitpointsGained(event.source, event.consumable.hrid, hitpointsAdded);\n            }\n\n            if (event.consumable.manapointRestore > 0) {\n                const tickValue = CombatUtilities.calculateTickValue(\n                    event.consumable.manapointRestore,\n                    event.totalTicks,\n                    event.currentTick\n                );\n                const manapointsAdded = event.source.addManapoints(tickValue);\n                this.simResult.addManapointsGained(event.source, event.consumable.hrid, manapointsAdded);\n\n                // when oom check ability trigger\n                if (event.source.isOutOfMana) {\n                    const awaitCooldownEvent = new AwaitCooldownEvent(this.simulationTime, event.source);\n                    this.eventQueue.addEvent(awaitCooldownEvent);\n                }\n            }\n\n            if (event.currentTick < event.totalTicks) {\n                const consumableTickEvent = new ConsumableTickEvent(\n                    this.simulationTime + HOT_TICK_INTERVAL,\n                    event.source,\n                    event.consumable,\n                    event.totalTicks,\n                    event.currentTick + 1\n                );\n                this.eventQueue.addEvent(consumableTickEvent);\n            }\n        }\n\n        processDamageOverTimeTickEvent(event) {\n            const tickDamage = CombatUtilities.calculateTickValue(event.damage, event.totalTicks, event.currentTick);\n            const damage = Math.min(tickDamage, event.target.combatDetails.currentHitpoints);\n\n            event.target.combatDetails.currentHitpoints -= damage;\n            this.simResult.addAttack(event.sourceRef, event.target, 'damageOverTime', damage);\n\n            const log = this.buildCombatLog('', 'damageOverTime', event.target, damage);\n            this.addToWipeLogs(log);\n\n            if (event.currentTick < event.totalTicks) {\n                const damageOverTimeTickEvent = new DamageOverTimeEvent(\n                    this.simulationTime + DOT_TICK_INTERVAL,\n                    event.sourceRef,\n                    event.target,\n                    event.damage,\n                    event.totalTicks,\n                    event.currentTick + 1,\n                    event.combatStyleHrid\n                );\n                this.eventQueue.addEvent(damageOverTimeTickEvent);\n            }\n\n            if (event.target.combatDetails.currentHitpoints === 0) {\n                this.eventQueue.clearEventsForUnit(event.target);\n                this.simResult.addDeath(event.target);\n                if (!event.target.isPlayer) {\n                    this.simResult.updateTimeSpentAlive(event.target.hrid, false, this.simulationTime);\n                }\n            }\n\n            this.checkEncounterEnd();\n        }\n\n        processRegenTickEvent(_event) {\n            const units = [...this.players];\n            // Enemy regen is always 0 in game data — skip enemies\n\n            for (const unit of units) {\n                if (unit.combatDetails.currentHitpoints <= 0) {\n                    continue;\n                }\n\n                const hitpointRegen = Math.floor(\n                    unit.combatDetails.maxHitpoints * unit.combatDetails.combatStats.hpRegenPer10\n                );\n                const hitpointsAdded = unit.addHitpoints(hitpointRegen);\n                this.simResult.addHitpointsGained(unit, 'regen', hitpointsAdded);\n\n                const manapointRegen = Math.floor(\n                    unit.combatDetails.maxManapoints * unit.combatDetails.combatStats.mpRegenPer10\n                );\n                const manapointsAdded = unit.addManapoints(manapointRegen);\n                this.simResult.addManapointsGained(unit, 'regen', manapointsAdded);\n\n                // when oom check ability trigger\n                if (unit.isOutOfMana) {\n                    const awaitCooldownEvent = new AwaitCooldownEvent(this.simulationTime, unit);\n                    this.eventQueue.addEvent(awaitCooldownEvent);\n                }\n            }\n\n            const regenTickEvent = new RegenTickEvent(this.simulationTime + REGEN_TICK_INTERVAL);\n            this.eventQueue.addEvent(regenTickEvent);\n        }\n\n        processCheckBuffExpirationEvent(event) {\n            event.source.removeExpiredBuffs(this.simulationTime);\n        }\n\n        processStunExpirationEvent(event) {\n            event.source.isStunned = false;\n            this.addNextAttackEvent(event.source);\n        }\n\n        processBlindExpirationEvent(event) {\n            event.source.isBlinded = false;\n            this.addNextAttackEvent(event.source);\n        }\n\n        processSilenceExpirationEvent(event) {\n            event.source.isSilenced = false;\n        }\n\n        processCurseExpirationEvent(event) {\n            event.source.removeExpiredBuffs(this.simulationTime);\n        }\n\n        processWeakenExpirationEvent(event) {\n            event.source.removeExpiredBuffs(this.simulationTime);\n        }\n\n        processFuryExpirationEvent(event) {\n            event.source.furyAmount = 0;\n            event.source.furyExpireTime = 0;\n            event.source.updateFuryBuffs(0, 0, 0, 0);\n        }\n\n        _processFuryUpdate(source, didHit) {\n            const FURY_EXPIRE_TIME = 15000000000;\n            const MAX_FURY_STACK = 5;\n\n            const oldAmount = source.furyAmount;\n            const newAmount = didHit ? Math.min(oldAmount + 1, MAX_FURY_STACK) : Math.floor(oldAmount / 2);\n\n            source.furyAmount = newAmount;\n\n            // Always reschedule expiration (resets the 15s timer)\n            this.eventQueue.clearByTypeAndSource(FuryExpirationEvent.type, source);\n            if (newAmount > 0) {\n                source.furyExpireTime = this.simulationTime + FURY_EXPIRE_TIME;\n                this.eventQueue.addEvent(new FuryExpirationEvent(source.furyExpireTime, newAmount, source));\n            }\n\n            // Only recalculate combat stats if stacks actually changed\n            if (newAmount !== oldAmount) {\n                source.updateFuryBuffs(\n                    newAmount,\n                    source.combatDetails.combatStats.fury,\n                    this.simulationTime,\n                    FURY_EXPIRE_TIME\n                );\n            }\n        }\n\n        processEnrageTickEvent(event) {\n            if (!this.enemies) return;\n            const maxEnrageStack = 10;\n            this.enemies\n                .filter((enemy) => enemy.combatDetails.currentHitpoints > 0)\n                .forEach((enemy) => {\n                    const nowStack = Math.min(maxEnrageStack, Math.floor(event.encounterTime / enemy.enrageTime));\n\n                    if (nowStack <= 0) {\n                        return;\n                    }\n\n                    const enrageDamageBuff = {\n                        uniqueHrid: '/buff_uniques/enrage_damage',\n                        typeHrid: '/buff_types/damage',\n                        ratioBoost: nowStack * 0.1,\n                        ratioBoostLevelBonus: 0,\n                        flatBoost: 0,\n                        flatBoostLevelBonus: 0,\n                        startTime: '0001-01-01T00:00:00Z',\n                        duration: ENRAGE_TICK_INTERVAL,\n                    };\n                    const enrageAccuracyBuff = {\n                        uniqueHrid: '/buff_uniques/enrage_accuracy',\n                        typeHrid: '/buff_types/accuracy',\n                        ratioBoost: nowStack * 0.1,\n                        ratioBoostLevelBonus: 0,\n                        flatBoost: 0,\n                        flatBoostLevelBonus: 0,\n                        startTime: '0001-01-01T00:00:00Z',\n                        duration: ENRAGE_TICK_INTERVAL,\n                    };\n                    enemy.addBuff(enrageDamageBuff);\n                    enemy.addBuff(enrageAccuracyBuff);\n\n                    this.simResult.maxEnrageStack = Math.max(this.simResult.maxEnrageStack, nowStack);\n                });\n\n            const enrageTickEvent = new EnrageTickEvent(\n                this.simulationTime + ENRAGE_TICK_INTERVAL,\n                event.encounterTime + ENRAGE_TICK_INTERVAL\n            );\n            this.eventQueue.addEvent(enrageTickEvent);\n        }\n\n        checkTriggers() {\n            let triggeredSomething;\n\n            do {\n                triggeredSomething = false;\n\n                for (const player of this.players) {\n                    if (player.combatDetails.currentHitpoints > 0) {\n                        if (this.checkTriggersForUnit(player, this.players, this.enemies)) {\n                            triggeredSomething = true;\n                        }\n                    }\n                }\n\n                if (this.enemies) {\n                    for (const enemy of this.enemies) {\n                        if (enemy.combatDetails.currentHitpoints > 0) {\n                            if (this.checkTriggersForUnit(enemy, this.enemies, this.players)) {\n                                triggeredSomething = true;\n                            }\n                        }\n                    }\n                }\n            } while (triggeredSomething);\n        }\n\n        checkTriggersForUnit(unit, friendlies, enemies) {\n            if (unit.combatDetails.currentHitpoints <= 0) {\n                throw new Error('Checking triggers for a dead unit');\n            }\n\n            let triggeredSomething = false;\n            const target = CombatUtilities.getTarget(enemies);\n\n            for (const food of unit.food) {\n                if (food && food.shouldTrigger(this.simulationTime, unit, target, friendlies, enemies)) {\n                    const result = this.tryUseConsumable(unit, food);\n                    if (result) {\n                        triggeredSomething = true;\n                    }\n                }\n            }\n\n            for (const drink of unit.drinks) {\n                if (drink && drink.shouldTrigger(this.simulationTime, unit, target, friendlies, enemies)) {\n                    const result = this.tryUseConsumable(unit, drink);\n                    if (result) {\n                        triggeredSomething = true;\n                    }\n                }\n            }\n\n            return triggeredSomething;\n        }\n\n        tryUseConsumable(source, consumable) {\n            if (source.combatDetails.currentHitpoints <= 0) {\n                return false;\n            }\n\n            consumable.lastUsed = this.simulationTime;\n            let consumeCooldown = consumable.cooldownDuration;\n            if (source.combatDetails.combatStats.drinkConcentration > 0 && consumable.catagoryHrid.includes('drink')) {\n                consumeCooldown = consumeCooldown / (1 + source.combatDetails.combatStats.drinkConcentration);\n            } else if (source.combatDetails.combatStats.foodHaste > 0 && consumable.catagoryHrid.includes('food')) {\n                consumeCooldown = consumeCooldown / (1 + source.combatDetails.combatStats.foodHaste);\n            }\n            const cooldownReadyEvent = new CooldownReadyEvent(this.simulationTime + consumeCooldown);\n            this.eventQueue.addEvent(cooldownReadyEvent);\n\n            this.simResult.addConsumableUse(source, consumable);\n\n            if (consumable.recoveryDuration === 0) {\n                if (consumable.hitpointRestore > 0) {\n                    const hitpointsAdded = source.addHitpoints(consumable.hitpointRestore);\n                    this.simResult.addHitpointsGained(source, consumable.hrid, hitpointsAdded);\n                }\n\n                if (consumable.manapointRestore > 0) {\n                    const manapointsAdded = source.addManapoints(consumable.manapointRestore);\n                    this.simResult.addManapointsGained(source, consumable.hrid, manapointsAdded);\n\n                    // when oom check ability trigger\n                    if (source.isOutOfMana) {\n                        const awaitCooldownEvent = new AwaitCooldownEvent(this.simulationTime, source);\n                        this.eventQueue.addEvent(awaitCooldownEvent);\n                    }\n                }\n            } else {\n                const consumableTickEvent = new ConsumableTickEvent(\n                    this.simulationTime + HOT_TICK_INTERVAL,\n                    source,\n                    consumable,\n                    consumable.recoveryDuration / HOT_TICK_INTERVAL,\n                    1\n                );\n                this.eventQueue.addEvent(consumableTickEvent);\n            }\n\n            for (const buff of consumable.buffs) {\n                const currentBuff = structuredClone(buff);\n                if (source.combatDetails.combatStats.drinkConcentration > 0 && consumable.catagoryHrid.includes('drink')) {\n                    currentBuff.ratioBoost *= 1 + source.combatDetails.combatStats.drinkConcentration;\n                    currentBuff.flatBoost *= 1 + source.combatDetails.combatStats.drinkConcentration;\n                    currentBuff.duration = currentBuff.duration / (1 + source.combatDetails.combatStats.drinkConcentration);\n                }\n                source.addBuff(currentBuff, this.simulationTime);\n                const checkBuffExpirationEvent = new CheckBuffExpirationEvent(\n                    this.simulationTime + currentBuff.duration,\n                    source\n                );\n                this.eventQueue.addEvent(checkBuffExpirationEvent);\n            }\n\n            return true;\n        }\n\n        canUseAbility(source, ability, oomCheck) {\n            if (source.combatDetails.currentHitpoints <= 0) {\n                return false;\n            }\n\n            if (source.combatDetails.currentManapoints < ability.manaCost) {\n                if (source.isPlayer && oomCheck) {\n                    this.simResult.addRanOutOfManaCount(source, true, this.simulationTime);\n                }\n                return false;\n            }\n            if (source.isPlayer && oomCheck) {\n                this.simResult.addRanOutOfManaCount(source, false, this.simulationTime);\n            }\n            return true;\n        }\n\n        tryUseAbility(source, ability) {\n            if (!this.canUseAbility(source, ability, true)) {\n                return false;\n            }\n\n            if (source.isPlayer) {\n                if (source.abilityManaCosts.has(ability.hrid)) {\n                    source.abilityManaCosts.set(ability.hrid, source.abilityManaCosts.get(ability.hrid) + ability.manaCost);\n                } else {\n                    source.abilityManaCosts.set(ability.hrid, ability.manaCost);\n                }\n            }\n\n            source.combatDetails.currentManapoints -= ability.manaCost;\n\n            ability.lastUsed = this.simulationTime;\n\n            source.combatDetails.combatStats.abilityHaste;\n            ability.cooldownDuration;\n\n            const todoAbilities = [ability];\n\n            if (source.combatDetails.combatStats.blaze > 0 && Math.random() < source.combatDetails.combatStats.blaze) {\n                todoAbilities.push(new Ability('blaze'));\n            }\n\n            if (source.combatDetails.combatStats.bloom > 0 && Math.random() < source.combatDetails.combatStats.bloom) {\n                todoAbilities.push(new Ability('bloom'));\n            }\n\n            for (const todoAbility of todoAbilities) {\n                for (const abilityEffect of todoAbility.abilityEffects) {\n                    switch (abilityEffect.effectType) {\n                        case '/ability_effect_types/buff':\n                            this.processAbilityBuffEffect(source, todoAbility, abilityEffect);\n                            break;\n                        case '/ability_effect_types/damage':\n                            this.processAbilityDamageEffect(source, todoAbility, abilityEffect);\n                            break;\n                        case '/ability_effect_types/heal':\n                            this.processAbilityHealEffect(source, todoAbility, abilityEffect);\n                            break;\n                        case '/ability_effect_types/spend_hp':\n                            this.processAbilitySpendHpEffect(source, todoAbility, abilityEffect);\n                            break;\n                        case '/ability_effect_types/revive':\n                            this.processAbilityReviveEffect(source, todoAbility, abilityEffect);\n                            break;\n                        case '/ability_effect_types/promote':\n                            this.eventQueue.clearEventsForUnit(source);\n                            source = this.processAbilityPromoteEffect(source, todoAbility, abilityEffect);\n                            this.addNextAttackEvent(source);\n                            break;\n                        default:\n                            throw new Error(\n                                'Unsupported effect type for ability: ' +\n                                    todoAbility.hrid +\n                                    ' effectType: ' +\n                                    abilityEffect.effectType\n                            );\n                    }\n                }\n            }\n\n            if (source.combatDetails.combatStats.ripple > 0 && Math.random() < source.combatDetails.combatStats.ripple) {\n                const manapointsAdded = source.addManapoints(10);\n                this.simResult.addManapointsGained(source, 'ripple', manapointsAdded);\n                for (const ab of source.abilities) {\n                    if (ab && ab.lastUsed) {\n                        const remainingCooldown = ab.lastUsed + ab.cooldownDuration - this.simulationTime;\n                        if (remainingCooldown > 0) {\n                            ab.lastUsed = Math.max(ab.lastUsed - ONE_SECOND * 2, this.simulationTime - ab.cooldownDuration);\n                        }\n                    }\n                }\n            }\n\n            this.addNextAttackEvent(source);\n\n            // Could die from reflect damage\n            if (source.combatDetails.currentHitpoints === 0) {\n                this.eventQueue.clearEventsForUnit(source);\n                this.simResult.addDeath(source);\n                if (!source.isPlayer) {\n                    this.simResult.updateTimeSpentAlive(source.hrid, false, this.simulationTime);\n                }\n            }\n\n            this.checkEncounterEnd();\n\n            return true;\n        }\n\n        processAbilityBuffEffect(source, ability, abilityEffect) {\n            if (abilityEffect.targetType === 'allAllies') {\n                const targets = source.isPlayer ? this.players : this.enemies;\n                for (const target of targets.filter((unit) => unit && unit.combatDetails.currentHitpoints > 0)) {\n                    for (const buff of abilityEffect.buffs) {\n                        if (ability.isSpecialAbility && buff.multiplierForSkillHrid && buff.multiplierPerSkillLevel > 0) {\n                            const multiplier =\n                                1.0 +\n                                source.combatDetails[buff.multiplierForSkillHrid.split('/')[2] + 'Level'] *\n                                    buff.multiplierPerSkillLevel;\n                            const currentBuff = structuredClone(buff);\n                            currentBuff.flatBoost *= multiplier;\n                            currentBuff.ratioBoost *= multiplier;\n                            target.addBuff(currentBuff, this.simulationTime);\n                        } else {\n                            target.addBuff(buff, this.simulationTime);\n                        }\n                        const checkBuffExpirationEvent = new CheckBuffExpirationEvent(\n                            this.simulationTime + buff.duration,\n                            target\n                        );\n                        this.eventQueue.addEvent(checkBuffExpirationEvent);\n                    }\n                }\n                return;\n            }\n\n            if (abilityEffect.targetType !== 'self') {\n                throw new Error('Unsupported target type for buff ability effect: ' + ability.hrid);\n            }\n\n            for (const buff of abilityEffect.buffs) {\n                source.addBuff(buff, this.simulationTime);\n                const checkBuffExpirationEvent = new CheckBuffExpirationEvent(this.simulationTime + buff.duration, source);\n                this.eventQueue.addEvent(checkBuffExpirationEvent);\n            }\n        }\n\n        processAbilityDamageEffect(source, ability, abilityEffect) {\n            let targets;\n            switch (abilityEffect.targetType) {\n                case 'enemy':\n                case 'allEnemies':\n                    targets = source.isPlayer ? this.enemies : this.players;\n                    break;\n                default:\n                    throw new Error('Unsupported target type for damage ability effect: ' + ability.hrid);\n            }\n\n            if (!targets) {\n                return;\n            }\n\n            const avoidTarget = [];\n\n            let isSkipParry = false;\n\n            for (let target of targets.filter((unit) => unit && unit.combatDetails.currentHitpoints > 0)) {\n                let parryTarget;\n                if (!isSkipParry) {\n                    parryTarget = this.checkParry(targets);\n                    isSkipParry = true; // parry check only once on first target\n                }\n\n                if (parryTarget) {\n                    const tempTarget = source;\n                    const tempSource = parryTarget;\n\n                    const attackResult = CombatUtilities.processAttack(tempSource, tempTarget);\n\n                    this.simResult.addAttack(\n                        tempSource,\n                        tempTarget,\n                        'parry',\n                        attackResult.didHit ? attackResult.damageDone : 'miss'\n                    );\n\n                    if (attackResult.lifeStealHeal > 0) {\n                        this.simResult.addHitpointsGained(tempSource, 'lifesteal', attackResult.lifeStealHeal);\n                    }\n\n                    if (attackResult.manaLeechMana > 0) {\n                        this.simResult.addManapointsGained(tempSource, 'manaLeech', attackResult.manaLeechMana);\n                    }\n\n                    if (attackResult.thornDamageDone > 0) {\n                        this.simResult.addAttack(\n                            tempTarget,\n                            tempSource,\n                            attackResult.thornType,\n                            attackResult.thornDamageDone\n                        );\n                    }\n                    if (tempTarget.combatDetails.combatStats.retaliation > 0) {\n                        this.simResult.addAttack(\n                            tempTarget,\n                            tempSource,\n                            'retaliation',\n                            attackResult.retaliationDamageDone > 0 ? attackResult.retaliationDamageDone : 'miss'\n                        );\n                    }\n\n                    if (tempTarget.combatDetails.currentHitpoints === 0) {\n                        this.eventQueue.clearEventsForUnit(tempTarget);\n                        this.simResult.addDeath(tempTarget);\n                        if (!tempTarget.isPlayer) {\n                            this.simResult.updateTimeSpentAlive(tempTarget.hrid, false, this.simulationTime);\n                        }\n                    }\n\n                    // Could die from reflect damage\n                    if (\n                        tempSource.combatDetails.currentHitpoints === 0 &&\n                        (attackResult.thornDamageDone !== 0 || attackResult.retaliationDamageDone !== 0)\n                    ) {\n                        this.eventQueue.clearEventsForUnit(tempSource);\n                        this.simResult.addDeath(tempSource);\n                        if (!tempSource.isPlayer) {\n                            this.simResult.updateTimeSpentAlive(tempSource.hrid, false, this.simulationTime);\n                        }\n                    }\n                } else {\n                    targets = targets.filter(\n                        (unit) => unit && !avoidTarget.includes(unit.hrid) && unit.combatDetails.currentHitpoints > 0\n                    );\n                    if (!source.isPlayer && targets.length > 0 && abilityEffect.targetType === 'enemy') {\n                        let cumulativeThreat = 0;\n                        const cumulativeRanges = [];\n                        targets.forEach((player) => {\n                            const playerThreat = player.combatDetails.combatStats.threat;\n                            cumulativeThreat += playerThreat;\n                            cumulativeRanges.push({\n                                player: player,\n                                rangeStart: cumulativeThreat - playerThreat,\n                                rangeEnd: cumulativeThreat,\n                            });\n                        });\n                        const randomValueHit = Math.random() * cumulativeThreat;\n                        target = cumulativeRanges.find(\n                            (range) => randomValueHit >= range.rangeStart && randomValueHit < range.rangeEnd\n                        ).player;\n                        avoidTarget.push(target.hrid);\n                    }\n                    if (targets.length <= 0) {\n                        break;\n                    }\n\n                    const attackResult = CombatUtilities.processAttack(source, target, abilityEffect);\n\n                    if (this.zone.isDungeon && target.isPlayer && attackResult.didHit && attackResult.damageDone > 0) {\n                        const log = this.generateCombatLog(source, ability.hrid, target, attackResult);\n                        this.addToWipeLogs(log);\n                    }\n\n                    if (attackResult.hpDrain > 0) {\n                        this.simResult.addHitpointsGained(source, ability.hrid, attackResult.hpDrain);\n                    }\n\n                    if (attackResult.didHit && abilityEffect.buffs) {\n                        for (const buff of abilityEffect.buffs) {\n                            target.addBuff(buff, this.simulationTime);\n                            const checkBuffExpirationEvent = new CheckBuffExpirationEvent(\n                                this.simulationTime + buff.duration,\n                                target\n                            );\n                            this.eventQueue.addEvent(checkBuffExpirationEvent);\n                        }\n                    }\n\n                    if (abilityEffect.damageOverTimeRatio > 0 && attackResult.damageDone > 0) {\n                        const damageOverTimeEvent = new DamageOverTimeEvent(\n                            this.simulationTime + DOT_TICK_INTERVAL,\n                            source,\n                            target,\n                            attackResult.damageDone * abilityEffect.damageOverTimeRatio,\n                            abilityEffect.damageOverTimeDuration / DOT_TICK_INTERVAL,\n                            1,\n                            abilityEffect.combatStyleHrid\n                        );\n                        this.eventQueue.addEvent(damageOverTimeEvent);\n                    }\n\n                    if (\n                        attackResult.didHit &&\n                        abilityEffect.stunChance > 0 &&\n                        Math.random() < (abilityEffect.stunChance * 100) / (100 + target.combatDetails.combatStats.tenacity)\n                    ) {\n                        target.isStunned = true;\n                        target.stunExpireTime = this.simulationTime + abilityEffect.stunDuration;\n                        // Clear all 3 event types via indexed lookups instead of O(n) clearMatching\n                        this.eventQueue.clearByTypeAndSource(AutoAttackEvent.type, target);\n                        this.eventQueue.clearByTypeAndSource(AbilityCastEndEvent.type, target);\n                        this.eventQueue.clearByTypeAndSource(StunExpirationEvent.type, target);\n                        const stunExpirationEvent = new StunExpirationEvent(target.stunExpireTime, target);\n                        this.eventQueue.addEvent(stunExpirationEvent);\n                    }\n\n                    if (\n                        attackResult.didHit &&\n                        abilityEffect.blindChance > 0 &&\n                        Math.random() <\n                            (abilityEffect.blindChance * 100) / (100 + target.combatDetails.combatStats.tenacity)\n                    ) {\n                        target.isBlinded = true;\n                        target.blindExpireTime = this.simulationTime + abilityEffect.blindDuration;\n                        this.eventQueue.clearByTypeAndSource(BlindExpirationEvent.type, target);\n                        if (this.eventQueue.clearByTypeAndSource(AutoAttackEvent.type, target)) {\n                            this.addNextAttackEvent(target);\n                        }\n                        const blindExpirationEvent = new BlindExpirationEvent(target.blindExpireTime, target);\n                        this.eventQueue.addEvent(blindExpirationEvent);\n                    }\n\n                    if (\n                        attackResult.didHit &&\n                        abilityEffect.silenceChance > 0 &&\n                        Math.random() <\n                            (abilityEffect.silenceChance * 100) / (100 + target.combatDetails.combatStats.tenacity)\n                    ) {\n                        target.isSilenced = true;\n                        target.silenceExpireTime = this.simulationTime + abilityEffect.silenceDuration;\n                        this.eventQueue.clearByTypeAndSource(SilenceExpirationEvent.type, target);\n                        if (this.eventQueue.clearByTypeAndSource(AbilityCastEndEvent.type, target)) {\n                            this.addNextAttackEvent(target);\n                        }\n                        const silenceExpirationEvent = new SilenceExpirationEvent(target.silenceExpireTime, target);\n                        this.eventQueue.addEvent(silenceExpirationEvent);\n                    }\n\n                    if (attackResult.didHit && source.combatDetails.combatStats.curse > 0) {\n                        const curseExpireTime = 15000000000;\n                        const currentCurseEvent = this.eventQueue.getByTypeAndSource(CurseExpirationEvent.type, target);\n                        let currentCurseAmount = 0;\n                        if (currentCurseEvent) currentCurseAmount = currentCurseEvent.curseAmount;\n                        this.eventQueue.clearByTypeAndSource(CurseExpirationEvent.type, target);\n\n                        const curseExpirationEvent = new CurseExpirationEvent(\n                            this.simulationTime + curseExpireTime,\n                            currentCurseAmount,\n                            target\n                        );\n                        const curseBuff = {\n                            uniqueHrid: '/buff_uniques/curse',\n                            typeHrid: '/buff_types/damage_taken',\n                            ratioBoost: 0,\n                            ratioBoostLevelBonus: 0,\n                            flatBoost: source.combatDetails.combatStats.curse * curseExpirationEvent.curseAmount,\n                            flatBoostLevelBonus: 0,\n                            startTime: '0001-01-01T00:00:00Z',\n                            duration: curseExpireTime,\n                        };\n                        target.addBuff(curseBuff);\n                        this.eventQueue.addEvent(curseExpirationEvent);\n                    }\n\n                    if (target.combatDetails.combatStats.weaken > 0) {\n                        const weakenExpireTime = 15000000000;\n                        source.weakenExpireTime = this.simulationTime + weakenExpireTime;\n                        const currentWeakenEvent = this.eventQueue.getByTypeAndSource(WeakenExpirationEvent.type, source);\n                        let weakenAmount = 0;\n                        if (currentWeakenEvent) weakenAmount = currentWeakenEvent.weakenAmount;\n                        this.eventQueue.clearByTypeAndSource(WeakenExpirationEvent.type, source);\n                        const weakenExpirationEvent = new WeakenExpirationEvent(\n                            this.simulationTime + weakenExpireTime,\n                            weakenAmount,\n                            source\n                        );\n                        const weakenBuff = {\n                            uniqueHrid: '/buff_uniques/weaken',\n                            typeHrid: '/buff_types/damage',\n                            ratioBoost: -1 * target.combatDetails.combatStats.weaken * weakenExpirationEvent.weakenAmount,\n                            ratioBoostLevelBonus: 0,\n                            flatBoost: 0,\n                            flatBoostLevelBonus: 0,\n                            startTime: '0001-01-01T00:00:00Z',\n                            duration: weakenExpireTime,\n                        };\n                        source.addBuff(weakenBuff);\n                        this.eventQueue.addEvent(weakenExpirationEvent);\n                    }\n\n                    if (source.combatDetails.combatStats.fury > 0) {\n                        this._processFuryUpdate(source, attackResult.didHit);\n                    }\n\n                    this.simResult.addAttack(\n                        source,\n                        target,\n                        ability.hrid,\n                        attackResult.didHit ? attackResult.damageDone : 'miss'\n                    );\n\n                    if (attackResult.thornDamageDone > 0) {\n                        this.simResult.addAttack(target, source, attackResult.thornType, attackResult.thornDamageDone);\n                    }\n                    if (this.zone.isDungeon && attackResult.thornDamageDone > 0 && source.isPlayer) {\n                        const log = this.buildCombatLog(\n                            target,\n                            attackResult.thornType,\n                            source,\n                            attackResult.thornDamageDone\n                        );\n                        this.addToWipeLogs(log);\n                    }\n\n                    if (target.combatDetails.combatStats.retaliation > 0) {\n                        this.simResult.addAttack(\n                            target,\n                            source,\n                            'retaliation',\n                            attackResult.retaliationDamageDone > 0 ? attackResult.retaliationDamageDone : 'miss'\n                        );\n                    }\n                    if (this.zone.isDungeon && attackResult.retaliationDamageDone > 0 && source.isPlayer) {\n                        const log = this.buildCombatLog(target, 'retaliation', source, attackResult.retaliationDamageDone);\n                        this.addToWipeLogs(log);\n                    }\n\n                    if (target.combatDetails.currentHitpoints === 0) {\n                        this.eventQueue.clearEventsForUnit(target);\n                        this.simResult.addDeath(target);\n                        if (!target.isPlayer) {\n                            this.simResult.updateTimeSpentAlive(target.hrid, false, this.simulationTime);\n                        }\n                    }\n\n                    if (attackResult.didHit && abilityEffect.pierceChance > Math.random()) {\n                        continue;\n                    }\n                }\n\n                if (parryTarget) {\n                    break;\n                }\n\n                if (abilityEffect.targetType === 'enemy') {\n                    break;\n                }\n            }\n        }\n\n        processAbilityHealEffect(source, ability, abilityEffect) {\n            if (abilityEffect.targetType === 'allAllies') {\n                const targets = source.isPlayer ? this.players : this.enemies;\n                for (const target of targets.filter((unit) => unit && unit.combatDetails.currentHitpoints > 0)) {\n                    const amountHealed = CombatUtilities.processHeal(source, abilityEffect, target);\n                    this.simResult.addHitpointsGained(target, ability.hrid, amountHealed);\n                }\n                return;\n            }\n\n            if (abilityEffect.targetType === 'lowestHpAlly') {\n                const targets = source.isPlayer ? this.players : this.enemies;\n                let healTarget;\n                for (const target of targets.filter((unit) => unit && unit.combatDetails.currentHitpoints > 0)) {\n                    if (!healTarget) {\n                        healTarget = target;\n                        continue;\n                    }\n                    if (\n                        target.combatDetails.currentHitpoints / target.combatDetails.maxHitpoints <\n                        healTarget.combatDetails.currentHitpoints / healTarget.combatDetails.maxHitpoints\n                    ) {\n                        healTarget = target;\n                    }\n                }\n\n                if (healTarget) {\n                    const amountHealed = CombatUtilities.processHeal(source, abilityEffect, healTarget);\n                    this.simResult.addHitpointsGained(healTarget, ability.hrid, amountHealed);\n                }\n                return;\n            }\n\n            if (abilityEffect.targetType !== 'self') {\n                throw new Error('Unsupported target type for heal ability effect: ' + ability.hrid);\n            }\n\n            const amountHealed = CombatUtilities.processHeal(source, abilityEffect, source);\n            this.simResult.addHitpointsGained(source, ability.hrid, amountHealed);\n        }\n\n        processAbilityReviveEffect(source, ability, abilityEffect) {\n            if (abilityEffect.targetType !== 'deadAlly') {\n                throw new Error('Unsupported target type for revive ability effect: ' + ability.hrid);\n            }\n\n            const targets = source.isPlayer ? this.players : this.enemies;\n            const reviveTarget = targets.find((unit) => unit && unit.combatDetails.currentHitpoints <= 0);\n\n            if (reviveTarget) {\n                this.eventQueue.clearByTypeAndHrid(PlayerRespawnEvent.type, reviveTarget.hrid);\n\n                reviveTarget.removeExpiredBuffs(this.simulationTime);\n\n                const amountHealed = CombatUtilities.processRevive(source, abilityEffect, reviveTarget);\n                this.simResult.addHitpointsGained(reviveTarget, ability.hrid, amountHealed);\n\n                this.addNextAttackEvent(reviveTarget);\n\n                if (!source.isPlayer) {\n                    this.simResult.updateTimeSpentAlive(reviveTarget.hrid, true, this.simulationTime);\n                }\n            }\n        }\n\n        processAbilityPromoteEffect(source, _ability, _abilityEffect) {\n            const promotionHrids = ['/monsters/enchanted_rook', '/monsters/enchanted_knight', '/monsters/enchanted_bishop'];\n            const randomPromotionIndex = Math.floor(Math.random() * promotionHrids.length);\n            return new Monster(promotionHrids[randomPromotionIndex], source.difficultyTier);\n        }\n\n        processAbilitySpendHpEffect(source, ability, abilityEffect) {\n            if (abilityEffect.targetType !== 'self') {\n                throw new Error('Unsupported target type for spend hp ability effect: ' + ability.hrid);\n            }\n\n            const hpSpent = CombatUtilities.processSpendHp(source, abilityEffect);\n            this.simResult.addHitpointsSpent(source, ability.hrid, hpSpent);\n        }\n    }\n\n    const LABYRINTH_TIMEOUT = 120 * 1e9; // 120 seconds in nanoseconds\n\n    /**\n     * Labyrinth encounter manager.\n     * Each encounter is a single monster at a given roomLevel.\n     * Timeout (120s) or player death = loss; enemy killed = win.\n     */\n    class Labyrinth {\n        constructor(monsterHrid, roomLevel, crateHrids = []) {\n            this.monsterHrid = monsterHrid;\n            this.hrid = monsterHrid;\n            this.roomLevel = roomLevel;\n            this.buffs = [];\n            this.attemptCount = 0;\n            this.encounterStartTime = 0;\n\n            // Resolve crate buffs from game data\n            if (crateHrids.length > 0) {\n                const gameData = getGameData();\n                const crateMap = gameData.labyrinthCrateDetailMap;\n                if (crateMap) {\n                    for (const hrid of crateHrids) {\n                        if (crateMap[hrid]) {\n                            this.buffs = this.buffs.concat(crateMap[hrid]);\n                        }\n                    }\n                }\n            }\n        }\n\n        /**\n         * Spawn a new monster for the next encounter.\n         * @returns {Monster[]} Single-element array with the scaled monster\n         */\n        getMonster() {\n            this.attemptCount++;\n            return [new Monster(this.monsterHrid, 0, this.roomLevel)];\n        }\n\n        /**\n         * Record when a new encounter begins.\n         * @param {number} time - Current simulation time in nanoseconds\n         */\n        updateEncounterStartTime(time) {\n            this.encounterStartTime = time;\n        }\n\n        /**\n         * Check if the current encounter has exceeded the 120s timeout.\n         * @param {number} currentTime - Current simulation time in nanoseconds\n         * @returns {boolean}\n         */\n        checkTimeout(currentTime) {\n            return currentTime - this.encounterStartTime > LABYRINTH_TIMEOUT;\n        }\n    }\n\n    class Consumable {\n        constructor(hrid, triggers = null) {\n            this.hrid = hrid;\n\n            const itemDetailMap = getGameData().itemDetailMap;\n            const gameConsumable = itemDetailMap[this.hrid];\n            if (!gameConsumable) {\n                throw new Error('No consumable found for hrid: ' + this.hrid);\n            }\n\n            this.cooldownDuration = gameConsumable.consumableDetail.cooldownDuration;\n            this.hitpointRestore = gameConsumable.consumableDetail.hitpointRestore;\n            this.manapointRestore = gameConsumable.consumableDetail.manapointRestore;\n            this.recoveryDuration = gameConsumable.consumableDetail.recoveryDuration;\n            this.catagoryHrid = gameConsumable.categoryHrid;\n\n            this.buffs = [];\n            if (gameConsumable.consumableDetail.buffs) {\n                for (const consumableBuff of gameConsumable.consumableDetail.buffs) {\n                    const buff = new Buff(consumableBuff);\n                    this.buffs.push(buff);\n                }\n            }\n\n            if (triggers) {\n                this.triggers = triggers;\n            } else {\n                this.triggers = [];\n                for (const defaultTrigger of gameConsumable.consumableDetail.defaultCombatTriggers) {\n                    const trigger = new Trigger(\n                        defaultTrigger.dependencyHrid,\n                        defaultTrigger.conditionHrid,\n                        defaultTrigger.comparatorHrid,\n                        defaultTrigger.value\n                    );\n                    this.triggers.push(trigger);\n                }\n            }\n\n            this.lastUsed = Number.MIN_SAFE_INTEGER;\n        }\n\n        static createFromDTO(dto) {\n            const triggers = dto.triggers ? dto.triggers.map((trigger) => Trigger.createFromDTO(trigger)) : null;\n            const consumable = new Consumable(dto.hrid, triggers);\n\n            return consumable;\n        }\n\n        shouldTrigger(currentTime, source, target, friendlies, enemies) {\n            if (source.isStunned) {\n                return false;\n            }\n            let consumableHaste;\n            if (this.catagoryHrid.includes('food')) {\n                consumableHaste = source.combatDetails.combatStats.foodHaste;\n            } else {\n                consumableHaste = source.combatDetails.combatStats.drinkConcentration;\n            }\n            let cooldownDuration = this.cooldownDuration;\n            if (consumableHaste > 0) {\n                cooldownDuration = cooldownDuration / (1 + consumableHaste);\n            }\n\n            if (this.lastUsed + cooldownDuration > currentTime) {\n                return false;\n            }\n\n            if (this.triggers.length === 0) {\n                return true;\n            }\n\n            let shouldTrigger = true;\n            for (const trigger of this.triggers) {\n                if (!trigger.isActive(source, target, friendlies, enemies, currentTime)) {\n                    shouldTrigger = false;\n                }\n            }\n\n            return shouldTrigger;\n        }\n    }\n\n    class Equipment {\n        constructor(hrid, enhancementLevel) {\n            this.hrid = hrid;\n            const gameData = getGameData();\n            const gameItem = gameData.itemDetailMap[this.hrid];\n            if (!gameItem) {\n                throw new Error('No equipment found for hrid: ' + this.hrid);\n            }\n            this.gameItem = gameItem;\n            this.enhancementLevel = enhancementLevel;\n        }\n\n        static createFromDTO(dto) {\n            const equipment = new Equipment(dto.hrid, dto.enhancementLevel);\n\n            return equipment;\n        }\n\n        getCombatStat(combatStat) {\n            const gameData = getGameData();\n            const multiplier = gameData.enhancementLevelTotalBonusMultiplierTable[this.enhancementLevel];\n            if (this.gameItem.equipmentDetail.combatStats[combatStat]) {\n                const enhancementBonus = this.gameItem.equipmentDetail.combatEnhancementBonuses[combatStat] || 0;\n                const stat = this.gameItem.equipmentDetail.combatStats[combatStat] + multiplier * enhancementBonus;\n                return stat;\n            }\n            return 0;\n        }\n\n        getCombatStyle() {\n            return this.gameItem.equipmentDetail.combatStats.combatStyleHrids[0];\n        }\n\n        getDamageType() {\n            return this.gameItem.equipmentDetail.combatStats.damageType;\n        }\n\n        getPrimaryTraining() {\n            return this.gameItem.equipmentDetail.combatStats.primaryTraining;\n        }\n\n        getFocusTraining() {\n            return this.gameItem.equipmentDetail.combatStats.focusTraining;\n        }\n    }\n\n    class HouseRoom {\n        constructor(hrid, level) {\n            this.hrid = hrid;\n            this.level = level;\n\n            const gameData = getGameData();\n            const gameHouseRoom = gameData.houseRoomDetailMap[this.hrid];\n            if (!gameHouseRoom) {\n                throw new Error('No house room found for hrid: ' + this.hrid);\n            }\n\n            this.buffs = [];\n            if (gameHouseRoom.actionBuffs) {\n                for (const actionBuff of gameHouseRoom.actionBuffs) {\n                    const buff = new Buff(actionBuff, level);\n                    this.buffs.push(buff);\n                }\n            }\n            if (gameHouseRoom.globalBuffs) {\n                for (const globalBuff of gameHouseRoom.globalBuffs) {\n                    const buff = new Buff(globalBuff, level);\n                    this.buffs.push(buff);\n                }\n            }\n        }\n    }\n\n    class Player extends CombatUnit {\n        equipment = {\n            '/equipment_types/head': null,\n            '/equipment_types/body': null,\n            '/equipment_types/legs': null,\n            '/equipment_types/feet': null,\n            '/equipment_types/hands': null,\n            '/equipment_types/main_hand': null,\n            '/equipment_types/two_hand': null,\n            '/equipment_types/off_hand': null,\n            '/equipment_types/pouch': null,\n            '/equipment_types/back': null,\n            '/equipment_types/neck': null,\n            '/equipment_types/earrings': null,\n            '/equipment_types/ring': null,\n            '/equipment_types/charm': null,\n        };\n\n        constructor() {\n            super();\n\n            this.isPlayer = true;\n            this.hrid = 'player';\n        }\n\n        static createFromDTO(dto) {\n            const player = new Player();\n\n            player.staminaLevel = dto.staminaLevel;\n            player.intelligenceLevel = dto.intelligenceLevel;\n            player.attackLevel = dto.attackLevel;\n            player.meleeLevel = dto.meleeLevel;\n            player.defenseLevel = dto.defenseLevel;\n            player.rangedLevel = dto.rangedLevel;\n            player.magicLevel = dto.magicLevel;\n\n            player.hrid = dto.hrid;\n\n            for (const [key, value] of Object.entries(dto.equipment)) {\n                player.equipment[key] = value ? Equipment.createFromDTO(value) : null;\n            }\n\n            player.food = dto.food.map((food) => (food ? Consumable.createFromDTO(food) : null));\n            player.drinks = dto.drinks.map((drink) => (drink ? Consumable.createFromDTO(drink) : null));\n            player.abilities = dto.abilities.map((ability) => (ability ? Ability.createFromDTO(ability) : null));\n            Object.entries(dto.houseRooms).forEach((houseRoom) => {\n                if (houseRoom[1] > 0) {\n                    player.houseRooms.push(new HouseRoom(houseRoom[0], houseRoom[1]));\n                }\n            });\n\n            player.debuffOnLevelGap = dto.debuffOnLevelGap;\n\n            return player;\n        }\n\n        updateCombatDetails() {\n            if (this.equipment['/equipment_types/main_hand']) {\n                this.combatDetails.combatStats.combatStyleHrid =\n                    this.equipment['/equipment_types/main_hand'].getCombatStyle();\n                this.combatDetails.combatStats.damageType = this.equipment['/equipment_types/main_hand'].getDamageType();\n                this.combatDetails.combatStats.attackInterval =\n                    this.equipment['/equipment_types/main_hand'].getCombatStat('attackInterval');\n                this.combatDetails.combatStats.primaryTraining =\n                    this.equipment['/equipment_types/main_hand'].getPrimaryTraining();\n            } else if (this.equipment['/equipment_types/two_hand']) {\n                this.combatDetails.combatStats.combatStyleHrid =\n                    this.equipment['/equipment_types/two_hand'].getCombatStyle();\n                this.combatDetails.combatStats.damageType = this.equipment['/equipment_types/two_hand'].getDamageType();\n                this.combatDetails.combatStats.attackInterval =\n                    this.equipment['/equipment_types/two_hand'].getCombatStat('attackInterval');\n                this.combatDetails.combatStats.primaryTraining =\n                    this.equipment['/equipment_types/two_hand'].getPrimaryTraining();\n            } else {\n                this.combatDetails.combatStats.combatStyleHrid = '/combat_styles/smash';\n                this.combatDetails.combatStats.damageType = '/damage_types/physical';\n                this.combatDetails.combatStats.attackInterval = 3000000000;\n                this.combatDetails.combatStats.primaryTraining = '/skills/melee';\n            }\n\n            if (this.equipment['/equipment_types/charm']) {\n                this.combatDetails.combatStats.focusTraining = this.equipment['/equipment_types/charm'].getFocusTraining();\n            } else {\n                this.combatDetails.combatStats.focusTraining = '';\n            }\n\n            [\n                'stabAccuracy',\n                'slashAccuracy',\n                'smashAccuracy',\n                'rangedAccuracy',\n                'magicAccuracy',\n                'stabDamage',\n                'slashDamage',\n                'smashDamage',\n                'rangedDamage',\n                'magicDamage',\n                'defensiveDamage',\n                'taskDamage',\n                'physicalAmplify',\n                'waterAmplify',\n                'natureAmplify',\n                'fireAmplify',\n                'healingAmplify',\n                'stabEvasion',\n                'slashEvasion',\n                'smashEvasion',\n                'rangedEvasion',\n                'magicEvasion',\n                'armor',\n                'waterResistance',\n                'natureResistance',\n                'fireResistance',\n                'maxHitpoints',\n                'maxManapoints',\n                'lifeSteal',\n                'hpRegenPer10',\n                'mpRegenPer10',\n                'physicalThorns',\n                'elementalThorns',\n                'combatDropRate',\n                'combatRareFind',\n                'combatDropQuantity',\n                'combatExperience',\n                'criticalRate',\n                'criticalDamage',\n                'armorPenetration',\n                'waterPenetration',\n                'naturePenetration',\n                'firePenetration',\n                'abilityHaste',\n                'tenacity',\n                'manaLeech',\n                'castSpeed',\n                'threat',\n                'parry',\n                'mayhem',\n                'pierce',\n                'curse',\n                'fury',\n                'weaken',\n                'ripple',\n                'bloom',\n                'blaze',\n                'attackSpeed',\n                'foodHaste',\n                'drinkConcentration',\n                'autoAttackDamage',\n                'abilityDamage',\n                'staminaExperience',\n                'intelligenceExperience',\n                'attackExperience',\n                'defenseExperience',\n                'meleeExperience',\n                'rangedExperience',\n                'magicExperience',\n                'retaliation',\n                'maxHitpointsRatio',\n                'maxManapointsRatio',\n            ].forEach((stat) => {\n                this.combatDetails.combatStats[stat] = Object.values(this.equipment)\n                    .filter((equipment) => equipment != null)\n                    .map((equipment) => equipment.getCombatStat(stat))\n                    .reduce((prev, cur) => prev + cur, 0);\n            });\n\n            if (this.equipment['/equipment_types/pouch']) {\n                this.combatDetails.combatStats.foodSlots =\n                    1 + this.equipment['/equipment_types/pouch'].getCombatStat('foodSlots');\n                this.combatDetails.combatStats.drinkSlots =\n                    1 + this.equipment['/equipment_types/pouch'].getCombatStat('drinkSlots');\n            } else {\n                this.combatDetails.combatStats.foodSlots = 1;\n                this.combatDetails.combatStats.drinkSlots = 1;\n            }\n\n            super.updateCombatDetails();\n        }\n    }\n\n    class Zone {\n        constructor(hrid, difficultyTier) {\n            this.hrid = hrid;\n            this.difficultyTier = difficultyTier;\n\n            const actionDetailMap = getGameData().actionDetailMap;\n            const gameZone = actionDetailMap[this.hrid];\n            this.monsterSpawnInfo = gameZone.combatZoneInfo.fightInfo;\n            this.dungeonSpawnInfo = gameZone.combatZoneInfo.dungeonInfo;\n            this.encountersKilled = 1;\n            this.buffs = gameZone.buffs;\n            this.isDungeon = gameZone.combatZoneInfo.isDungeon;\n            this.dungeonsCompleted = 0;\n            this.dungeonsFailed = 0;\n            this.finalWave = false;\n\n            if (this.monsterSpawnInfo) {\n                this.monsterSpawnInfo.battlesPerBoss = 10;\n            }\n        }\n\n        getRandomEncounter() {\n            if (!this.monsterSpawnInfo) {\n                return [];\n            }\n\n            if (this.monsterSpawnInfo.bossSpawns && this.encountersKilled === this.monsterSpawnInfo.battlesPerBoss) {\n                this.encountersKilled = 1;\n                return this.monsterSpawnInfo.bossSpawns.map(\n                    (monster) => new Monster(monster.combatMonsterHrid, monster.difficultyTier + this.difficultyTier)\n                );\n            }\n\n            if (!this.monsterSpawnInfo.randomSpawnInfo || !this.monsterSpawnInfo.randomSpawnInfo.spawns) {\n                this.encountersKilled++;\n                return [];\n            }\n\n            const totalWeight = this.monsterSpawnInfo.randomSpawnInfo.spawns.reduce((prev, cur) => prev + cur.rate, 0);\n\n            const encounterHrids = [];\n            let totalStrength = 0;\n\n            outer: for (let i = 0; i < this.monsterSpawnInfo.randomSpawnInfo.maxSpawnCount; i++) {\n                const randomWeight = totalWeight * Math.random();\n                let cumulativeWeight = 0;\n\n                for (const spawn of this.monsterSpawnInfo.randomSpawnInfo.spawns) {\n                    cumulativeWeight += spawn.rate;\n                    if (randomWeight <= cumulativeWeight) {\n                        totalStrength += spawn.strength;\n\n                        if (totalStrength <= this.monsterSpawnInfo.randomSpawnInfo.maxTotalStrength) {\n                            encounterHrids.push({ hrid: spawn.combatMonsterHrid, difficultyTier: spawn.difficultyTier });\n                        } else {\n                            break outer;\n                        }\n                        break;\n                    }\n                }\n            }\n            this.encountersKilled++;\n            return encounterHrids.map((hrid) => new Monster(hrid.hrid, hrid.difficultyTier + this.difficultyTier));\n        }\n\n        failWave() {\n            this.dungeonsFailed++;\n            this.encountersKilled = 1;\n        }\n\n        getNextWave() {\n            if (this.encountersKilled > this.dungeonSpawnInfo.maxWaves) {\n                this.dungeonsCompleted++;\n                this.encountersKilled = 1;\n            }\n\n            const waveNum = this.encountersKilled;\n            const fixedSpawns = this.dungeonSpawnInfo.fixedSpawnsMap[waveNum.toString()];\n\n            if (fixedSpawns) {\n                this.encountersKilled++;\n                return fixedSpawns.map(\n                    (monster) => new Monster(monster.combatMonsterHrid, monster.difficultyTier + this.difficultyTier)\n                );\n            }\n\n            // Random spawn path\n            const randomSpawnInfoMap = this.dungeonSpawnInfo.randomSpawnInfoMap;\n\n            if (!randomSpawnInfoMap || typeof randomSpawnInfoMap !== 'object') {\n                this.encountersKilled++;\n                return [];\n            }\n\n            const waveKeys = Object.keys(randomSpawnInfoMap)\n                .map(Number)\n                .sort((a, b) => a - b);\n\n            if (waveKeys.length === 0) {\n                this.encountersKilled++;\n                return [];\n            }\n\n            let monsterSpawns = null;\n\n            if (waveNum >= waveKeys[waveKeys.length - 1]) {\n                monsterSpawns = randomSpawnInfoMap[waveKeys[waveKeys.length - 1]];\n            } else {\n                for (let i = 0; i < waveKeys.length - 1; i++) {\n                    if (waveNum >= waveKeys[i] && waveNum < waveKeys[i + 1]) {\n                        monsterSpawns = randomSpawnInfoMap[waveKeys[i]];\n                        break;\n                    }\n                }\n            }\n\n            // Fallback to first available spawn info if no range matched\n            if (!monsterSpawns || !monsterSpawns.spawns) {\n                monsterSpawns = randomSpawnInfoMap[waveKeys[0]];\n            }\n\n            // Final safety — if still broken, skip wave instead of crashing\n            if (!monsterSpawns?.spawns) {\n                this.encountersKilled++;\n                return [];\n            }\n\n            const totalWeight = monsterSpawns.spawns.reduce((prev, cur) => prev + cur.rate, 0);\n\n            const encounterHrids = [];\n            let totalStrength = 0;\n\n            outer: for (let i = 0; i < monsterSpawns.maxSpawnCount; i++) {\n                const randomWeight = totalWeight * Math.random();\n                let cumulativeWeight = 0;\n\n                for (const spawn of monsterSpawns.spawns) {\n                    cumulativeWeight += spawn.rate;\n                    if (randomWeight <= cumulativeWeight) {\n                        totalStrength += spawn.strength;\n\n                        if (totalStrength <= monsterSpawns.maxTotalStrength) {\n                            encounterHrids.push({\n                                hrid: spawn.combatMonsterHrid,\n                                difficultyTier: spawn.difficultyTier,\n                            });\n                        } else {\n                            break outer;\n                        }\n                        break;\n                    }\n                }\n            }\n            this.encountersKilled++;\n            return encounterHrids.map((hrid) => new Monster(hrid.hrid, hrid.difficultyTier + this.difficultyTier));\n        }\n    }\n\n    /**\n     * Combat Simulator Worker Entry\n     *\n     * This file is bundled into a string at build time by the workerBundlePlugin\n     * and runs inside a Web Worker. It receives simulation parameters via\n     * postMessage and returns results.\n     */\n\n\n    onmessage = function (event) {\n        const { type, taskId } = event.data;\n\n        if (type !== 'start_simulation') return;\n\n        try {\n            const {\n                gameData,\n                playerDTOs,\n                zoneHrid,\n                difficultyTier,\n                simulationTimeLimit,\n                extraBuffs,\n                labyrinth: labyrinthData,\n            } = event.data;\n\n            // Set game data for the engine singleton\n            setGameData(gameData);\n\n            // Create Zone (used as fallback even in labyrinth mode for SimResult constructor)\n            const zone = new Zone(zoneHrid, difficultyTier);\n\n            // Create Labyrinth if specified\n            let labyrinth = null;\n            if (labyrinthData) {\n                labyrinth = new Labyrinth(labyrinthData.monsterHrid, labyrinthData.roomLevel, labyrinthData.crates || []);\n            }\n\n            // Create Players\n            const players = playerDTOs.map((dto) => {\n                const cloned = structuredClone(dto);\n                if (labyrinth) {\n                    cloned.food = cloned.food.map(() => null);\n                    cloned.drinks = cloned.drinks.map(() => null);\n                }\n                const player = Player.createFromDTO(cloned);\n                // Labyrinth: crate buffs go to zoneBuffs; otherwise use zone buffs\n                player.zoneBuffs = labyrinth ? labyrinth.buffs : zone.buffs;\n                player.extraBuffs = extraBuffs;\n                return player;\n            });\n\n            // Create simulator with progress callback\n            const combatSimulator = new CombatSimulator(\n                players,\n                zone,\n                (progressData) => {\n                    postMessage({\n                        type: 'progress',\n                        taskId,\n                        progress: Math.round(progressData.progress * 100),\n                    });\n                },\n                labyrinth\n            );\n\n            // Run simulation\n            const simResult = combatSimulator.simulate(simulationTimeLimit);\n\n            postMessage({\n                type: 'result',\n                taskId,\n                simResult,\n            });\n        } catch (error) {\n            postMessage({\n                type: 'error',\n                taskId,\n                error: error.message || String(error),\n            });\n        }\n    };\n\n})();\n";
-
     /**
-     * Combat Simulator Runner
-     * Runs simulations in parallel Web Workers for maximum speed.
-     *
-     * For large simulations (>= 20 hours), the time is split across multiple
-     * workers (up to 4) running in parallel. Results are merged by summing
-     * all additive counters. For small simulations, a single worker is used.
-     */
-
-
-    let workerBlobURL = null;
-    let activeWorkers = [];
-    let taskIdCounter = 0;
-    let pendingRejects = []; // Track reject functions to abort on cancel
-
-    /**
-     * Get or create the worker Blob URL (created once, reused).
-     * @returns {string}
-     */
-    function getWorkerURL() {
-        if (!workerBlobURL) {
-            const blob = new Blob([WORKER_SCRIPT], { type: 'application/javascript' });
-            workerBlobURL = URL.createObjectURL(blob);
-        }
-        return workerBlobURL;
-    }
-
-    /**
-     * Build extra buffs from community buffs and MooPass.
-     * @param {Object} communityBuffs - { mooPass, comExp, comDrop }
-     * @returns {Array<Object>}
-     */
-    function buildExtraBuffs(communityBuffs) {
-        const extraBuffs = [];
-
-        if (communityBuffs?.mooPass) {
-            extraBuffs.push({
-                uniqueHrid: '/buff_uniques/experience_moo_pass_buff',
-                typeHrid: '/buff_types/wisdom',
-                ratioBoost: 0,
-                ratioBoostLevelBonus: 0,
-                flatBoost: 0.05,
-                flatBoostLevelBonus: 0,
-                startTime: '0001-01-01T00:00:00Z',
-                duration: 0,
-            });
-        }
-
-        if (communityBuffs?.comExp > 0) {
-            extraBuffs.push({
-                uniqueHrid: '/buff_uniques/experience_community_buff',
-                typeHrid: '/buff_types/wisdom',
-                ratioBoost: 0,
-                ratioBoostLevelBonus: 0,
-                flatBoost: 0.005 * (communityBuffs.comExp - 1) + 0.2,
-                flatBoostLevelBonus: 0,
-                startTime: '0001-01-01T00:00:00Z',
-                duration: 0,
-            });
-        }
-
-        if (communityBuffs?.comDrop > 0) {
-            extraBuffs.push({
-                uniqueHrid: '/buff_uniques/combat_community_buff',
-                typeHrid: '/buff_types/combat_drop_quantity',
-                ratioBoost: 0,
-                ratioBoostLevelBonus: 0,
-                flatBoost: 0.005 * (communityBuffs.comDrop - 1) + 0.2,
-                flatBoostLevelBonus: 0,
-                startTime: '0001-01-01T00:00:00Z',
-                duration: 0,
-            });
-        }
-
-        return extraBuffs;
-    }
-
-    /**
-     * Run a single simulation chunk in a Worker.
-     * @param {Object} message - Worker message payload
-     * @param {Function} [onProgress] - Progress callback (0-100 for this chunk)
-     * @returns {Promise<Object>} SimResult
-     */
-    function runWorkerChunk(message, onProgress) {
-        return new Promise((resolve, reject) => {
-            const worker = new Worker(getWorkerURL());
-            activeWorkers.push(worker);
-            pendingRejects.push(reject);
-
-            const cleanup = () => {
-                activeWorkers = activeWorkers.filter((w) => w !== worker);
-                pendingRejects = pendingRejects.filter((r) => r !== reject);
-            };
-
-            worker.onmessage = (event) => {
-                const msg = event.data;
-                if (msg.taskId !== message.taskId) return;
-
-                if (msg.type === 'progress') {
-                    if (onProgress) onProgress(msg.progress);
-                } else if (msg.type === 'result') {
-                    worker.terminate();
-                    cleanup();
-                    resolve(msg.simResult);
-                } else if (msg.type === 'error') {
-                    worker.terminate();
-                    cleanup();
-                    reject(new Error(msg.error));
-                }
-            };
-
-            worker.onerror = (error) => {
-                worker.terminate();
-                cleanup();
-                reject(new Error(error.message || 'Worker error'));
-            };
-
-            worker.postMessage(message);
-        });
-    }
-
-    /**
-     * Merge multiple SimResults into one by summing all additive counters.
-     * @param {Array<Object>} results - Array of SimResult objects
-     * @returns {Object} Merged SimResult
-     */
-    function mergeSimResults(results) {
-        if (results.length === 1) return results[0];
-
-        const merged = structuredClone(results[0]);
-
-        for (let i = 1; i < results.length; i++) {
-            const r = results[i];
-
-            // Encounters
-            merged.encounters += r.encounters;
-
-            // Deaths (per unit hrid)
-            for (const [hrid, count] of Object.entries(r.deaths)) {
-                merged.deaths[hrid] = (merged.deaths[hrid] || 0) + count;
-            }
-
-            // Experience gained (per player → per skill)
-            for (const [playerHrid, skills] of Object.entries(r.experienceGained)) {
-                if (!merged.experienceGained[playerHrid]) {
-                    merged.experienceGained[playerHrid] = {};
-                }
-                for (const [skill, amount] of Object.entries(skills)) {
-                    merged.experienceGained[playerHrid][skill] = (merged.experienceGained[playerHrid][skill] || 0) + amount;
-                }
-            }
-
-            // Consumables used (per player → per item)
-            for (const [playerHrid, items] of Object.entries(r.consumablesUsed)) {
-                if (!merged.consumablesUsed[playerHrid]) {
-                    merged.consumablesUsed[playerHrid] = {};
-                }
-                for (const [itemHrid, count] of Object.entries(items)) {
-                    merged.consumablesUsed[playerHrid][itemHrid] =
-                        (merged.consumablesUsed[playerHrid][itemHrid] || 0) + count;
-                }
-            }
-
-            // Mana used (per player → per ability)
-            if (r.manaUsed) {
-                if (!merged.manaUsed) merged.manaUsed = {};
-                for (const [playerHrid, abilities] of Object.entries(r.manaUsed)) {
-                    if (!merged.manaUsed[playerHrid]) merged.manaUsed[playerHrid] = {};
-                    for (const [abilityHrid, amount] of Object.entries(abilities)) {
-                        merged.manaUsed[playerHrid][abilityHrid] = (merged.manaUsed[playerHrid][abilityHrid] || 0) + amount;
-                    }
-                }
-            }
-
-            // Hitpoints gained/spent (per unit → per source)
-            for (const field of ['hitpointsGained', 'manapointsGained', 'hitpointsSpent']) {
-                if (r[field]) {
-                    if (!merged[field]) merged[field] = {};
-                    for (const [unitHrid, sources] of Object.entries(r[field])) {
-                        if (!merged[field][unitHrid]) merged[field][unitHrid] = {};
-                        for (const [source, amount] of Object.entries(sources)) {
-                            merged[field][unitHrid][source] = (merged[field][unitHrid][source] || 0) + amount;
-                        }
-                    }
-                }
-            }
-
-            // Attacks (per source → per target → per ability)
-            if (r.attacks) {
-                if (!merged.attacks) merged.attacks = {};
-                for (const [sourceHrid, targets] of Object.entries(r.attacks)) {
-                    if (!merged.attacks[sourceHrid]) merged.attacks[sourceHrid] = {};
-                    for (const [targetHrid, abilities] of Object.entries(targets)) {
-                        if (!merged.attacks[sourceHrid][targetHrid]) {
-                            merged.attacks[sourceHrid][targetHrid] = {};
-                        }
-                        for (const [abilityName, stats] of Object.entries(abilities)) {
-                            if (!merged.attacks[sourceHrid][targetHrid][abilityName]) {
-                                merged.attacks[sourceHrid][targetHrid][abilityName] = { hit: 0, miss: 0 };
-                            }
-                            merged.attacks[sourceHrid][targetHrid][abilityName].hit += stats.hit || 0;
-                            merged.attacks[sourceHrid][targetHrid][abilityName].miss += stats.miss || 0;
-                        }
-                    }
-                }
-            }
-
-            // Dungeon stats
-            if (r.isDungeon) {
-                merged.dungeonsCompleted = (merged.dungeonsCompleted || 0) + (r.dungeonsCompleted || 0);
-                merged.dungeonsFailed = (merged.dungeonsFailed || 0) + (r.dungeonsFailed || 0);
-                merged.maxWaveReached = Math.max(merged.maxWaveReached || 0, r.maxWaveReached || 0);
-            }
-
-            // Simulated time
-            merged.simulatedTime = (merged.simulatedTime || 0) + (r.simulatedTime || 0);
-
-            // Time spent alive
-            if (r.timeSpentAlive) {
-                if (!merged.timeSpentAlive) merged.timeSpentAlive = [];
-                for (const entry of r.timeSpentAlive) {
-                    const existing = merged.timeSpentAlive.find((e) => e.name === entry.name);
-                    if (existing) {
-                        existing.timeSpentAlive += entry.timeSpentAlive;
-                        existing.count += entry.count;
-                    } else {
-                        merged.timeSpentAlive.push({ ...entry });
-                    }
-                }
-            }
-        }
-
-        return merged;
-    }
-
-    /**
-     * Run a combat simulation, parallelized across multiple Workers when beneficial.
-     * @param {Object} params
-     * @param {Object} params.gameData - Game data maps from buildGameDataPayload()
-     * @param {Array<Object>} params.playerDTOs - Player DTOs from buildAllPlayerDTOs()
-     * @param {string} params.zoneHrid - Zone HRID
-     * @param {number} params.difficultyTier - Difficulty tier (0+)
-     * @param {number} params.hours - Hours to simulate
-     * @param {Object} params.communityBuffs - { mooPass, comExp, comDrop }
-     * @param {Function} [onProgress] - Called with (percent: 0-100)
-     * @returns {Promise<Object>} Merged SimResult
-     */
-    async function runSimulation(params, onProgress) {
-        const { gameData, playerDTOs, zoneHrid, difficultyTier, hours, communityBuffs } = params;
-
-        const extraBuffs = buildExtraBuffs(communityBuffs);
-        const ONE_HOUR_NS = 3600 * 1e9;
-
-        // Cancel any previous run
-        cancelSimulation();
-        const workerCount =
-            1;
-
-        // Split hours across workers
-        const baseHours = Math.floor(hours / workerCount);
-        const remainder = hours - baseHours * workerCount;
-
-        const chunks = [];
-        for (let i = 0; i < workerCount; i++) {
-            const chunkHours = baseHours + (i < remainder ? 1 : 0);
-            chunks.push(chunkHours);
-        }
-
-        // Track per-worker progress
-        const workerProgress = new Array(workerCount).fill(0);
-
-        // Launch all workers in parallel
-        const promises = chunks.map((chunkHours, i) => {
-            const taskId = ++taskIdCounter;
-            const message = {
-                type: 'start_simulation',
-                taskId,
-                gameData,
-                playerDTOs,
-                zoneHrid,
-                difficultyTier,
-                simulationTimeLimit: chunkHours * ONE_HOUR_NS,
-                extraBuffs,
-            };
-
-            return runWorkerChunk(message, (percent) => {
-                workerProgress[i] = percent;
-            });
-        });
-
-        const results = await Promise.all(promises);
-
-        return mergeSimResults(results);
-    }
-
-    /**
-     * Terminate all active simulation workers and reject pending promises.
-     */
-    function cancelSimulation() {
-        for (const worker of activeWorkers) {
-            worker.terminate();
-        }
-        activeWorkers = [];
-
-        const rejects = pendingRejects.slice();
-        pendingRejects = [];
-        for (const reject of rejects) {
-            reject(new Error('Cancelled'));
-        }
-    }
-
-    /**
-     * Combat Simulator Adapter
-     * Bridges Toolasha's live data to the combat sim engine.
-     *
-     * Extracts game data maps, builds player DTOs, and provides
-     * combat zone metadata for the simulation UI.
+     * Enhancement XP Calculations
+     * Based on Ultimate Enhancement Tracker formulas
      */
 
 
     /**
-     * Extract all required game data maps from initClientData for the sim engine.
-     * @returns {Object|null} Plain object with all 13 game data maps, or null if data unavailable
+     * Get base item level from item HRID
+     * @param {string} itemHrid - Item HRID
+     * @returns {number} Base item level
      */
-    function buildGameDataPayload() {
-        const clientData = dataManager.getInitClientData();
-        if (!clientData) {
-            console.error('[CombatSimAdapter] No initClientData available');
-            return null;
-        }
-
-        return {
-            itemDetailMap: clientData.itemDetailMap,
-            actionDetailMap: clientData.actionDetailMap,
-            abilityDetailMap: clientData.abilityDetailMap,
-            combatMonsterDetailMap: clientData.combatMonsterDetailMap,
-            combatStyleDetailMap: clientData.combatStyleDetailMap,
-            damageTypeDetailMap: clientData.damageTypeDetailMap,
-            houseRoomDetailMap: clientData.houseRoomDetailMap,
-            combatTriggerDependencyDetailMap: clientData.combatTriggerDependencyDetailMap,
-            combatTriggerConditionDetailMap: clientData.combatTriggerConditionDetailMap,
-            combatTriggerComparatorDetailMap: clientData.combatTriggerComparatorDetailMap,
-            enhancementLevelTotalBonusMultiplierTable: clientData.enhancementLevelTotalBonusMultiplierTable,
-            abilitySlotsLevelRequirementList: clientData.abilitySlotsLevelRequirementList,
-            openableLootDropMap: clientData.openableLootDropMap,
-            labyrinthCrateDetailMap: clientData.labyrinthCrateDetailMap,
-        };
-    }
-
-    /**
-     * Build a player DTO from the current character data.
-     * Outputs the format expected by Player.createFromDTO():
-     *   { staminaLevel, ..., equipment: { '/equipment_types/head': {hrid, enhancementLevel}, ... },
-     *     food: [{hrid, triggers}], drinks: [{hrid, triggers}],
-     *     abilities: [{hrid, level, triggers}], houseRooms: {'/house_rooms/x': level},
-     *     hrid: 'player1', debuffOnLevelGap: 0 }
-     * @returns {Object|null} Player DTO in sim engine format, or null if data unavailable
-     */
-    function buildPlayerDTO() {
-        const characterData = dataManager.characterData;
-        const clientData = dataManager.getInitClientData();
-
-        if (!characterData) {
-            console.error('[CombatSimAdapter] No character data available');
-            return null;
-        }
-
-        const dto = {
-            staminaLevel: 1,
-            intelligenceLevel: 1,
-            attackLevel: 1,
-            meleeLevel: 1,
-            defenseLevel: 1,
-            rangedLevel: 1,
-            magicLevel: 1,
-            woodcuttingLevel: 1,
-            foragingLevel: 1,
-            milkingLevel: 1,
-            cookingLevel: 1,
-            brewingLevel: 1,
-            cheesesmithingLevel: 1,
-            craftingLevel: 1,
-            tailoringLevel: 1,
-            alchemyLevel: 1,
-            enhancingLevel: 1,
-            hrid: 'player1',
-            debuffOnLevelGap: 0,
-            equipment: {},
-            food: [],
-            drinks: [],
-            abilities: [],
-            houseRooms: {},
-            tokenUpgrades: { speed: 0, efficiency: 0, success: 0, doubleProgress: 0 },
-            communityBuffLevels: { productionEfficiency: 0, enhancingSpeed: 0, gatheringQuantity: 0, experience: 0 },
-        };
-
-        // Extract all skill levels (combat + skilling)
-        for (const skill of characterData.characterSkills || []) {
-            const skillName = skill.skillHrid.split('/').pop();
-            const key = skillName + 'Level';
-            if (dto[key] !== undefined) {
-                dto[key] = skill.level;
-            }
-        }
-
-        // Extract labyrinth token upgrades
-        const info = characterData.characterInfo;
-        if (info) {
-            dto.tokenUpgrades = {
-                speed: Math.max(0, Math.floor(Number(info.labyrinthSkillActionSpeedLevel) || 0)),
-                efficiency: Math.max(0, Math.floor(Number(info.labyrinthSkillingEfficiencyLevel) || 0)),
-                success: Math.max(0, Math.floor(Number(info.labyrinthSkillingSuccessLevel) || 0)),
-                doubleProgress: Math.max(0, Math.floor(Number(info.labyrinthSkillingDoubleProgressLevel) || 0)),
-            };
-        }
-
-        // Extract community buff levels
-        dto.communityBuffLevels = {
-            productionEfficiency: dataManager.getCommunityBuffLevel('/community_buff_types/production_efficiency') || 0,
-            enhancingSpeed: dataManager.getCommunityBuffLevel('/community_buff_types/enhancing_speed') || 0,
-            gatheringQuantity: dataManager.getCommunityBuffLevel('/community_buff_types/gathering_quantity') || 0,
-            experience: dataManager.getCommunityBuffLevel('/community_buff_types/experience') || 0,
-        };
-
-        // Extract equipped items → keyed by equipment type
-        // Prefer the always-current characterEquipment Map (updated on every items_updated WS message)
-        // over characterItems array which can lose enhancementLevel when items are swapped mid-session.
-        const itemDetailMap = clientData?.itemDetailMap || {};
-        const equipmentMap = dataManager.characterEquipment;
-
-        if (equipmentMap && equipmentMap.size > 0) {
-            for (const [, item] of equipmentMap) {
-                const itemDetail = itemDetailMap[item.itemHrid];
-                if (!itemDetail?.equipmentDetail?.type) continue;
-                dto.equipment[itemDetail.equipmentDetail.type] = {
-                    hrid: item.itemHrid,
-                    enhancementLevel: item.enhancementLevel || 0,
-                };
-            }
-        } else if (Array.isArray(characterData.characterItems)) {
-            // Fallback: array format (Map not yet populated)
-            for (const item of characterData.characterItems) {
-                if (!item.itemLocationHrid || item.itemLocationHrid.includes('/item_locations/inventory')) continue;
-                const itemDetail = itemDetailMap[item.itemHrid];
-                if (!itemDetail?.equipmentDetail?.type) continue;
-                dto.equipment[itemDetail.equipmentDetail.type] = {
-                    hrid: item.itemHrid,
-                    enhancementLevel: item.enhancementLevel || 0,
-                };
-            }
-        } else if (characterData.characterEquipment) {
-            for (const key in characterData.characterEquipment) {
-                const item = characterData.characterEquipment[key];
-                const itemDetail = itemDetailMap[item.itemHrid];
-                if (!itemDetail?.equipmentDetail?.type) continue;
-                dto.equipment[itemDetail.equipmentDetail.type] = {
-                    hrid: item.itemHrid,
-                    enhancementLevel: item.enhancementLevel || 0,
-                };
-            }
-        }
-
-        // Build trigger map (ability + consumable triggers combined)
-        const triggerMap = {
-            ...(characterData.abilityCombatTriggersMap || {}),
-            ...(characterData.consumableCombatTriggersMap || {}),
-        };
-
-        /**
-         * Convert raw trigger data to DTOs for Trigger.createFromDTO.
-         * @param {string} hrid - Ability or consumable HRID
-         * @returns {Array<Object>} Trigger DTOs
-         */
-        const buildTriggerDTOs = (hrid) => {
-            const rawTriggers = triggerMap[hrid];
-            if (!Array.isArray(rawTriggers)) return null;
-
-            return rawTriggers.map((t) => ({
-                dependencyHrid: t.dependencyHrid,
-                conditionHrid: t.conditionHrid,
-                comparatorHrid: t.comparatorHrid,
-                value: t.value || 0,
-            }));
-        };
-
-        // Extract food slots → array of { hrid, triggers }
-        const foodSlots = characterData.actionTypeFoodSlotsMap?.['/action_types/combat'] || [];
-        for (let i = 0; i < 3; i++) {
-            const item = foodSlots[i];
-            if (item?.itemHrid) {
-                dto.food.push({ hrid: item.itemHrid, triggers: buildTriggerDTOs(item.itemHrid) });
-            } else {
-                dto.food.push(null);
-            }
-        }
-
-        // Extract drink slots → array of { hrid, triggers }
-        const drinkSlots = characterData.actionTypeDrinkSlotsMap?.['/action_types/combat'] || [];
-        for (let i = 0; i < 3; i++) {
-            const item = drinkSlots[i];
-            if (item?.itemHrid) {
-                dto.drinks.push({ hrid: item.itemHrid, triggers: buildTriggerDTOs(item.itemHrid) });
-            } else {
-                dto.drinks.push(null);
-            }
-        }
-
-        // Extract equipped abilities → array of { hrid, level, triggers }
-        const equippedAbilities = characterData.combatUnit?.combatAbilities || [];
-        // Slot 0 = special ability, slots 1-4 = normal abilities
-        for (let i = 0; i < 5; i++) {
-            dto.abilities.push(null);
-        }
-
-        let normalAbilityIndex = 1;
-        for (const ability of equippedAbilities) {
-            if (!ability?.abilityHrid) continue;
-
-            const isSpecial = clientData?.abilityDetailMap?.[ability.abilityHrid]?.isSpecialAbility || false;
-            const abilityDTO = {
-                hrid: ability.abilityHrid,
-                level: ability.level || 1,
-                triggers: buildTriggerDTOs(ability.abilityHrid),
-            };
-
-            if (isSpecial) {
-                dto.abilities[0] = abilityDTO;
-            } else if (normalAbilityIndex < 5) {
-                dto.abilities[normalAbilityIndex++] = abilityDTO;
-            }
-        }
-
-        // Extract house room levels
-        for (const house of Object.values(characterData.characterHouseRoomMap || {})) {
-            dto.houseRooms[house.houseRoomHrid] = house.level;
-        }
-
-        return dto;
-    }
-
-    /**
-     * Build a player DTO from a cached party member profile.
-     * @param {Object} profile - Profile data with .profile sub-object
-     * @param {Object} clientData - initClientData
-     * @param {Object} battleData - Battle data (optional, for consumable detection)
-     * @returns {Object} Player DTO in engine format
-     */
-    function buildPartyMemberDTO(profile, clientData, battleData) {
-        const itemDetailMap = clientData?.itemDetailMap || {};
-
-        const dto = {
-            staminaLevel: 1,
-            intelligenceLevel: 1,
-            attackLevel: 1,
-            meleeLevel: 1,
-            defenseLevel: 1,
-            rangedLevel: 1,
-            magicLevel: 1,
-            hrid: 'player',
-            debuffOnLevelGap: 0,
-            equipment: {},
-            food: [],
-            drinks: [],
-            abilities: [],
-            houseRooms: {},
-        };
-
-        // Extract skill levels
-        for (const skill of profile.profile?.characterSkills || []) {
-            const skillName = skill.skillHrid?.split('/').pop();
-            const key = skillName + 'Level';
-            if (dto[key] !== undefined) {
-                dto[key] = skill.level || 1;
-            }
-        }
-
-        // Extract equipment from wearableItemMap → keyed by equipmentDetail.type
-        if (profile.profile?.wearableItemMap) {
-            for (const key in profile.profile.wearableItemMap) {
-                const item = profile.profile.wearableItemMap[key];
-                const itemDetail = itemDetailMap[item.itemHrid];
-                if (!itemDetail?.equipmentDetail?.type) continue;
-                dto.equipment[itemDetail.equipmentDetail.type] = {
-                    hrid: item.itemHrid,
-                    enhancementLevel: item.enhancementLevel || 0,
-                };
-            }
-        }
-
-        // Try to get consumables from battle data first
-        let battlePlayer = null;
-        if (battleData?.players) {
-            battlePlayer = battleData.players.find((p) => p.character?.id === profile.characterID);
-        }
-        // Build trigger map — prefer battle data triggers over profile triggers (battle data is fresher)
-        const triggerMap = {
-            ...(battlePlayer?.abilityCombatTriggersMap || profile.profile?.abilityCombatTriggersMap || {}),
-            ...(battlePlayer?.consumableCombatTriggersMap || profile.profile?.consumableCombatTriggersMap || {}),
-        };
-
-        const buildTriggerDTOs = (hrid) => {
-            const rawTriggers = triggerMap[hrid];
-            if (!Array.isArray(rawTriggers)) return null;
-            return rawTriggers.map((t) => ({
-                dependencyHrid: t.dependencyHrid,
-                conditionHrid: t.conditionHrid,
-                comparatorHrid: t.comparatorHrid,
-                value: t.value || 0,
-            }));
-        };
-
-        // Consumables: prefer battle data, fall back to trigger map keys
-        if (battlePlayer?.combatConsumables) {
-            let foodIndex = 0;
-            let drinkIndex = 0;
-            for (const consumable of battlePlayer.combatConsumables) {
-                const hrid = consumable.itemHrid;
-                const isDrink =
-                    hrid.includes('/drinks/') ||
-                    hrid.includes('coffee') ||
-                    itemDetailMap[hrid]?.categoryHrid?.includes('drink');
-                if (isDrink && drinkIndex < 3) {
-                    dto.drinks.push({ hrid, triggers: buildTriggerDTOs(hrid) });
-                    drinkIndex++;
-                } else if (!isDrink && foodIndex < 3) {
-                    dto.food.push({ hrid, triggers: buildTriggerDTOs(hrid) });
-                    foodIndex++;
-                }
-            }
-        } else {
-            // Fall back to trigger map keys for consumable HRIDs
-            const consumableHrids = Object.keys(profile.profile?.consumableCombatTriggersMap || {});
-            let foodIndex = 0;
-            let drinkIndex = 0;
-            for (const hrid of consumableHrids) {
-                const isDrink =
-                    hrid.includes('/drinks/') ||
-                    hrid.includes('coffee') ||
-                    itemDetailMap[hrid]?.categoryHrid?.includes('drink');
-                if (isDrink && drinkIndex < 3) {
-                    dto.drinks.push({ hrid, triggers: buildTriggerDTOs(hrid) });
-                    drinkIndex++;
-                } else if (!isDrink && foodIndex < 3) {
-                    dto.food.push({ hrid, triggers: buildTriggerDTOs(hrid) });
-                    foodIndex++;
-                }
-            }
-        }
-
-        // Pad remaining slots with null
-        while (dto.food.length < 3) dto.food.push(null);
-        while (dto.drinks.length < 3) dto.drinks.push(null);
-
-        // Extract abilities
-        for (let i = 0; i < 5; i++) dto.abilities.push(null);
-        let normalAbilityIndex = 1;
-        const equippedAbilities = profile.profile?.equippedAbilities || [];
-        for (const ability of equippedAbilities) {
-            if (!ability?.abilityHrid) continue;
-            const isSpecial = clientData?.abilityDetailMap?.[ability.abilityHrid]?.isSpecialAbility || false;
-            const abilityDTO = {
-                hrid: ability.abilityHrid,
-                level: ability.level || 1,
-                triggers: buildTriggerDTOs(ability.abilityHrid),
-            };
-            if (isSpecial) {
-                dto.abilities[0] = abilityDTO;
-            } else if (normalAbilityIndex < 5) {
-                dto.abilities[normalAbilityIndex++] = abilityDTO;
-            }
-        }
-
-        // House rooms
-        if (profile.profile?.characterHouseRoomMap) {
-            for (const house of Object.values(profile.profile.characterHouseRoomMap)) {
-                dto.houseRooms[house.houseRoomHrid] = house.level;
-            }
-        }
-
-        return dto;
-    }
-
-    /**
-     * Calculate combat level for level gap debuff.
-     * @param {Object} dto - Player DTO
-     * @returns {number} Combat level
-     */
-    function calcCombatLevel(dto) {
-        return Math.floor(
-            0.1 *
-                (dto.staminaLevel +
-                    dto.intelligenceLevel +
-                    dto.attackLevel +
-                    dto.defenseLevel +
-                    Math.max(dto.meleeLevel, dto.rangedLevel, dto.magicLevel)) +
-                0.5 * Math.max(dto.attackLevel, dto.defenseLevel, dto.meleeLevel, dto.rangedLevel, dto.magicLevel)
-        );
-    }
-
-    /**
-     * Build player DTOs for all party members (or solo if not in a party).
-     * Auto-detects party from characterData and loads cached profiles.
-     * @returns {Promise<{players: Array, playerNames: Array<string>, missingMembers: Array<string>}>}
-     */
-    async function buildAllPlayerDTOs() {
-        const characterData = dataManager.characterData;
-        const clientData = dataManager.getInitClientData();
-
-        if (!characterData) {
-            return { players: [], playerInfo: [], selfHrid: 'player1', missingMembers: [] };
-        }
-
-        const hasParty = characterData.partyInfo?.partySlotMap;
-
-        if (!hasParty) {
-            // Solo mode
-            const selfDTO = buildPlayerDTO();
-            if (!selfDTO) return { players: [], playerInfo: [], selfHrid: 'player1', missingMembers: [] };
-            return {
-                players: [selfDTO],
-                playerInfo: [{ hrid: selfDTO.hrid, name: characterData.character?.name || 'Player 1' }],
-                selfHrid: selfDTO.hrid,
-                missingMembers: [],
-            };
-        }
-
-        // Party mode — load profile list from IndexedDB
-        let profileList = [];
+    function getBaseItemLevel(itemHrid) {
         try {
-            profileList = (await storage.getJSON('profile_list', 'combatExport', null)) || [];
-        } catch (error) {
-            console.error('[CombatSimAdapter] Failed to load profile list:', error);
-        }
+            const gameData = dataManager.getInitClientData();
+            const itemData = gameData?.itemDetailMap?.[itemHrid];
 
-        // Get battle data for consumable detection
-        const battleData = dataManager.battleData || null;
-
-        const players = [];
-        const playerNames = [];
-        const missingMembers = [];
-        let selfHrid = null;
-        let slotIndex = 1;
-
-        for (const member of Object.values(characterData.partyInfo.partySlotMap)) {
-            if (!member.characterID) continue;
-
-            if (member.characterID === characterData.character.id) {
-                // Self
-                const selfDTO = buildPlayerDTO();
-                if (selfDTO) {
-                    selfDTO.hrid = 'player' + slotIndex;
-                    selfHrid = selfDTO.hrid;
-                    players.push(selfDTO);
-                    playerNames.push(characterData.character.name || 'Player ' + slotIndex);
-                }
-            } else {
-                // Party member — look up in profile list (IndexedDB, cross-session)
-                const profile = profileList.find((p) => p.characterID === member.characterID);
-
-                if (profile) {
-                    const memberDTO = buildPartyMemberDTO(profile, clientData, battleData);
-                    memberDTO.hrid = 'player' + slotIndex;
-                    players.push(memberDTO);
-                    playerNames.push(profile.characterName || 'Player ' + slotIndex);
-                } else {
-                    missingMembers.push(member.characterName || 'Unknown');
-                }
+            if (itemData?.itemLevel) {
+                return itemData.itemLevel;
             }
-            slotIndex++;
+
+            return 0;
+        } catch {
+            return 0;
         }
-
-        // Calculate level gap debuff
-        if (players.length > 1) {
-            let maxCombatLevel = 0;
-            const levels = players.map((p) => {
-                const level = calcCombatLevel(p);
-                maxCombatLevel = Math.max(maxCombatLevel, level);
-                return level;
-            });
-
-            for (let i = 0; i < players.length; i++) {
-                const ratio = maxCombatLevel / levels[i];
-                if (ratio > 1.2) {
-                    const maxDebuff = 0.9;
-                    const levelPercent = Math.floor((ratio - 1.2) * 100) / 100;
-                    players[i].debuffOnLevelGap = -1 * Math.min(maxDebuff, 3 * levelPercent);
-                } else {
-                    players[i].debuffOnLevelGap = 0;
-                }
-            }
-        }
-
-        // Build playerInfo: hrid → name mapping in player order, for tab rendering
-        const playerInfo = players.map((p, i) => ({ hrid: p.hrid, name: playerNames[i] }));
-
-        return { players, playerInfo, selfHrid: selfHrid || players[0]?.hrid || 'player1', missingMembers };
     }
 
     /**
-     * Extract community buff levels from characterData for the simulation.
-     * @returns {{comExp: number, comDrop: number}} Community buff levels (0 if not active)
+     * Calculate enhancing action time from the game's buff maps
+     * Reads the pre-computed action_speed flatBoost values from all buff sources
+     * and adds level advantage, matching the game's actual speed calculation
+     * @param {string} itemHrid - Item HRID being enhanced
+     * @returns {number} Per-action time in seconds
      */
-    function getCommunityBuffs() {
-        const mooPassBuffs = dataManager.getMooPassBuffs();
-        return {
-            mooPass: mooPassBuffs && mooPassBuffs.length > 0,
-            comExp: dataManager.getCommunityBuffLevel('/community_buff_types/experience') || 0,
-            comDrop: dataManager.getCommunityBuffLevel('/community_buff_types/combat_drop_quantity') || 0,
-        };
+    function getEnhancingActionTime(itemHrid) {
+        try {
+            const charData = dataManager.characterData;
+            if (!charData) return 12;
+
+            // Get base time from game data
+            const actionDetails = dataManager.getActionDetails('/actions/enhancing/enhance');
+            const baseTime = actionDetails?.baseTimeCost ? actionDetails.baseTimeCost / 1e9 : 12;
+
+            // Get enhancing skill level
+            const enhancingSkill = charData.characterSkills?.find((s) => s.skillHrid === '/skills/enhancing');
+            const baseLevel = enhancingSkill?.level || 1;
+
+            // Get tea level bonus from consumable buff map
+            let teaLevelBonus = 0;
+            const consumableBuffs = charData.consumableActionTypeBuffsMap?.['/action_types/enhancing'];
+            if (Array.isArray(consumableBuffs)) {
+                for (const buff of consumableBuffs) {
+                    if (buff.typeHrid === '/buff_types/enhancing_level') {
+                        teaLevelBonus = buff.flatBoost || 0;
+                    }
+                }
+            }
+
+            // Sum action_speed flatBoost from ALL buff sources (equipment, house, community, tea)
+            let totalSpeedBuff = 0;
+
+            const buffMaps = [
+                charData.equipmentActionTypeBuffsMap,
+                charData.houseActionTypeBuffsMap,
+                charData.communityActionTypeBuffsMap,
+                charData.consumableActionTypeBuffsMap,
+            ];
+
+            for (const buffMap of buffMaps) {
+                const enhancingBuffs = buffMap?.['/action_types/enhancing'];
+                if (!Array.isArray(enhancingBuffs)) continue;
+
+                for (const buff of enhancingBuffs) {
+                    if (buff.typeHrid === '/buff_types/action_speed') {
+                        totalSpeedBuff += buff.flatBoost || 0;
+                    }
+                }
+            }
+
+            // Add personal buffs (Labyrinth seals)
+            totalSpeedBuff += dataManager.getPersonalBuffFlatBoost('/action_types/enhancing', '/buff_types/action_speed');
+
+            // Add level advantage: (effectiveLevel - itemLevel) / 100
+            const effectiveLevel = baseLevel + teaLevelBonus;
+            const itemLevel = getBaseItemLevel(itemHrid);
+            if (effectiveLevel > itemLevel) {
+                totalSpeedBuff += (effectiveLevel - itemLevel) / 100;
+            }
+
+            return Math.max(profitConstants_js.MIN_ACTION_TIME_SECONDS, baseTime / (1 + totalSpeedBuff));
+        } catch {
+            return 12;
+        }
+    }
+
+    /**
+     * Calculate enhancement predictions using character stats
+     * @param {string} itemHrid - Item HRID being enhanced
+     * @param {number} startLevel - Starting enhancement level
+     * @param {number} targetLevel - Target enhancement level
+     * @param {number} protectFrom - Level to start using protection
+     * @returns {Object|null} Prediction data or null if cannot calculate
+     */
+    function calculateEnhancementPredictions(itemHrid, startLevel, targetLevel, protectFrom) {
+        try {
+            // Get item level
+            const itemLevel = getBaseItemLevel(itemHrid);
+
+            // Use getEnhancingParams() for all character stats (level, speed, success, teas, etc.)
+            const params = enhancementConfig_js.getEnhancingParams();
+
+            // Check for blessed tea
+            const hasBlessed = params.teas?.blessed || false;
+
+            // Calculate predictions (Markov chain for attempts, protections, success rates)
+            const result = enhancementCalculator_js.calculateEnhancement({
+                enhancingLevel: params.enhancingLevel,
+                houseLevel: params.houseLevel,
+                toolBonus: params.toolBonus,
+                speedBonus: params.speedBonus,
+                itemLevel,
+                targetLevel,
+                startLevel,
+                protectFrom,
+                blessedTea: hasBlessed,
+                guzzlingBonus: params.guzzlingBonus,
+            });
+
+            if (!result) {
+                return null;
+            }
+
+            // Calculate per-action time from the game's buff maps (authoritative source)
+            // instead of the hardcoded formula in calculateEnhancement
+            const perActionTime = getEnhancingActionTime(itemHrid);
+
+            return {
+                expectedAttempts: Math.round(result.attemptsRounded),
+                expectedProtections: Math.round(result.protectionCount),
+                expectedTime: perActionTime * result.attempts,
+                perActionTime,
+                successMultiplier: result.successMultiplier,
+            };
+        } catch {
+            return null;
+        }
     }
 
     /**
@@ -8389,6 +7567,16 @@
      * - Queue tooltip enhancement (time for each action + total)
      */
 
+
+    /**
+     * Format a completion Date as a clock string, respecting user's time/date format settings.
+     * @param {Date} completionTime
+     * @param {boolean} includeDate - Whether to include the date portion
+     * @returns {string}
+     */
+    function formatCompletionTime(completionTime, includeDate) {
+        return formatters_js.formatDateTime(completionTime, { includeDate, includeTime: true, includeSeconds: true });
+    }
 
     /**
      * ActionTimeDisplay class manages the time display panel and queue tooltips
@@ -8567,7 +7755,7 @@
                     this.injectQueueTimes(queueMenu);
 
                     this.setupQueueMenuObserver(queueMenu);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             this.cleanupRegistry.registerCleanup(() => {
@@ -8636,7 +7824,7 @@
                     const actionObj = this.matchActionFromDiv(actionDiv, currentActions, usedActionIds);
 
                     if (!actionObj) {
-                        this.appendTimeToActionDiv(actionDiv, i18n_js.t('[Unknown action]'));
+                        this.appendTimeToActionDiv(actionDiv, '[Unknown action]');
                         continue;
                     }
 
@@ -8656,12 +7844,12 @@
                     // Format time text
                     let timeText;
                     if (result.isTrulyInfinite) {
-                        timeText = i18n_js.t('[∞]');
+                        timeText = '[∞]';
                     } else if (result.isInfinite && result.materialLimit !== null) {
-                        const timeStr = formatters_js.timeReadableZh(result.totalTime);
+                        const timeStr = formatters_js.timeReadable(result.totalTime);
                         timeText = `[${timeStr} · ${result.limitLabel}: ${this.formatLargeNumber(result.materialLimit)}]`;
                     } else {
-                        const timeStr = formatters_js.timeReadableZh(result.totalTime);
+                        const timeStr = formatters_js.timeReadable(result.totalTime);
                         timeText = `[${timeStr}]`;
                     }
 
@@ -8669,10 +7857,7 @@
                     if (!hasInfinite && !result.isTrulyInfinite) {
                         const completionDate = new Date();
                         completionDate.setSeconds(completionDate.getSeconds() + accumulatedTime);
-                        const hours = String(completionDate.getHours()).padStart(2, '0');
-                        const minutes = String(completionDate.getMinutes()).padStart(2, '0');
-                        const seconds = String(completionDate.getSeconds()).padStart(2, '0');
-                        timeText += ` ${i18n_js.t('Complete at')} ${hours}:${minutes}:${seconds}`;
+                        timeText += ` Complete at ${formatCompletionTime(completionDate, false)}`;
                     }
 
                     this.appendTimeToActionDiv(actionDiv, timeText);
@@ -8695,10 +7880,9 @@
 
                     let totalText;
                     if (hasInfinite) {
-                        totalText =
-                            accumulatedTime > 0 ? i18n_js.t('Total: {0} + [∞]', formatters_js.timeReadableZh(accumulatedTime)) : i18n_js.t('Total: [∞]');
+                        totalText = accumulatedTime > 0 ? `Total: ${formatters_js.timeReadable(accumulatedTime)} + [∞]` : 'Total: [∞]';
                     } else {
-                        totalText = i18n_js.t('Total: {0}', formatters_js.timeReadableZh(accumulatedTime));
+                        totalText = `Total: ${formatters_js.timeReadable(accumulatedTime)}`;
                     }
                     totalDiv.textContent = totalText;
                     actionsContainer.appendChild(totalDiv);
@@ -8738,33 +7922,12 @@
          * @returns {Object|null} { totalTime, hasInfinite, actionId } or null
          */
         calculateCurrentActionTime(currentActions, inventoryLookup) {
-            // Detect current action from DOM
             const actionNameElement = document.querySelector('div[class*="Header_actionName"]');
             if (!actionNameElement || !actionNameElement.textContent) return null;
 
             const actionNameText = this.getCleanActionName(actionNameElement);
-            const actionNameMatch = actionNameText.match(/^(.+?)(?:\s*\([^)]+\))?$/);
-            const fullNameFromDom = actionNameMatch ? actionNameMatch[1].trim() : actionNameText;
-
-            let actionNameFromDom, itemNameFromDom;
-            if (fullNameFromDom.includes(':')) {
-                const parts = fullNameFromDom.split(':');
-                actionNameFromDom = parts[0].trim();
-                itemNameFromDom = parts.slice(1).join(':').trim();
-            } else {
-                actionNameFromDom = fullNameFromDom;
-                itemNameFromDom = null;
-            }
-
-            const currentAction = currentActions.find((a) => {
-                const actionDetails = dataManager.getActionDetails(a.actionHrid);
-                if (!actionDetails || actionDetails.name !== actionNameFromDom) return false;
-                if (itemNameFromDom && a.primaryItemHash) {
-                    const itemHrid = '/items/' + itemNameFromDom.toLowerCase().replace(/\s+/g, '_');
-                    return a.primaryItemHash.includes(itemHrid);
-                }
-                return true;
-            });
+            const sorted = [...currentActions].sort((a, b) => a.ordinal - b.ordinal);
+            const currentAction = this.matchCurrentActionFromText(sorted.slice(0, 1), actionNameText);
 
             if (!currentAction) return null;
 
@@ -8868,13 +8031,13 @@
 
             // Derive limit label
             if (limitType === 'gold') {
-                limitLabel = i18n_js.t('gold');
+                limitLabel = 'gold';
             } else if (limitType && limitType.startsWith('material:')) {
-                limitLabel = i18n_js.t('mat');
+                limitLabel = 'mat';
             } else if (limitType && limitType.startsWith('upgrade:')) {
-                limitLabel = i18n_js.t('upgrade');
+                limitLabel = 'upgrade';
             } else {
-                limitLabel = i18n_js.t('max');
+                limitLabel = 'max';
             }
 
             return {
@@ -8910,7 +8073,7 @@
                     this.createDisplayPanel();
                     this.setupActionNameObserver(actionNameElement);
                     this.updateDisplay();
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
         }
 
@@ -8944,7 +8107,7 @@
                 {
                     childList: true,
                     subtree: true,
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
         }
 
@@ -9014,7 +8177,7 @@
                     childList: true,
                     characterData: true,
                     subtree: true,
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
         }
 
@@ -9101,11 +8264,13 @@
                 return;
             }
 
-            // Find the matching action in cache
-            const cachedActions = dataManager.getCurrentActions();
+            // Parse action name from DOM
+            // Format can be: "Action Name (#123)", "Action Name (123)", "Action Name: Item (123)", etc.
+            // First, strip any stats we previously appended
+            const actionNameText = this.getCleanActionName(actionNameElement);
 
-            // Check if no action is running (idle)
-            if (!cachedActions || cachedActions.length === 0) {
+            // Check if no action is running ("Doing nothing...")
+            if (actionNameText.includes('Doing nothing')) {
                 this.displayElement.innerHTML = '';
                 this.clearAppendedStats(actionNameElement);
                 // Reconnect observer
@@ -9113,28 +8278,19 @@
                 return;
             }
 
-            // Parse action name from DOM
-            // Format can be: "Action Name (#123)", "Action Name (123)", "Action Name: Item (123)", etc.
-            // First, strip any stats we previously appended
-            const actionNameText = this.getCleanActionName(actionNameElement);
-
             // Extract inventory count from parentheses (e.g., "Coinify: Item (4312)" -> 4312)
             const inventoryCountMatch = actionNameText.match(/\(([\d,]+)\)$/);
             const inventoryCount = inventoryCountMatch ? parseInt(inventoryCountMatch[1].replace(/,/g, ''), 10) : null;
+
+            // Find the matching action in cache
+            const cachedActions = dataManager.getCurrentActions();
             let action;
 
+            // Match against the front action (lowest ordinal = most active).
+            // Sort needed because the array is in insertion order, not ordinal order.
             if (cachedActions.length > 0) {
-                const sorted = [...cachedActions].sort((a, b) => a.ordinal - b.ordinal);
-                sorted.map((a) => {
-                    const ad = dataManager.getActionDetails(a.actionHrid);
-                    return {
-                        ordinal: a.ordinal,
-                        hrid: a.actionHrid,
-                        type: ad?.type || '?',
-                        name: ad?.name || '?',
-                    };
-                });
-                action = this.matchCurrentActionFromText(sorted, actionNameText);
+                const sorted = cachedActions.sort((a, b) => a.ordinal - b.ordinal);
+                action = this.matchCurrentActionFromText(sorted.slice(0, 1), actionNameText);
             }
 
             if (!action) {
@@ -9496,30 +8652,12 @@
             completionTime.setSeconds(completionTime.getSeconds() + totalTimeSeconds);
 
             // Format time strings (timeReadable handles days/hours/minutes properly)
-            const timeStr = formatters_js.timeReadableZh(totalTimeSeconds);
+            const timeStr = formatters_js.timeReadable(totalTimeSeconds);
 
             // Format completion time
             const now = new Date();
             const isToday = completionTime.toDateString() === now.toDateString();
-
-            let clockTime;
-            if (isToday) {
-                // Today: Just show time in 12-hour format
-                clockTime = completionTime.toLocaleTimeString('zh-CN', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                });
-            } else {
-                // Future date: Show date and time in 12-hour format
-                clockTime = completionTime.toLocaleString('zh-CN', {
-                    month: 'numeric',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                });
-            }
+            const clockTime = formatCompletionTime(completionTime, !isToday);
 
             // Build display HTML
             // Line 1: Append stats to game's action name div
@@ -9528,17 +8666,17 @@
             // Queue count
             if (config.getSetting('actionBar_showQueueCount')) {
                 if (queueSizeDisplay !== Infinity) {
-                    statsToAppend.push(`(${queueSizeDisplay.toLocaleString()} ${i18n_js.t('queued')})`);
+                    statsToAppend.push(`(${queueSizeDisplay.toLocaleString()} queued)`);
                 } else if (materialLimit !== null) {
                     let limitLabel = '';
                     if (limitType === 'gold') {
-                        limitLabel = i18n_js.t('gold limit');
+                        limitLabel = 'gold limit';
                     } else if (limitType && limitType.startsWith('material:')) {
-                        limitLabel = i18n_js.t('mat limit');
+                        limitLabel = 'mat limit';
                     } else if (limitType && limitType.startsWith('upgrade:')) {
-                        limitLabel = i18n_js.t('upgrade limit');
+                        limitLabel = 'upgrade limit';
                     } else {
-                        limitLabel = i18n_js.t('max');
+                        limitLabel = 'max';
                     }
                     statsToAppend.push(`(∞ · ${limitLabel}: ${this.formatLargeNumber(materialLimit)})`);
                 } else {
@@ -9548,13 +8686,14 @@
 
             // Time per action
             if (config.getSetting('actionBar_showActionDuration')) {
-                statsToAppend.push(`${actionTime.toFixed(2)}${i18n_js.t('s/action')}`);
+                statsToAppend.push(`${actionTime.toFixed(2)}s/action`);
             }
 
             // Actions/hr and items/hr
             if (config.getSetting('actionBar_showActionsPerHour')) {
-                const msg = `${actionsPerHourWithEfficiency.toFixed(0)} ${i18n_js.t('actions/hr')} (${itemsPerHour.toFixed(0)} ${i18n_js.t('items/hr')})`;
-                statsToAppend.push(msg);
+                statsToAppend.push(
+                    `${actionsPerHourWithEfficiency.toFixed(0)} actions/hr (${itemsPerHour.toFixed(0)} items/hr)`
+                );
             }
 
             // Append to game's div (with marker for cleanup)
@@ -9573,22 +8712,10 @@
                 if (recycleTimeSeconds !== null) {
                     const recycleCompletion = new Date();
                     recycleCompletion.setSeconds(recycleCompletion.getSeconds() + recycleTimeSeconds);
-                    const recycleTimeStr = formatters_js.timeReadableZh(recycleTimeSeconds);
+                    const recycleTimeStr = formatters_js.timeReadable(recycleTimeSeconds);
                     const recycleIsToday = recycleCompletion.toDateString() === new Date().toDateString();
-                    const recycleClockTime = recycleCompletion.toLocaleString(
-                        'zh-CN',
-                        recycleIsToday
-                            ? { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }
-                            : {
-                                  month: 'numeric',
-                                  day: 'numeric',
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                  second: '2-digit',
-                                  hour12: true,
-                              }
-                    );
-                    recycleHtml = `<span style="color:#4dd0a0; margin-left:12px; font-size:11px;">${i18n_js.t('Est. w/ recycle: {0} → {1}', recycleTimeStr, recycleClockTime)}</span>`;
+                    const recycleClockTime = formatCompletionTime(recycleCompletion, !recycleIsToday);
+                    recycleHtml = `<span style="color:#4dd0a0; margin-left:12px; font-size:11px;">Est. w/ recycle: ${recycleTimeStr} → ${recycleClockTime}</span>`;
                 }
                 this.displayElement.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${matsLabel} ${timeStr} → ${clockTime}${recycleHtml}`;
             } else {
@@ -9621,7 +8748,7 @@
                     childList: true,
                     characterData: true,
                     subtree: true,
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
         }
 
@@ -9666,9 +8793,23 @@
 
             const { expectedAttempts, expectedProtections, perActionTime, successMultiplier } = predictions;
 
+            // Detect Philosopher's Mirror — guarantees success on every attempt
+            let protectionItemHrid = null;
+            if (action.secondaryItemHash) {
+                const { itemHrid: secItemHrid } = this.parseItemHash(action.secondaryItemHash);
+                protectionItemHrid = secItemHrid;
+            }
+            if (!protectionItemHrid && action.enhancingProtectionItemHrid) {
+                protectionItemHrid = action.enhancingProtectionItemHrid;
+            }
+            const usesMirror = protectionItemHrid === '/items/philosophers_mirror';
+
+            const effectiveAttempts = usesMirror ? targetLevel - currentLevel : expectedAttempts;
+            const effectiveProtections = usesMirror ? 0 : expectedProtections;
+
             // Calculate current level success rate
             const baseRate = currentLevel < enhancementCalculator_js.BASE_SUCCESS_RATES.length ? enhancementCalculator_js.BASE_SUCCESS_RATES[currentLevel] : 30;
-            const actualSuccessRate = Math.min(100, baseRate * successMultiplier);
+            const actualSuccessRate = usesMirror ? 100 : Math.min(100, baseRate * successMultiplier);
 
             // Determine queue count
             let queuedActions;
@@ -9696,30 +8837,15 @@
                 // Also check protection item availability if protection is active
                 if (
                     protectFrom > 0 &&
-                    expectedProtections > 0 &&
+                    effectiveProtections > 0 &&
                     config.getSetting('actionPanel_enhanceMatLimitProtections')
                 ) {
-                    let protectionItemHrid = null;
-
-                    // Extract from secondaryItemHash
-                    if (action.secondaryItemHash) {
-                        const { itemHrid: secItemHrid } = this.parseItemHash(action.secondaryItemHash);
-                        protectionItemHrid = secItemHrid;
-                    }
-
-                    // Fallback to direct field
-                    if (!protectionItemHrid && action.enhancingProtectionItemHrid) {
-                        protectionItemHrid = action.enhancingProtectionItemHrid;
-                    }
-
                     if (protectionItemHrid) {
                         const byHrid = inventoryLookup?.byHrid || {};
                         const availableProtections = byHrid[protectionItemHrid] || 0;
 
-                        if (availableProtections < expectedProtections) {
-                            // Protection items are the bottleneck — estimate how many attempts
-                            // we can sustain. Protection usage ratio = expectedProtections / expectedAttempts
-                            const protectionRatio = expectedProtections / expectedAttempts;
+                        if (availableProtections < effectiveProtections) {
+                            const protectionRatio = effectiveProtections / effectiveAttempts;
                             const maxAttemptsFromProtection =
                                 protectionRatio > 0 ? Math.floor(availableProtections / protectionRatio) : Infinity;
 
@@ -9729,6 +8855,17 @@
                                 limitingItemHrid = protectionItemHrid;
                             }
                         }
+                    }
+                }
+
+                // Philosopher's Mirror is consumed 1 per action — treat as material limit
+                if (usesMirror) {
+                    const byHrid = inventoryLookup?.byHrid || {};
+                    const availableMirrors = byHrid['/items/philosophers_mirror'] || 0;
+                    if (availableMirrors < queuedActions) {
+                        queuedActions = availableMirrors;
+                        materialLimit = availableMirrors;
+                        limitingItemHrid = '/items/philosophers_mirror';
                     }
                 }
             }
@@ -9768,13 +8905,13 @@
             const statsToAppend = [];
 
             if (config.getSetting('actionBar_showActionDuration')) {
-                statsToAppend.push(`${perActionTime.toFixed(2)}${i18n_js.t('s/action')}`);
+                statsToAppend.push(`${perActionTime.toFixed(2)}s/action`);
             }
-            statsToAppend.push(`${actualSuccessRate.toFixed(1)}${i18n_js.t('% success')}`);
-            statsToAppend.push(`${i18n_js.t('~{0} to target', formatters_js.formatWithSeparator(expectedAttempts))}`);
+            statsToAppend.push(`${actualSuccessRate.toFixed(1)}% success`);
+            statsToAppend.push(`~${formatters_js.formatWithSeparator(effectiveAttempts)} to target`);
 
-            if (protectFrom > 0 && expectedProtections > 0) {
-                statsToAppend.push(i18n_js.t('~{0} protections', formatters_js.formatWithSeparator(expectedProtections)));
+            if (protectFrom > 0 && effectiveProtections > 0) {
+                statsToAppend.push(`~${formatters_js.formatWithSeparator(effectiveProtections)} protections`);
             }
 
             this.appendStatsToActionName(actionNameElement, statsToAppend.join(' · '));
@@ -9786,33 +8923,17 @@
                 materialTime > 0 &&
                 isFinite(materialTime)
             ) {
-                const timeStr = formatters_js.timeReadableZh(materialTime);
+                const timeStr = formatters_js.timeReadable(materialTime);
 
                 const completionTime = new Date();
                 completionTime.setSeconds(completionTime.getSeconds() + materialTime);
 
                 const now = new Date();
                 const isToday = completionTime.toDateString() === now.toDateString();
-
-                let clockTime;
-                if (isToday) {
-                    clockTime = completionTime.toLocaleTimeString('zh-CN', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                    });
-                } else {
-                    clockTime = completionTime.toLocaleString('zh-CN', {
-                        month: 'numeric',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                    });
-                }
+                const clockTime = formatCompletionTime(completionTime, !isToday);
 
                 const itemIconHtml = this.getItemIconHtml(limitingItemHrid);
-                const matsLabel = itemIconHtml ? `${itemIconHtml}:` : i18n_js.t('Mats:');
+                const matsLabel = itemIconHtml ? `${itemIconHtml}:` : 'Mats:';
                 this.displayElement.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${matsLabel} ${timeStr} → ${clockTime} (${formatters_js.formatWithSeparator(materialLimit)} actions)`;
             } else {
                 this.displayElement.innerHTML = '';
@@ -9843,6 +8964,24 @@
 
             const perActionTime = predictions.perActionTime;
 
+            // Philosopher's Mirror guarantees success — exactly (target - current) actions
+            let usesMirror = false;
+            if (actionObj.secondaryItemHash) {
+                const { itemHrid: secItemHrid } = this.parseItemHash(actionObj.secondaryItemHash);
+                if (secItemHrid === '/items/philosophers_mirror') usesMirror = true;
+            }
+            if (!usesMirror && actionObj.enhancingProtectionItemHrid === '/items/philosophers_mirror') {
+                usesMirror = true;
+            }
+
+            if (usesMirror) {
+                let actions = targetLevel - currentLevel;
+                if (actionObj.hasMaxCount) {
+                    actions = Math.min(actions, actionObj.maxCount - actionObj.currentCount);
+                }
+                return { count: actions, totalTime: actions * perActionTime };
+            }
+
             // Determine queue count
             let queuedActions;
             if (actionObj.hasMaxCount) {
@@ -9852,61 +8991,13 @@
                 queuedActions = limitResult?.maxActions ?? Infinity;
             }
 
-            if (queuedActions === Infinity) return null;
-
-            const realisticActions = Math.min(queuedActions, predictions.expectedAttempts);
+            const realisticActions =
+                queuedActions === Infinity
+                    ? predictions.expectedAttempts
+                    : Math.min(queuedActions, predictions.expectedAttempts);
             const totalTime = realisticActions * perActionTime;
 
             return { count: realisticActions, totalTime };
-        }
-
-        async estimateCombatTime(actionObj, actionDetails) {
-            try {
-                const initClientData = dataManager.getInitClientData();
-                const monsterMap = initClientData?.combatMonsterDetailMap || {};
-                const zoneAction = initClientData?.actionDetailMap?.[actionObj.actionHrid];
-                if (!zoneAction) return null;
-
-                const spawns = zoneAction.combatZoneInfo?.fightInfo?.randomSpawnInfo?.spawns || [];
-                const allMonsters = spawns.map((s) => s.combatMonsterHrid);
-                if (allMonsters.length === 0) return null;
-
-                const gameData = buildGameDataPayload();
-                if (!gameData) return null;
-
-                const { players } = await buildAllPlayerDTOs();
-                if (!players || !players.length) return null;
-
-                const SIM_HOURS = 0.1;
-                const simResult = await runSimulation({
-                    gameData,
-                    playerDTOs: players,
-                    zoneHrid: actionObj.actionHrid,
-                    difficultyTier: 0,
-                    hours: SIM_HOURS,
-                    communityBuffs: getCommunityBuffs(),
-                });
-
-                const totalKills = allMonsters.reduce((sum, hrid) => sum + (simResult.deaths?.[hrid] || 0), 0);
-                const killsPerHour = totalKills / SIM_HOURS;
-                if (killsPerHour <= 0) return null;
-
-                let count = Infinity;
-                if (actionObj.hasMaxCount) {
-                    count = actionObj.maxCount - actionObj.currentCount;
-                } else {
-                    const taskHrid = actionObj.taskHrid || actionObj.taskTypeHrid;
-                    if (taskHrid && initClientData?.taskDetailMap?.[taskHrid]?.count) {
-                        count = initClientData.taskDetailMap[taskHrid].count;
-                    }
-                }
-                if (!isFinite(count) || count <= 0) return null;
-
-                const totalSeconds = Math.round((count / killsPerHour) * 3600);
-                return { count, killsPerHour, totalSeconds };
-            } catch (e) {
-                return null;
-            }
         }
 
         parseActionNameFromDom(actionNameText) {
@@ -9930,14 +9021,10 @@
         }
 
         buildItemHridFromName(itemName) {
-            const asciiHrid = `/items/${itemName
+            return `/items/${itemName
             .toLowerCase()
             .replace(/[^a-z0-9\s]/g, '')
             .replace(/\s+/g, '_')}`;
-            if (/\/items\/[a-z]/.test(asciiHrid)) {
-                return asciiHrid;
-            }
-            return null;
         }
 
         /**
@@ -9973,24 +9060,12 @@
 
         matchCurrentActionFromText(currentActions, actionNameText) {
             const { actionNameFromDom, itemNameFromDom } = this.parseActionNameFromDom(actionNameText);
-            let itemHridFromDom = this.buildItemHridFromName(itemNameFromDom || actionNameFromDom);
-            // Fallback: Chinese name → HRID via itemNameTranslator
-            if (!itemHridFromDom) {
-                itemHridFromDom = itemNameTranslator.getHridFromChineseName(itemNameFromDom || actionNameFromDom);
-            }
+            const itemHridFromDom = this.buildItemHridFromName(itemNameFromDom || actionNameFromDom);
 
             return currentActions.find((currentAction) => {
                 const actionDetails = dataManager.getActionDetails(currentAction.actionHrid);
                 if (!actionDetails) {
                     return false;
-                }
-
-                // Combat actions: match by monster name from DOM (Chinese or English)
-                if (actionDetails.type === '/action_types/combat') {
-                    const monsterHrid = dataManager.getMonsterHridFromName(actionNameFromDom);
-                    if (!monsterHrid) return false;
-                    const zoneHrid = dataManager.getCombatZoneForMonster(monsterHrid);
-                    return zoneHrid === currentAction.actionHrid;
                 }
 
                 // Enhancing actions: DOM shows item name (e.g. "Cheese Sword +1"), not "Enhance: ..."
@@ -10393,12 +9468,9 @@
 
             // Handle enhancing actions specially
             if (isEnhancingAction) {
-                const itemName = actionNameText;
-                let itemHrid = '/items/' + itemName.toLowerCase().replace(/\s+/g, '_');
-                if (/[\u4e00-\u9fff]/.test(itemHrid)) {
-                    const chineseHrid = itemNameTranslator.getHridFromChineseName(itemName);
-                    if (chineseHrid) itemHrid = chineseHrid;
-                }
+                // For enhancing, the text is just the item name (e.g., "Cheese Sword")
+                const itemName = actionNameText.replace(/\s*\+\d+$/, '');
+                const itemHrid = '/items/' + itemName.toLowerCase().replace(/\s+/g, '_');
 
                 // Find enhancing action matching this item (excluding already-used actions)
                 return cachedActions.find((a) => {
@@ -10427,7 +9499,8 @@
                 itemNameFromDiv = null;
             }
 
-            const match = cachedActions.find((a) => {
+            // Match action from cache (same logic as main display, excluding already-used actions)
+            return cachedActions.find((a) => {
                 if (usedActionIds.has(a.id)) {
                     return false; // Skip already-matched actions
                 }
@@ -10438,21 +9511,9 @@
                 }
 
                 if (actionDetails.name !== actionNameFromDiv) {
-                    if (actionDetails.type === '/action_types/combat') {
-                        const monsterHrid = dataManager.getMonsterHridFromName(actionNameFromDiv);
-                        if (!monsterHrid) return false;
-                        const zoneHrid = dataManager.getCombatZoneForMonster(monsterHrid);
-                        return zoneHrid === a.actionHrid;
-                    }
-
-                    let itemHridFromDiv = itemNameFromDiv
+                    const itemHridFromDiv = itemNameFromDiv
                         ? `/items/${itemNameFromDiv.toLowerCase().replace(/\s+/g, '_')}`
                         : `/items/${actionNameFromDiv.toLowerCase().replace(/\s+/g, '_')}`;
-                    // Fallback: Chinese name → HRID via itemNameTranslator
-                    if (!itemHridFromDiv || /[\u4e00-\u9fff]/.test(itemHridFromDiv)) {
-                        const chineseHrid = itemNameTranslator.getHridFromChineseName(itemNameFromDiv || actionNameFromDiv);
-                        if (chineseHrid) itemHridFromDiv = chineseHrid;
-                    }
                     const outputItems = actionDetails.outputItems || [];
                     const dropTable = actionDetails.dropTable || [];
                     const matchesOutput = outputItems.some((item) => item.itemHrid === itemHridFromDiv);
@@ -10463,18 +9524,22 @@
                     }
                 }
 
+                // If there's an item name, match on primaryItemHash
+                if (itemNameFromDiv && a.primaryItemHash) {
+                    const itemHrid = '/items/' + itemNameFromDiv.toLowerCase().replace(/\s+/g, '_');
+                    return a.primaryItemHash.includes(itemHrid);
+                }
+
                 return true;
             });
-            if (match) return match;
-
-            return null;
         }
 
         /**
          * Inject time display into queue tooltip
          * @param {HTMLElement} queueMenu - Queue menu container element
          */
-        async injectQueueTimes(queueMenu) {
+        injectQueueTimes(queueMenu) {
+            // Track if we need to reconnect observer at the end
             let shouldReconnectObserver = false;
 
             try {
@@ -10511,43 +9576,9 @@
                 let currentAction = null;
                 const actionNameElement = document.querySelector('div[class*="Header_actionName"]');
                 if (actionNameElement && actionNameElement.textContent) {
-                    // Use getCleanActionName to strip any stats we previously appended
                     const actionNameText = this.getCleanActionName(actionNameElement);
-
-                    // Parse action name (same logic as main display)
-                    // Also handles formatted numbers like "Farmland (276K)" or "Zone (1.2M)"
-                    const actionNameMatch = actionNameText.match(/^(.+?)(?:\s*\([^)]+\))?$/);
-                    const fullNameFromDom = actionNameMatch ? actionNameMatch[1].trim() : actionNameText;
-
-                    let actionNameFromDom, itemNameFromDom;
-                    if (fullNameFromDom.includes(':')) {
-                        const parts = fullNameFromDom.split(':');
-                        actionNameFromDom = parts[0].trim();
-                        itemNameFromDom = parts.slice(1).join(':').trim();
-                    } else {
-                        actionNameFromDom = fullNameFromDom;
-                        itemNameFromDom = null;
-                    }
-
-                    // Match current action from cache
-                    currentAction = currentActions.find((a) => {
-                        const actionDetails = dataManager.getActionDetails(a.actionHrid);
-                        if (!actionDetails || actionDetails.name !== actionNameFromDom) {
-                            return false;
-                        }
-
-                        if (itemNameFromDom && a.primaryItemHash) {
-                            const itemHrid = '/items/' + itemNameFromDom.toLowerCase().replace(/\s+/g, '_');
-                            const matches = a.primaryItemHash.includes(itemHrid);
-                            return matches;
-                        }
-
-                        return true;
-                    });
-
-                    if (currentAction) {
-                        // Current action matched
-                    }
+                    const sorted = [...currentActions].sort((a, b) => a.ordinal - b.ordinal);
+                    currentAction = this.matchCurrentActionFromText(sorted.slice(0, 1), actionNameText);
                 }
 
                 // Calculate time for current action to include in total
@@ -10690,41 +9721,6 @@
                     }
 
                     const isEnhancing = actionDetails.type === '/action_types/enhancing';
-                    const isCombat = actionDetails.type === '/action_types/combat';
-
-                    if (isCombat) {
-                        usedActionIds.add(actionObj.id);
-                        const combatEst = await this.estimateCombatTime(actionObj, actionDetails);
-                        if (combatEst && combatEst.totalSeconds > 0) {
-                            const timeStr = formatters_js.timeReadableZh(combatEst.totalSeconds);
-                            const completionDate = new Date();
-                            completionDate.setSeconds(
-                                completionDate.getSeconds() + accumulatedTime + combatEst.totalSeconds
-                            );
-                            const hours = String(completionDate.getHours()).padStart(2, '0');
-                            const minutes = String(completionDate.getMinutes()).padStart(2, '0');
-                            const seconds = String(completionDate.getSeconds()).padStart(2, '0');
-
-                            const combatTimeDiv = document.createElement('div');
-                            combatTimeDiv.className = 'mwi-queue-action-time';
-                            combatTimeDiv.style.cssText = `
-                            color: var(--text-color-secondary, ${config.COLOR_TEXT_SECONDARY});
-                            font-size: 0.85em;
-                            margin-top: 2px;
-                        `;
-                            combatTimeDiv.textContent = `[${timeStr} · ${this.formatLargeNumber(combatEst.count)} ${i18n_js.t('kills')}] ${i18n_js.t('Complete at')} ${hours}:${minutes}:${seconds}`;
-
-                            const actionTextContainer = actionDiv.querySelector('[class*="QueuedActions_actionText"]');
-                            if (actionTextContainer) {
-                                actionTextContainer.appendChild(combatTimeDiv);
-                            } else {
-                                actionDiv.appendChild(combatTimeDiv);
-                            }
-
-                            accumulatedTime += combatEst.totalSeconds;
-                        }
-                        continue;
-                    }
 
                     // Check if infinite BEFORE calculating count
                     const isInfinite = !actionObj.hasMaxCount || actionObj.actionHrid.includes('/combat/');
@@ -10826,11 +9822,7 @@
                         const completionDate = new Date();
                         completionDate.setSeconds(completionDate.getSeconds() + accumulatedTime);
 
-                        const hours = String(completionDate.getHours()).padStart(2, '0');
-                        const minutes = String(completionDate.getMinutes()).padStart(2, '0');
-                        const seconds = String(completionDate.getSeconds()).padStart(2, '0');
-
-                        completionText = ` ${i18n_js.t('Complete at')} ${hours}:${minutes}:${seconds}`;
+                        completionText = ` Complete at ${formatCompletionTime(completionDate, false)}`;
                     }
 
                     // Create time display element
@@ -10856,10 +9848,10 @@
                         } else {
                             limitLabel = 'max';
                         }
-                        const timeStr = formatters_js.timeReadableZh(totalTime);
+                        const timeStr = formatters_js.timeReadable(totalTime);
                         timeDiv.textContent = `[${timeStr} · ${limitLabel}: ${this.formatLargeNumber(materialLimit)}]${completionText}`;
                     } else {
-                        const timeStr = formatters_js.timeReadableZh(totalTime);
+                        const timeStr = formatters_js.timeReadable(totalTime);
                         timeDiv.textContent = `[${timeStr}]${completionText}`;
                     }
 
@@ -10914,20 +9906,17 @@
                 // Build total time text
                 let totalText = '';
                 if (hasInfinite) {
+                    // Show finite time first, then add infinity indicator
                     if (accumulatedTime > 0) {
-                        totalText = `${i18n_js.t('Total time')}: ${formatters_js.timeReadableZh(accumulatedTime)} + [∞]`;
+                        totalText = `Total time: ${formatters_js.timeReadable(accumulatedTime)} + [∞]`;
                     } else {
-                        totalText = `${i18n_js.t('Total time')}: [∞]`;
+                        totalText = 'Total time: [∞]';
                     }
-                } else if (accumulatedTime > 0) {
-                    totalText = `${i18n_js.t('Total time')}: ${formatters_js.timeReadableZh(accumulatedTime)}`;
+                } else {
+                    totalText = `Total time: ${formatters_js.timeReadable(accumulatedTime)}`;
                 }
 
-                if (totalText) {
-                    totalDiv.innerHTML = totalText;
-                } else {
-                    totalDiv.remove();
-                }
+                totalDiv.innerHTML = totalText;
 
                 // Insert after queue menu
                 queueMenu.insertAdjacentElement('afterend', totalDiv);
@@ -11024,7 +10013,7 @@
                             ? config.getSettingValue('color_profit', '#4ade80')
                             : config.getSettingValue('color_loss', '#f87171');
                     const valueSign = totalProfit >= 0 ? '+' : '';
-                    const valueLabel = isEstimatedValue ? i18n_js.t('Estimated value') : i18n_js.t('Total profit');
+                    const valueLabel = isEstimatedValue ? 'Estimated value' : 'Total profit';
                     const valueText = `<br>${valueLabel}: <span style="color: ${valueColor};">${valueSign}${this.formatLargeNumber(Math.abs(Math.round(totalProfit)))}</span>`;
                     totalDiv.innerHTML = baseText + valueText;
                 }
@@ -11266,7 +10255,7 @@
 
             if (remaining !== undefined) {
                 remaining = Math.max(0, remaining);
-                span.textContent = remaining.toFixed(1) + i18n_js.t('s / ') + this.totalTime.toFixed(1) + 's';
+                span.textContent = remaining.toFixed(1) + t('s / ') + this.totalTime.toFixed(1) + 's';
             }
         }
 
@@ -11421,7 +10410,7 @@
 
             const addToggle = document.createElement('button');
             addToggle.textContent = '+';
-            addToggle.title = i18n_js.t('Toggle add mode: click to accumulate counts instead of setting them');
+            addToggle.title = t('Toggle add mode: click to accumulate counts instead of setting them');
             addToggle.style.cssText = `
             font-size: 11px;
             font-weight: 700;
@@ -11443,7 +10432,7 @@
             });
             fragment.appendChild(addToggle);
 
-            fragment.appendChild(document.createTextNode(i18n_js.t('Do ')));
+            fragment.appendChild(document.createTextNode(t('Do ')));
 
             const activePresetValues = this._parsePresets(
                 config.getSettingValue('actionPanel_quickInputs_countPresets', ''),
@@ -11465,7 +10454,7 @@
                 fragment.appendChild(button);
             });
 
-            const maxButton = this.createButton(i18n_js.t('Max'), () => {
+            const maxButton = this.createButton(t('Max'), () => {
                 const currentInput =
                     panel.querySelector('[class*="maxActionCountInput"] input') ||
                     panel.querySelector('input[type="number"]') ||
@@ -11483,7 +10472,7 @@
             });
             fragment.appendChild(maxButton);
 
-            fragment.appendChild(document.createTextNode(i18n_js.t(' times')));
+            fragment.appendChild(document.createTextNode(t(' times')));
 
             return fragment;
         }
@@ -11498,7 +10487,7 @@
                 'SkillActionDetail_skillActionDetail',
                 (panel) => {
                     this.injectButtons(panel);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             this.cleanupRegistry.registerCleanup(() => {
@@ -11527,7 +10516,7 @@
                 const currentActionName = actionNameElement?.textContent?.trim() || '';
                 const previousActionName = panel.dataset.mwiInjectedAction || '';
 
-                if (panel.querySelector('.mwi-collapsible-section')) {
+                if (panel.querySelector('.mwi-collapsible-section') || panel.querySelector('.mwi-quick-input-btn')) {
                     if (currentActionName && currentActionName === previousActionName) {
                         return;
                     }
@@ -11665,9 +10654,7 @@
                                 item.drinkConcentration > 0
                                     ? ` (${item.baseSpeed.toFixed(2)}% × ${(1 + item.drinkConcentration / 100).toFixed(2)})`
                                     : '';
-                            speedLines.push(
-                                `  - ${itemNameTranslator.getDisplayName(item.hrid)}: +${item.speed.toFixed(2)}%${detailText}`
-                            );
+                            speedLines.push(`  - ${item.name}: +${item.speed.toFixed(2)}%${detailText}`);
                         }
 
                         // Personal buff (Scroll of Action Speed)
@@ -11713,7 +10700,7 @@
                                         : '';
 
                                 speedLines.push(
-                                    `  - ${itemNameTranslator.getDisplayName(trinketSlot.itemHrid)}${enhText}: +${taskSpeedBonus.toFixed(2)}%${detailText}`
+                                    `  - ${itemDetails.name}${enhText}: +${taskSpeedBonus.toFixed(2)}%${detailText}`
                                 );
                             }
                         }
@@ -11812,7 +10799,7 @@
                         const inputValue = numberInput.value;
 
                         if (inputValue === '∞') {
-                            totalTimeLine.textContent = i18n_js.t('Total time: ∞');
+                            totalTimeLine.textContent = t('Total time: ∞');
                             return;
                         }
 
@@ -11823,9 +10810,9 @@
                             // Calculate time-consuming actions needed
                             const baseActionsNeeded = Math.ceil(queueCount / efficiencyMultiplier);
                             const totalSeconds = baseActionsNeeded * actionTime;
-                            totalTimeLine.textContent = i18n_js.t('Total time: {0}', formatters_js.timeReadableZh(totalSeconds));
+                            totalTimeLine.textContent = t('Total time: {0}', formatters_js.timeReadableZh(totalSeconds));
                         } else {
-                            totalTimeLine.textContent = i18n_js.t('Total time: 0s');
+                            totalTimeLine.textContent = t('Total time: 0s');
                         }
                     };
 
@@ -11845,7 +10832,7 @@
                         {
                             attributes: true,
                             attributeFilter: ['value'],
-                        }
+                        }, { debounce: true, debounceDelay: 150 }
                     );
                     this.cleanupRegistry.registerCleanup(() => {
                         if (inputObserverCleanup) {
@@ -11873,11 +10860,11 @@
                     const actionsPerHourWithEfficiency = Math.round(
                         profitHelpers_js.calculateEffectiveActionsPerHour(profitHelpers_js.calculateActionsPerHour(actionTime), efficiencyMultiplier)
                     );
-                    const initialSummary = i18n_js.t('{0}/hr | Total time: 0s', actionsPerHourWithEfficiency);
+                    const initialSummary = t('{0}/hr | Total time: 0s', actionsPerHourWithEfficiency);
 
                     speedSection = uiComponents_js.createCollapsibleSection(
                         '⏱',
-                        i18n_js.t('Action Speed & Time'),
+                        t('Action Speed & Time'),
                         initialSummary,
                         speedContent,
                         false // Collapsed by default
@@ -11895,19 +10882,19 @@
                         if (speedSummaryDiv) {
                             const inputValue = numberInput.value;
                             if (inputValue === '∞') {
-                                speedSummaryDiv.textContent = i18n_js.t('{0}/hr | Total time: ∞', actionsPerHourWithEfficiency);
+                                speedSummaryDiv.textContent = t('{0}/hr | Total time: ∞', actionsPerHourWithEfficiency);
                             } else {
                                 const queueCount = parseInt(inputValue) || 0;
                                 if (queueCount > 0) {
                                     const baseActionsNeeded = Math.ceil(queueCount / efficiencyMultiplier);
                                     const totalSeconds = baseActionsNeeded * actionTime;
-                                    speedSummaryDiv.textContent = i18n_js.t(
+                                    speedSummaryDiv.textContent = t(
                                         '{0}/hr | Total time: {1}',
                                         actionsPerHourWithEfficiency,
                                         formatters_js.timeReadableZh(totalSeconds)
                                     );
                                 } else {
-                                    speedSummaryDiv.textContent = i18n_js.t(
+                                    speedSummaryDiv.textContent = t(
                                         '{0}/hr | Total time: 0s',
                                         actionsPerHourWithEfficiency
                                     );
@@ -11930,7 +10917,7 @@
                         {
                             attributes: true,
                             attributeFilter: ['value'],
-                        }
+                        }, { debounce: true, debounceDelay: 150 }
                     );
                     this.cleanupRegistry.registerCleanup(() => {
                         newInputObserverCleanup();
@@ -11978,7 +10965,7 @@
                 `;
 
                     // FIRST ROW: Time-based buttons (hours)
-                    queueContent.appendChild(document.createTextNode(i18n_js.t('Do ')));
+                    queueContent.appendChild(document.createTextNode(t('Do ')));
 
                     const activePresetHours = this._parsePresets(
                         config.getSettingValue('actionPanel_quickInputs_hourPresets', ''),
@@ -12137,7 +11124,7 @@
             };
 
             const roomHrid = roomMapping[actionType];
-            if (!roomHrid) return i18n_js.t('Unknown Room');
+            if (!roomHrid) return t('Unknown Room');
 
             const room = houseRooms.get(roomHrid);
             const roomName = roomHrid
@@ -12228,7 +11215,6 @@
                 if (teaInfo) {
                     const scaledSpeed = teaInfo.baseSpeed * (1 + drinkConcentration);
                     consumables.push({
-                        hrid: drink.itemHrid,
                         name: teaInfo.name,
                         baseSpeed: teaInfo.baseSpeed * 100,
                         drinkConcentration: drinkConcentration * 100,
@@ -12545,9 +11531,7 @@
                     if (xpData.charmBreakdown && xpData.charmBreakdown.length > 0) {
                         for (const item of xpData.charmBreakdown) {
                             const enhText = item.enhancementLevel > 0 ? ` +${item.enhancementLevel}` : '';
-                            lines.push(
-                                `    • ${itemNameTranslator.getDisplayName(item.hrid)}${enhText}: +${item.value.toFixed(2)}%`
-                            );
+                            lines.push(`    • ${item.name}${enhText}: +${item.value.toFixed(2)}%`);
                         }
                     }
 
@@ -12555,9 +11539,7 @@
                     if (xpData.wisdomBreakdown && xpData.wisdomBreakdown.length > 0) {
                         for (const item of xpData.wisdomBreakdown) {
                             const enhText = item.enhancementLevel > 0 ? ` +${item.enhancementLevel}` : '';
-                            lines.push(
-                                `    • ${itemNameTranslator.getDisplayName(item.hrid)}${enhText}: +${item.value.toFixed(2)}%`
-                            );
+                            lines.push(`    • ${item.name}${enhText}: +${item.value.toFixed(2)}%`);
                         }
                     }
 
@@ -12681,7 +11663,7 @@
                         // Auto-fill queue input when target level changes
                         this.setInputValue(numberInput, result.actionsNeeded);
                     } else {
-                        targetLevelResult.textContent = i18n_js.t('Invalid level');
+                        targetLevelResult.textContent = t('Invalid level');
                         targetLevelResult.style.color = 'var(--color-error, #ff4444)';
                     }
                 };
@@ -12779,7 +11761,7 @@
                 'SkillActionDetail_skillActionDetail',
                 (detailPanel) => {
                     this.attachToActionPanel(detailPanel);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
         }
 
@@ -12991,26 +11973,26 @@
                 // Range output (e.g., "1.3 - 4")
                 const minOutput = parseFloat(output[0].trim());
                 const maxOutput = parseFloat(output[1].trim());
-                const expectedMin = (minOutput * amount * dropRate * successRate).toLocaleString('en-US', {
+                const expectedMin = (minOutput * amount * dropRate * successRate).toLocaleString(undefined, {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,
                 });
-                const expectedMax = (maxOutput * amount * dropRate * successRate).toLocaleString('en-US', {
+                const expectedMax = (maxOutput * amount * dropRate * successRate).toLocaleString(undefined, {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,
                 });
                 const expectedAvg = (((minOutput + maxOutput) / 2) * amount * dropRate * successRate).toLocaleString(
-                    'en-US',
+                    undefined,
                     {
                         minimumFractionDigits: 1,
                         maximumFractionDigits: 1,
-                    }
+                    }, { debounce: true, debounceDelay: 150 }
                 );
                 clone.innerText = `${expectedMin} - ${expectedMax} (${expectedAvg})`;
             } else {
                 // Single value output
                 const value = parseFloat(output[0].trim());
-                const expectedValue = (value * amount * dropRate * successRate).toLocaleString('en-US', {
+                const expectedValue = (value * amount * dropRate * successRate).toLocaleString(undefined, {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,
                 });
@@ -13084,7 +12066,7 @@
                 const totalXP = modifiedXP * amount;
 
                 // Set total XP text (formatted with 1 decimal place and thousand separators)
-                clone.childNodes[0].textContent = totalXP.toLocaleString('en-US', {
+                clone.childNodes[0].textContent = totalXP.toLocaleString(undefined, {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,
                 });
@@ -13172,6 +12154,7 @@
             this.itemsUpdatedDebounceTimer = null; // Debounce timer for items_updated events
             this.DEBOUNCE_DELAY = 300; // 300ms debounce for event handlers
             this.timerRegistry = timerRegistry_js.createTimerRegistry();
+            this.resizeObserver = null;
         }
 
         /**
@@ -13290,6 +12273,10 @@
                 });
                 // Update pin state
                 this.updatePinIcon(existingPin, actionHrid);
+                if (existingDisplay) {
+                    this.scheduleStatsLayoutSync(actionPanel, existingDisplay);
+                    this.getResizeObserver().observe(existingDisplay);
+                }
                 // Note: Profit update is deferred to updateAllCounts() in setupObserver()
                 return;
             }
@@ -13313,7 +12300,7 @@
                 top: 100%;
                 left: 0;
                 right: 0;
-                font-size: 0.55em;
+                font-size: 11px;
                 padding: 4px 8px;
                 text-align: center;
                 background: rgba(0, 0, 0, 0.7);
@@ -13325,12 +12312,8 @@
 
                 actionPanel.appendChild(display);
 
-                // Set marginBottom to the bar's actual rendered height so the grid row
-                // reserves exactly the right amount of space below the tile.
-                requestAnimationFrame(() => {
-                    const h = display.offsetHeight;
-                    if (h > 0) actionPanel.style.marginBottom = `${h}px`;
-                });
+                this.scheduleStatsLayoutSync(actionPanel, display);
+                this.getResizeObserver().observe(display);
             }
 
             // Create pin icon (for ALL actions - gathering and production)
@@ -13348,7 +12331,7 @@
             user-select: none;
             filter: grayscale(100%) brightness(0.7);
         `;
-            pinIcon.title = i18n_js.t('Pin this action to keep it visible');
+            pinIcon.title = 'Pin this action to keep it visible';
 
             // Pin hover effect
             pinIcon.addEventListener('mouseenter', () => {
@@ -13508,6 +12491,7 @@
 
                 if (maxCrafts === null) {
                     data.displayElement.style.display = 'none';
+                    this.syncStatsLayout(actionPanel, data.displayElement);
                     return;
                 }
             }
@@ -13592,25 +12576,25 @@
 
             if (showMaxProduceable) {
                 html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-                html += `<span style="color: ${canProduceColor};">${i18n_js.t('Can produce: {0}', maxCrafts.toLocaleString())}</span></div>`;
+                html += `<span style="color: ${canProduceColor};">Can produce: ${maxCrafts.toLocaleString()}</span></div>`;
             }
 
             if (showProfit) {
                 if (hasMissingPrices) {
                     html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-                    html += `<span data-stat="profit" style="color: ${config.SCRIPT_COLOR_ALERT};">${i18n_js.t('Profit/hr: -- ⚠')}</span></div>`;
+                    html += `<span data-stat="profit" style="color: ${config.SCRIPT_COLOR_ALERT};">Profit/hr: -- ⚠</span></div>`;
                 } else if (resolvedProfitPerHour !== null) {
                     const profitColor = resolvedProfitPerHour >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                     const profitSign = resolvedProfitPerHour >= 0 ? '' : '-';
                     const estimatedNote = outputPriceEstimated ? ' ⚠' : '';
                     html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-                    html += `<span data-stat="profit" style="color: ${profitColor};">${i18n_js.t('Profit/hr: {0}', `${profitSign}${formatters_js.formatKMB(Math.abs(resolvedProfitPerHour))}${estimatedNote}`)}</span></div>`;
+                    html += `<span data-stat="profit" style="color: ${profitColor};">Profit/hr: ${profitSign}${formatters_js.formatKMB(Math.abs(resolvedProfitPerHour))}${estimatedNote}</span></div>`;
                 }
             }
 
             if (showExp && expPerHour !== null && expPerHour > 0) {
                 html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-                html += `<span data-stat="exp" style="color: #fff;">${i18n_js.t('Exp/hr: {0}', formatters_js.formatKMB(expPerHour))}</span></div>`;
+                html += `<span data-stat="exp" style="color: #fff;">Exp/hr: ${formatters_js.formatKMB(expPerHour)}</span></div>`;
             }
 
             if (
@@ -13687,6 +12671,8 @@
 
             // Trigger sort via shared manager
             actionPanelSort.triggerSort();
+
+            this.syncAllStatsLayouts();
         }
 
         /**
@@ -13880,10 +12866,64 @@
                 // Reveal now that sizing is complete.
                 displayElement.style.visibility = '';
 
-                // Keep marginBottom in sync with the bar's actual rendered height.
-                const h = displayElement.offsetHeight;
-                if (h > 0) actionPanel.style.marginBottom = `${h}px`;
+                this.syncStatsLayout(actionPanel, displayElement);
+                this.scheduleStatsLayoutSync(actionPanel, displayElement);
             });
+        }
+
+        getResizeObserver() {
+            if (!this.resizeObserver) {
+                this.resizeObserver = new ResizeObserver((entries) => {
+                    for (const entry of entries) {
+                        const displayElement = entry.target;
+                        const actionPanel = displayElement.parentElement;
+                        if (actionPanel) {
+                            this.syncStatsLayout(actionPanel, displayElement);
+                            this.scheduleStatsLayoutSync(actionPanel, displayElement);
+                        }
+                    }
+                });
+            }
+            return this.resizeObserver;
+        }
+
+        syncStatsLayout(actionPanel, displayElement) {
+            if (!actionPanel || !displayElement) return;
+            if (!document.body.contains(actionPanel) || !document.body.contains(displayElement)) return;
+
+            actionPanel.style.alignSelf = 'flex-start';
+            actionPanel.style.overflow = 'visible';
+
+            if (actionPanel.style.position !== 'relative' && actionPanel.style.position !== 'absolute') {
+                actionPanel.style.position = 'relative';
+            }
+
+            if (displayElement.style.display === 'none') {
+                actionPanel.style.marginBottom = '';
+                return;
+            }
+
+            const height = Math.ceil(displayElement.getBoundingClientRect().height || displayElement.offsetHeight || 0);
+
+            if (height > 0) {
+                actionPanel.style.marginBottom = `${height}px`;
+            }
+        }
+
+        scheduleStatsLayoutSync(actionPanel, displayElement) {
+            requestAnimationFrame(() => {
+                this.syncStatsLayout(actionPanel, displayElement);
+                requestAnimationFrame(() => {
+                    this.syncStatsLayout(actionPanel, displayElement);
+                });
+            });
+        }
+
+        syncAllStatsLayouts() {
+            for (const [actionPanel, data] of this.actionElements.entries()) {
+                if (!document.body.contains(actionPanel) || !data.displayElement) continue;
+                this.scheduleStatsLayoutSync(actionPanel, data.displayElement);
+            }
         }
 
         /**
@@ -13917,7 +12957,7 @@
                 pinIcon.style.filter = 'grayscale(100%) brightness(0.7)';
                 pinIcon.style.transform = 'scale(1)';
             }
-            pinIcon.title = isPinned ? i18n_js.t('Unpin this action') : i18n_js.t('Pin this action to keep it visible');
+            pinIcon.title = isPinned ? 'Unpin this action' : 'Pin this action to keep it visible';
         }
 
         /**
@@ -13931,6 +12971,11 @@
             }
 
             this.timerRegistry.clearAll();
+
+            if (this.resizeObserver) {
+                this.resizeObserver.disconnect();
+                this.resizeObserver = null;
+            }
 
             // CRITICAL: Remove injected DOM elements BEFORE clearing Maps
             // This prevents detached SVG elements from accumulating
@@ -14035,6 +13080,7 @@
             this.consumablesUpdatedDebounceTimer = null; // Debounce timer for consumables_updated events
             this.indicatorUpdateDebounceTimer = null; // Debounce timer for indicator rendering
             this.DEBOUNCE_DELAY = 300; // 300ms debounce for event handlers
+            this.resizeObserver = null;
         }
 
         /**
@@ -14145,6 +13191,10 @@
                 });
                 // Register with shared sort manager
                 actionPanelSort.registerPanel(actionPanel, actionHrid);
+                if (existingDisplay) {
+                    this.scheduleStatsLayoutSync(actionPanel, existingDisplay);
+                    this.getResizeObserver().observe(existingDisplay);
+                }
                 // Trigger sort
                 actionPanelSort.triggerSort();
                 return;
@@ -14158,7 +13208,7 @@
             top: 100%;
             left: 0;
             right: 0;
-            font-size: 0.55em;
+            font-size: 11px;
             padding: 4px 8px;
             text-align: center;
             background: rgba(0, 0, 0, 0.7);
@@ -14178,12 +13228,8 @@
             // Append directly to action panel with absolute positioning
             actionPanel.appendChild(display);
 
-            // Set marginBottom to the bar's actual rendered height so the grid row
-            // reserves exactly the right amount of space below the tile.
-            requestAnimationFrame(() => {
-                const h = display.offsetHeight;
-                if (h > 0) actionPanel.style.marginBottom = `${h}px`;
-            });
+            this.scheduleStatsLayoutSync(actionPanel, display);
+            this.getResizeObserver().observe(display);
 
             // Store reference
             this.actionElements.set(actionPanel, {
@@ -14319,6 +13365,8 @@
 
             // Trigger sort via shared manager
             actionPanelSort.triggerSort();
+
+            this.syncAllStatsLayouts();
         }
 
         /**
@@ -14479,12 +13527,12 @@
                 const profitColor = profitPerHour >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                 const profitSign = profitPerHour >= 0 ? '' : '-';
                 html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-                html += `<span data-stat="profit" style="color: ${profitColor};">${i18n_js.t('Profit/hr: {0}', `${profitSign}${formatters_js.formatKMB(Math.abs(profitPerHour))}`)}</span></div>`;
+                html += `<span data-stat="profit" style="color: ${profitColor};">Profit/hr: ${profitSign}${formatters_js.formatKMB(Math.abs(profitPerHour))}</span></div>`;
             }
 
             if (showExp && expPerHour !== null && expPerHour > 0) {
                 html += `<div class="mwi-action-stat-line" style="white-space: nowrap;">`;
-                html += `<span data-stat="exp" style="color: #fff;">${i18n_js.t('Exp/hr: {0}', formatters_js.formatKMB(expPerHour))}</span></div>`;
+                html += `<span data-stat="exp" style="color: #fff;">Exp/hr: ${formatters_js.formatKMB(expPerHour)}</span></div>`;
             }
 
             if (showProfit && showExp && profitPerHour !== null && expPerHour !== null && expPerHour > 0) {
@@ -14495,6 +13543,7 @@
             data.displayElement.innerHTML = html;
             if (!html) {
                 data.displayElement.style.display = 'none';
+                this.syncStatsLayout(actionPanel, data.displayElement);
                 return;
             }
             data.displayElement.style.display = 'block';
@@ -14558,10 +13607,64 @@
                 // Reveal now that sizing is complete.
                 displayElement.style.visibility = '';
 
-                // Keep marginBottom in sync with the bar's actual rendered height.
-                const h = displayElement.offsetHeight;
-                if (h > 0) actionPanel.style.marginBottom = `${h}px`;
+                this.syncStatsLayout(actionPanel, displayElement);
+                this.scheduleStatsLayoutSync(actionPanel, displayElement);
             });
+        }
+
+        getResizeObserver() {
+            if (!this.resizeObserver) {
+                this.resizeObserver = new ResizeObserver((entries) => {
+                    for (const entry of entries) {
+                        const displayElement = entry.target;
+                        const actionPanel = displayElement.parentElement;
+                        if (actionPanel) {
+                            this.syncStatsLayout(actionPanel, displayElement);
+                            this.scheduleStatsLayoutSync(actionPanel, displayElement);
+                        }
+                    }
+                });
+            }
+            return this.resizeObserver;
+        }
+
+        syncStatsLayout(actionPanel, displayElement) {
+            if (!actionPanel || !displayElement) return;
+            if (!document.body.contains(actionPanel) || !document.body.contains(displayElement)) return;
+
+            actionPanel.style.alignSelf = 'flex-start';
+            actionPanel.style.overflow = 'visible';
+
+            if (actionPanel.style.position !== 'relative' && actionPanel.style.position !== 'absolute') {
+                actionPanel.style.position = 'relative';
+            }
+
+            if (displayElement.style.display === 'none') {
+                actionPanel.style.marginBottom = '';
+                return;
+            }
+
+            const height = Math.ceil(displayElement.getBoundingClientRect().height || displayElement.offsetHeight || 0);
+
+            if (height > 0) {
+                actionPanel.style.marginBottom = `${height}px`;
+            }
+        }
+
+        scheduleStatsLayoutSync(actionPanel, displayElement) {
+            requestAnimationFrame(() => {
+                this.syncStatsLayout(actionPanel, displayElement);
+                requestAnimationFrame(() => {
+                    this.syncStatsLayout(actionPanel, displayElement);
+                });
+            });
+        }
+
+        syncAllStatsLayouts() {
+            for (const [actionPanel, data] of this.actionElements.entries()) {
+                if (!document.body.contains(actionPanel) || !data.displayElement) continue;
+                this.scheduleStatsLayoutSync(actionPanel, data.displayElement);
+            }
         }
 
         /**
@@ -14570,6 +13673,12 @@
         clearAllReferences() {
             clearTimeout(this.indicatorUpdateDebounceTimer);
             this.indicatorUpdateDebounceTimer = null;
+
+            if (this.resizeObserver) {
+                this.resizeObserver.disconnect();
+                this.resizeObserver = null;
+            }
+
             // CRITICAL: Remove injected DOM elements BEFORE clearing Maps
             // This prevents detached SVG elements from accumulating
             // Note: .remove() is safe to call even if element is already detached
@@ -14930,7 +14039,12 @@
 
         // Check if this is a buy modal (has a buy/confirm button)
         // A sell modal would have a sell button instead
-        const isBuyModal = modal.querySelector('[class*="Button_buy"]');
+        const isBuyModal =
+            modal.querySelector('[class*="Button_buy"]') ||
+            modal.textContent.includes('Buy Now') ||
+            modal.textContent.includes('Buy Listing') ||
+            modal.textContent.includes('立即购买') ||
+            modal.textContent.includes('买入挂单');
         if (!isBuyModal) {
             return;
         }
@@ -15230,35 +14344,11 @@
         // Skip non-native tabs (Toolasha inventory tabs, missing material tabs)
         // to find the second native marketplace tab
         const nativeTabs = Array.from(tablist.children).filter(
-            (child) => !child.hasAttribute('data-mwi-custom-tab') && !child.classList.contains('toolasha-inv-tab')
+            (child) =>
+                !child.hasAttribute('data-mwi-custom-tab') &&
+                !child.classList.contains('toolasha-inv-tab')
         );
         return nativeTabs[1] || null;
-    }
-
-    /**
-     * Check if a tablist belongs to the alchemy action panel.
-     *
-     * @param {Element} tablist - A tablist element to check
-     * @returns {boolean} True if the tablist belongs to the alchemy panel
-     */
-    function isAlchemyPanel(tablist) {
-        return (
-            !!tablist.closest('[class*="SkillActionDetail_skillActionDetail"]') &&
-            !!tablist.closest('[class*="AlchemyPanel_"]')
-        );
-    }
-
-    /**
-     * Get an alchemy tab by its known position.
-     * Alchemy tabs order: [Coinify=0, Transmute=1, Decompose=2]
-     *
-     * @param {Element} tablist - The alchemy tablist element
-     * @param {number} positionIndex - The zero-based position index of the desired tab
-     * @returns {Element|null} The tab element at the given position, or null
-     */
-    function getAlchemyTab(tablist, positionIndex) {
-        const children = Array.from(tablist.children);
-        return children[positionIndex] || null;
     }
 
     /**
@@ -15467,7 +14557,7 @@
             // No mirror used - return traditional result
             optimalStrategy = {
                 protectFrom: optimalTraditional.protectFrom,
-                label: optimalTraditional.protectFrom === 0 ? i18n_js.t('Never') : `+${optimalTraditional.protectFrom}`,
+                label: optimalTraditional.protectFrom === 0 ? t('Never') : `+${optimalTraditional.protectFrom}`,
                 expectedAttempts: optimalTraditional.expectedAttempts,
                 totalTime: optimalTraditional.totalTime,
                 baseCost: optimalTraditional.baseCost,
@@ -15650,7 +14740,7 @@
 
         return {
             protectFrom: optimalTraditional.protectFrom,
-            label: optimalTraditional.protectFrom === 0 ? i18n_js.t('Never') : `From +${optimalTraditional.protectFrom}`,
+            label: optimalTraditional.protectFrom === 0 ? t('Never') : `From +${optimalTraditional.protectFrom}`,
             expectedAttempts: totalAttempts,
             totalTime: totalTime,
             baseCost: 0, // Not applicable for mirror phase
@@ -16447,7 +15537,7 @@
     ) {
         const button = document.createElement('button');
         button.id = 'mwi-missing-mats-button';
-        button.textContent = i18n_js.t('Missing Mats Marketplace');
+        button.textContent = t('Missing Mats Marketplace');
         button.disabled = disabled;
         button.style.cssText = `
         width: 100%;
@@ -16569,9 +15659,9 @@
     function createMissingMaterialsButton(missingMaterials, actionHrid, numActions, disabled = false) {
         const button = document.createElement('button');
         button.id = 'mwi-missing-mats-button';
-        button.textContent = i18n_js.t('Missing Mats Marketplace');
+        button.textContent = t('Missing Mats Marketplace');
         button.disabled = disabled;
-        button.title = disabled && numActions <= 0 ? i18n_js.t('Enter a quantity to check missing materials') : '';
+        button.title = disabled && numActions <= 0 ? t('Enter a quantity to check missing materials') : '';
         button.style.cssText = `
         width: 100%;
         padding: 10px 16px;
@@ -16736,7 +15826,7 @@
     `;
 
         if (strategyInfo.protectFrom === 0) {
-            indicator.textContent = i18n_js.t('No protection needed');
+            indicator.textContent = t('No protection needed');
         } else {
             // Get item sprite URL from existing DOM
             const spriteUse = document.querySelector('use[href*="items_sprite"]');
@@ -16754,7 +15844,7 @@
             }
 
             const label = document.createElement('span');
-            label.textContent = i18n_js.t('From: +{0}', strategyInfo.protectFrom);
+            label.textContent = t('From: +{0}', strategyInfo.protectFrom);
             indicator.appendChild(label);
         }
 
@@ -16809,7 +15899,7 @@
         if (badgeSpan) {
             badgeSpan.innerHTML = `
             <div style="text-align: center;">
-                <div>${i18n_js.t('\u21a9 Return')}</div>
+                <div>${t('\u21a9 Return')}</div>
                 <div style="font-size: 0.75em; color: #60a5fa;">${displayName}</div>
             </div>
         `;
@@ -17023,15 +16113,15 @@
 
         if (!material.isTradeable) {
             statusColor = '#888888'; // Gray - not tradeable
-            statusText = i18n_js.t('Not Tradeable');
+            statusText = t('Not Tradeable');
         } else if (material.missing > 0) {
             statusColor = '#ef4444'; // Red - missing materials
             // Show queued amount if any materials are reserved by queue
             const queuedText = material.queued > 0 ? ` (${formatters_js.formatWithSeparator(material.queued)} Q'd)` : '';
-            statusText = i18n_js.t('Missing: {0}', `${formatters_js.formatWithSeparator(material.missing)}${queuedText}`);
+            statusText = t('Missing: {0}', `${formatters_js.formatWithSeparator(material.missing)}${queuedText}`);
         } else {
             statusColor = '#4ade80'; // Green - sufficient materials
-            statusText = i18n_js.t('Sufficient ({0})', formatters_js.formatWithSeparator(material.required));
+            statusText = t('Sufficient ({0})', formatters_js.formatWithSeparator(material.required));
         }
 
         // Title case: capitalize first letter of each word
@@ -17249,11 +16339,11 @@
     `;
         header.innerHTML = `
         <div>
-            <span style="font-size:15px; font-weight:600; color:#e0e0e0;">${i18n_js.t('Budget Calculator')}</span>
+            <span style="font-size:15px; font-weight:600; color:#e0e0e0;">${t('Budget Calculator')}</span>
             <span style="margin-left:10px; color:#aaa;">
-                ${i18n_js.t('Budget: {0}', formatters_js.formatKMB(budget))}
+                ${t('Budget: {0}', formatters_js.formatKMB(budget))}
                 &nbsp;→&nbsp;
-                <strong style="color:#7ec87e;">${i18n_js.t('{0} units', formatters_js.formatWithSeparator(result.n))}</strong>
+                <strong style="color:#7ec87e;">${t('{0} units', formatters_js.formatWithSeparator(result.n))}</strong>
             </span>
         </div>
         <button id="mwi-budget-modal-close" style="
@@ -17290,7 +16380,7 @@
 
                 const askCell = ask
                     ? `<td style="${tdStyle}">${formatters_js.formatKMB(ask)}</td>`
-                    : `<td style="${tdDimStyle}">${mat.isTradeable ? i18n_js.t('No data') : '—'}</td>`;
+                    : `<td style="${tdDimStyle}">${mat.isTradeable ? t('No data') : '—'}</td>`;
 
                 const costCell =
                     lineCost > 0
@@ -17316,22 +16406,22 @@
         <table style="width:100%; border-collapse:collapse;">
             <thead>
                 <tr>
-                    <th style="${thLeftStyle}">${i18n_js.t('Ingredient')}</th>
-                    <th style="${thStyle}">${i18n_js.t('Required')}</th>
-                    <th style="${thStyle}">${i18n_js.t('On Hand')}</th>
-                    <th style="${thStyle}">${i18n_js.t('To Buy')}</th>
-                    <th style="${thStyle}">${i18n_js.t('Ask Price')}</th>
-                    <th style="${thStyle}">${i18n_js.t('Total Cost')}</th>
+                    <th style="${thLeftStyle}">${t('Ingredient')}</th>
+                    <th style="${thStyle}">${t('Required')}</th>
+                    <th style="${thStyle}">${t('On Hand')}</th>
+                    <th style="${thStyle}">${t('To Buy')}</th>
+                    <th style="${thStyle}">${t('Ask Price')}</th>
+                    <th style="${thStyle}">${t('Total Cost')}</th>
                 </tr>
             </thead>
             <tbody>${rows}</tbody>
             <tfoot>
                 <tr>
-                    <td colspan="5" style="${summaryRowStyle}; text-align:left; color:#aaa;">${i18n_js.t('Per unit cost (ask)')}</td>
+                    <td colspan="5" style="${summaryRowStyle}; text-align:left; color:#aaa;">${t('Per unit cost (ask)')}</td>
                     <td style="${summaryRowStyle}">${formatters_js.formatKMB(Math.round(perUnitCost))}</td>
                 </tr>
                 <tr>
-                    <td colspan="5" style="${summaryRowStyle}; text-align:left; color:#aaa;">${i18n_js.t('Total spend')}</td>
+                    <td colspan="5" style="${summaryRowStyle}; text-align:left; color:#aaa;">${t('Total spend')}</td>
                     <td style="${summaryRowStyle}; color:#7ec87e;">${formatters_js.formatKMB(totalSpend)}</td>
                 </tr>
             </tfoot>
@@ -17446,7 +16536,7 @@
 
             const input = document.createElement('input');
             input.type = 'text';
-            input.placeholder = i18n_js.t('Budget (e.g. 50m)');
+            input.placeholder = t('Budget (e.g. 50m)');
             input.style.cssText = `
             flex: 1;
             background: #2a2a2a;
@@ -17459,7 +16549,7 @@
         `;
 
             const calcBtn = document.createElement('button');
-            calcBtn.textContent = i18n_js.t('Calculate');
+            calcBtn.textContent = t('Calculate');
             calcBtn.style.cssText = `
             background: linear-gradient(180deg, rgba(126,200,126,0.2) 0%, rgba(126,200,126,0.1) 100%);
             color: #e0e0e0;
@@ -17480,7 +16570,7 @@
             });
 
             const detailsLink = document.createElement('span');
-            detailsLink.title = i18n_js.t('View last breakdown');
+            detailsLink.title = t('View last breakdown');
             detailsLink.style.cssText = 'font-size:14px; cursor:pointer; opacity:0.4; user-select:none;';
             detailsLink.textContent = '📋';
             detailsLink.style.display = 'none';
@@ -17508,9 +16598,9 @@
 
                 const result = findMaxUnits(actionHrid, budget);
                 if (!result) {
-                    calcBtn.textContent = i18n_js.t('No data');
+                    calcBtn.textContent = t('No data');
                     const timeout = setTimeout(() => {
-                        calcBtn.textContent = i18n_js.t('Calculate');
+                        calcBtn.textContent = t('Calculate');
                     }, 2000);
                     this.timerRegistry.registerTimeout(timeout);
                     return;
@@ -17949,6 +17039,13 @@
 
 
     const UI_ID = 'mwi-crafting-plan';
+
+    const PRICING_MODES = [
+        { value: 'conservative', label: 'Instant Buy' },
+        { value: 'hybrid', label: 'Instant Buy / Patient Sell' },
+        { value: 'optimistic', label: 'Patient Buy / Patient Sell' },
+        { value: 'patientBuy', label: 'Patient Buy' },
+    ];
     const craftingPlanTabs = [];
     let cleanupObserver = null;
     const autofillManager = createAutofillManager('CraftingPlan');
@@ -18126,24 +17223,58 @@
         const content = document.createElement('div');
 
         // === Summary comparison ===
-        const unitCostText = plan.unitCost === Infinity ? '?' : i18n_js.t('{0}/ea', formatters_js.formatWithSeparator(Math.round(plan.unitCost)));
-        const buyText = plan.buyPrice !== null ? formatters_js.formatWithSeparator(Math.round(plan.buyPrice)) : i18n_js.t('N/A');
-        const craftText = plan.craftCost !== null ? formatters_js.formatWithSeparator(Math.round(plan.craftCost)) : i18n_js.t('N/A');
-        const strategyText = plan.strategy === 'buy' ? i18n_js.t('Buy from market') : i18n_js.t('Craft from materials');
+        const unitCostText = plan.unitCost === Infinity ? '?' : formatters_js.formatWithSeparator(Math.round(plan.unitCost));
+        const buyText = plan.buyPrice !== null ? formatters_js.formatWithSeparator(Math.round(plan.buyPrice)) : 'N/A';
+        const craftText = plan.craftCost !== null ? formatters_js.formatWithSeparator(Math.round(plan.craftCost)) : 'N/A';
+        const strategyText = plan.strategy === 'buy' ? 'Buy from market' : 'Craft from materials';
 
         const summary = document.createElement('div');
         summary.style.cssText = 'margin-bottom: 6px;';
         summary.innerHTML = `
         <div style="display: flex; justify-content: space-between; color: var(--text-color-primary, #fff);">
-            <span>${i18n_js.t('Optimal:')} <strong>${strategyText}</strong></span>
-            <span>${unitCostText}</span>
+            <span>Optimal: <strong>${strategyText}</strong></span>
+            <span>${unitCostText}/ea</span>
         </div>
         <div style="display: flex; justify-content: space-between; color: var(--text-color-secondary, #888); font-size: 0.9em;">
-            <span>${i18n_js.t('Market buy:')} ${buyText}</span>
-            <span>${i18n_js.t('Craft cost:')} ${craftText}</span>
+            <span>Market buy: ${buyText}</span>
+            <span>Craft cost: ${craftText}</span>
         </div>
     `;
         content.appendChild(summary);
+
+        // === Pricing mode toggle ===
+        const currentMode = PRICING_MODES.find((m) => m.value === mode) || PRICING_MODES[0];
+        const pricingRow = document.createElement('div');
+        pricingRow.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.85em;
+        color: var(--text-color-secondary, #888);
+        margin-bottom: 4px;
+    `;
+        const pricingLabel = document.createElement('span');
+        pricingLabel.textContent = 'Pricing:';
+        const pricingBtn = document.createElement('button');
+        pricingBtn.textContent = currentMode.label;
+        pricingBtn.style.cssText = `
+        font-size: 0.85em;
+        padding: 1px 6px;
+        background: var(--bg-color-tertiary, #1a1a1a);
+        color: var(--text-color-secondary, #ccc);
+        border: 1px solid var(--border-color, #444);
+        border-radius: 3px;
+        cursor: pointer;
+    `;
+        pricingBtn.addEventListener('click', () => {
+            const idx = PRICING_MODES.findIndex((m) => m.value === mode);
+            const next = PRICING_MODES[(idx + 1) % PRICING_MODES.length];
+            config.setSetting('profitCalc_pricingMode', next.value);
+            if (onToggle) onToggle();
+        });
+        pricingRow.appendChild(pricingLabel);
+        pricingRow.appendChild(pricingBtn);
+        content.appendChild(pricingRow);
 
         // === Buy intermediates toggle ===
         const toggleRow = document.createElement('label');
@@ -18165,7 +17296,7 @@
             if (onToggle) onToggle();
         });
         toggleRow.appendChild(checkbox);
-        toggleRow.appendChild(document.createTextNode(i18n_js.t('Buy raw materials only')));
+        toggleRow.appendChild(document.createTextNode('Buy raw materials only'));
         content.appendChild(toggleRow);
 
         // === No processing toggle ===
@@ -18188,7 +17319,7 @@
             if (onToggle) onToggle();
         });
         noProcessingRow.appendChild(noProcessingCheckbox);
-        noProcessingRow.appendChild(document.createTextNode(i18n_js.t('No processing (buy intermediates)')));
+        noProcessingRow.appendChild(document.createTextNode('No processing (buy intermediates)'));
         content.appendChild(noProcessingRow);
 
         // === Task mode toggle ===
@@ -18211,7 +17342,7 @@
             if (onToggle) onToggle();
         });
         taskToggleRow.appendChild(taskCheckbox);
-        taskToggleRow.appendChild(document.createTextNode(i18n_js.t('Task mode (force last step)')));
+        taskToggleRow.appendChild(document.createTextNode('Task mode (force last step)'));
         content.appendChild(taskToggleRow);
 
         // === Time cost toggle ===
@@ -18230,7 +17361,7 @@
         timeCostCheckbox.checked = timeCostEnabled;
         timeCostCheckbox.style.cssText = 'margin: 0; cursor: pointer;';
         timeCostRow.appendChild(timeCostCheckbox);
-        timeCostRow.appendChild(document.createTextNode(i18n_js.t('Factor in time cost')));
+        timeCostRow.appendChild(document.createTextNode('Factor in time cost'));
 
         const goldInput = document.createElement('input');
         goldInput.type = 'number';
@@ -18243,7 +17374,7 @@
     `;
         goldInput.style.display = timeCostEnabled ? '' : 'none';
         const goldLabel = document.createElement('span');
-        goldLabel.textContent = i18n_js.t('gold/hr');
+        goldLabel.textContent = 'gold/hr';
         goldLabel.style.fontSize = '0.85em';
         goldLabel.style.display = timeCostEnabled ? '' : 'none';
 
@@ -18265,7 +17396,7 @@
         // Only show breakdown if crafting is the optimal strategy
         if (plan.strategy !== 'craft' || plan.children.length === 0) {
             const costText = plan.unitCost === Infinity ? '?' : `${formatters_js.formatKMB(Math.round(plan.unitCost))}/ea`;
-            const section = uiComponents_js.createCollapsibleSection('', i18n_js.t('Best Crafting Plan'), costText, content, defaultOpen, 0);
+            const section = uiComponents_js.createCollapsibleSection('', 'Best Crafting Plan', costText, content, defaultOpen, 0);
             section.id = UI_ID;
             section.className = 'mwi-crafting-plan-section';
             return section;
@@ -18286,7 +17417,7 @@
             color: var(--text-color-primary, #fff);
             margin-bottom: 4px;
         `;
-            shoppingHeader.textContent = i18n_js.t('Shopping List');
+            shoppingHeader.textContent = 'Shopping List';
             content.appendChild(shoppingHeader);
 
             // Sort by total cost descending
@@ -18301,7 +17432,7 @@
 
             // Total buy cost
             const totalBuyCost = sortedItems.reduce((sum, item) => sum + item.totalCost, 0);
-            const totalRow = createRow(i18n_js.t('Total material cost'), formatters_js.formatWithSeparator(Math.round(totalBuyCost)), {
+            const totalRow = createRow('Total material cost', formatters_js.formatWithSeparator(Math.round(totalBuyCost)), {
                 leftColor: 'var(--text-color-primary, #fff)',
             });
             totalRow.style.borderTop = '1px solid var(--border-color, #333)';
@@ -18311,7 +17442,7 @@
 
             // === Buy Missing Materials button ===
             const buyButton = document.createElement('button');
-            buyButton.textContent = i18n_js.t('Buy Missing Materials');
+            buyButton.textContent = 'Buy Missing Materials';
             buyButton.style.cssText = `
             width: 100%; margin-top: 6px; padding: 6px;
             background: linear-gradient(135deg, #1e40af, #3b82f6);
@@ -18360,7 +17491,12 @@
                 // Wait for marketplace to appear
                 for (let i = 0; i < 50; i++) {
                     const tabsContainer = document.querySelector('.MuiTabs-flexContainer[role="tablist"]');
-                    if (tabsContainer && isMarketplacePanel(tabsContainer)) break;
+                    if (tabsContainer) {
+                        const hasMarketListings = Array.from(tabsContainer.children).some((btn) =>
+                            btn.textContent.includes('Market Listings')
+                        );
+                        if (hasMarketListings) break;
+                    }
                     await new Promise((resolve) => setTimeout(resolve, 100));
                 }
 
@@ -18385,18 +17521,20 @@
             color: var(--text-color-primary, #fff);
             margin-bottom: 4px;
         `;
-            stepsHeader.textContent = i18n_js.t('Crafting Steps');
+            stepsHeader.textContent = 'Crafting Steps';
             content.appendChild(stepsHeader);
 
             const gameData = dataManager.getInitClientData();
             const skills = dataManager.getSkills();
             const equipment = dataManager.getEquipment();
             let totalCraftSeconds = 0;
+            let totalXP = 0;
 
             for (let i = 0; i < craftSteps.length; i++) {
                 const step = craftSteps[i];
                 const qty = formatters_js.formatWithSeparator(step.quantity);
                 let timeStr = '';
+                let xpStr = '';
                 if (step.actionHrid) {
                     const actionDetails = gameData?.actionDetailMap?.[step.actionHrid];
                     if (actionDetails) {
@@ -18408,14 +17546,25 @@
                         const effMultiplier = efficiency_js.calculateEfficiencyMultiplier(stats.totalEfficiency);
                         const totalSeconds = (stats.actionTime * step.actionsNeeded) / effMultiplier;
                         totalCraftSeconds += totalSeconds;
-                        timeStr = ` (${formatters_js.timeReadableZh(totalSeconds)})`;
+                        timeStr = ` (${formatters_js.timeReadable(totalSeconds)}`;
+                    }
+                    const expData = experienceCalculator_js.calculateExpPerHour(step.actionHrid);
+                    if (expData?.expPerHour > 0 && expData.actionsPerHour > 0) {
+                        const xpPerAction = expData.expPerHour / expData.actionsPerHour;
+                        totalXP += xpPerAction * step.actionsNeeded;
+                        xpStr = ` · ${formatters_js.formatKMB(expData.expPerHour)} xp/hr`;
+                    }
+                    if (timeStr) {
+                        timeStr += `${xpStr})`;
+                    } else if (xpStr) {
+                        timeStr = ` (${xpStr.slice(3)})`;
                     }
                 }
                 content.appendChild(createRow(`${i + 1}. ${step.itemName}`, `x${qty}${timeStr}`));
             }
 
             if (totalCraftSeconds > 0) {
-                const totalTimeRow = createRow(i18n_js.t('Total craft time'), formatters_js.timeReadableZh(totalCraftSeconds), {
+                const totalTimeRow = createRow('Total craft time', formatters_js.timeReadable(totalCraftSeconds), {
                     leftColor: 'var(--text-color-primary, #fff)',
                 });
                 totalTimeRow.style.borderTop = '1px solid var(--border-color, #333)';
@@ -18423,10 +17572,18 @@
                 totalTimeRow.style.paddingTop = '4px';
                 content.appendChild(totalTimeRow);
             }
+
+            if (totalXP > 0) {
+                content.appendChild(
+                    createRow('Total XP', formatters_js.formatKMB(Math.round(totalXP)), {
+                        leftColor: 'var(--text-color-primary, #fff)',
+                    })
+                );
+            }
         }
 
         const costText = plan.unitCost === Infinity ? '?' : `${formatters_js.formatKMB(Math.round(plan.unitCost))}/ea`;
-        const section = uiComponents_js.createCollapsibleSection('', i18n_js.t('Best Crafting Plan'), costText, content, defaultOpen, 0);
+        const section = uiComponents_js.createCollapsibleSection('', 'Best Crafting Plan', costText, content, defaultOpen, 0);
         section.id = UI_ID;
         section.className = 'mwi-crafting-plan-section';
 
@@ -18444,7 +17601,7 @@
         removeMaterialTabs();
         craftingPlanTabs.length = 0;
 
-        const referenceTab = getMyListingsTab(tabsContainer);
+        const referenceTab = Array.from(tabsContainer.children).find((btn) => btn.textContent.includes('My Listings'));
         if (!referenceTab) return;
 
         tabsContainer.style.flexWrap = 'wrap';
@@ -19531,26 +18688,6 @@
     const GATHERING_SKILLS = ['milking', 'foraging', 'woodcutting'];
     const PRODUCTION_SKILLS = ['cheesesmithing', 'crafting', 'tailoring', 'cooking', 'brewing', 'alchemy'];
 
-    // Chinese locale support: translate Chinese skill names to English
-    const SKILL_ZH_TO_EN = {
-        挤奶: 'milking',
-        采集: 'foraging',
-        伐木: 'woodcutting',
-        奶酪锻造: 'cheesesmithing',
-        制作: 'crafting',
-        缝纫: 'tailoring',
-        编织: 'weaving',
-        烹饪: 'cooking',
-        酿造: 'brewing',
-        炼金: 'alchemy',
-        强化: 'enhancing',
-    };
-
-    const SKILL_ZH_TO_EN_LOWER = {};
-    Object.entries(SKILL_ZH_TO_EN).forEach(([zh, en]) => {
-        SKILL_ZH_TO_EN_LOWER[zh.toLowerCase()] = en;
-    });
-
     /**
      * Get all relevant teas for a skill and optimization goal
      * Returns teas grouped by exclusivity (skill teas are mutually exclusive)
@@ -19559,7 +18696,7 @@
      * @returns {Object} { skillTeas: [], generalTeas: [] }
      */
     function getRelevantTeas(skillName, goal) {
-        const skill = SKILL_ZH_TO_EN_LOWER[skillName.toLowerCase()] || skillName.toLowerCase();
+        const skill = skillName.toLowerCase();
         const isGathering = GATHERING_SKILLS.includes(skill);
 
         // Skill-specific teas (mutually exclusive - can only equip ONE)
@@ -20322,7 +19459,7 @@
         constraints = null,
         alchemyContext = null
     ) {
-        const normalizedSkill = SKILL_ZH_TO_EN_LOWER[skillName.toLowerCase()] || skillName.toLowerCase();
+        const normalizedSkill = skillName.toLowerCase();
         const isGathering = GATHERING_SKILLS.includes(normalizedSkill);
         const isProduction = PRODUCTION_SKILLS.includes(normalizedSkill);
 
@@ -20361,23 +19498,6 @@
 
         // Filter to specific location if provided (using game data category)
         if (locationName && gameData.actionCategoryDetailMap) {
-            // Translate Chinese location names to English for comparison against game data
-            const ZH_LOCATION_TO_EN = {
-                奶牛谷: 'Silly Cow Valley',
-                森林: 'Forest',
-                神秘森林: 'Mythic Forest',
-                树木: 'Trees',
-                特殊树木: 'Special Trees',
-                地狱: 'Hell',
-                蘑菇: 'Mushrooms',
-                浮岛: 'Floating Island',
-                魔法森林: 'Magic Forest',
-                沙漠: 'Desert',
-                水果: 'Fruit',
-                山脉: 'Mountains',
-            };
-            const comparedName = ZH_LOCATION_TO_EN[locationName] || locationName;
-
             // Find the category HRID that matches this location name AND skill
             // Multiple skills can have categories with the same name (e.g., "Material" exists for both Tailoring and Cheesesmithing)
             // So we need to match the skill-specific category path
@@ -20386,7 +19506,7 @@
 
             for (const [categoryHrid, categoryDetail] of Object.entries(gameData.actionCategoryDetailMap)) {
                 // Match both the category name AND ensure it's for the correct skill
-                if (categoryDetail.name === comparedName && categoryHrid.startsWith(skillPrefix)) {
+                if (categoryDetail.name === locationName && categoryHrid.startsWith(skillPrefix)) {
                     targetCategoryHrid = categoryHrid;
                     break;
                 }
@@ -20697,9 +19817,6 @@
                 const allButtons = Array.from(tablist?.querySelectorAll('button[role="tab"]') || []);
                 const tabIndex = allButtons.indexOf(button);
                 if (tabIndex >= 0 && allButtons.length - tabIndex > 1) {
-                    // Prefer data attribute for locale-safe HRID matching
-                    const hrid = button.getAttribute('data-category-hrid') || button.getAttribute('data-hrid');
-                    if (hrid) return hrid;
                     return button.textContent?.trim() || null;
                 }
             }
@@ -20780,7 +19897,7 @@
                 'GatheringProductionSkillPanel_label',
                 (labelElement) => {
                     this.checkAndInjectButtons(labelElement);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             // Observe for alchemy panel labels (different class from other skills)
@@ -20789,7 +19906,7 @@
                 'AlchemyPanel_label',
                 (labelElement) => {
                     this.checkAndInjectButtons(labelElement);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             this.unregisterHandlers.push(unregisterLabelObserver);
@@ -20831,11 +19948,11 @@
         `;
 
             // Create XP button
-            const xpButton = this.createButton(i18n_js.t('XP'), 'xp', config.COLOR_INFO);
+            const xpButton = this.createButton(t('XP'), 'xp', config.COLOR_INFO);
             // Create Gold button
-            const goldButton = this.createButton(i18n_js.t('Gold'), 'gold', config.COLOR_PROFIT);
+            const goldButton = this.createButton(t('Gold'), 'gold', config.COLOR_PROFIT);
             // Create Both button
-            const bothButton = this.createButton(i18n_js.t('Both'), 'both', config.COLOR_ACCENT);
+            const bothButton = this.createButton(t('Both'), 'both', config.COLOR_ACCENT);
 
             buttonContainer.appendChild(xpButton);
             buttonContainer.appendChild(goldButton);
@@ -20905,9 +20022,9 @@
             const isAlchemy = !!anchorButton.closest('[class*="AlchemyPanel_"]');
 
             // Get current skill name — action filter doesn't track alchemy, so override when needed
-            const skillName = isAlchemy ? 'Alchemy' : actionFilter.getCurrentSkillEnglishName();
+            const skillName = isAlchemy ? 'Alchemy' : actionFilter.getCurrentSkillName();
             if (!skillName) {
-                this.showError(anchorButton, i18n_js.t('Could not detect current skill'));
+                this.showError(anchorButton, t('Could not detect current skill'));
                 return;
             }
 
@@ -20919,7 +20036,7 @@
             if (isAlchemy) {
                 alchemyContext = await getAlchemyContext();
                 if (!alchemyContext) {
-                    this.showError(anchorButton, i18n_js.t('No item selected in alchemy panel'));
+                    this.showError(anchorButton, t('No item selected in alchemy panel'));
                     return;
                 }
             }
@@ -21018,13 +20135,13 @@
             cursor: grab;
             user-select: none;
         `;
-            header.title = i18n_js.t('Drag to move');
+            header.title = t('Drag to move');
             if (drilldownAction) {
-                header.textContent = i18n_js.t('Optimal {0}/hr for {1}', goalLabel, drilldownAction);
+                header.textContent = t('Optimal {0}/hr for {1}', goalLabel, drilldownAction);
             } else if (alchemyContext) {
                 const dcPercent = result.drinkConcentration ? (result.drinkConcentration * 100).toFixed(2) : 0;
                 const dcSuffix = dcPercent > 0 ? ` (${dcPercent}% DC)` : '';
-                header.textContent = i18n_js.t(
+                header.textContent = t(
                     'Optimal {0}/hr for {1}: {2}',
                     goalLabel,
                     alchemyContext.actionType,
@@ -21034,7 +20151,7 @@
                 const displayName = locationTab || skillName;
                 const dcPercent = result.drinkConcentration ? (result.drinkConcentration * 100).toFixed(2) : 0;
                 const dcSuffix = dcPercent > 0 ? ` (${dcPercent}% DC)` : '';
-                header.textContent = i18n_js.t('Optimal {0}/hr for {1}', goalLabel, displayName + dcSuffix);
+                header.textContent = t('Optimal {0}/hr for {1}', goalLabel, displayName + dcSuffix);
             }
             popup.appendChild(header);
             this.makeDraggable(popup, header);
@@ -21050,7 +20167,7 @@
                 background: rgba(0, 0, 0, 0.3);
                 border-radius: 4px;
             `;
-                noResult.textContent = i18n_js.t('No valid combinations with current constraints.');
+                noResult.textContent = t('No valid combinations with current constraints.');
                 popup.appendChild(noResult);
             } else {
                 const teaList = document.createElement('div');
@@ -21070,7 +20187,7 @@
                 color: #fff;
                 font-weight: 500;
             `;
-                    teaName.textContent = itemNameTranslator.getDisplayName(tea.hrid);
+                    teaName.textContent = tea.name;
 
                     const teaBuffs = document.createElement('span');
                     teaBuffs.style.cssText = `
@@ -21108,11 +20225,11 @@
             stats.innerHTML = `
             <div style="margin-bottom: 4px;">
                 <span style="color: ${goal === 'xp' ? config.COLOR_INFO : config.COLOR_PROFIT};">
-                    ${i18n_js.t('Avg {0}/hr: {1}', goalLabel, avgValue)}
+                    ${t('Avg {0}/hr: {1}', goalLabel, avgValue)}
                 </span>
             </div>
             <div style="font-size: 11px;">
-                ${i18n_js.t('Level')} ${result.playerLevel} •
+                ${t('Level')} ${result.playerLevel} •
             </div>
         `;
 
@@ -21124,7 +20241,7 @@
                 text-decoration: underline;
                 color: rgba(255, 255, 255, 0.5);
             `;
-                backLink.textContent = i18n_js.t('← All {0} actions', skillName);
+                backLink.textContent = t('← All {0} actions', skillName);
                 backLink.addEventListener('click', () => {
                     const allResult = findOptimalTeas(skillName, goal, locationTab, null, null, alchemyContext);
                     if (!allResult.error && allResult.optimal) {
@@ -21141,18 +20258,18 @@
                 } else if (goal === 'gold') {
                     actionsText =
                         excludedCount > 0
-                            ? i18n_js.t(
+                            ? t(
                                   '{0} profitable of {1} (+{2} excluded)',
                                   profitableCount,
                                   result.actionsEvaluated,
                                   excludedCount
                               )
-                            : i18n_js.t('{0} profitable of {1}', profitableCount, result.actionsEvaluated);
+                            : t('{0} profitable of {1}', profitableCount, result.actionsEvaluated);
                 } else {
                     actionsText =
                         excludedCount > 0
-                            ? i18n_js.t('{0} actions (+{1} excluded)', result.actionsEvaluated, excludedCount)
-                            : i18n_js.t('{0} actions evaluated', result.actionsEvaluated);
+                            ? t('{0} actions (+{1} excluded)', result.actionsEvaluated, excludedCount)
+                            : t('{0} actions evaluated', result.actionsEvaluated);
                 }
 
                 const actionsToggle = document.createElement('span');
@@ -21162,7 +20279,7 @@
                 color: rgba(255, 255, 255, 0.5);
             `;
                 actionsToggle.textContent = actionsText;
-                actionsToggle.title = i18n_js.t('Click to expand');
+                actionsToggle.title = t('Click to expand');
 
                 const actionsDetail = document.createElement('div');
                 actionsDetail.style.cssText = `
@@ -21240,7 +20357,7 @@
                         color: rgba(255, 255, 255, 0.4);
                         padding-top: 4px;
                     `;
-                        separator.textContent = i18n_js.t('Excluded ({0} - level too low)', excludedActions.length);
+                        separator.textContent = t('Excluded ({0} - level too low)', excludedActions.length);
                         actionsDetail.appendChild(separator);
                     }
 
@@ -21260,7 +20377,7 @@
                     `;
 
                         const levelReq = document.createElement('span');
-                        levelReq.textContent = i18n_js.t('Lvl {0}', excluded.requiredLevel);
+                        levelReq.textContent = t('Lvl {0}', excluded.requiredLevel);
                         levelReq.style.cssText = `
                         color: rgba(255, 255, 255, 0.35);
                         font-style: italic;
@@ -21281,13 +20398,13 @@
                     } else if (goal === 'gold') {
                         expandedText =
                             excludedCount > 0
-                                ? i18n_js.t('▼ {0} profitable (+{1})', profitableCount, excludedCount)
-                                : i18n_js.t('▼ {0} profitable', profitableCount);
+                                ? t('▼ {0} profitable (+{1})', profitableCount, excludedCount)
+                                : t('▼ {0} profitable', profitableCount);
                     } else {
                         expandedText =
                             excludedCount > 0
-                                ? i18n_js.t('▼ {0} (+{1})', result.actionsEvaluated, excludedCount)
-                                : i18n_js.t('▼ {0} actions', result.actionsEvaluated);
+                                ? t('▼ {0} (+{1})', result.actionsEvaluated, excludedCount)
+                                : t('▼ {0} actions', result.actionsEvaluated);
                     }
                     actionsToggle.textContent = isHidden ? expandedText : actionsText;
                 });
@@ -21308,8 +20425,8 @@
                 text-decoration: underline;
                 color: ${config.COLOR_GOLD};
             `;
-                costToggle.textContent = i18n_js.t('Tea cost: {0}/hr ▶', formatters_js.formatKMB(costData.total));
-                costToggle.title = i18n_js.t('Click to expand');
+                costToggle.textContent = t('Tea cost: {0}/hr ▶', formatters_js.formatKMB(costData.total));
+                costToggle.title = t('Click to expand');
 
                 const costDetail = document.createElement('div');
                 costDetail.style.cssText = `
@@ -21332,7 +20449,7 @@
                 border-bottom: 1px solid rgba(255, 255, 255, 0.15);
                 margin-bottom: 4px;
             `;
-                [i18n_js.t('Tea'), i18n_js.t('Units/hr'), i18n_js.t('Unit cost'), i18n_js.t('Cost/hr')].forEach((label) => {
+                [t('Tea'), t('Units/hr'), t('Unit cost'), t('Cost/hr')].forEach((label) => {
                     const cell = document.createElement('span');
                     cell.textContent = label;
                     cell.style.textAlign = 'right';
@@ -21380,7 +20497,7 @@
                 border-top: 1px solid rgba(255, 255, 255, 0.15);
                 color: rgba(255, 255, 255, 0.5);
             `;
-                [i18n_js.t('Total'), '', '', formatters_js.formatKMB(costData.total)].forEach((text, i) => {
+                [t('Total'), '', '', formatters_js.formatKMB(costData.total)].forEach((text, i) => {
                     const cell = document.createElement('span');
                     cell.textContent = text;
                     cell.style.textAlign = i === 0 ? 'left' : 'right';
@@ -21392,7 +20509,7 @@
                 costToggle.addEventListener('click', () => {
                     const isHidden = costDetail.style.display === 'none';
                     costDetail.style.display = isHidden ? 'block' : 'none';
-                    costToggle.textContent = i18n_js.t('Tea cost: {0}/hr {1}', formatters_js.formatKMB(costData.total), isHidden ? '▼' : '▶');
+                    costToggle.textContent = t('Tea cost: {0}/hr {1}', formatters_js.formatKMB(costData.total), isHidden ? '▼' : '▶');
                 });
 
                 costSection.appendChild(costToggle);
@@ -21417,7 +20534,7 @@
                 color: rgba(255, 255, 255, 0.5);
                 margin-bottom: 6px;
             `;
-                altHeader.textContent = i18n_js.t('Alternatives:');
+                altHeader.textContent = t('Alternatives:');
                 altSection.appendChild(altHeader);
 
                 // Show top 3 alternatives (skip the optimal)
@@ -21448,15 +20565,17 @@
 
             const constraintHeader = document.createElement('div');
             constraintHeader.style.cssText = `font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 6px;`;
-            constraintHeader.textContent = i18n_js.t('Tea Constraints:');
+            constraintHeader.textContent = t('Tea Constraints:');
             constraintSection.appendChild(constraintHeader);
 
             const relevantTeas = getRelevantTeas(skillName.toLowerCase(), goal);
             const allConstraintTeas = [...relevantTeas.skillTeas, ...relevantTeas.generalTeas];
+            const gameData = dataManager.getInitClientData();
+
             for (const hrid of allConstraintTeas) {
                 const isPinned = this.pinnedTeas.has(hrid);
                 const isBanned = this.bannedTeas.has(hrid);
-                const teaDisplayName = itemNameTranslator.getDisplayName(hrid);
+                const teaDisplayName = gameData?.itemDetailMap?.[hrid]?.name || hrid;
 
                 const row = document.createElement('div');
                 row.style.cssText = `
@@ -21482,7 +20601,7 @@
                 // Pin button ⊕
                 const pinBtn = document.createElement('button');
                 pinBtn.textContent = '⊕';
-                pinBtn.title = isPinned ? i18n_js.t('Remove pin') : i18n_js.t('Pin (force include)');
+                pinBtn.title = isPinned ? t('Remove pin') : t('Pin (force include)');
                 pinBtn.style.cssText = `
                 background: transparent;
                 border: 1px solid ${isPinned ? config.COLOR_GOLD : 'rgba(255,255,255,0.2)'};
@@ -21505,7 +20624,7 @@
                 // Ban button ⊘
                 const banBtn = document.createElement('button');
                 banBtn.textContent = '⊘';
-                banBtn.title = isBanned ? i18n_js.t('Remove ban') : i18n_js.t('Ban (force exclude)');
+                banBtn.title = isBanned ? t('Remove ban') : t('Ban (force exclude)');
                 banBtn.style.cssText = `
                 background: transparent;
                 border: 1px solid ${isBanned ? config.COLOR_LOSS : 'rgba(255,255,255,0.2)'};
@@ -21599,8 +20718,8 @@
             cursor: grab;
             user-select: none;
         `;
-            header.textContent = i18n_js.t('Optimal Teas for {0}', displayName);
-            header.title = i18n_js.t('Drag to move');
+            header.textContent = t('Optimal Teas for {0}', displayName);
+            header.title = t('Drag to move');
             popup.appendChild(header);
 
             this.makeDraggable(popup, header);
@@ -21634,7 +20753,7 @@
                     color: rgba(255, 255, 255, 0.8);
                     padding: 2px 0;
                 `;
-                    teaRow.textContent = itemNameTranslator.getDisplayName(tea.hrid);
+                    teaRow.textContent = tea.name;
                     xpCol.appendChild(teaRow);
                 }
 
@@ -21663,7 +20782,7 @@
                     color: rgba(255, 255, 255, 0.8);
                     padding: 2px 0;
                 `;
-                    teaRow.textContent = itemNameTranslator.getDisplayName(tea.hrid);
+                    teaRow.textContent = tea.name;
                     goldCol.appendChild(teaRow);
                 }
 
@@ -21895,6 +21014,7 @@
 
         for (const item of inventory) {
             if (item.itemLocationHrid !== '/item_locations/inventory') continue;
+            if (item.enhancementLevel) continue;
             const count = item.count || 0;
             if (!count) continue;
             map.set(item.itemHrid, (map.get(item.itemHrid) || 0) + count);
@@ -21948,9 +21068,24 @@
 
         initialize() {
             if (this.isInitialized) return;
-            if (!config.getSetting('inventoryCountDisplay', true)) return;
 
             this.isInitialized = true;
+
+            config.onSettingChange('inventoryCountDisplay', (enabled) => {
+                if (enabled) {
+                    this._enable();
+                } else {
+                    this._disable();
+                }
+            });
+
+            if (config.getSetting('inventoryCountDisplay', true)) {
+                this._enable();
+            }
+        }
+
+        _enable() {
+            if (this.unregisterObservers.length > 0) return;
 
             this._setupTileObserver();
             this._setupDetailObserver();
@@ -21965,6 +21100,17 @@
             this.unregisterObservers.push(() => {
                 dataManager.off('items_updated', this.itemsUpdatedHandler);
             });
+        }
+
+        _disable() {
+            this.unregisterObservers.forEach((fn) => fn());
+            this.unregisterObservers = [];
+
+            document.querySelectorAll('.mwi-inv-count-tile').forEach((el) => el.remove());
+            document.querySelectorAll('.mwi-inv-count-detail').forEach((el) => el.remove());
+
+            this.tileElements.clear();
+            this.detailPanels.clear();
         }
 
         // ─── Tile observer ────────────────────────────────────────────────────────
@@ -22098,7 +21244,7 @@
             margin-top: 2px;
             pointer-events: none;
         `;
-            span.textContent = count > 0 ? i18n_js.t('({0} in inventory)', formatCount(count)) : '';
+            span.textContent = count > 0 ? t('({0} in inventory)', formatCount(count)) : '';
 
             // Insert after the info container (nameEl's parent) so it sits on its own
             // line below the action name row. Inserting after nameEl itself puts the span
@@ -22134,7 +21280,7 @@
                 if (!span || !span.dataset.outputHrid) continue;
                 const count = countMap.get(span.dataset.outputHrid) || 0;
                 span.style.color = config.COLOR_INV_COUNT;
-                span.textContent = count > 0 ? i18n_js.t('({0} in inventory)', formatCount(count)) : '';
+                span.textContent = count > 0 ? t('({0} in inventory)', formatCount(count)) : '';
             }
         }
 
@@ -22152,14 +21298,7 @@
         }
 
         disable() {
-            this.unregisterObservers.forEach((fn) => fn());
-            this.unregisterObservers = [];
-
-            document.querySelectorAll('.mwi-inv-count-tile').forEach((el) => el.remove());
-            document.querySelectorAll('.mwi-inv-count-detail').forEach((el) => el.remove());
-
-            this.tileElements.clear();
-            this.detailPanels.clear();
+            this._disable();
             this.isInitialized = false;
         }
     }
@@ -22260,14 +21399,14 @@
     const GATHERING_TYPES = ['/action_types/foraging', '/action_types/woodcutting', '/action_types/milking'];
 
     const COLUMNS = [
-        { key: 'name', label: i18n_js.t('Action'), align: 'left', filterable: false },
-        { key: 'skill', label: i18n_js.t('Skill'), align: 'left', filterable: true },
-        { key: 'level', label: i18n_js.t('Lv'), align: 'left', filterable: false },
-        { key: 'profitPerHour', label: i18n_js.t('Profit/hr'), align: 'right', filterable: false },
-        { key: 'expPerHour', label: i18n_js.t('XP/hr'), align: 'right', filterable: false },
+        { key: 'name', label: t('Action'), align: 'left', filterable: false },
+        { key: 'skill', label: t('Skill'), align: 'left', filterable: true },
+        { key: 'level', label: t('Lv'), align: 'left', filterable: false },
+        { key: 'profitPerHour', label: t('Profit/hr'), align: 'right', filterable: false },
+        { key: 'expPerHour', label: t('XP/hr'), align: 'right', filterable: false },
     ];
 
-    const GRID_COLUMNS = '1fr 120px 50px 90px 90px';
+    const GRID_COLUMNS = '28px 1fr 120px 50px 90px 90px';
 
     /**
      * Get game object via React fiber tree traversal
@@ -22402,7 +21541,7 @@
             margin-bottom: 2px;
         `;
 
-            btn.innerHTML = `<span style="font-size: 1.1em;">📌</span><span>${i18n_js.t('Pinned')}</span>`;
+            btn.innerHTML = `<span style="font-size: 1.1em;">📌</span><span>${t('Pinned')}</span>`;
 
             btn.addEventListener('mouseenter', () => {
                 if (!this.isActive) {
@@ -22487,9 +21626,12 @@
                 const details = dataManager.getActionDetails(actionHrid);
                 if (!details) continue;
 
-                let displayName = itemNameTranslator.getDisplayName(actionHrid);
+                let displayName = details.name;
                 if (pinnedItemHrid) {
-                    displayName = `${itemNameTranslator.getDisplayName(actionHrid)} ${itemNameTranslator.getDisplayName(pinnedItemHrid)}`;
+                    const itemDetails = dataManager.getItemDetails(pinnedItemHrid);
+                    if (itemDetails) {
+                        displayName = `${details.name} ${itemDetails.name}`;
+                    }
                 }
 
                 let stats = actionPanelSort.getCachedStats(pinnedKey);
@@ -22508,6 +21650,10 @@
                     profitPerHour: stats?.profitPerHour ?? null,
                     expPerHour: stats?.expPerHour ?? null,
                 });
+            }
+
+            if (!this.itemsSpriteUrl) {
+                this.itemsSpriteUrl = await assetManifest.getSpriteUrl('items');
             }
 
             this.renderTable();
@@ -22576,7 +21722,7 @@
         `;
             header.innerHTML = `
             <span style="font-size: 1.3em;">📌</span>
-            <span style="font-size: 1.1em; font-weight: bold;">${i18n_js.t('Pinned Actions')}</span>
+            <span style="font-size: 1.1em; font-weight: bold;">${t('Pinned Actions')}</span>
             <span style="color: #888; font-size: 0.85em;">(${actions.length})</span>
         `;
             this.pageContainer.appendChild(header);
@@ -22591,7 +21737,7 @@
         `;
 
             for (const tab of ['overview', 'materials']) {
-                const label = tab === 'overview' ? i18n_js.t('Overview') : i18n_js.t('Materials');
+                const label = tab === 'overview' ? t('Overview') : t('Materials');
                 const btn = document.createElement('button');
                 btn.dataset.tab = tab;
                 btn.textContent = label;
@@ -22657,9 +21803,9 @@
                 empty.style.cssText = 'text-align: center; padding: 40px 20px; color: #999;';
                 empty.innerHTML = `
                 <div style="font-size: 2em; margin-bottom: 12px;">📌</div>
-                <div style="font-size: 1.1em; margin-bottom: 8px;">${i18n_js.t('No pinned actions yet')}</div>
+                <div style="font-size: 1.1em; margin-bottom: 8px;">${t('No pinned actions yet')}</div>
                 <div style="font-size: 0.85em; color: #666;">
-                    ${i18n_js.t('Pin actions using the 📌 icon on action tiles to see them here.')}
+                    ${t('Pin actions using the 📌 icon on action tiles to see them here.')}
                 </div>
             `;
                 this.contentArea.appendChild(empty);
@@ -22680,6 +21826,10 @@
             border-bottom: 2px solid #555;
             user-select: none;
         `;
+
+            // Empty header for icon column
+            const iconHeader = document.createElement('div');
+            headerRow.appendChild(iconHeader);
 
             for (const col of COLUMNS) {
                 const th = document.createElement('div');
@@ -22767,7 +21917,14 @@
                 background: ${rowBg};
             `;
 
+                const iconSlug = action.outputItemHrid ? action.outputItemHrid.split('/').pop() : '';
+                const iconHtml =
+                    this.itemsSpriteUrl && iconSlug
+                        ? `<svg width="24" height="24"><use href="${this.itemsSpriteUrl}#${iconSlug}"></use></svg>`
+                        : '';
+
                 row.innerHTML = `
+                <span style="display: flex; align-items: center; justify-content: center;">${iconHtml}</span>
                 <span style="font-weight: 500; text-align: left;">${action.name}</span>
                 <span style="color: #aaa; font-size: 0.9em; text-align: left;">${action.skill}</span>
                 <span style="color: #aaa; text-align: left;">${action.level}</span>
@@ -22800,7 +21957,7 @@
             if (actions.length === 0 && this.allActions.length > 0) {
                 const noResults = document.createElement('div');
                 noResults.style.cssText = 'text-align: center; padding: 20px; color: #888;';
-                noResults.textContent = i18n_js.t('No actions match the current filter.');
+                noResults.textContent = t('No actions match the current filter.');
                 this.contentArea.appendChild(noResults);
             }
         }
@@ -22825,7 +21982,7 @@
             if (productionActions.length === 0) {
                 const empty = document.createElement('div');
                 empty.style.cssText = 'text-align: center; padding: 40px 20px; color: #999;';
-                empty.textContent = i18n_js.t('No production actions pinned');
+                empty.textContent = t('No production actions pinned');
                 contentArea.appendChild(empty);
                 return;
             }
@@ -22867,7 +22024,7 @@
                 // Can produce count
                 const canProduceEl = document.createElement('div');
                 canProduceEl.style.cssText = `font-size: 0.85em; color: ${canProduce > 0 ? config.COLOR_PROFIT : config.COLOR_LOSS};`;
-                canProduceEl.textContent = i18n_js.t('Can produce: {0}', canProduce.toLocaleString());
+                canProduceEl.textContent = t('Can produce: {0}', canProduce.toLocaleString());
 
                 groupHeader.appendChild(iconEl);
                 groupHeader.appendChild(nameEl);
@@ -22938,7 +22095,7 @@
 
             // Title
             const title = document.createElement('div');
-            title.textContent = i18n_js.t('Filter by Skill');
+            title.textContent = t('Filter by Skill');
             title.style.cssText = 'color: #fff; font-weight: bold; margin-bottom: 10px; font-size: 0.85em;';
             popup.appendChild(title);
 
@@ -22973,7 +22130,7 @@
             btnRow.style.cssText = 'display: flex; gap: 8px;';
 
             const applyBtn = document.createElement('button');
-            applyBtn.textContent = i18n_js.t('Apply');
+            applyBtn.textContent = t('Apply');
             applyBtn.style.cssText = `
             flex: 1;
             padding: 6px;
@@ -22986,7 +22143,7 @@
         `;
 
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = i18n_js.t('Clear');
+            clearBtn.textContent = t('Clear');
             clearBtn.style.cssText = `
             flex: 1;
             padding: 6px;
@@ -23423,7 +22580,7 @@
                     this.checkAndUpdateDisplay();
                     // Setup content observer when alchemy component appears
                     this.setupContentObserver(alchemyComponent);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             // Initial check for existing panel
@@ -23772,7 +22929,7 @@
 
             // Revenue Section
             const revenueDiv = document.createElement('div');
-            revenueDiv.innerHTML = `<div style="font-weight: 500; color: var(--text-color-primary, #fff); margin-bottom: 4px;">${i18n_js.t('Revenue: {0}/hr', formatters_js.formatLargeNumber(revenue))}</div>`;
+            revenueDiv.innerHTML = `<div style="font-weight: 500; color: var(--text-color-primary, #fff); margin-bottom: 4px;">Revenue: ${formatters_js.formatLargeNumber(revenue)}/hr</div>`;
 
             // Split drops into normal, essence, and rare
             const normalDrops = profitData.dropRevenues.filter((drop) => !drop.isEssence && !drop.isRare);
@@ -23785,7 +22942,8 @@
                 let normalDropsRevenue = 0;
 
                 for (const drop of normalDrops) {
-                    const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
+                    const itemDetails = dataManager.getItemDetails(drop.itemHrid);
+                    const itemName = itemDetails?.name || drop.itemHrid;
                     const decimals = 2; // Always use 2 decimals
                     const dropRatePct = formatters_js.formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
 
@@ -23808,7 +22966,7 @@
 
                 const normalDropsSection = this.createTrackedCollapsible(
                     '',
-                    i18n_js.t('Normal Drops: {0}/hr', formatters_js.formatLargeNumber(Math.round(normalDropsRevenue))),
+                    `Normal Drops: ${formatters_js.formatLargeNumber(Math.round(normalDropsRevenue))}/hr (${normalDrops.length} item${normalDrops.length !== 1 ? 's' : ''})`,
                     null,
                     normalDropsContent,
                     false,
@@ -23823,7 +22981,8 @@
                 let essenceRevenue = 0;
 
                 for (const drop of essenceDrops) {
-                    const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
+                    const itemDetails = dataManager.getItemDetails(drop.itemHrid);
+                    const itemName = itemDetails?.name || drop.itemHrid;
                     const decimals = 2; // Always use 2 decimals
                     const dropRatePct = formatters_js.formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
 
@@ -23837,7 +22996,7 @@
 
                 const essenceSection = this.createTrackedCollapsible(
                     '',
-                    i18n_js.t('Essence Drops: {0}/hr', formatters_js.formatLargeNumber(Math.round(essenceRevenue))),
+                    `Essence Drops: ${formatters_js.formatLargeNumber(Math.round(essenceRevenue))}/hr (${essenceDrops.length} item${essenceDrops.length !== 1 ? 's' : ''})`,
                     null,
                     essenceContent,
                     false,
@@ -23852,7 +23011,8 @@
                 let rareRevenue = 0;
 
                 for (const drop of rareDrops) {
-                    const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
+                    const itemDetails = dataManager.getItemDetails(drop.itemHrid);
+                    const itemName = itemDetails?.name || drop.itemHrid;
                     const decimals = drop.dropsPerHour < 1 ? 2 : 1;
                     const baseDropRatePct = formatters_js.formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
                     const effectiveDropRatePct = formatters_js.formatPercentage(
@@ -23878,7 +23038,7 @@
 
                 const rareSection = this.createTrackedCollapsible(
                     '',
-                    i18n_js.t('Rare Drops: {0}/hr', formatters_js.formatLargeNumber(Math.round(rareRevenue))),
+                    `Rare Drops: ${formatters_js.formatLargeNumber(Math.round(rareRevenue))}/hr (${rareDrops.length} item${rareDrops.length !== 1 ? 's' : ''})`,
                     null,
                     rareContent,
                     false,
@@ -23889,13 +23049,14 @@
 
             // Costs Section
             const costsDiv = document.createElement('div');
-            costsDiv.innerHTML = `<div style="font-weight: 500; color: var(--text-color-primary, #fff); margin-top: 12px; margin-bottom: 4px;">${i18n_js.t('Costs: {0}/hr', formatters_js.formatLargeNumber(costs))}</div>`;
+            costsDiv.innerHTML = `<div style="font-weight: 500; color: var(--text-color-primary, #fff); margin-top: 12px; margin-bottom: 4px;">Costs: ${formatters_js.formatLargeNumber(costs)}/hr</div>`;
 
             // Material Costs subsection (consumed on ALL attempts)
             if (profitData.requirementCosts && profitData.requirementCosts.length > 0) {
                 const materialCostsContent = document.createElement('div');
                 for (const material of profitData.requirementCosts) {
-                    const itemName = itemNameTranslator.getDisplayName(material.itemHrid);
+                    const itemDetails = dataManager.getItemDetails(material.itemHrid);
+                    const itemName = itemDetails?.name || material.itemHrid;
                     const amountPerHour = material.count * profitData.actionsPerHour;
 
                     const line = document.createElement('div');
@@ -23923,7 +23084,7 @@
 
                 const materialCostsSection = this.createTrackedCollapsible(
                     '',
-                    i18n_js.t('Material Costs: {0}/hr', formatters_js.formatLargeNumber(Math.round(profitData.materialCostPerHour))),
+                    `Material Costs: ${formatters_js.formatLargeNumber(Math.round(profitData.materialCostPerHour))}/hr (${profitData.requirementCosts.length} material${profitData.requirementCosts.length !== 1 ? 's' : ''})`,
                     null,
                     materialCostsContent,
                     false,
@@ -23935,7 +23096,8 @@
             // Catalyst Cost subsection (consumed only on success)
             if (profitData.catalystCost && profitData.catalystCost.itemHrid) {
                 const catalystContent = document.createElement('div');
-                const itemName = itemNameTranslator.getDisplayName(profitData.catalystCost.itemHrid);
+                const itemDetails = dataManager.getItemDetails(profitData.catalystCost.itemHrid);
+                const itemName = itemDetails?.name || profitData.catalystCost.itemHrid;
 
                 // Calculate catalysts per hour (only consumed on success)
                 const catalystsPerHour = profitData.actionsPerHour * profitData.successRate;
@@ -23953,7 +23115,7 @@
 
                 const catalystSection = this.createTrackedCollapsible(
                     '',
-                    i18n_js.t('Catalyst Cost: {0}/hr', formatters_js.formatLargeNumber(Math.round(profitData.catalystCost.costPerHour))),
+                    `Catalyst Cost: ${formatters_js.formatLargeNumber(Math.round(profitData.catalystCost.costPerHour))}/hr`,
                     null,
                     catalystContent,
                     false,
@@ -23966,7 +23128,8 @@
             if (profitData.consumableCosts && profitData.consumableCosts.length > 0) {
                 const drinkCostsContent = document.createElement('div');
                 for (const drink of profitData.consumableCosts) {
-                    const itemName = itemNameTranslator.getDisplayName(drink.itemHrid);
+                    const itemDetails = dataManager.getItemDetails(drink.itemHrid);
+                    const itemName = itemDetails?.name || drink.itemHrid;
 
                     // Format drinks per hour
                     const formattedDrinkAmount =
@@ -23980,10 +23143,10 @@
                     drinkCostsContent.appendChild(line);
                 }
 
-                profitData.consumableCosts.length;
+                const drinkCount = profitData.consumableCosts.length;
                 const drinkCostsSection = this.createTrackedCollapsible(
                     '',
-                    i18n_js.t('Drink Costs: {0}/hr', formatters_js.formatLargeNumber(Math.round(profitData.totalTeaCostPerHour))),
+                    `Drink Costs: ${formatters_js.formatLargeNumber(Math.round(profitData.totalTeaCostPerHour))}/hr (${drinkCount} drink${drinkCount !== 1 ? 's' : ''})`,
                     null,
                     drinkCostsContent,
                     false,
@@ -24001,7 +23164,7 @@
             // Main modifiers header
             const modifiersHeader = document.createElement('div');
             modifiersHeader.style.cssText = 'font-weight: 500; color: var(--text-color-primary, #fff); margin-bottom: 4px;';
-            modifiersHeader.textContent = i18n_js.t('Modifiers:');
+            modifiersHeader.textContent = 'Modifiers:';
             modifiersDiv.appendChild(modifiersHeader);
 
             // Success Rate breakdown
@@ -24012,20 +23175,20 @@
                 // Base success rate (from player level vs recipe requirement)
                 const line = document.createElement('div');
                 line.style.marginLeft = '8px';
-                line.textContent = `• ${i18n_js.t('Base Success Rate')}: ${formatters_js.formatPercentage(successBreakdown.base, 1)}`;
+                line.textContent = `• Base Success Rate: ${formatters_js.formatPercentage(successBreakdown.base, 1)}`;
                 successContent.appendChild(line);
 
                 // Tea bonus (from Catalytic Tea)
                 if (successBreakdown.tea > 0) {
                     const teaLine = document.createElement('div');
                     teaLine.style.marginLeft = '8px';
-                    teaLine.textContent = `• ${i18n_js.t('Tea Bonus')}: +${formatters_js.formatPercentage(successBreakdown.tea, 1)} (multiplicative)`;
+                    teaLine.textContent = `• Tea Bonus: +${formatters_js.formatPercentage(successBreakdown.tea, 1)} (multiplicative)`;
                     successContent.appendChild(teaLine);
                 }
 
                 const successSection = this.createTrackedCollapsible(
                     '',
-                    i18n_js.t('Success Rate: {0}', formatters_js.formatPercentage(profitData.successRate, 1)),
+                    `Success Rate: ${formatters_js.formatPercentage(profitData.successRate, 1)}`,
                     null,
                     successContent,
                     false,
@@ -24036,7 +23199,7 @@
                 // Fallback if breakdown not available
                 const successRateLine = document.createElement('div');
                 successRateLine.style.marginLeft = '8px';
-                successRateLine.textContent = `• ${i18n_js.t('Success Rate')}: ${formatters_js.formatPercentage(profitData.successRate, 1)}`;
+                successRateLine.textContent = `• Success Rate: ${formatters_js.formatPercentage(profitData.successRate, 1)}`;
                 modifiersDiv.appendChild(successRateLine);
             }
 
@@ -24048,48 +23211,48 @@
                 if (effBreakdown.levelEfficiency > 0) {
                     const line = document.createElement('div');
                     line.style.marginLeft = '8px';
-                    line.textContent = `• ${i18n_js.t('Level Bonus')}: +${effBreakdown.levelEfficiency.toFixed(2)}%`;
+                    line.textContent = `• Level Bonus: +${effBreakdown.levelEfficiency.toFixed(2)}%`;
                     effContent.appendChild(line);
                 }
 
                 if (effBreakdown.houseEfficiency > 0) {
                     const line = document.createElement('div');
                     line.style.marginLeft = '8px';
-                    line.textContent = `• ${i18n_js.t('House Bonus')}: +${effBreakdown.houseEfficiency.toFixed(2)}%`;
+                    line.textContent = `• House Bonus: +${effBreakdown.houseEfficiency.toFixed(2)}%`;
                     effContent.appendChild(line);
                 }
 
                 if (effBreakdown.teaEfficiency > 0) {
                     const line = document.createElement('div');
                     line.style.marginLeft = '8px';
-                    line.textContent = `• ${i18n_js.t('Tea Bonus')}: +${effBreakdown.teaEfficiency.toFixed(2)}%`;
+                    line.textContent = `• Tea Bonus: +${effBreakdown.teaEfficiency.toFixed(2)}%`;
                     effContent.appendChild(line);
                 }
 
                 if (effBreakdown.equipmentEfficiency > 0) {
                     const line = document.createElement('div');
                     line.style.marginLeft = '8px';
-                    line.textContent = `• ${i18n_js.t('Equipment Bonus')}: +${effBreakdown.equipmentEfficiency.toFixed(2)}%`;
+                    line.textContent = `• Equipment Bonus: +${effBreakdown.equipmentEfficiency.toFixed(2)}%`;
                     effContent.appendChild(line);
                 }
 
                 if (effBreakdown.communityEfficiency > 0) {
                     const line = document.createElement('div');
                     line.style.marginLeft = '8px';
-                    line.textContent = `• ${i18n_js.t('Community Buff')}: +${effBreakdown.communityEfficiency.toFixed(2)}%`;
+                    line.textContent = `• Community Buff: +${effBreakdown.communityEfficiency.toFixed(2)}%`;
                     effContent.appendChild(line);
                 }
 
                 if (effBreakdown.achievementEfficiency > 0) {
                     const line = document.createElement('div');
                     line.style.marginLeft = '8px';
-                    line.textContent = `• ${i18n_js.t('Achievement Bonus')}: +${effBreakdown.achievementEfficiency.toFixed(2)}%`;
+                    line.textContent = `• Achievement Bonus: +${effBreakdown.achievementEfficiency.toFixed(2)}%`;
                     effContent.appendChild(line);
                 }
 
                 const effSection = this.createTrackedCollapsible(
                     '',
-                    i18n_js.t('Efficiency: +{0}', formatters_js.formatPercentage(profitData.efficiency, 1)),
+                    `Efficiency: +${formatters_js.formatPercentage(profitData.efficiency, 1)}`,
                     null,
                     effContent,
                     false,
@@ -24123,7 +23286,7 @@
 
                     const speedSection = this.createTrackedCollapsible(
                         '',
-                        i18n_js.t('Action Speed: +{0}', formatters_js.formatPercentage(actionSpeed, 1)),
+                        `Action Speed: +${formatters_js.formatPercentage(actionSpeed, 1)}`,
                         null,
                         speedContent,
                         false,
@@ -24163,7 +23326,7 @@
 
                     const rareSection = this.createTrackedCollapsible(
                         '',
-                        i18n_js.t('Rare Find: +{0}%', rareBreakdown.total.toFixed(2)),
+                        `Rare Find: +${rareBreakdown.total.toFixed(2)}%`,
                         null,
                         rareContent,
                         false,
@@ -24189,7 +23352,7 @@
 
                     const essenceSection = this.createTrackedCollapsible(
                         '',
-                        i18n_js.t('Essence Find: +{0}%', essenceBreakdown.total.toFixed(2)),
+                        `Essence Find: +${essenceBreakdown.total.toFixed(2)}%`,
                         null,
                         essenceContent,
                         false,
@@ -24218,11 +23381,7 @@
             color: ${profitColor};
             margin-bottom: 8px;
         `;
-            netProfitLine.textContent = i18n_js.t(
-                'Net Profit: {0}/hr, {1}/day',
-                formatters_js.formatLargeNumber(profit),
-                formatters_js.formatLargeNumber(profitPerDay)
-            );
+            netProfitLine.textContent = `Net Profit: ${formatters_js.formatLargeNumber(profit)}/hr, ${formatters_js.formatLargeNumber(profitPerDay)}/day`;
             topLevelContent.appendChild(netProfitLine);
 
             // Add pricing mode label
@@ -24235,12 +23394,12 @@
             color: #888;
             font-size: 0.85em;
         `;
-            modeDiv.textContent = i18n_js.t('Pricing Mode: {0}', modeLabel);
+            modeDiv.textContent = `Pricing Mode: ${modeLabel}`;
             topLevelContent.appendChild(modeDiv);
 
             const detailedBreakdownSection = this.createTrackedCollapsible(
                 '📊',
-                i18n_js.t('Detailed Breakdown'),
+                'Detailed Breakdown',
                 null,
                 detailsContent,
                 false,
@@ -24250,14 +23409,7 @@
             topLevelContent.appendChild(detailedBreakdownSection);
 
             // Create main profit section
-            const profitSection = this.createTrackedCollapsible(
-                '💰',
-                i18n_js.t('Profitability'),
-                summary,
-                topLevelContent,
-                false,
-                0
-            );
+            const profitSection = this.createTrackedCollapsible('💰', 'Profitability', summary, topLevelContent, false, 0);
             profitSection.id = 'mwi-alchemy-profit';
             profitSection.classList.add('mwi-alchemy-profit');
             profitSection.setAttribute('data-mwi-profit-display', 'true');
@@ -24446,7 +23598,7 @@
                     const inputValue = inputField.value;
 
                     if (inputValue === '∞') {
-                        totalTimeLine.textContent = i18n_js.t('Total time: ∞');
+                        totalTimeLine.textContent = 'Total time: ∞';
                         return;
                     }
 
@@ -24454,9 +23606,9 @@
                     if (repeatCount > 0) {
                         const baseActionsNeeded = Math.ceil(repeatCount / efficiencyMultiplier);
                         const totalSeconds = baseActionsNeeded * actionTime;
-                        totalTimeLine.textContent = `Total time: ${formatters_js.timeReadableZh(totalSeconds)}`;
+                        totalTimeLine.textContent = `Total time: ${formatters_js.timeReadable(totalSeconds)}`;
                     } else {
-                        totalTimeLine.textContent = i18n_js.t('Total time: 0s');
+                        totalTimeLine.textContent = 'Total time: 0s';
                     }
                 };
 
@@ -24483,7 +23635,7 @@
                     if (repeatCount > 0) {
                         const baseActionsNeeded = Math.ceil(repeatCount / efficiencyMultiplier);
                         const totalSeconds = baseActionsNeeded * actionTime;
-                        return `${effectiveActionsPerHour}/hr | Total time: ${formatters_js.timeReadableZh(totalSeconds)}`;
+                        return `${effectiveActionsPerHour}/hr | Total time: ${formatters_js.timeReadable(totalSeconds)}`;
                     }
                     return `${effectiveActionsPerHour}/hr | Total time: 0s`;
                 };
@@ -24638,7 +23790,7 @@
                     `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">To Level ${nextLevel}:</span>`
                 );
                 lines.push(`  Actions: ${formatters_js.formatWithSeparator(actionsNeeded)}`);
-                lines.push(`  Time: ${formatters_js.timeReadableZh(timeNeeded)}`);
+                lines.push(`  Time: ${formatters_js.timeReadable(timeNeeded)}`);
 
                 lines.push('');
 
@@ -24669,7 +23821,7 @@
                 <span>:</span>
             </div>`);
                 lines.push(`<div id="mwi-alchemy-target-level-result" style="margin-top: 4px; margin-left: 8px;">
-                ${formatters_js.formatWithSeparator(actionsNeeded)} actions | ${formatters_js.timeReadableZh(timeNeeded)}
+                ${formatters_js.formatWithSeparator(actionsNeeded)} actions | ${formatters_js.timeReadable(timeNeeded)}
             </div>`);
 
                 lines.push('');
@@ -24697,10 +23849,10 @@
                             xpPerAction,
                             levelExperienceTable
                         );
-                        targetLevelResult.innerHTML = `${formatters_js.formatWithSeparator(result.actionsNeeded)} actions | ${formatters_js.timeReadableZh(result.timeNeeded)}`;
+                        targetLevelResult.innerHTML = `${formatters_js.formatWithSeparator(result.actionsNeeded)} actions | ${formatters_js.timeReadable(result.timeNeeded)}`;
                         targetLevelResult.style.color = `var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY})`;
                     } else {
-                        targetLevelResult.textContent = i18n_js.t('Invalid level');
+                        targetLevelResult.textContent = 'Invalid level';
                         targetLevelResult.style.color = 'var(--color-error, #ff4444)';
                     }
                 };
@@ -24713,7 +23865,7 @@
                 }
 
                 // Create summary for collapsed view
-                const summary = `${formatters_js.timeReadableZh(timeNeeded)} to Level ${nextLevel}`;
+                const summary = `${formatters_js.timeReadable(timeNeeded)} to Level ${nextLevel}`;
 
                 return this.createTrackedCollapsible('📈', 'Level Progress', summary, content, false);
             } catch (error) {
@@ -24899,13 +24051,18 @@
                 if (!tablist) return;
 
                 // Verify this is the alchemy tablist
-                if (!isAlchemyPanel(tablist)) return;
+                const hasCoinify = Array.from(tablist.children).some(
+                    (btn) => btn.textContent.includes('Coinify') && !btn.dataset.mwiBestItemsTab
+                );
+                if (!hasCoinify) return;
 
                 // Already injected?
                 if (tablist.querySelector('[data-mwi-best-items-tab="true"]')) return;
 
                 // Clone an existing tab for structure
-                const referenceTab = getAlchemyTab(tablist, 0);
+                const referenceTab = Array.from(tablist.children).find(
+                    (btn) => btn.textContent.includes('Coinify') && !btn.dataset.mwiBestItemsTab
+                );
                 if (!referenceTab) return;
 
                 const tab = referenceTab.cloneNode(true);
@@ -24919,10 +24076,10 @@
                 if (badge) {
                     const badgeSpan = badge.querySelector('.MuiBadge-badge');
                     badge.textContent = '';
-                    badge.appendChild(document.createTextNode(i18n_js.t('Best Items')));
+                    badge.appendChild(document.createTextNode('Best Items'));
                     if (badgeSpan) badge.appendChild(badgeSpan);
                 } else {
-                    tab.textContent = i18n_js.t('Best Items');
+                    tab.textContent = 'Best Items';
                 }
 
                 tab.addEventListener('click', (e) => {
@@ -24958,13 +24115,11 @@
          */
         detectAlchemyType() {
             const tabContainer = document.querySelector('[class*="AlchemyPanel_tabsComponentContainer"]');
-            const tablist = tabContainer?.querySelector('[role="tablist"]');
-            if (!tablist) return 'coinify';
-            const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
-            const selectedIdx = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
-            // Alchemy tabs order: [Coinify=0, Transmute=1, Decompose=2]
-            if (selectedIdx === 1) return 'transmute';
-            if (selectedIdx === 2) return 'decompose';
+            const selectedTab = tabContainer?.querySelector('[role="tab"][aria-selected="true"]');
+            const text = selectedTab?.textContent?.trim()?.toLowerCase() || '';
+
+            if (text.includes('decompose')) return 'decompose';
+            if (text.includes('transmute')) return 'transmute';
             return 'coinify';
         }
 
@@ -25012,7 +24167,7 @@
 
                 results.push({
                     itemHrid,
-                    name: itemNameTranslator.getDisplayName(itemHrid),
+                    name: itemDetails.name,
                     itemLevel,
                     itemPrice: marketData_js.getItemPrice(itemHrid, { context: 'profit', side: 'buy' }) || 0,
                     profitPerHour: profitData.profitPerHour,
@@ -25139,12 +24294,12 @@
             // Sort toggle
             const sortLabel = document.createElement('span');
             sortLabel.style.cssText = 'color: #aaa; font-size: 0.75rem;';
-            sortLabel.textContent = i18n_js.t('Sort by:');
+            sortLabel.textContent = 'Sort by:';
             controls.appendChild(sortLabel);
 
             for (const mode of ['profit', 'xp']) {
                 const btn = document.createElement('button');
-                btn.textContent = mode === 'profit' ? i18n_js.t('Profit/hr') : i18n_js.t('XP/hr');
+                btn.textContent = mode === 'profit' ? 'Profit/hr' : 'XP/hr';
                 btn.setAttribute('data-mwi-sort-btn', mode);
                 btn.style.cssText = `
                 padding: 3px 8px; border-radius: 4px; cursor: pointer;
@@ -25160,7 +24315,7 @@
             // Profitable only toggle
             const profitToggle = document.createElement('button');
             profitToggle.setAttribute('data-mwi-profit-toggle', 'true');
-            profitToggle.textContent = i18n_js.t('Profitable only');
+            profitToggle.textContent = 'Profitable only';
             profitToggle.style.cssText = `
             padding: 3px 8px; border-radius: 4px; cursor: pointer;
             border: 1px solid #555; font-size: 0.75rem; color: #fff;
@@ -25179,7 +24334,7 @@
             searchRow.style.cssText = 'display: flex; margin-bottom: 8px;';
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = i18n_js.t('Search items...');
+            searchInput.placeholder = 'Search items...';
             searchInput.setAttribute('data-mwi-best-search', 'true');
             searchInput.style.cssText = `
             flex: 1; padding: 5px 10px; border-radius: 4px;
@@ -25207,14 +24362,14 @@
             // Profit/hr filter
             const profitFilter = document.createElement('span');
             profitFilter.style.cssText = 'display: flex; align-items: center; gap: 4px;';
-            profitFilter.innerHTML = i18n_js.t('Profit/hr:');
+            profitFilter.innerHTML = 'Profit/hr:';
             const profitMin = document.createElement('input');
             profitMin.type = 'text';
-            profitMin.placeholder = i18n_js.t('Min');
+            profitMin.placeholder = 'Min';
             profitMin.style.cssText = filterInputStyle;
             const profitMax = document.createElement('input');
             profitMax.type = 'text';
-            profitMax.placeholder = i18n_js.t('Max');
+            profitMax.placeholder = 'Max';
             profitMax.style.cssText = filterInputStyle;
 
             const parseFilterValue = (val) => {
@@ -25245,14 +24400,14 @@
             // Item price filter
             const priceFilter = document.createElement('span');
             priceFilter.style.cssText = 'display: flex; align-items: center; gap: 4px;';
-            priceFilter.innerHTML = i18n_js.t('Item price:');
+            priceFilter.innerHTML = 'Item price:';
             const priceMin = document.createElement('input');
             priceMin.type = 'text';
-            priceMin.placeholder = i18n_js.t('Min');
+            priceMin.placeholder = 'Min';
             priceMin.style.cssText = filterInputStyle;
             const priceMax = document.createElement('input');
             priceMax.type = 'text';
-            priceMax.placeholder = i18n_js.t('Max');
+            priceMax.placeholder = 'Max';
             priceMax.style.cssText = filterInputStyle;
             priceMin.addEventListener('change', onFilterChange);
             priceMax.addEventListener('change', onFilterChange);
@@ -25305,7 +24460,7 @@
             const title = this.modal.querySelector('[data-mwi-best-title]');
             if (title) {
                 const typeLabel = this.currentType.charAt(0).toUpperCase() + this.currentType.slice(1);
-                title.textContent = i18n_js.t('Best Items — {0}', typeLabel);
+                title.textContent = `Best Items \u2014 ${typeLabel}`;
             }
 
             // Update tab styling
@@ -25340,7 +24495,7 @@
 
             for (const col of ['#', 'Item', 'Lvl', 'Catalyst', 'Profit/hr', 'XP/hr']) {
                 const th = document.createElement('th');
-                th.textContent = i18n_js.t(col);
+                th.textContent = col;
                 th.style.cssText = 'padding: 6px 8px; text-align: left; color: #aaa; font-weight: 500;';
                 if (col === '#' || col === 'Lvl') th.style.textAlign = 'center';
                 if (col === 'Profit/hr' || col === 'XP/hr') th.style.textAlign = 'right';
@@ -25429,15 +24584,13 @@
 
             if (sorted.length === 0) {
                 container.innerHTML =
-                    '<div style="color: #888; padding: 20px; text-align: center;">' +
-                    i18n_js.t('No eligible items found') +
-                    '</div>';
+                    '<div style="color: #888; padding: 20px; text-align: center;">No eligible items found</div>';
             } else {
                 container.appendChild(table);
                 if (sorted.length > maxRows) {
                     const more = document.createElement('div');
                     more.style.cssText = 'color: #888; text-align: center; padding: 8px; font-size: 0.75rem;';
-                    more.textContent = i18n_js.t('Showing top {0} of {1} items', maxRows, sorted.length);
+                    more.textContent = `Showing top ${maxRows} of ${sorted.length} items`;
                     container.appendChild(more);
                 }
             }
@@ -25467,6 +24620,20 @@
         }
 
         /**
+         * Create a clickable item name span that navigates to marketplace
+         */
+        _makeItemLink(name, itemHrid) {
+            const link = document.createElement('span');
+            link.textContent = name;
+            link.style.cssText = 'color: #93c5fd; cursor: pointer; text-decoration: underline;';
+            link.addEventListener('click', (e) => {
+                e.stopPropagation();
+                navigateToMarketplace(itemHrid);
+            });
+            return link;
+        }
+
+        /**
          * Render breakdown content for an expanded item row
          */
         renderBreakdownContent(item) {
@@ -25474,7 +24641,7 @@
             const profitData = item.profitData;
 
             if (!profitData) {
-                container.textContent = i18n_js.t('No breakdown data available');
+                container.textContent = 'No breakdown data available';
                 container.style.color = '#888';
                 return container;
             }
@@ -25486,11 +24653,12 @@
                 const totalRevenue = profitData.dropRevenues
                     .filter((d) => !d.isSelfReturn)
                     .reduce((sum, d) => sum + d.revenuePerHour, 0);
-                revenueHeader.textContent = i18n_js.t('Revenue: {0}/hr', formatters_js.formatKMB(Math.round(totalRevenue)));
+                revenueHeader.textContent = `Revenue: ${formatters_js.formatKMB(Math.round(totalRevenue))}/hr`;
                 container.appendChild(revenueHeader);
 
                 for (const drop of profitData.dropRevenues) {
-                    const itemName = itemNameTranslator.getDisplayName(drop.itemHrid);
+                    const itemDetails = dataManager.getItemDetails(drop.itemHrid);
+                    const itemName = itemDetails?.name || drop.itemHrid.split('/').pop();
                     const dropRatePct = formatters_js.formatPercentage(drop.dropRate, drop.dropRate < 0.01 ? 3 : 2);
                     const dropsDisplay =
                         drop.dropsPerHour >= 10000
@@ -25503,7 +24671,11 @@
                         line.style.textDecoration = 'line-through';
                         line.style.opacity = '0.6';
                     }
-                    line.textContent = `\u2022 ${itemName}: ${dropsDisplay}/hr (${dropRatePct} \u00d7 ${formatters_js.formatPercentage(profitData.successRate, 1)} success) @ ${formatters_js.formatWithSeparator(Math.round(drop.price))} \u2192 ${formatters_js.formatKMB(Math.round(drop.revenuePerHour))}/hr`;
+                    line.append(
+                        `\u2022 `,
+                        this._makeItemLink(itemName, drop.itemHrid),
+                        `: ${dropsDisplay}/hr (${dropRatePct} \u00d7 ${formatters_js.formatPercentage(profitData.successRate, 1)} success) @ ${formatters_js.formatWithSeparator(Math.round(drop.price))} \u2192 ${formatters_js.formatKMB(Math.round(drop.revenuePerHour))}/hr`
+                    );
                     container.appendChild(line);
                 }
             }
@@ -25517,36 +24689,51 @@
             if (totalCosts > 0 || profitData.requirementCosts?.length > 0) {
                 const costsHeader = document.createElement('div');
                 costsHeader.style.cssText = 'color: #fff; font-weight: 500; margin-top: 6px; margin-bottom: 2px;';
-                costsHeader.textContent = i18n_js.t('Costs: {0}/hr', formatters_js.formatKMB(Math.round(totalCosts)));
+                costsHeader.textContent = `Costs: ${formatters_js.formatKMB(Math.round(totalCosts))}/hr`;
                 container.appendChild(costsHeader);
 
                 // Input materials
                 if (profitData.requirementCosts) {
                     for (const req of profitData.requirementCosts) {
-                        const itemName = itemNameTranslator.getDisplayName(req.itemHrid);
+                        const itemDetails = dataManager.getItemDetails(req.itemHrid);
+                        const itemName = itemDetails?.name || req.itemHrid.split('/').pop();
                         const line = document.createElement('div');
                         line.style.cssText = 'margin-left: 8px; color: #aaa;';
-                        line.textContent = `\u2022 ${itemName}: ${req.count}\u00d7 @ ${formatters_js.formatWithSeparator(Math.round(req.price))} \u2192 ${formatters_js.formatKMB(Math.round(req.costPerHour))}/hr`;
+                        line.append(
+                            `\u2022 `,
+                            this._makeItemLink(itemName, req.itemHrid),
+                            `: ${req.count}\u00d7 @ ${formatters_js.formatWithSeparator(Math.round(req.price))} \u2192 ${formatters_js.formatKMB(Math.round(req.costPerHour))}/hr`
+                        );
                         container.appendChild(line);
                     }
                 }
 
                 // Catalyst
                 if (profitData.catalystCost?.itemHrid && profitData.catalystCostPerHour > 0) {
-                    const catName = itemNameTranslator.getDisplayName(profitData.catalystCost.itemHrid);
+                    const catDetails = dataManager.getItemDetails(profitData.catalystCost.itemHrid);
+                    const catName = catDetails?.name || profitData.catalystCost.itemHrid.split('/').pop();
                     const line = document.createElement('div');
                     line.style.cssText = 'margin-left: 8px; color: #aaa;';
-                    line.textContent = `\u2022 ${catName} @ ${formatters_js.formatWithSeparator(Math.round(profitData.catalystCost.price))} \u2192 ${formatters_js.formatKMB(Math.round(profitData.catalystCostPerHour))}/hr`;
+                    line.append(
+                        `\u2022 `,
+                        this._makeItemLink(catName, profitData.catalystCost.itemHrid),
+                        ` @ ${formatters_js.formatWithSeparator(Math.round(profitData.catalystCost.price))} \u2192 ${formatters_js.formatKMB(Math.round(profitData.catalystCostPerHour))}/hr`
+                    );
                     container.appendChild(line);
                 }
 
                 // Tea
                 if (profitData.consumableCosts?.length > 0) {
                     for (const tea of profitData.consumableCosts) {
-                        const teaName = itemNameTranslator.getDisplayName(tea.itemHrid);
+                        const teaDetails = dataManager.getItemDetails(tea.itemHrid);
+                        const teaName = teaDetails?.name || tea.itemHrid.split('/').pop();
                         const line = document.createElement('div');
                         line.style.cssText = 'margin-left: 8px; color: #aaa;';
-                        line.textContent = `\u2022 ${teaName} \u2192 ${formatters_js.formatKMB(Math.round(tea.costPerHour))}/hr`;
+                        line.append(
+                            `\u2022 `,
+                            this._makeItemLink(teaName, tea.itemHrid),
+                            ` \u2192 ${formatters_js.formatKMB(Math.round(tea.costPerHour))}/hr`
+                        );
                         container.appendChild(line);
                     }
                 }
@@ -25605,4 +24792,4 @@
 
     console.log('[Toolasha] Actions library loaded');
 
-})(Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.i18n, Toolasha.Core.config, Toolasha.Utils.enhancementConfig, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.profitConstants, Toolasha.Utils.formatters, Toolasha.Core.marketAPI, Toolasha.Utils.domObserverHelpers, Toolasha.Core.storage, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.marketData, Toolasha.Utils.efficiency, Toolasha.Utils.profitHelpers, Toolasha.Market.profitCalculator, Toolasha.Utils.uiComponents, Toolasha.Utils.actionPanelHelper, Toolasha.Core.webSocketHook, Toolasha.Utils.dom, Toolasha.Utils.timerRegistry, Toolasha.Utils.actionCalculator, Toolasha.Utils.cleanupRegistry, Toolasha.Utils.teaParser, Toolasha.Utils.buffParser, Toolasha.Market.expectedValueCalculator, Toolasha.Utils.equipmentParser, Toolasha.Utils.houseEfficiency, Toolasha.Utils.experienceParser, Toolasha.Utils.reactInput, Toolasha.Utils.experienceCalculator, Toolasha.Utils.materialCalculator, Toolasha.Market.alchemyProfitCalculator);
+})(Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.config, Toolasha.Utils.enhancementConfig, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.profitConstants, Toolasha.Utils.formatters, Toolasha.Core.marketAPI, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.marketData, Toolasha.Utils.efficiency, Toolasha.Utils.profitHelpers, Toolasha.Core.storage, Toolasha.Market.profitCalculator, Toolasha.Utils.uiComponents, Toolasha.Utils.actionPanelHelper, Toolasha.Core.webSocketHook, Toolasha.Utils.dom, Toolasha.Utils.timerRegistry, Toolasha.Utils.actionCalculator, Toolasha.Utils.cleanupRegistry, Toolasha.Utils.teaParser, Toolasha.Utils.buffParser, Toolasha.Utils.equipmentParser, Toolasha.Utils.houseEfficiency, Toolasha.Utils.experienceParser, Toolasha.Utils.reactInput, Toolasha.Utils.experienceCalculator, Toolasha.Utils.materialCalculator, Toolasha.Market.expectedValueCalculator, Toolasha.Market.alchemyProfitCalculator);

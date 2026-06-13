@@ -1,11 +1,11 @@
 /**
  * Toolasha Market Library
  * Market, inventory, and economy features
- * Version: 2.59.10
+ * Version: 2.58.6
  * License: CC-BY-NC-SA-4.0
  */
 
-(function (config, dataManager, domObserver, marketAPI, houseEfficiency_js, efficiency_js, bonusRevenueCalculator_js, enhancementCalculator_js, formatters_js, marketData_js, teaParser_js, i18n_js, storage, profitConstants_js, profitHelpers_js, buffParser_js, equipmentParser_js, actionCalculator_js, tokenValuation_js, enhancementConfig_js, dom, materialCalculator_js, timerRegistry_js, cleanupRegistry_js, domObserverHelpers_js, enhancementMultipliers_js, reactInput_js, webSocketHook, abilityCostCalculator_js, houseCostCalculator_js) {
+(function (config, dataManager, domObserver, marketAPI, houseEfficiency_js, efficiency_js, bonusRevenueCalculator_js, enhancementCalculator_js, formatters_js, marketData_js, teaParser_js, storage, profitConstants_js, profitHelpers_js, buffParser_js, equipmentParser_js, actionCalculator_js, tokenValuation_js, enhancementConfig_js, dom, materialCalculator_js, timerRegistry_js, cleanupRegistry_js, domObserverHelpers_js, enhancementMultipliers_js, reactInput_js, webSocketHook, abilityCostCalculator_js, houseCostCalculator_js) {
     'use strict';
 
     function _interopNamespaceDefault(e) {
@@ -27,940 +27,980 @@
 
     var dom__namespace = /*#__PURE__*/_interopNamespaceDefault(dom);
 
+    /**
+     * Internationalization (i18n) Module
+     * Lightweight translation layer with English-as-key fallback.
+     *
+     * Usage:
+     *   import { t, registerLocale } from '../core/i18n.js';
+     *   t('Market Prices in Tooltips')  →  '市场价格提示' (if translated)
+     *   t('Market Prices in Tooltips')  →  'Market Prices in Tooltips' (fallback)
+     *   t('Cost: {0}/hr', '100K')       →  '花费: 100K/时'
+     */
+
+    /** @type {Record<string, string>} */
+    const translations = {};
+
+    /**
+     * Translate a string. Returns the Chinese translation if available, otherwise the English key itself.
+     * Supports positional interpolation with {0}, {1}, etc.
+     *
+     * @param {string} str - English key string
+     * @param {...(string|number)} args - Positional arguments for interpolation
+     * @returns {string} Translated or fallback string
+     *
+     * @example
+     *   t('Hello')                          // '你好'
+     *   t('Unknown key')                    // 'Unknown key' (fallback)
+     *   t('Profit: {0}/hr', '12.3K')        // '利润: 12.3K/时'
+     */
+    function t(str, ...args) {
+        const translated = translations[str] !== undefined ? translations[str] : str;
+
+        if (args.length === 0) {
+            return translated;
+        }
+
+        return translated.replace(/\{(\d+)\}/g, (_, index) => {
+            const arg = args[parseInt(index, 10)];
+            return arg !== undefined ? String(arg) : `{${index}}`;
+        });
+    }
+
     var itemNamesZh = {
-        Coin: '金币',
-        'Task Token': '任务代币',
-        'Labyrinth Token': '迷宫代币',
-        'Chimerical Token': '奇幻代币',
-        'Sinister Token': '阴森代币',
-        'Enchanted Token': '秘法代币',
-        'Pirate Token': '海盗代币',
-        Cowbell: '牛铃',
-        'Bag Of 10 Cowbells': '牛铃袋 (10个)',
-        "Purple's Gift": '小紫牛的礼物',
-        'Small Meteorite Cache': '小陨石舱',
-        'Medium Meteorite Cache': '中陨石舱',
-        'Large Meteorite Cache': '大陨石舱',
-        "Small Artisan's Crate": '小工匠匣',
-        "Medium Artisan's Crate": '中工匠匣',
-        "Large Artisan's Crate": '大工匠匣',
-        'Small Treasure Chest': '小宝箱',
-        'Medium Treasure Chest': '中宝箱',
-        'Large Treasure Chest': '大宝箱',
-        'Chimerical Chest': '奇幻宝箱',
-        'Sinister Chest': '阴森宝箱',
-        'Enchanted Chest': '秘法宝箱',
-        'Pirate Chest': '海盗宝箱',
-        "Purdora's Box (Skilling)": '紫多拉之盒（生活）',
-        "Purdora's Box (Combat)": '紫多拉之盒（战斗）',
-        'Scroll Of Gathering': '采集卷轴',
-        'Scroll Of Gourmet': '美食卷轴',
-        'Scroll Of Processing': '加工卷轴',
-        'Scroll Of Efficiency': '效率卷轴',
-        'Scroll Of Action Speed': '行动速度卷轴',
-        'Scroll Of Combat Drop': '战斗掉落卷轴',
-        'Scroll Of Attack Speed': '攻击速度卷轴',
-        'Scroll Of Cast Speed': '施法速度卷轴',
-        'Scroll Of Damage': '伤害卷轴',
-        'Scroll Of Critical Rate': '暴击率卷轴',
-        'Scroll Of Wisdom': '经验卷轴',
-        'Scroll Of Rare Find': '稀有发现卷轴',
-        'Blue Key Fragment': '蓝色钥匙碎片',
-        'Green Key Fragment': '绿色钥匙碎片',
-        'Purple Key Fragment': '紫色钥匙碎片',
-        'White Key Fragment': '白色钥匙碎片',
-        'Orange Key Fragment': '橙色钥匙碎片',
-        'Brown Key Fragment': '棕色钥匙碎片',
-        'Stone Key Fragment': '石头钥匙碎片',
-        'Dark Key Fragment': '黑暗钥匙碎片',
-        'Burning Key Fragment': '燃烧钥匙碎片',
-        Donut: '甜甜圈',
-        'Blueberry Donut': '蓝莓甜甜圈',
-        'Blackberry Donut': '黑莓甜甜圈',
-        'Strawberry Donut': '草莓甜甜圈',
-        'Mooberry Donut': '哞莓甜甜圈',
-        'Marsberry Donut': '火星莓甜甜圈',
-        'Spaceberry Donut': '太空莓甜甜圈',
-        Cupcake: '纸杯蛋糕',
-        'Blueberry Cake': '蓝莓蛋糕',
-        'Blackberry Cake': '黑莓蛋糕',
-        'Strawberry Cake': '草莓蛋糕',
-        'Mooberry Cake': '哞莓蛋糕',
-        'Marsberry Cake': '火星莓蛋糕',
-        'Spaceberry Cake': '太空莓蛋糕',
-        Gummy: '软糖',
-        'Apple Gummy': '苹果软糖',
-        'Orange Gummy': '橙子软糖',
-        'Plum Gummy': '李子软糖',
-        'Peach Gummy': '桃子软糖',
-        'Dragon Fruit Gummy': '火龙果软糖',
-        'Star Fruit Gummy': '杨桃软糖',
-        Yogurt: '酸奶',
-        'Apple Yogurt': '苹果酸奶',
-        'Orange Yogurt': '橙子酸奶',
-        'Plum Yogurt': '李子酸奶',
-        'Peach Yogurt': '桃子酸奶',
-        'Dragon Fruit Yogurt': '火龙果酸奶',
-        'Star Fruit Yogurt': '杨桃酸奶',
-        'Milking Tea': '挤奶茶',
-        'Foraging Tea': '采摘茶',
-        'Woodcutting Tea': '伐木茶',
-        'Cooking Tea': '烹饪茶',
-        'Brewing Tea': '冲泡茶',
-        'Alchemy Tea': '炼金茶',
-        'Enhancing Tea': '强化茶',
-        'Cheesesmithing Tea': '奶酪锻造茶',
-        'Crafting Tea': '制作茶',
-        'Tailoring Tea': '缝纫茶',
-        'Super Milking Tea': '超级挤奶茶',
-        'Super Foraging Tea': '超级采摘茶',
-        'Super Woodcutting Tea': '超级伐木茶',
-        'Super Cooking Tea': '超级烹饪茶',
-        'Super Brewing Tea': '超级冲泡茶',
-        'Super Alchemy Tea': '超级炼金茶',
-        'Super Enhancing Tea': '超级强化茶',
-        'Super Crafting Tea': '超级制作茶',
-        'Super Tailoring Tea': '超级缝纫茶',
-        'Ultra Milking Tea': '究极挤奶茶',
-        'Ultra Foraging Tea': '究极采摘茶',
-        'Ultra Woodcutting Tea': '究极伐木茶',
-        'Ultra Cooking Tea': '究极烹饪茶',
-        'Ultra Brewing Tea': '究极冲泡茶',
-        'Ultra Alchemy Tea': '究极炼金茶',
-        'Ultra Enhancing Tea': '究极强化茶',
-        'Ultra Crafting Tea': '究极制作茶',
-        'Ultra Tailoring Tea': '究极缝纫茶',
-        'Gathering Tea': '采集茶',
-        'Gourmet Tea': '美食茶',
-        'Wisdom Tea': '经验茶',
-        'Processing Tea': '加工茶',
-        'Efficiency Tea': '效率茶',
-        'Artisan Tea': '工匠茶',
-        'Catalytic Tea': '催化茶',
-        'Blessed Tea': '福气茶',
-        'Stamina Coffee': '耐力咖啡',
-        'Intelligence Coffee': '智力咖啡',
-        'Defense Coffee': '防御咖啡',
-        'Attack Coffee': '攻击咖啡',
-        'Melee Coffee': '近战咖啡',
-        'Ranged Coffee': '远程咖啡',
-        'Magic Coffee': '魔法咖啡',
-        'Super Stamina Coffee': '超级耐力咖啡',
-        'Super Intelligence Coffee': '超级智力咖啡',
-        'Super Defense Coffee': '超级防御咖啡',
-        'Super Attack Coffee': '超级攻击咖啡',
-        'Super Melee Coffee': '超级近战咖啡',
-        'Super Ranged Coffee': '超级远程咖啡',
-        'Super Magic Coffee': '超级魔法咖啡',
-        'Ultra Stamina Coffee': '究极耐力咖啡',
-        'Ultra Intelligence Coffee': '究极智力咖啡',
-        'Ultra Defense Coffee': '究极防御咖啡',
-        'Ultra Attack Coffee': '究极攻击咖啡',
-        'Ultra Melee Coffee': '究极近战咖啡',
-        'Ultra Ranged Coffee': '究极远程咖啡',
-        'Ultra Magic Coffee': '究极魔法咖啡',
-        'Wisdom Coffee': '经验咖啡',
-        'Lucky Coffee': '幸运咖啡',
-        'Swiftness Coffee': '迅捷咖啡',
-        'Channeling Coffee': '吟唱咖啡',
-        'Critical Coffee': '暴击咖啡',
-        Poke: '破胆之刺',
-        Impale: '透骨之刺',
-        Puncture: '破甲之刺',
-        'Penetrating Strike': '贯心之刺',
-        Scratch: '爪影斩',
-        Cleave: '分裂斩',
-        Maim: '血刃斩',
-        'Crippling Slash': '致残斩',
-        Smack: '重碾',
-        Sweep: '重扫',
-        'Stunning Blow': '重锤',
-        'Fracturing Impact': '碎裂冲击',
-        'Shield Bash': '盾击',
-        'Quick Shot': '快速射击',
-        'Aqua Arrow': '流水箭',
-        'Flame Arrow': '烈焰箭',
-        'Rain Of Arrows': '箭雨',
-        'Silencing Shot': '沉默之箭',
-        'Steady Shot': '稳定射击',
-        'Pestilent Shot': '疫病射击',
-        'Penetrating Shot': '贯穿射击',
-        'Water Strike': '流水冲击',
-        'Ice Spear': '冰枪术',
-        'Frost Surge': '冰霜爆裂',
-        'Mana Spring': '法力喷泉',
-        Entangle: '缠绕',
-        'Toxic Pollen': '剧毒粉尘',
-        "Nature's Veil": '自然菌幕',
-        'Life Drain': '生命吸取',
-        Fireball: '火球',
-        'Flame Blast': '熔岩爆裂',
-        Firestorm: '火焰风暴',
-        'Smoke Burst': '烟爆灭影',
-        'Minor Heal': '初级自愈术',
-        Heal: '自愈术',
-        'Quick Aid': '快速治疗术',
-        Rejuvenate: '群体治疗术',
-        Taunt: '嘲讽',
-        Provoke: '挑衅',
-        Toughness: '坚韧',
-        Elusiveness: '闪避',
-        Precision: '精确',
-        Berserk: '狂暴',
-        'Elemental Affinity': '元素增幅',
-        Frenzy: '狂速',
-        'Spike Shell': '尖刺防护',
-        Retribution: '惩戒',
-        Vampirism: '吸血',
-        Revive: '复活',
-        Insanity: '疯狂',
-        Invincible: '无敌',
-        'Speed Aura': '速度光环',
-        'Guardian Aura': '守护光环',
-        'Fierce Aura': '物理光环',
-        'Critical Aura': '暴击光环',
-        'Mystic Aura': '元素光环',
-        'Gobo Stabber': '哥布林长剑',
-        'Gobo Slasher': '哥布林关刀',
-        'Gobo Smasher': '哥布林狼牙棒',
-        'Spiked Bulwark': '尖刺重盾',
-        'Werewolf Slasher': '狼人关刀',
-        'Griffin Bulwark': '狮鹫重盾',
-        'Griffin Bulwark (R)': '狮鹫重盾（精）',
-        'Gobo Shooter': '哥布林弹弓',
-        'Vampiric Bow': '吸血弓',
-        'Cursed Bow': '咒怨之弓',
-        'Cursed Bow (R)': '咒怨之弓（精）',
-        'Gobo Boomstick': '哥布林火棍',
-        'Cheese Bulwark': '奶酪重盾',
-        'Verdant Bulwark': '翠绿重盾',
-        'Azure Bulwark': '蔚蓝重盾',
-        'Burble Bulwark': '深紫重盾',
-        'Crimson Bulwark': '绛红重盾',
-        'Rainbow Bulwark': '彩虹重盾',
-        'Holy Bulwark': '神圣重盾',
-        'Wooden Bow': '木弓',
-        'Birch Bow': '桦木弓',
-        'Cedar Bow': '雪松弓',
-        'Purpleheart Bow': '紫心弓',
-        'Ginkgo Bow': '银杏弓',
-        'Redwood Bow': '红杉弓',
-        'Arcane Bow': '神秘弓',
-        'Stalactite Spear': '石钟长枪',
-        'Granite Bludgeon': '花岗岩大棒',
-        'Furious Spear': '狂怒长枪',
-        'Furious Spear (R)': '狂怒长枪（精）',
-        'Regal Sword': '君王之剑',
-        'Regal Sword (R)': '君王之剑（精）',
-        'Chaotic Flail': '混沌连枷',
-        'Chaotic Flail (R)': '混沌连枷（精）',
-        'Soul Hunter Crossbow': '灵魂猎手弩',
-        'Sundering Crossbow': '裂空之弩',
-        'Sundering Crossbow (R)': '裂空之弩（精）',
-        'Frost Staff': '冰霜法杖',
-        'Infernal Battlestaff': '炼狱法杖',
-        'Jackalope Staff': '鹿角兔之杖',
-        'Rippling Trident': '涟漪三叉戟',
-        'Rippling Trident (R)': '涟漪三叉戟（精）',
-        'Blooming Trident': '绽放三叉戟',
-        'Blooming Trident (R)': '绽放三叉戟（精）',
-        'Blazing Trident': '炽焰三叉戟',
-        'Blazing Trident (R)': '炽焰三叉戟（精）',
-        'Cheese Sword': '奶酪剑',
-        'Verdant Sword': '翠绿剑',
-        'Azure Sword': '蔚蓝剑',
-        'Burble Sword': '深紫剑',
-        'Crimson Sword': '绛红剑',
-        'Rainbow Sword': '彩虹剑',
-        'Holy Sword': '神圣剑',
-        'Cheese Spear': '奶酪长枪',
-        'Verdant Spear': '翠绿长枪',
-        'Azure Spear': '蔚蓝长枪',
-        'Burble Spear': '深紫长枪',
-        'Crimson Spear': '绛红长枪',
-        'Rainbow Spear': '彩虹长枪',
-        'Holy Spear': '神圣长枪',
-        'Cheese Mace': '奶酪钉头锤',
-        'Verdant Mace': '翠绿钉头锤',
-        'Azure Mace': '蔚蓝钉头锤',
-        'Burble Mace': '深紫钉头锤',
-        'Crimson Mace': '绛红钉头锤',
-        'Rainbow Mace': '彩虹钉头锤',
-        'Holy Mace': '神圣钉头锤',
-        'Wooden Crossbow': '木弩',
-        'Birch Crossbow': '桦木弩',
-        'Cedar Crossbow': '雪松弩',
-        'Purpleheart Crossbow': '紫心弩',
-        'Ginkgo Crossbow': '银杏弩',
-        'Redwood Crossbow': '红杉弩',
-        'Arcane Crossbow': '神秘弩',
-        'Wooden Water Staff': '木制水法杖',
-        'Birch Water Staff': '桦木水法杖',
-        'Cedar Water Staff': '雪松水法杖',
-        'Purpleheart Water Staff': '紫心水法杖',
-        'Ginkgo Water Staff': '银杏水法杖',
-        'Redwood Water Staff': '红杉水法杖',
-        'Arcane Water Staff': '神秘水法杖',
-        'Wooden Nature Staff': '木制自然法杖',
-        'Birch Nature Staff': '桦木自然法杖',
-        'Cedar Nature Staff': '雪松自然法杖',
-        'Purpleheart Nature Staff': '紫心自然法杖',
-        'Ginkgo Nature Staff': '银杏自然法杖',
-        'Redwood Nature Staff': '红杉自然法杖',
-        'Arcane Nature Staff': '神秘自然法杖',
-        'Wooden Fire Staff': '木制火法杖',
-        'Birch Fire Staff': '桦木火法杖',
-        'Cedar Fire Staff': '雪松火法杖',
-        'Purpleheart Fire Staff': '紫心火法杖',
-        'Ginkgo Fire Staff': '银杏火法杖',
-        'Redwood Fire Staff': '红杉火法杖',
-        'Arcane Fire Staff': '神秘火法杖',
-        'Eye Watch': '掌上监工',
-        'Snake Fang Dirk': '蛇牙短剑',
-        'Vision Shield': '视觉盾',
-        'Gobo Defender': '哥布林防御者',
-        'Vampire Fang Dirk': '吸血鬼短剑',
-        "Knight's Aegis": '骑士盾',
-        "Knight's Aegis (R)": '骑士盾（精）',
-        'Treant Shield': '树人盾',
-        'Manticore Shield': '蝎狮盾',
-        'Tome Of Healing': '治疗之书',
-        'Tome Of The Elements': '元素之书',
-        'Watchful Relic': '警戒遗物',
-        "Bishop's Codex": '主教法典',
-        "Bishop's Codex (R)": '主教法典（精）',
-        'Cheese Buckler': '奶酪圆盾',
-        'Verdant Buckler': '翠绿圆盾',
-        'Azure Buckler': '蔚蓝圆盾',
-        'Burble Buckler': '深紫圆盾',
-        'Crimson Buckler': '绛红圆盾',
-        'Rainbow Buckler': '彩虹圆盾',
-        'Holy Buckler': '神圣圆盾',
-        'Wooden Shield': '木盾',
-        'Birch Shield': '桦木盾',
-        'Cedar Shield': '雪松盾',
-        'Purpleheart Shield': '紫心盾',
-        'Ginkgo Shield': '银杏盾',
-        'Redwood Shield': '红杉盾',
-        'Arcane Shield': '神秘盾',
-        'Gatherer Cape': '采集者披风',
-        'Gatherer Cape (R)': '采集者披风（精）',
-        'Artificer Cape': '工匠披风',
-        'Artificer Cape (R)': '工匠披风（精）',
-        'Culinary Cape': '厨师披风',
-        'Culinary Cape (R)': '厨师披风（精）',
-        'Chance Cape': '机缘披风',
-        'Chance Cape (R)': '机缘披风（精）',
-        'Sinister Cape': '阴森披风',
-        'Sinister Cape (R)': '阴森披风（精）',
-        'Chimerical Quiver': '奇幻箭袋',
-        'Chimerical Quiver (R)': '奇幻箭袋（精）',
-        'Enchanted Cloak': '秘法披风',
-        'Enchanted Cloak (R)': '秘法披风（精）',
-        'Red Culinary Hat': '红色厨师帽',
-        'Snail Shell Helmet': '蜗牛壳头盔',
-        'Vision Helmet': '视觉头盔',
-        'Fluffy Red Hat': '蓬松红帽子',
-        'Corsair Helmet': '掠夺者头盔',
-        'Corsair Helmet (R)': '掠夺者头盔（精）',
-        'Acrobatic Hood': '杂技师兜帽',
-        'Acrobatic Hood (R)': '杂技师兜帽（精）',
-        "Magician's Hat": '魔术师帽',
-        "Magician's Hat (R)": '魔术师帽（精）',
-        'Cheese Helmet': '奶酪头盔',
-        'Verdant Helmet': '翠绿头盔',
-        'Azure Helmet': '蔚蓝头盔',
-        'Burble Helmet': '深紫头盔',
-        'Crimson Helmet': '绛红头盔',
-        'Rainbow Helmet': '彩虹头盔',
-        'Holy Helmet': '神圣头盔',
-        'Rough Hood': '粗糙兜帽',
-        'Reptile Hood': '爬行动物兜帽',
-        'Gobo Hood': '哥布林兜帽',
-        'Beast Hood': '野兽兜帽',
-        'Umbral Hood': '暗影兜帽',
-        'Cotton Hat': '棉帽',
-        'Linen Hat': '亚麻帽',
-        'Bamboo Hat': '竹帽',
-        'Silk Hat': '丝帽',
-        'Radiant Hat': '光辉帽',
-        "Dairyhand's Top": '挤奶工上衣',
-        "Forager's Top": '采摘者上衣',
-        "Lumberjack's Top": '伐木工上衣',
-        "Cheesemaker's Top": '奶酪师上衣',
-        "Crafter's Top": '工匠上衣',
-        "Tailor's Top": '裁缝上衣',
-        "Chef's Top": '厨师上衣',
-        "Brewer's Top": '饮品师上衣',
-        "Alchemist's Top": '炼金师上衣',
-        "Enhancer's Top": '强化师上衣',
-        'Gator Vest': '鳄鱼马甲',
-        'Turtle Shell Body': '龟壳胸甲',
-        'Colossus Plate Body': '巨像胸甲',
-        'Demonic Plate Body': '恶魔胸甲',
-        'Anchorbound Plate Body': '锚定胸甲',
-        'Anchorbound Plate Body (R)': '锚定胸甲（精）',
-        'Maelstrom Plate Body': '怒涛胸甲',
-        'Maelstrom Plate Body (R)': '怒涛胸甲（精）',
-        'Marine Tunic': '海洋皮衣',
-        'Revenant Tunic': '亡灵皮衣',
-        'Griffin Tunic': '狮鹫皮衣',
-        'Kraken Tunic': '克拉肯皮衣',
-        'Kraken Tunic (R)': '克拉肯皮衣（精）',
-        'Icy Robe Top': '冰霜袍服',
-        'Flaming Robe Top': '烈焰袍服',
-        'Luna Robe Top': '月神袍服',
-        'Royal Water Robe Top': '皇家水系袍服',
-        'Royal Water Robe Top (R)': '皇家水系袍服（精）',
-        'Royal Nature Robe Top': '皇家自然系袍服',
-        'Royal Nature Robe Top (R)': '皇家自然系袍服（精）',
-        'Royal Fire Robe Top': '皇家火系袍服',
-        'Royal Fire Robe Top (R)': '皇家火系袍服（精）',
-        'Cheese Plate Body': '奶酪胸甲',
-        'Verdant Plate Body': '翠绿胸甲',
-        'Azure Plate Body': '蔚蓝胸甲',
-        'Burble Plate Body': '深紫胸甲',
-        'Crimson Plate Body': '绛红胸甲',
-        'Rainbow Plate Body': '彩虹胸甲',
-        'Holy Plate Body': '神圣胸甲',
-        'Rough Tunic': '粗糙皮衣',
-        'Reptile Tunic': '爬行动物皮衣',
-        'Gobo Tunic': '哥布林皮衣',
-        'Beast Tunic': '野兽皮衣',
-        'Umbral Tunic': '暗影皮衣',
-        'Cotton Robe Top': '棉袍服',
-        'Linen Robe Top': '亚麻袍服',
-        'Bamboo Robe Top': '竹袍服',
-        'Silk Robe Top': '丝绸袍服',
-        'Radiant Robe Top': '光辉袍服',
-        "Dairyhand's Bottoms": '挤奶工下装',
-        "Forager's Bottoms": '采摘者下装',
-        "Lumberjack's Bottoms": '伐木工下装',
-        "Cheesemaker's Bottoms": '奶酪师下装',
-        "Crafter's Bottoms": '工匠下装',
-        "Tailor's Bottoms": '裁缝下装',
-        "Chef's Bottoms": '厨师下装',
-        "Brewer's Bottoms": '饮品师下装',
-        "Alchemist's Bottoms": '炼金师下装',
-        "Enhancer's Bottoms": '强化师下装',
-        'Turtle Shell Legs': '龟壳腿甲',
-        'Colossus Plate Legs': '巨像腿甲',
-        'Demonic Plate Legs': '恶魔腿甲',
-        'Anchorbound Plate Legs': '锚定腿甲',
-        'Anchorbound Plate Legs (R)': '锚定腿甲（精）',
-        'Maelstrom Plate Legs': '怒涛腿甲',
-        'Maelstrom Plate Legs (R)': '怒涛腿甲（精）',
-        'Marine Chaps': '航海皮裤',
-        'Revenant Chaps': '亡灵皮裤',
-        'Griffin Chaps': '狮鹫皮裤',
-        'Kraken Chaps': '克拉肯皮裤',
-        'Kraken Chaps (R)': '克拉肯皮裤（精）',
-        'Icy Robe Bottoms': '冰霜袍裙',
-        'Flaming Robe Bottoms': '烈焰袍裙',
-        'Luna Robe Bottoms': '月神袍裙',
-        'Royal Water Robe Bottoms': '皇家水系袍裙',
-        'Royal Water Robe Bottoms (R)': '皇家水系袍裙（精）',
-        'Royal Nature Robe Bottoms': '皇家自然系袍裙',
-        'Royal Nature Robe Bottoms (R)': '皇家自然系袍裙（精）',
-        'Royal Fire Robe Bottoms': '皇家火系袍裙',
-        'Royal Fire Robe Bottoms (R)': '皇家火系袍裙（精）',
-        'Cheese Plate Legs': '奶酪腿甲',
-        'Verdant Plate Legs': '翠绿腿甲',
-        'Azure Plate Legs': '蔚蓝腿甲',
-        'Burble Plate Legs': '深紫腿甲',
-        'Crimson Plate Legs': '绛红腿甲',
-        'Rainbow Plate Legs': '彩虹腿甲',
-        'Holy Plate Legs': '神圣腿甲',
-        'Rough Chaps': '粗糙皮裤',
-        'Reptile Chaps': '爬行动物皮裤',
-        'Gobo Chaps': '哥布林皮裤',
-        'Beast Chaps': '野兽皮裤',
-        'Umbral Chaps': '暗影皮裤',
-        'Cotton Robe Bottoms': '棉袍裙',
-        'Linen Robe Bottoms': '亚麻袍裙',
-        'Bamboo Robe Bottoms': '竹袍裙',
-        'Silk Robe Bottoms': '丝绸袍裙',
-        'Radiant Robe Bottoms': '光辉袍裙',
-        'Enchanted Gloves': '附魔手套',
-        'Pincer Gloves': '蟹钳手套',
-        'Panda Gloves': '熊猫手套',
-        'Magnetic Gloves': '磁力手套',
-        'Dodocamel Gauntlets': '渡渡驼护手',
-        'Dodocamel Gauntlets (R)': '渡渡驼护手（精）',
-        'Sighted Bracers': '瞄准护腕',
-        'Marksman Bracers': '神射护腕',
-        'Marksman Bracers (R)': '神射护腕（精）',
-        'Chrono Gloves': '时空手套',
-        'Cheese Gauntlets': '奶酪护手',
-        'Verdant Gauntlets': '翠绿护手',
-        'Azure Gauntlets': '蔚蓝护手',
-        'Burble Gauntlets': '深紫护手',
-        'Crimson Gauntlets': '绛红护手',
-        'Rainbow Gauntlets': '彩虹护手',
-        'Holy Gauntlets': '神圣护手',
-        'Rough Bracers': '粗糙护腕',
-        'Reptile Bracers': '爬行动物护腕',
-        'Gobo Bracers': '哥布林护腕',
-        'Beast Bracers': '野兽护腕',
-        'Umbral Bracers': '暗影护腕',
-        'Cotton Gloves': '棉手套',
-        'Linen Gloves': '亚麻手套',
-        'Bamboo Gloves': '竹手套',
-        'Silk Gloves': '丝手套',
-        'Radiant Gloves': '光辉手套',
-        "Collector's Boots": '收藏家靴',
-        'Shoebill Shoes': '鲸头鹳鞋',
-        'Black Bear Shoes': '黑熊鞋',
-        'Grizzly Bear Shoes': '棕熊鞋',
-        'Polar Bear Shoes': '北极熊鞋',
-        'Pathbreaker Boots': '开路者靴',
-        'Pathbreaker Boots (R)': '开路者靴（精）',
-        'Centaur Boots': '半人马靴',
-        'Pathfinder Boots': '探路者靴',
-        'Pathfinder Boots (R)': '探路者靴（精）',
-        'Sorcerer Boots': '巫师靴',
-        'Pathseeker Boots': '寻路者靴',
-        'Pathseeker Boots (R)': '寻路者靴（精）',
-        'Cheese Boots': '奶酪靴',
-        'Verdant Boots': '翠绿靴',
-        'Azure Boots': '蔚蓝靴',
-        'Burble Boots': '深紫靴',
-        'Crimson Boots': '绛红靴',
-        'Rainbow Boots': '彩虹靴',
-        'Holy Boots': '神圣靴',
-        'Rough Boots': '粗糙靴',
-        'Reptile Boots': '爬行动物靴',
-        'Gobo Boots': '哥布林靴',
-        'Beast Boots': '野兽靴',
-        'Umbral Boots': '暗影靴',
-        'Cotton Boots': '棉靴',
-        'Linen Boots': '亚麻靴',
-        'Bamboo Boots': '竹靴',
-        'Silk Boots': '丝靴',
-        'Radiant Boots': '光辉靴',
-        'Small Pouch': '小袋子',
-        'Medium Pouch': '中袋子',
-        'Large Pouch': '大袋子',
-        'Giant Pouch': '巨大袋子',
-        'Gluttonous Pouch': '贪食之袋',
-        'Guzzling Pouch': '暴饮之囊',
-        'Necklace Of Efficiency': '效率项链',
-        'Fighter Necklace': '战士项链',
-        'Ranger Necklace': '射手项链',
-        'Wizard Necklace': '巫师项链',
-        'Necklace Of Wisdom': '经验项链',
-        'Necklace Of Speed': '速度项链',
-        "Philosopher's Necklace": '贤者项链',
-        'Earrings Of Gathering': '采集耳环',
-        'Earrings Of Essence Find': '精华发现耳环',
-        'Earrings Of Armor': '护甲耳环',
-        'Earrings Of Regeneration': '恢复耳环',
-        'Earrings Of Resistance': '抗性耳环',
-        'Earrings Of Rare Find': '稀有发现耳环',
-        'Earrings Of Critical Strike': '暴击耳环',
-        "Philosopher's Earrings": '贤者耳环',
-        'Ring Of Gathering': '采集戒指',
-        'Ring Of Essence Find': '精华发现戒指',
-        'Ring Of Armor': '护甲戒指',
-        'Ring Of Regeneration': '恢复戒指',
-        'Ring Of Resistance': '抗性戒指',
-        'Ring Of Rare Find': '稀有发现戒指',
-        'Ring Of Critical Strike': '暴击戒指',
-        "Philosopher's Ring": '贤者戒指',
-        'Trainee Milking Charm': '实习挤奶护符',
-        'Basic Milking Charm': '基础挤奶护符',
-        'Advanced Milking Charm': '高级挤奶护符',
-        'Expert Milking Charm': '专家挤奶护符',
-        'Master Milking Charm': '大师挤奶护符',
-        'Grandmaster Milking Charm': '宗师挤奶护符',
-        'Trainee Foraging Charm': '实习采摘护符',
-        'Basic Foraging Charm': '基础采摘护符',
-        'Advanced Foraging Charm': '高级采摘护符',
-        'Expert Foraging Charm': '专家采摘护符',
-        'Master Foraging Charm': '大师采摘护符',
-        'Grandmaster Foraging Charm': '宗师采摘护符',
-        'Trainee Woodcutting Charm': '实习伐木护符',
-        'Basic Woodcutting Charm': '基础伐木护符',
-        'Advanced Woodcutting Charm': '高级伐木护符',
-        'Expert Woodcutting Charm': '专家伐木护符',
-        'Master Woodcutting Charm': '大师伐木护符',
-        'Grandmaster Woodcutting Charm': '宗师伐木护符',
-        'Trainee Cheesesmithing Charm': '实习奶酪锻造护符',
-        'Basic Cheesesmithing Charm': '基础奶酪锻造护符',
-        'Advanced Cheesesmithing Charm': '高级奶酪锻造护符',
-        'Expert Cheesesmithing Charm': '专家奶酪锻造护符',
-        'Master Cheesesmithing Charm': '大师奶酪锻造护符',
-        'Grandmaster Cheesesmithing Charm': '宗师奶酪锻造护符',
-        'Trainee Crafting Charm': '实习制作护符',
-        'Basic Crafting Charm': '基础制作护符',
-        'Advanced Crafting Charm': '高级制作护符',
-        'Expert Crafting Charm': '专家制作护符',
-        'Master Crafting Charm': '大师制作护符',
-        'Grandmaster Crafting Charm': '宗师制作护符',
-        'Trainee Tailoring Charm': '实习缝纫护符',
-        'Basic Tailoring Charm': '基础缝纫护符',
-        'Advanced Tailoring Charm': '高级缝纫护符',
-        'Expert Tailoring Charm': '专家缝纫护符',
-        'Master Tailoring Charm': '大师缝纫护符',
-        'Grandmaster Tailoring Charm': '宗师缝纫护符',
-        'Trainee Cooking Charm': '实习烹饪护符',
-        'Basic Cooking Charm': '基础烹饪护符',
-        'Advanced Cooking Charm': '高级烹饪护符',
-        'Expert Cooking Charm': '专家烹饪护符',
-        'Master Cooking Charm': '大师烹饪护符',
-        'Grandmaster Cooking Charm': '宗师烹饪护符',
-        'Trainee Brewing Charm': '实习冲泡护符',
-        'Basic Brewing Charm': '基础冲泡护符',
-        'Advanced Brewing Charm': '高级冲泡护符',
-        'Expert Brewing Charm': '专家冲泡护符',
-        'Master Brewing Charm': '大师冲泡护符',
-        'Grandmaster Brewing Charm': '宗师冲泡护符',
-        'Trainee Alchemy Charm': '实习炼金护符',
-        'Basic Alchemy Charm': '基础炼金护符',
-        'Advanced Alchemy Charm': '高级炼金护符',
-        'Expert Alchemy Charm': '专家炼金护符',
-        'Master Alchemy Charm': '大师炼金护符',
-        'Grandmaster Alchemy Charm': '宗师炼金护符',
-        'Trainee Enhancing Charm': '实习强化护符',
-        'Basic Enhancing Charm': '基础强化护符',
-        'Advanced Enhancing Charm': '高级强化护符',
-        'Expert Enhancing Charm': '专家强化护符',
-        'Master Enhancing Charm': '大师强化护符',
-        'Grandmaster Enhancing Charm': '宗师强化护符',
-        'Trainee Stamina Charm': '实习耐力护符',
-        'Basic Stamina Charm': '基础耐力护符',
-        'Advanced Stamina Charm': '高级耐力护符',
-        'Expert Stamina Charm': '专家耐力护符',
-        'Master Stamina Charm': '大师耐力护符',
-        'Grandmaster Stamina Charm': '宗师耐力护符',
-        'Trainee Intelligence Charm': '实习智力护符',
-        'Basic Intelligence Charm': '基础智力护符',
-        'Advanced Intelligence Charm': '高级智力护符',
-        'Expert Intelligence Charm': '专家智力护符',
-        'Master Intelligence Charm': '大师智力护符',
-        'Grandmaster Intelligence Charm': '宗师智力护符',
-        'Trainee Attack Charm': '实习攻击护符',
-        'Basic Attack Charm': '基础攻击护符',
-        'Advanced Attack Charm': '高级攻击护符',
-        'Expert Attack Charm': '专家攻击护符',
-        'Master Attack Charm': '大师攻击护符',
-        'Grandmaster Attack Charm': '宗师攻击护符',
-        'Trainee Defense Charm': '实习防御护符',
-        'Basic Defense Charm': '基础防御护符',
-        'Advanced Defense Charm': '高级防御护符',
-        'Expert Defense Charm': '专家防御护符',
-        'Master Defense Charm': '大师防御护符',
-        'Grandmaster Defense Charm': '宗师防御护符',
-        'Trainee Melee Charm': '实习近战护符',
-        'Basic Melee Charm': '基础近战护符',
-        'Advanced Melee Charm': '高级近战护符',
-        'Expert Melee Charm': '专家近战护符',
-        'Master Melee Charm': '大师近战护符',
-        'Grandmaster Melee Charm': '宗师近战护符',
-        'Trainee Ranged Charm': '实习远程护符',
-        'Basic Ranged Charm': '基础远程护符',
-        'Advanced Ranged Charm': '高级远程护符',
-        'Expert Ranged Charm': '专家远程护符',
-        'Master Ranged Charm': '大师远程护符',
-        'Grandmaster Ranged Charm': '宗师远程护符',
-        'Trainee Magic Charm': '实习魔法护符',
-        'Basic Magic Charm': '基础魔法护符',
-        'Advanced Magic Charm': '高级魔法护符',
-        'Expert Magic Charm': '专家魔法护符',
-        'Master Magic Charm': '大师魔法护符',
-        'Grandmaster Magic Charm': '宗师魔法护符',
-        'Basic Task Badge': '基础任务徽章',
-        'Advanced Task Badge': '高级任务徽章',
-        'Expert Task Badge': '专家任务徽章',
-        'Celestial Brush': '星空刷子',
-        'Cheese Brush': '奶酪刷子',
-        'Verdant Brush': '翠绿刷子',
-        'Azure Brush': '蔚蓝刷子',
-        'Burble Brush': '深紫刷子',
-        'Crimson Brush': '绛红刷子',
-        'Rainbow Brush': '彩虹刷子',
-        'Holy Brush': '神圣刷子',
-        'Celestial Shears': '星空剪刀',
-        'Cheese Shears': '奶酪剪刀',
-        'Verdant Shears': '翠绿剪刀',
-        'Azure Shears': '蔚蓝剪刀',
-        'Burble Shears': '深紫剪刀',
-        'Crimson Shears': '绛红剪刀',
-        'Rainbow Shears': '彩虹剪刀',
-        'Holy Shears': '神圣剪刀',
-        'Celestial Hatchet': '星空斧头',
-        'Cheese Hatchet': '奶酪斧头',
-        'Verdant Hatchet': '翠绿斧头',
-        'Azure Hatchet': '蔚蓝斧头',
-        'Burble Hatchet': '深紫斧头',
-        'Crimson Hatchet': '绛红斧头',
-        'Rainbow Hatchet': '彩虹斧头',
-        'Holy Hatchet': '神圣斧头',
-        'Celestial Hammer': '星空锤子',
-        'Cheese Hammer': '奶酪锤子',
-        'Verdant Hammer': '翠绿锤子',
-        'Azure Hammer': '蔚蓝锤子',
-        'Burble Hammer': '深紫锤子',
-        'Crimson Hammer': '绛红锤子',
-        'Rainbow Hammer': '彩虹锤子',
-        'Holy Hammer': '神圣锤子',
-        'Celestial Chisel': '星空凿子',
-        'Cheese Chisel': '奶酪凿子',
-        'Verdant Chisel': '翠绿凿子',
-        'Azure Chisel': '蔚蓝凿子',
-        'Burble Chisel': '深紫凿子',
-        'Crimson Chisel': '绛红凿子',
-        'Rainbow Chisel': '彩虹凿子',
-        'Holy Chisel': '神圣凿子',
-        'Celestial Needle': '星空针',
-        'Cheese Needle': '奶酪针',
-        'Verdant Needle': '翠绿针',
-        'Azure Needle': '蔚蓝针',
-        'Burble Needle': '深紫针',
-        'Crimson Needle': '绛红针',
-        'Rainbow Needle': '彩虹针',
-        'Holy Needle': '神圣针',
-        'Celestial Spatula': '星空锅铲',
-        'Cheese Spatula': '奶酪锅铲',
-        'Verdant Spatula': '翠绿锅铲',
-        'Azure Spatula': '蔚蓝锅铲',
-        'Burble Spatula': '深紫锅铲',
-        'Crimson Spatula': '绛红锅铲',
-        'Rainbow Spatula': '彩虹锅铲',
-        'Holy Spatula': '神圣锅铲',
-        'Celestial Pot': '星空壶',
-        'Cheese Pot': '奶酪壶',
-        'Verdant Pot': '翠绿壶',
-        'Azure Pot': '蔚蓝壶',
-        'Burble Pot': '深紫壶',
-        'Crimson Pot': '绛红壶',
-        'Rainbow Pot': '彩虹壶',
-        'Holy Pot': '神圣壶',
-        'Celestial Alembic': '星空蒸馏器',
-        'Cheese Alembic': '奶酪蒸馏器',
-        'Verdant Alembic': '翠绿蒸馏器',
-        'Azure Alembic': '蔚蓝蒸馏器',
-        'Burble Alembic': '深紫蒸馏器',
-        'Crimson Alembic': '绛红蒸馏器',
-        'Rainbow Alembic': '彩虹蒸馏器',
-        'Holy Alembic': '神圣蒸馏器',
-        'Celestial Enhancer': '星空强化器',
-        'Cheese Enhancer': '奶酪强化器',
-        'Verdant Enhancer': '翠绿强化器',
-        'Azure Enhancer': '蔚蓝强化器',
-        'Burble Enhancer': '深紫强化器',
-        'Crimson Enhancer': '绛红强化器',
-        'Rainbow Enhancer': '彩虹强化器',
-        'Holy Enhancer': '神圣强化器',
-        Milk: '牛奶',
-        'Verdant Milk': '翠绿牛奶',
-        'Azure Milk': '蔚蓝牛奶',
-        'Burble Milk': '深紫牛奶',
-        'Crimson Milk': '绛红牛奶',
-        'Rainbow Milk': '彩虹牛奶',
-        'Holy Milk': '神圣牛奶',
-        Cheese: '奶酪',
-        'Verdant Cheese': '翠绿奶酪',
-        'Azure Cheese': '蔚蓝奶酪',
-        'Burble Cheese': '深紫奶酪',
-        'Crimson Cheese': '绛红奶酪',
-        'Rainbow Cheese': '彩虹奶酪',
-        'Holy Cheese': '神圣奶酪',
-        Log: '原木',
-        'Birch Log': '白桦原木',
-        'Cedar Log': '雪松原木',
-        'Purpleheart Log': '紫心原木',
-        'Ginkgo Log': '银杏原木',
-        'Redwood Log': '红杉原木',
-        'Arcane Log': '神秘原木',
-        Lumber: '木板',
-        'Birch Lumber': '白桦木板',
-        'Cedar Lumber': '雪松木板',
-        'Purpleheart Lumber': '紫心木板',
-        'Ginkgo Lumber': '银杏木板',
-        'Redwood Lumber': '红杉木板',
-        'Arcane Lumber': '神秘木板',
-        'Rough Hide': '粗糙兽皮',
-        'Reptile Hide': '爬行动物皮',
-        'Gobo Hide': '哥布林皮',
-        'Beast Hide': '野兽皮',
-        'Umbral Hide': '暗影皮',
-        'Rough Leather': '粗糙皮革',
-        'Reptile Leather': '爬行动物皮革',
-        'Gobo Leather': '哥布林皮革',
-        'Beast Leather': '野兽皮革',
-        'Umbral Leather': '暗影皮革',
-        Cotton: '棉花',
-        Flax: '亚麻',
-        'Bamboo Branch': '竹子',
-        Cocoon: '蚕茧',
-        'Radiant Fiber': '光辉纤维',
-        'Cotton Fabric': '棉花布料',
-        'Linen Fabric': '亚麻布料',
-        'Bamboo Fabric': '竹子布料',
-        'Silk Fabric': '丝绸',
-        'Radiant Fabric': '光辉布料',
-        Egg: '鸡蛋',
-        Wheat: '小麦',
-        Sugar: '糖',
-        Blueberry: '蓝莓',
-        Blackberry: '黑莓',
-        Strawberry: '草莓',
-        Mooberry: '哞莓',
-        Marsberry: '火星莓',
-        Spaceberry: '太空莓',
-        Apple: '苹果',
-        Orange: '橙子',
-        Plum: '李子',
-        Peach: '桃子',
-        'Dragon Fruit': '火龙果',
-        'Star Fruit': '杨桃',
-        'Arabica Coffee Bean': '低级咖啡豆',
-        'Robusta Coffee Bean': '中级咖啡豆',
-        'Liberica Coffee Bean': '高级咖啡豆',
-        'Excelsa Coffee Bean': '特级咖啡豆',
-        'Fieriosa Coffee Bean': '火山咖啡豆',
-        'Spacia Coffee Bean': '太空咖啡豆',
-        'Green Tea Leaf': '绿茶叶',
-        'Black Tea Leaf': '黑茶叶',
-        'Burble Tea Leaf': '紫茶叶',
-        'Moolong Tea Leaf': '哞龙茶叶',
-        'Red Tea Leaf': '红茶叶',
-        'Emp Tea Leaf': '虚空茶叶',
-        'Catalyst Of Coinification': '点金催化剂',
-        'Catalyst Of Decomposition': '分解催化剂',
-        'Catalyst Of Transmutation': '转化催化剂',
-        'Prime Catalyst': '至高催化剂',
-        'Snake Fang': '蛇牙',
-        'Shoebill Feather': '鲸头鹳羽毛',
-        'Snail Shell': '蜗牛壳',
-        'Crab Pincer': '蟹钳',
-        'Turtle Shell': '乌龟壳',
-        'Marine Scale': '海洋鳞片',
-        'Treant Bark': '树皮',
-        'Centaur Hoof': '半人马蹄',
-        'Luna Wing': '月神翼',
-        'Gobo Rag': '哥布林抹布',
-        Goggles: '护目镜',
-        'Magnifying Glass': '放大镜',
-        'Eye Of The Watcher': '观察者之眼',
-        'Icy Cloth': '冰霜织物',
-        'Flaming Cloth': '烈焰织物',
-        "Sorcerer's Sole": '魔法师鞋底',
-        'Chrono Sphere': '时空球',
-        'Frost Sphere': '冰霜球',
-        'Panda Fluff': '熊猫绒',
-        'Black Bear Fluff': '黑熊绒',
-        'Grizzly Bear Fluff': '棕熊绒',
-        'Polar Bear Fluff': '北极熊绒',
-        'Red Panda Fluff': '小熊猫绒',
-        Magnet: '磁铁',
-        'Stalactite Shard': '钟乳石碎片',
-        'Living Granite': '花岗岩',
-        'Colossus Core': '巨像核心',
-        'Vampire Fang': '吸血鬼之牙',
-        'Werewolf Claw': '狼人之爪',
-        'Revenant Anima': '亡者之魂',
-        'Soul Fragment': '灵魂碎片',
-        'Infernal Ember': '地狱余烬',
-        'Demonic Core': '恶魔核心',
-        'Griffin Leather': '狮鹫之皮',
-        'Manticore Sting': '蝎狮之刺',
-        'Jackalope Antler': '鹿角兔之角',
-        'Dodocamel Plume': '渡渡驼之翎',
-        'Griffin Talon': '狮鹫之爪',
-        'Chimerical Refinement Shard': '奇幻精炼碎片',
-        "Acrobat's Ribbon": '杂技师彩带',
-        "Magician's Cloth": '魔术师织物',
-        'Chaotic Chain': '混沌锁链',
-        'Cursed Ball': '诅咒之球',
-        'Sinister Refinement Shard': '阴森精炼碎片',
-        'Royal Cloth': '皇家织物',
-        "Knight's Ingot": '骑士之锭',
-        "Bishop's Scroll": '主教卷轴',
-        'Regal Jewel': '君王宝石',
-        'Sundering Jewel': '裂空宝石',
-        'Enchanted Refinement Shard': '秘法精炼碎片',
-        'Marksman Brooch': '神射胸针',
-        'Corsair Crest': '掠夺者徽章',
-        'Damaged Anchor': '破损船锚',
-        'Maelstrom Plating': '怒涛甲片',
-        'Kraken Leather': '克拉肯皮革',
-        'Kraken Fang': '克拉肯之牙',
-        'Pirate Refinement Shard': '海盗精炼碎片',
-        'Pathbreaker Lodestone': '开路者磁石',
-        'Pathfinder Lodestone': '探路者磁石',
-        'Pathseeker Lodestone': '寻路者磁石',
-        'Labyrinth Refinement Shard': '迷宫精炼碎片',
-        'Butter Of Proficiency': '精通之油',
-        'Thread Of Expertise': '专精之线',
-        'Branch Of Insight': '洞察之枝',
-        'Gluttonous Energy': '贪食能量',
-        'Guzzling Energy': '暴饮能量',
-        'Milking Essence': '挤奶精华',
-        'Foraging Essence': '采摘精华',
-        'Woodcutting Essence': '伐木精华',
-        'Cheesesmithing Essence': '奶酪锻造精华',
-        'Crafting Essence': '制作精华',
-        'Tailoring Essence': '缝纫精华',
-        'Cooking Essence': '烹饪精华',
-        'Brewing Essence': '冲泡精华',
-        'Alchemy Essence': '炼金精华',
-        'Enhancing Essence': '强化精华',
-        'Swamp Essence': '沼泽精华',
-        'Aqua Essence': '海洋精华',
-        'Jungle Essence': '丛林精华',
-        'Gobo Essence': '哥布林精华',
-        Eyessence: '眼精华',
-        'Sorcerer Essence': '法师精华',
-        'Bear Essence': '熊熊精华',
-        'Golem Essence': '魔像精华',
-        'Twilight Essence': '暮光精华',
-        'Abyssal Essence': '地狱精华',
-        'Chimerical Essence': '奇幻精华',
-        'Sinister Essence': '阴森精华',
-        'Enchanted Essence': '秘法精华',
-        'Pirate Essence': '海盗精华',
-        'Labyrinth Essence': '迷宫精华',
-        'Task Crystal': '任务水晶',
-        'Star Fragment': '星光碎片',
-        Pearl: '珍珠',
-        Amber: '琥珀',
-        Garnet: '石榴石',
-        Jade: '翡翠',
-        Amethyst: '紫水晶',
-        Moonstone: '月亮石',
-        Sunstone: '太阳石',
-        "Philosopher's Stone": '贤者之石',
-        'Crushed Pearl': '珍珠碎片',
-        'Crushed Amber': '琥珀碎片',
-        'Crushed Garnet': '石榴石碎片',
-        'Crushed Jade': '翡翠碎片',
-        'Crushed Amethyst': '紫水晶碎片',
-        'Crushed Moonstone': '月亮石碎片',
-        'Crushed Sunstone': '太阳石碎片',
-        "Crushed Philosopher's Stone": '贤者之石碎片',
-        'Shard Of Protection': '保护碎片',
-        'Mirror Of Protection': '保护之镜',
-        "Philosopher's Mirror": '贤者之镜',
-        'Basic Torch': '基础火把',
-        'Advanced Torch': '进阶火把',
-        'Expert Torch': '专家火把',
-        'Basic Shroud': '基础斗篷',
-        'Advanced Shroud': '进阶斗篷',
-        'Expert Shroud': '专家斗篷',
-        'Basic Beacon': '基础探照灯',
-        'Advanced Beacon': '进阶探照灯',
-        'Expert Beacon': '专家探照灯',
-        'Basic Food Crate': '基础食物箱',
-        'Advanced Food Crate': '进阶食物箱',
-        'Expert Food Crate': '专家食物箱',
-        'Basic Tea Crate': '基础茶叶箱',
-        'Advanced Tea Crate': '进阶茶叶箱',
-        'Expert Tea Crate': '专家茶叶箱',
-        'Basic Coffee Crate': '基础咖啡箱',
-        'Advanced Coffee Crate': '进阶咖啡箱',
-        'Expert Coffee Crate': '专家咖啡箱',
+      "Coin": "金币",
+      "Task Token": "任务代币",
+      "Labyrinth Token": "迷宫代币",
+      "Chimerical Token": "奇幻代币",
+      "Sinister Token": "阴森代币",
+      "Enchanted Token": "秘法代币",
+      "Pirate Token": "海盗代币",
+      "Cowbell": "牛铃",
+      "Bag Of 10 Cowbells": "牛铃袋 (10个)",
+      "Purple's Gift": "小紫牛的礼物",
+      "Small Meteorite Cache": "小陨石舱",
+      "Medium Meteorite Cache": "中陨石舱",
+      "Large Meteorite Cache": "大陨石舱",
+      "Small Artisan's Crate": "小工匠匣",
+      "Medium Artisan's Crate": "中工匠匣",
+      "Large Artisan's Crate": "大工匠匣",
+      "Small Treasure Chest": "小宝箱",
+      "Medium Treasure Chest": "中宝箱",
+      "Large Treasure Chest": "大宝箱",
+      "Chimerical Chest": "奇幻宝箱",
+      "Sinister Chest": "阴森宝箱",
+      "Enchanted Chest": "秘法宝箱",
+      "Pirate Chest": "海盗宝箱",
+      "Purdora's Box (Skilling)": "紫多拉之盒（生活）",
+      "Purdora's Box (Combat)": "紫多拉之盒（战斗）",
+      "Scroll Of Gathering": "采集卷轴",
+      "Scroll Of Gourmet": "美食卷轴",
+      "Scroll Of Processing": "加工卷轴",
+      "Scroll Of Efficiency": "效率卷轴",
+      "Scroll Of Action Speed": "行动速度卷轴",
+      "Scroll Of Combat Drop": "战斗掉落卷轴",
+      "Scroll Of Attack Speed": "攻击速度卷轴",
+      "Scroll Of Cast Speed": "施法速度卷轴",
+      "Scroll Of Damage": "伤害卷轴",
+      "Scroll Of Critical Rate": "暴击率卷轴",
+      "Scroll Of Wisdom": "经验卷轴",
+      "Scroll Of Rare Find": "稀有发现卷轴",
+      "Blue Key Fragment": "蓝色钥匙碎片",
+      "Green Key Fragment": "绿色钥匙碎片",
+      "Purple Key Fragment": "紫色钥匙碎片",
+      "White Key Fragment": "白色钥匙碎片",
+      "Orange Key Fragment": "橙色钥匙碎片",
+      "Brown Key Fragment": "棕色钥匙碎片",
+      "Stone Key Fragment": "石头钥匙碎片",
+      "Dark Key Fragment": "黑暗钥匙碎片",
+      "Burning Key Fragment": "燃烧钥匙碎片",
+      "Donut": "甜甜圈",
+      "Blueberry Donut": "蓝莓甜甜圈",
+      "Blackberry Donut": "黑莓甜甜圈",
+      "Strawberry Donut": "草莓甜甜圈",
+      "Mooberry Donut": "哞莓甜甜圈",
+      "Marsberry Donut": "火星莓甜甜圈",
+      "Spaceberry Donut": "太空莓甜甜圈",
+      "Cupcake": "纸杯蛋糕",
+      "Blueberry Cake": "蓝莓蛋糕",
+      "Blackberry Cake": "黑莓蛋糕",
+      "Strawberry Cake": "草莓蛋糕",
+      "Mooberry Cake": "哞莓蛋糕",
+      "Marsberry Cake": "火星莓蛋糕",
+      "Spaceberry Cake": "太空莓蛋糕",
+      "Gummy": "软糖",
+      "Apple Gummy": "苹果软糖",
+      "Orange Gummy": "橙子软糖",
+      "Plum Gummy": "李子软糖",
+      "Peach Gummy": "桃子软糖",
+      "Dragon Fruit Gummy": "火龙果软糖",
+      "Star Fruit Gummy": "杨桃软糖",
+      "Yogurt": "酸奶",
+      "Apple Yogurt": "苹果酸奶",
+      "Orange Yogurt": "橙子酸奶",
+      "Plum Yogurt": "李子酸奶",
+      "Peach Yogurt": "桃子酸奶",
+      "Dragon Fruit Yogurt": "火龙果酸奶",
+      "Star Fruit Yogurt": "杨桃酸奶",
+      "Milking Tea": "挤奶茶",
+      "Foraging Tea": "采摘茶",
+      "Woodcutting Tea": "伐木茶",
+      "Cooking Tea": "烹饪茶",
+      "Brewing Tea": "冲泡茶",
+      "Alchemy Tea": "炼金茶",
+      "Enhancing Tea": "强化茶",
+      "Cheesesmithing Tea": "奶酪锻造茶",
+      "Crafting Tea": "制作茶",
+      "Tailoring Tea": "缝纫茶",
+      "Super Milking Tea": "超级挤奶茶",
+      "Super Foraging Tea": "超级采摘茶",
+      "Super Woodcutting Tea": "超级伐木茶",
+      "Super Cooking Tea": "超级烹饪茶",
+      "Super Brewing Tea": "超级冲泡茶",
+      "Super Alchemy Tea": "超级炼金茶",
+      "Super Enhancing Tea": "超级强化茶",
+      "Super Crafting Tea": "超级制作茶",
+      "Super Tailoring Tea": "超级缝纫茶",
+      "Ultra Milking Tea": "究极挤奶茶",
+      "Ultra Foraging Tea": "究极采摘茶",
+      "Ultra Woodcutting Tea": "究极伐木茶",
+      "Ultra Cooking Tea": "究极烹饪茶",
+      "Ultra Brewing Tea": "究极冲泡茶",
+      "Ultra Alchemy Tea": "究极炼金茶",
+      "Ultra Enhancing Tea": "究极强化茶",
+      "Ultra Crafting Tea": "究极制作茶",
+      "Ultra Tailoring Tea": "究极缝纫茶",
+      "Gathering Tea": "采集茶",
+      "Gourmet Tea": "美食茶",
+      "Wisdom Tea": "经验茶",
+      "Processing Tea": "加工茶",
+      "Efficiency Tea": "效率茶",
+      "Artisan Tea": "工匠茶",
+      "Catalytic Tea": "催化茶",
+      "Blessed Tea": "福气茶",
+      "Stamina Coffee": "耐力咖啡",
+      "Intelligence Coffee": "智力咖啡",
+      "Defense Coffee": "防御咖啡",
+      "Attack Coffee": "攻击咖啡",
+      "Melee Coffee": "近战咖啡",
+      "Ranged Coffee": "远程咖啡",
+      "Magic Coffee": "魔法咖啡",
+      "Super Stamina Coffee": "超级耐力咖啡",
+      "Super Intelligence Coffee": "超级智力咖啡",
+      "Super Defense Coffee": "超级防御咖啡",
+      "Super Attack Coffee": "超级攻击咖啡",
+      "Super Melee Coffee": "超级近战咖啡",
+      "Super Ranged Coffee": "超级远程咖啡",
+      "Super Magic Coffee": "超级魔法咖啡",
+      "Ultra Stamina Coffee": "究极耐力咖啡",
+      "Ultra Intelligence Coffee": "究极智力咖啡",
+      "Ultra Defense Coffee": "究极防御咖啡",
+      "Ultra Attack Coffee": "究极攻击咖啡",
+      "Ultra Melee Coffee": "究极近战咖啡",
+      "Ultra Ranged Coffee": "究极远程咖啡",
+      "Ultra Magic Coffee": "究极魔法咖啡",
+      "Wisdom Coffee": "经验咖啡",
+      "Lucky Coffee": "幸运咖啡",
+      "Swiftness Coffee": "迅捷咖啡",
+      "Channeling Coffee": "吟唱咖啡",
+      "Critical Coffee": "暴击咖啡",
+      "Poke": "破胆之刺",
+      "Impale": "透骨之刺",
+      "Puncture": "破甲之刺",
+      "Penetrating Strike": "贯心之刺",
+      "Scratch": "爪影斩",
+      "Cleave": "分裂斩",
+      "Maim": "血刃斩",
+      "Crippling Slash": "致残斩",
+      "Smack": "重碾",
+      "Sweep": "重扫",
+      "Stunning Blow": "重锤",
+      "Fracturing Impact": "碎裂冲击",
+      "Shield Bash": "盾击",
+      "Quick Shot": "快速射击",
+      "Aqua Arrow": "流水箭",
+      "Flame Arrow": "烈焰箭",
+      "Rain Of Arrows": "箭雨",
+      "Silencing Shot": "沉默之箭",
+      "Steady Shot": "稳定射击",
+      "Pestilent Shot": "疫病射击",
+      "Penetrating Shot": "贯穿射击",
+      "Water Strike": "流水冲击",
+      "Ice Spear": "冰枪术",
+      "Frost Surge": "冰霜爆裂",
+      "Mana Spring": "法力喷泉",
+      "Entangle": "缠绕",
+      "Toxic Pollen": "剧毒粉尘",
+      "Nature's Veil": "自然菌幕",
+      "Life Drain": "生命吸取",
+      "Fireball": "火球",
+      "Flame Blast": "熔岩爆裂",
+      "Firestorm": "火焰风暴",
+      "Smoke Burst": "烟爆灭影",
+      "Minor Heal": "初级自愈术",
+      "Heal": "自愈术",
+      "Quick Aid": "快速治疗术",
+      "Rejuvenate": "群体治疗术",
+      "Taunt": "嘲讽",
+      "Provoke": "挑衅",
+      "Toughness": "坚韧",
+      "Elusiveness": "闪避",
+      "Precision": "精确",
+      "Berserk": "狂暴",
+      "Elemental Affinity": "元素增幅",
+      "Frenzy": "狂速",
+      "Spike Shell": "尖刺防护",
+      "Retribution": "惩戒",
+      "Vampirism": "吸血",
+      "Revive": "复活",
+      "Insanity": "疯狂",
+      "Invincible": "无敌",
+      "Speed Aura": "速度光环",
+      "Guardian Aura": "守护光环",
+      "Fierce Aura": "物理光环",
+      "Critical Aura": "暴击光环",
+      "Mystic Aura": "元素光环",
+      "Gobo Stabber": "哥布林长剑",
+      "Gobo Slasher": "哥布林关刀",
+      "Gobo Smasher": "哥布林狼牙棒",
+      "Spiked Bulwark": "尖刺重盾",
+      "Werewolf Slasher": "狼人关刀",
+      "Griffin Bulwark": "狮鹫重盾",
+      "Griffin Bulwark (R)": "狮鹫重盾（精）",
+      "Gobo Shooter": "哥布林弹弓",
+      "Vampiric Bow": "吸血弓",
+      "Cursed Bow": "咒怨之弓",
+      "Cursed Bow (R)": "咒怨之弓（精）",
+      "Gobo Boomstick": "哥布林火棍",
+      "Cheese Bulwark": "奶酪重盾",
+      "Verdant Bulwark": "翠绿重盾",
+      "Azure Bulwark": "蔚蓝重盾",
+      "Burble Bulwark": "深紫重盾",
+      "Crimson Bulwark": "绛红重盾",
+      "Rainbow Bulwark": "彩虹重盾",
+      "Holy Bulwark": "神圣重盾",
+      "Wooden Bow": "木弓",
+      "Birch Bow": "桦木弓",
+      "Cedar Bow": "雪松弓",
+      "Purpleheart Bow": "紫心弓",
+      "Ginkgo Bow": "银杏弓",
+      "Redwood Bow": "红杉弓",
+      "Arcane Bow": "神秘弓",
+      "Stalactite Spear": "石钟长枪",
+      "Granite Bludgeon": "花岗岩大棒",
+      "Furious Spear": "狂怒长枪",
+      "Furious Spear (R)": "狂怒长枪（精）",
+      "Regal Sword": "君王之剑",
+      "Regal Sword (R)": "君王之剑（精）",
+      "Chaotic Flail": "混沌连枷",
+      "Chaotic Flail (R)": "混沌连枷（精）",
+      "Soul Hunter Crossbow": "灵魂猎手弩",
+      "Sundering Crossbow": "裂空之弩",
+      "Sundering Crossbow (R)": "裂空之弩（精）",
+      "Frost Staff": "冰霜法杖",
+      "Infernal Battlestaff": "炼狱法杖",
+      "Jackalope Staff": "鹿角兔之杖",
+      "Rippling Trident": "涟漪三叉戟",
+      "Rippling Trident (R)": "涟漪三叉戟（精）",
+      "Blooming Trident": "绽放三叉戟",
+      "Blooming Trident (R)": "绽放三叉戟（精）",
+      "Blazing Trident": "炽焰三叉戟",
+      "Blazing Trident (R)": "炽焰三叉戟（精）",
+      "Cheese Sword": "奶酪剑",
+      "Verdant Sword": "翠绿剑",
+      "Azure Sword": "蔚蓝剑",
+      "Burble Sword": "深紫剑",
+      "Crimson Sword": "绛红剑",
+      "Rainbow Sword": "彩虹剑",
+      "Holy Sword": "神圣剑",
+      "Cheese Spear": "奶酪长枪",
+      "Verdant Spear": "翠绿长枪",
+      "Azure Spear": "蔚蓝长枪",
+      "Burble Spear": "深紫长枪",
+      "Crimson Spear": "绛红长枪",
+      "Rainbow Spear": "彩虹长枪",
+      "Holy Spear": "神圣长枪",
+      "Cheese Mace": "奶酪钉头锤",
+      "Verdant Mace": "翠绿钉头锤",
+      "Azure Mace": "蔚蓝钉头锤",
+      "Burble Mace": "深紫钉头锤",
+      "Crimson Mace": "绛红钉头锤",
+      "Rainbow Mace": "彩虹钉头锤",
+      "Holy Mace": "神圣钉头锤",
+      "Wooden Crossbow": "木弩",
+      "Birch Crossbow": "桦木弩",
+      "Cedar Crossbow": "雪松弩",
+      "Purpleheart Crossbow": "紫心弩",
+      "Ginkgo Crossbow": "银杏弩",
+      "Redwood Crossbow": "红杉弩",
+      "Arcane Crossbow": "神秘弩",
+      "Wooden Water Staff": "木制水法杖",
+      "Birch Water Staff": "桦木水法杖",
+      "Cedar Water Staff": "雪松水法杖",
+      "Purpleheart Water Staff": "紫心水法杖",
+      "Ginkgo Water Staff": "银杏水法杖",
+      "Redwood Water Staff": "红杉水法杖",
+      "Arcane Water Staff": "神秘水法杖",
+      "Wooden Nature Staff": "木制自然法杖",
+      "Birch Nature Staff": "桦木自然法杖",
+      "Cedar Nature Staff": "雪松自然法杖",
+      "Purpleheart Nature Staff": "紫心自然法杖",
+      "Ginkgo Nature Staff": "银杏自然法杖",
+      "Redwood Nature Staff": "红杉自然法杖",
+      "Arcane Nature Staff": "神秘自然法杖",
+      "Wooden Fire Staff": "木制火法杖",
+      "Birch Fire Staff": "桦木火法杖",
+      "Cedar Fire Staff": "雪松火法杖",
+      "Purpleheart Fire Staff": "紫心火法杖",
+      "Ginkgo Fire Staff": "银杏火法杖",
+      "Redwood Fire Staff": "红杉火法杖",
+      "Arcane Fire Staff": "神秘火法杖",
+      "Eye Watch": "掌上监工",
+      "Snake Fang Dirk": "蛇牙短剑",
+      "Vision Shield": "视觉盾",
+      "Gobo Defender": "哥布林防御者",
+      "Vampire Fang Dirk": "吸血鬼短剑",
+      "Knight's Aegis": "骑士盾",
+      "Knight's Aegis (R)": "骑士盾（精）",
+      "Treant Shield": "树人盾",
+      "Manticore Shield": "蝎狮盾",
+      "Tome Of Healing": "治疗之书",
+      "Tome Of The Elements": "元素之书",
+      "Watchful Relic": "警戒遗物",
+      "Bishop's Codex": "主教法典",
+      "Bishop's Codex (R)": "主教法典（精）",
+      "Cheese Buckler": "奶酪圆盾",
+      "Verdant Buckler": "翠绿圆盾",
+      "Azure Buckler": "蔚蓝圆盾",
+      "Burble Buckler": "深紫圆盾",
+      "Crimson Buckler": "绛红圆盾",
+      "Rainbow Buckler": "彩虹圆盾",
+      "Holy Buckler": "神圣圆盾",
+      "Wooden Shield": "木盾",
+      "Birch Shield": "桦木盾",
+      "Cedar Shield": "雪松盾",
+      "Purpleheart Shield": "紫心盾",
+      "Ginkgo Shield": "银杏盾",
+      "Redwood Shield": "红杉盾",
+      "Arcane Shield": "神秘盾",
+      "Gatherer Cape": "采集者披风",
+      "Gatherer Cape (R)": "采集者披风（精）",
+      "Artificer Cape": "工匠披风",
+      "Artificer Cape (R)": "工匠披风（精）",
+      "Culinary Cape": "厨师披风",
+      "Culinary Cape (R)": "厨师披风（精）",
+      "Chance Cape": "机缘披风",
+      "Chance Cape (R)": "机缘披风（精）",
+      "Sinister Cape": "阴森披风",
+      "Sinister Cape (R)": "阴森披风（精）",
+      "Chimerical Quiver": "奇幻箭袋",
+      "Chimerical Quiver (R)": "奇幻箭袋（精）",
+      "Enchanted Cloak": "秘法披风",
+      "Enchanted Cloak (R)": "秘法披风（精）",
+      "Red Culinary Hat": "红色厨师帽",
+      "Snail Shell Helmet": "蜗牛壳头盔",
+      "Vision Helmet": "视觉头盔",
+      "Fluffy Red Hat": "蓬松红帽子",
+      "Corsair Helmet": "掠夺者头盔",
+      "Corsair Helmet (R)": "掠夺者头盔（精）",
+      "Acrobatic Hood": "杂技师兜帽",
+      "Acrobatic Hood (R)": "杂技师兜帽（精）",
+      "Magician's Hat": "魔术师帽",
+      "Magician's Hat (R)": "魔术师帽（精）",
+      "Cheese Helmet": "奶酪头盔",
+      "Verdant Helmet": "翠绿头盔",
+      "Azure Helmet": "蔚蓝头盔",
+      "Burble Helmet": "深紫头盔",
+      "Crimson Helmet": "绛红头盔",
+      "Rainbow Helmet": "彩虹头盔",
+      "Holy Helmet": "神圣头盔",
+      "Rough Hood": "粗糙兜帽",
+      "Reptile Hood": "爬行动物兜帽",
+      "Gobo Hood": "哥布林兜帽",
+      "Beast Hood": "野兽兜帽",
+      "Umbral Hood": "暗影兜帽",
+      "Cotton Hat": "棉帽",
+      "Linen Hat": "亚麻帽",
+      "Bamboo Hat": "竹帽",
+      "Silk Hat": "丝帽",
+      "Radiant Hat": "光辉帽",
+      "Dairyhand's Top": "挤奶工上衣",
+      "Forager's Top": "采摘者上衣",
+      "Lumberjack's Top": "伐木工上衣",
+      "Cheesemaker's Top": "奶酪师上衣",
+      "Crafter's Top": "工匠上衣",
+      "Tailor's Top": "裁缝上衣",
+      "Chef's Top": "厨师上衣",
+      "Brewer's Top": "饮品师上衣",
+      "Alchemist's Top": "炼金师上衣",
+      "Enhancer's Top": "强化师上衣",
+      "Gator Vest": "鳄鱼马甲",
+      "Turtle Shell Body": "龟壳胸甲",
+      "Colossus Plate Body": "巨像胸甲",
+      "Demonic Plate Body": "恶魔胸甲",
+      "Anchorbound Plate Body": "锚定胸甲",
+      "Anchorbound Plate Body (R)": "锚定胸甲（精）",
+      "Maelstrom Plate Body": "怒涛胸甲",
+      "Maelstrom Plate Body (R)": "怒涛胸甲（精）",
+      "Marine Tunic": "海洋皮衣",
+      "Revenant Tunic": "亡灵皮衣",
+      "Griffin Tunic": "狮鹫皮衣",
+      "Kraken Tunic": "克拉肯皮衣",
+      "Kraken Tunic (R)": "克拉肯皮衣（精）",
+      "Icy Robe Top": "冰霜袍服",
+      "Flaming Robe Top": "烈焰袍服",
+      "Luna Robe Top": "月神袍服",
+      "Royal Water Robe Top": "皇家水系袍服",
+      "Royal Water Robe Top (R)": "皇家水系袍服（精）",
+      "Royal Nature Robe Top": "皇家自然系袍服",
+      "Royal Nature Robe Top (R)": "皇家自然系袍服（精）",
+      "Royal Fire Robe Top": "皇家火系袍服",
+      "Royal Fire Robe Top (R)": "皇家火系袍服（精）",
+      "Cheese Plate Body": "奶酪胸甲",
+      "Verdant Plate Body": "翠绿胸甲",
+      "Azure Plate Body": "蔚蓝胸甲",
+      "Burble Plate Body": "深紫胸甲",
+      "Crimson Plate Body": "绛红胸甲",
+      "Rainbow Plate Body": "彩虹胸甲",
+      "Holy Plate Body": "神圣胸甲",
+      "Rough Tunic": "粗糙皮衣",
+      "Reptile Tunic": "爬行动物皮衣",
+      "Gobo Tunic": "哥布林皮衣",
+      "Beast Tunic": "野兽皮衣",
+      "Umbral Tunic": "暗影皮衣",
+      "Cotton Robe Top": "棉袍服",
+      "Linen Robe Top": "亚麻袍服",
+      "Bamboo Robe Top": "竹袍服",
+      "Silk Robe Top": "丝绸袍服",
+      "Radiant Robe Top": "光辉袍服",
+      "Dairyhand's Bottoms": "挤奶工下装",
+      "Forager's Bottoms": "采摘者下装",
+      "Lumberjack's Bottoms": "伐木工下装",
+      "Cheesemaker's Bottoms": "奶酪师下装",
+      "Crafter's Bottoms": "工匠下装",
+      "Tailor's Bottoms": "裁缝下装",
+      "Chef's Bottoms": "厨师下装",
+      "Brewer's Bottoms": "饮品师下装",
+      "Alchemist's Bottoms": "炼金师下装",
+      "Enhancer's Bottoms": "强化师下装",
+      "Turtle Shell Legs": "龟壳腿甲",
+      "Colossus Plate Legs": "巨像腿甲",
+      "Demonic Plate Legs": "恶魔腿甲",
+      "Anchorbound Plate Legs": "锚定腿甲",
+      "Anchorbound Plate Legs (R)": "锚定腿甲（精）",
+      "Maelstrom Plate Legs": "怒涛腿甲",
+      "Maelstrom Plate Legs (R)": "怒涛腿甲（精）",
+      "Marine Chaps": "航海皮裤",
+      "Revenant Chaps": "亡灵皮裤",
+      "Griffin Chaps": "狮鹫皮裤",
+      "Kraken Chaps": "克拉肯皮裤",
+      "Kraken Chaps (R)": "克拉肯皮裤（精）",
+      "Icy Robe Bottoms": "冰霜袍裙",
+      "Flaming Robe Bottoms": "烈焰袍裙",
+      "Luna Robe Bottoms": "月神袍裙",
+      "Royal Water Robe Bottoms": "皇家水系袍裙",
+      "Royal Water Robe Bottoms (R)": "皇家水系袍裙（精）",
+      "Royal Nature Robe Bottoms": "皇家自然系袍裙",
+      "Royal Nature Robe Bottoms (R)": "皇家自然系袍裙（精）",
+      "Royal Fire Robe Bottoms": "皇家火系袍裙",
+      "Royal Fire Robe Bottoms (R)": "皇家火系袍裙（精）",
+      "Cheese Plate Legs": "奶酪腿甲",
+      "Verdant Plate Legs": "翠绿腿甲",
+      "Azure Plate Legs": "蔚蓝腿甲",
+      "Burble Plate Legs": "深紫腿甲",
+      "Crimson Plate Legs": "绛红腿甲",
+      "Rainbow Plate Legs": "彩虹腿甲",
+      "Holy Plate Legs": "神圣腿甲",
+      "Rough Chaps": "粗糙皮裤",
+      "Reptile Chaps": "爬行动物皮裤",
+      "Gobo Chaps": "哥布林皮裤",
+      "Beast Chaps": "野兽皮裤",
+      "Umbral Chaps": "暗影皮裤",
+      "Cotton Robe Bottoms": "棉袍裙",
+      "Linen Robe Bottoms": "亚麻袍裙",
+      "Bamboo Robe Bottoms": "竹袍裙",
+      "Silk Robe Bottoms": "丝绸袍裙",
+      "Radiant Robe Bottoms": "光辉袍裙",
+      "Enchanted Gloves": "附魔手套",
+      "Pincer Gloves": "蟹钳手套",
+      "Panda Gloves": "熊猫手套",
+      "Magnetic Gloves": "磁力手套",
+      "Dodocamel Gauntlets": "渡渡驼护手",
+      "Dodocamel Gauntlets (R)": "渡渡驼护手（精）",
+      "Sighted Bracers": "瞄准护腕",
+      "Marksman Bracers": "神射护腕",
+      "Marksman Bracers (R)": "神射护腕（精）",
+      "Chrono Gloves": "时空手套",
+      "Cheese Gauntlets": "奶酪护手",
+      "Verdant Gauntlets": "翠绿护手",
+      "Azure Gauntlets": "蔚蓝护手",
+      "Burble Gauntlets": "深紫护手",
+      "Crimson Gauntlets": "绛红护手",
+      "Rainbow Gauntlets": "彩虹护手",
+      "Holy Gauntlets": "神圣护手",
+      "Rough Bracers": "粗糙护腕",
+      "Reptile Bracers": "爬行动物护腕",
+      "Gobo Bracers": "哥布林护腕",
+      "Beast Bracers": "野兽护腕",
+      "Umbral Bracers": "暗影护腕",
+      "Cotton Gloves": "棉手套",
+      "Linen Gloves": "亚麻手套",
+      "Bamboo Gloves": "竹手套",
+      "Silk Gloves": "丝手套",
+      "Radiant Gloves": "光辉手套",
+      "Collector's Boots": "收藏家靴",
+      "Shoebill Shoes": "鲸头鹳鞋",
+      "Black Bear Shoes": "黑熊鞋",
+      "Grizzly Bear Shoes": "棕熊鞋",
+      "Polar Bear Shoes": "北极熊鞋",
+      "Pathbreaker Boots": "开路者靴",
+      "Pathbreaker Boots (R)": "开路者靴（精）",
+      "Centaur Boots": "半人马靴",
+      "Pathfinder Boots": "探路者靴",
+      "Pathfinder Boots (R)": "探路者靴（精）",
+      "Sorcerer Boots": "巫师靴",
+      "Pathseeker Boots": "寻路者靴",
+      "Pathseeker Boots (R)": "寻路者靴（精）",
+      "Cheese Boots": "奶酪靴",
+      "Verdant Boots": "翠绿靴",
+      "Azure Boots": "蔚蓝靴",
+      "Burble Boots": "深紫靴",
+      "Crimson Boots": "绛红靴",
+      "Rainbow Boots": "彩虹靴",
+      "Holy Boots": "神圣靴",
+      "Rough Boots": "粗糙靴",
+      "Reptile Boots": "爬行动物靴",
+      "Gobo Boots": "哥布林靴",
+      "Beast Boots": "野兽靴",
+      "Umbral Boots": "暗影靴",
+      "Cotton Boots": "棉靴",
+      "Linen Boots": "亚麻靴",
+      "Bamboo Boots": "竹靴",
+      "Silk Boots": "丝靴",
+      "Radiant Boots": "光辉靴",
+      "Small Pouch": "小袋子",
+      "Medium Pouch": "中袋子",
+      "Large Pouch": "大袋子",
+      "Giant Pouch": "巨大袋子",
+      "Gluttonous Pouch": "贪食之袋",
+      "Guzzling Pouch": "暴饮之囊",
+      "Necklace Of Efficiency": "效率项链",
+      "Fighter Necklace": "战士项链",
+      "Ranger Necklace": "射手项链",
+      "Wizard Necklace": "巫师项链",
+      "Necklace Of Wisdom": "经验项链",
+      "Necklace Of Speed": "速度项链",
+      "Philosopher's Necklace": "贤者项链",
+      "Earrings Of Gathering": "采集耳环",
+      "Earrings Of Essence Find": "精华发现耳环",
+      "Earrings Of Armor": "护甲耳环",
+      "Earrings Of Regeneration": "恢复耳环",
+      "Earrings Of Resistance": "抗性耳环",
+      "Earrings Of Rare Find": "稀有发现耳环",
+      "Earrings Of Critical Strike": "暴击耳环",
+      "Philosopher's Earrings": "贤者耳环",
+      "Ring Of Gathering": "采集戒指",
+      "Ring Of Essence Find": "精华发现戒指",
+      "Ring Of Armor": "护甲戒指",
+      "Ring Of Regeneration": "恢复戒指",
+      "Ring Of Resistance": "抗性戒指",
+      "Ring Of Rare Find": "稀有发现戒指",
+      "Ring Of Critical Strike": "暴击戒指",
+      "Philosopher's Ring": "贤者戒指",
+      "Trainee Milking Charm": "实习挤奶护符",
+      "Basic Milking Charm": "基础挤奶护符",
+      "Advanced Milking Charm": "高级挤奶护符",
+      "Expert Milking Charm": "专家挤奶护符",
+      "Master Milking Charm": "大师挤奶护符",
+      "Grandmaster Milking Charm": "宗师挤奶护符",
+      "Trainee Foraging Charm": "实习采摘护符",
+      "Basic Foraging Charm": "基础采摘护符",
+      "Advanced Foraging Charm": "高级采摘护符",
+      "Expert Foraging Charm": "专家采摘护符",
+      "Master Foraging Charm": "大师采摘护符",
+      "Grandmaster Foraging Charm": "宗师采摘护符",
+      "Trainee Woodcutting Charm": "实习伐木护符",
+      "Basic Woodcutting Charm": "基础伐木护符",
+      "Advanced Woodcutting Charm": "高级伐木护符",
+      "Expert Woodcutting Charm": "专家伐木护符",
+      "Master Woodcutting Charm": "大师伐木护符",
+      "Grandmaster Woodcutting Charm": "宗师伐木护符",
+      "Trainee Cheesesmithing Charm": "实习奶酪锻造护符",
+      "Basic Cheesesmithing Charm": "基础奶酪锻造护符",
+      "Advanced Cheesesmithing Charm": "高级奶酪锻造护符",
+      "Expert Cheesesmithing Charm": "专家奶酪锻造护符",
+      "Master Cheesesmithing Charm": "大师奶酪锻造护符",
+      "Grandmaster Cheesesmithing Charm": "宗师奶酪锻造护符",
+      "Trainee Crafting Charm": "实习制作护符",
+      "Basic Crafting Charm": "基础制作护符",
+      "Advanced Crafting Charm": "高级制作护符",
+      "Expert Crafting Charm": "专家制作护符",
+      "Master Crafting Charm": "大师制作护符",
+      "Grandmaster Crafting Charm": "宗师制作护符",
+      "Trainee Tailoring Charm": "实习缝纫护符",
+      "Basic Tailoring Charm": "基础缝纫护符",
+      "Advanced Tailoring Charm": "高级缝纫护符",
+      "Expert Tailoring Charm": "专家缝纫护符",
+      "Master Tailoring Charm": "大师缝纫护符",
+      "Grandmaster Tailoring Charm": "宗师缝纫护符",
+      "Trainee Cooking Charm": "实习烹饪护符",
+      "Basic Cooking Charm": "基础烹饪护符",
+      "Advanced Cooking Charm": "高级烹饪护符",
+      "Expert Cooking Charm": "专家烹饪护符",
+      "Master Cooking Charm": "大师烹饪护符",
+      "Grandmaster Cooking Charm": "宗师烹饪护符",
+      "Trainee Brewing Charm": "实习冲泡护符",
+      "Basic Brewing Charm": "基础冲泡护符",
+      "Advanced Brewing Charm": "高级冲泡护符",
+      "Expert Brewing Charm": "专家冲泡护符",
+      "Master Brewing Charm": "大师冲泡护符",
+      "Grandmaster Brewing Charm": "宗师冲泡护符",
+      "Trainee Alchemy Charm": "实习炼金护符",
+      "Basic Alchemy Charm": "基础炼金护符",
+      "Advanced Alchemy Charm": "高级炼金护符",
+      "Expert Alchemy Charm": "专家炼金护符",
+      "Master Alchemy Charm": "大师炼金护符",
+      "Grandmaster Alchemy Charm": "宗师炼金护符",
+      "Trainee Enhancing Charm": "实习强化护符",
+      "Basic Enhancing Charm": "基础强化护符",
+      "Advanced Enhancing Charm": "高级强化护符",
+      "Expert Enhancing Charm": "专家强化护符",
+      "Master Enhancing Charm": "大师强化护符",
+      "Grandmaster Enhancing Charm": "宗师强化护符",
+      "Trainee Stamina Charm": "实习耐力护符",
+      "Basic Stamina Charm": "基础耐力护符",
+      "Advanced Stamina Charm": "高级耐力护符",
+      "Expert Stamina Charm": "专家耐力护符",
+      "Master Stamina Charm": "大师耐力护符",
+      "Grandmaster Stamina Charm": "宗师耐力护符",
+      "Trainee Intelligence Charm": "实习智力护符",
+      "Basic Intelligence Charm": "基础智力护符",
+      "Advanced Intelligence Charm": "高级智力护符",
+      "Expert Intelligence Charm": "专家智力护符",
+      "Master Intelligence Charm": "大师智力护符",
+      "Grandmaster Intelligence Charm": "宗师智力护符",
+      "Trainee Attack Charm": "实习攻击护符",
+      "Basic Attack Charm": "基础攻击护符",
+      "Advanced Attack Charm": "高级攻击护符",
+      "Expert Attack Charm": "专家攻击护符",
+      "Master Attack Charm": "大师攻击护符",
+      "Grandmaster Attack Charm": "宗师攻击护符",
+      "Trainee Defense Charm": "实习防御护符",
+      "Basic Defense Charm": "基础防御护符",
+      "Advanced Defense Charm": "高级防御护符",
+      "Expert Defense Charm": "专家防御护符",
+      "Master Defense Charm": "大师防御护符",
+      "Grandmaster Defense Charm": "宗师防御护符",
+      "Trainee Melee Charm": "实习近战护符",
+      "Basic Melee Charm": "基础近战护符",
+      "Advanced Melee Charm": "高级近战护符",
+      "Expert Melee Charm": "专家近战护符",
+      "Master Melee Charm": "大师近战护符",
+      "Grandmaster Melee Charm": "宗师近战护符",
+      "Trainee Ranged Charm": "实习远程护符",
+      "Basic Ranged Charm": "基础远程护符",
+      "Advanced Ranged Charm": "高级远程护符",
+      "Expert Ranged Charm": "专家远程护符",
+      "Master Ranged Charm": "大师远程护符",
+      "Grandmaster Ranged Charm": "宗师远程护符",
+      "Trainee Magic Charm": "实习魔法护符",
+      "Basic Magic Charm": "基础魔法护符",
+      "Advanced Magic Charm": "高级魔法护符",
+      "Expert Magic Charm": "专家魔法护符",
+      "Master Magic Charm": "大师魔法护符",
+      "Grandmaster Magic Charm": "宗师魔法护符",
+      "Basic Task Badge": "基础任务徽章",
+      "Advanced Task Badge": "高级任务徽章",
+      "Expert Task Badge": "专家任务徽章",
+      "Celestial Brush": "星空刷子",
+      "Cheese Brush": "奶酪刷子",
+      "Verdant Brush": "翠绿刷子",
+      "Azure Brush": "蔚蓝刷子",
+      "Burble Brush": "深紫刷子",
+      "Crimson Brush": "绛红刷子",
+      "Rainbow Brush": "彩虹刷子",
+      "Holy Brush": "神圣刷子",
+      "Celestial Shears": "星空剪刀",
+      "Cheese Shears": "奶酪剪刀",
+      "Verdant Shears": "翠绿剪刀",
+      "Azure Shears": "蔚蓝剪刀",
+      "Burble Shears": "深紫剪刀",
+      "Crimson Shears": "绛红剪刀",
+      "Rainbow Shears": "彩虹剪刀",
+      "Holy Shears": "神圣剪刀",
+      "Celestial Hatchet": "星空斧头",
+      "Cheese Hatchet": "奶酪斧头",
+      "Verdant Hatchet": "翠绿斧头",
+      "Azure Hatchet": "蔚蓝斧头",
+      "Burble Hatchet": "深紫斧头",
+      "Crimson Hatchet": "绛红斧头",
+      "Rainbow Hatchet": "彩虹斧头",
+      "Holy Hatchet": "神圣斧头",
+      "Celestial Hammer": "星空锤子",
+      "Cheese Hammer": "奶酪锤子",
+      "Verdant Hammer": "翠绿锤子",
+      "Azure Hammer": "蔚蓝锤子",
+      "Burble Hammer": "深紫锤子",
+      "Crimson Hammer": "绛红锤子",
+      "Rainbow Hammer": "彩虹锤子",
+      "Holy Hammer": "神圣锤子",
+      "Celestial Chisel": "星空凿子",
+      "Cheese Chisel": "奶酪凿子",
+      "Verdant Chisel": "翠绿凿子",
+      "Azure Chisel": "蔚蓝凿子",
+      "Burble Chisel": "深紫凿子",
+      "Crimson Chisel": "绛红凿子",
+      "Rainbow Chisel": "彩虹凿子",
+      "Holy Chisel": "神圣凿子",
+      "Celestial Needle": "星空针",
+      "Cheese Needle": "奶酪针",
+      "Verdant Needle": "翠绿针",
+      "Azure Needle": "蔚蓝针",
+      "Burble Needle": "深紫针",
+      "Crimson Needle": "绛红针",
+      "Rainbow Needle": "彩虹针",
+      "Holy Needle": "神圣针",
+      "Celestial Spatula": "星空锅铲",
+      "Cheese Spatula": "奶酪锅铲",
+      "Verdant Spatula": "翠绿锅铲",
+      "Azure Spatula": "蔚蓝锅铲",
+      "Burble Spatula": "深紫锅铲",
+      "Crimson Spatula": "绛红锅铲",
+      "Rainbow Spatula": "彩虹锅铲",
+      "Holy Spatula": "神圣锅铲",
+      "Celestial Pot": "星空壶",
+      "Cheese Pot": "奶酪壶",
+      "Verdant Pot": "翠绿壶",
+      "Azure Pot": "蔚蓝壶",
+      "Burble Pot": "深紫壶",
+      "Crimson Pot": "绛红壶",
+      "Rainbow Pot": "彩虹壶",
+      "Holy Pot": "神圣壶",
+      "Celestial Alembic": "星空蒸馏器",
+      "Cheese Alembic": "奶酪蒸馏器",
+      "Verdant Alembic": "翠绿蒸馏器",
+      "Azure Alembic": "蔚蓝蒸馏器",
+      "Burble Alembic": "深紫蒸馏器",
+      "Crimson Alembic": "绛红蒸馏器",
+      "Rainbow Alembic": "彩虹蒸馏器",
+      "Holy Alembic": "神圣蒸馏器",
+      "Celestial Enhancer": "星空强化器",
+      "Cheese Enhancer": "奶酪强化器",
+      "Verdant Enhancer": "翠绿强化器",
+      "Azure Enhancer": "蔚蓝强化器",
+      "Burble Enhancer": "深紫强化器",
+      "Crimson Enhancer": "绛红强化器",
+      "Rainbow Enhancer": "彩虹强化器",
+      "Holy Enhancer": "神圣强化器",
+      "Milk": "牛奶",
+      "Verdant Milk": "翠绿牛奶",
+      "Azure Milk": "蔚蓝牛奶",
+      "Burble Milk": "深紫牛奶",
+      "Crimson Milk": "绛红牛奶",
+      "Rainbow Milk": "彩虹牛奶",
+      "Holy Milk": "神圣牛奶",
+      "Cheese": "奶酪",
+      "Verdant Cheese": "翠绿奶酪",
+      "Azure Cheese": "蔚蓝奶酪",
+      "Burble Cheese": "深紫奶酪",
+      "Crimson Cheese": "绛红奶酪",
+      "Rainbow Cheese": "彩虹奶酪",
+      "Holy Cheese": "神圣奶酪",
+      "Log": "原木",
+      "Birch Log": "白桦原木",
+      "Cedar Log": "雪松原木",
+      "Purpleheart Log": "紫心原木",
+      "Ginkgo Log": "银杏原木",
+      "Redwood Log": "红杉原木",
+      "Arcane Log": "神秘原木",
+      "Lumber": "木板",
+      "Birch Lumber": "白桦木板",
+      "Cedar Lumber": "雪松木板",
+      "Purpleheart Lumber": "紫心木板",
+      "Ginkgo Lumber": "银杏木板",
+      "Redwood Lumber": "红杉木板",
+      "Arcane Lumber": "神秘木板",
+      "Rough Hide": "粗糙兽皮",
+      "Reptile Hide": "爬行动物皮",
+      "Gobo Hide": "哥布林皮",
+      "Beast Hide": "野兽皮",
+      "Umbral Hide": "暗影皮",
+      "Rough Leather": "粗糙皮革",
+      "Reptile Leather": "爬行动物皮革",
+      "Gobo Leather": "哥布林皮革",
+      "Beast Leather": "野兽皮革",
+      "Umbral Leather": "暗影皮革",
+      "Cotton": "棉花",
+      "Flax": "亚麻",
+      "Bamboo Branch": "竹子",
+      "Cocoon": "蚕茧",
+      "Radiant Fiber": "光辉纤维",
+      "Cotton Fabric": "棉花布料",
+      "Linen Fabric": "亚麻布料",
+      "Bamboo Fabric": "竹子布料",
+      "Silk Fabric": "丝绸",
+      "Radiant Fabric": "光辉布料",
+      "Egg": "鸡蛋",
+      "Wheat": "小麦",
+      "Sugar": "糖",
+      "Blueberry": "蓝莓",
+      "Blackberry": "黑莓",
+      "Strawberry": "草莓",
+      "Mooberry": "哞莓",
+      "Marsberry": "火星莓",
+      "Spaceberry": "太空莓",
+      "Apple": "苹果",
+      "Orange": "橙子",
+      "Plum": "李子",
+      "Peach": "桃子",
+      "Dragon Fruit": "火龙果",
+      "Star Fruit": "杨桃",
+      "Arabica Coffee Bean": "低级咖啡豆",
+      "Robusta Coffee Bean": "中级咖啡豆",
+      "Liberica Coffee Bean": "高级咖啡豆",
+      "Excelsa Coffee Bean": "特级咖啡豆",
+      "Fieriosa Coffee Bean": "火山咖啡豆",
+      "Spacia Coffee Bean": "太空咖啡豆",
+      "Green Tea Leaf": "绿茶叶",
+      "Black Tea Leaf": "黑茶叶",
+      "Burble Tea Leaf": "紫茶叶",
+      "Moolong Tea Leaf": "哞龙茶叶",
+      "Red Tea Leaf": "红茶叶",
+      "Emp Tea Leaf": "虚空茶叶",
+      "Catalyst Of Coinification": "点金催化剂",
+      "Catalyst Of Decomposition": "分解催化剂",
+      "Catalyst Of Transmutation": "转化催化剂",
+      "Prime Catalyst": "至高催化剂",
+      "Snake Fang": "蛇牙",
+      "Shoebill Feather": "鲸头鹳羽毛",
+      "Snail Shell": "蜗牛壳",
+      "Crab Pincer": "蟹钳",
+      "Turtle Shell": "乌龟壳",
+      "Marine Scale": "海洋鳞片",
+      "Treant Bark": "树皮",
+      "Centaur Hoof": "半人马蹄",
+      "Luna Wing": "月神翼",
+      "Gobo Rag": "哥布林抹布",
+      "Goggles": "护目镜",
+      "Magnifying Glass": "放大镜",
+      "Eye Of The Watcher": "观察者之眼",
+      "Icy Cloth": "冰霜织物",
+      "Flaming Cloth": "烈焰织物",
+      "Sorcerer's Sole": "魔法师鞋底",
+      "Chrono Sphere": "时空球",
+      "Frost Sphere": "冰霜球",
+      "Panda Fluff": "熊猫绒",
+      "Black Bear Fluff": "黑熊绒",
+      "Grizzly Bear Fluff": "棕熊绒",
+      "Polar Bear Fluff": "北极熊绒",
+      "Red Panda Fluff": "小熊猫绒",
+      "Magnet": "磁铁",
+      "Stalactite Shard": "钟乳石碎片",
+      "Living Granite": "花岗岩",
+      "Colossus Core": "巨像核心",
+      "Vampire Fang": "吸血鬼之牙",
+      "Werewolf Claw": "狼人之爪",
+      "Revenant Anima": "亡者之魂",
+      "Soul Fragment": "灵魂碎片",
+      "Infernal Ember": "地狱余烬",
+      "Demonic Core": "恶魔核心",
+      "Griffin Leather": "狮鹫之皮",
+      "Manticore Sting": "蝎狮之刺",
+      "Jackalope Antler": "鹿角兔之角",
+      "Dodocamel Plume": "渡渡驼之翎",
+      "Griffin Talon": "狮鹫之爪",
+      "Chimerical Refinement Shard": "奇幻精炼碎片",
+      "Acrobat's Ribbon": "杂技师彩带",
+      "Magician's Cloth": "魔术师织物",
+      "Chaotic Chain": "混沌锁链",
+      "Cursed Ball": "诅咒之球",
+      "Sinister Refinement Shard": "阴森精炼碎片",
+      "Royal Cloth": "皇家织物",
+      "Knight's Ingot": "骑士之锭",
+      "Bishop's Scroll": "主教卷轴",
+      "Regal Jewel": "君王宝石",
+      "Sundering Jewel": "裂空宝石",
+      "Enchanted Refinement Shard": "秘法精炼碎片",
+      "Marksman Brooch": "神射胸针",
+      "Corsair Crest": "掠夺者徽章",
+      "Damaged Anchor": "破损船锚",
+      "Maelstrom Plating": "怒涛甲片",
+      "Kraken Leather": "克拉肯皮革",
+      "Kraken Fang": "克拉肯之牙",
+      "Pirate Refinement Shard": "海盗精炼碎片",
+      "Pathbreaker Lodestone": "开路者磁石",
+      "Pathfinder Lodestone": "探路者磁石",
+      "Pathseeker Lodestone": "寻路者磁石",
+      "Labyrinth Refinement Shard": "迷宫精炼碎片",
+      "Butter Of Proficiency": "精通之油",
+      "Thread Of Expertise": "专精之线",
+      "Branch Of Insight": "洞察之枝",
+      "Gluttonous Energy": "贪食能量",
+      "Guzzling Energy": "暴饮能量",
+      "Milking Essence": "挤奶精华",
+      "Foraging Essence": "采摘精华",
+      "Woodcutting Essence": "伐木精华",
+      "Cheesesmithing Essence": "奶酪锻造精华",
+      "Crafting Essence": "制作精华",
+      "Tailoring Essence": "缝纫精华",
+      "Cooking Essence": "烹饪精华",
+      "Brewing Essence": "冲泡精华",
+      "Alchemy Essence": "炼金精华",
+      "Enhancing Essence": "强化精华",
+      "Swamp Essence": "沼泽精华",
+      "Aqua Essence": "海洋精华",
+      "Jungle Essence": "丛林精华",
+      "Gobo Essence": "哥布林精华",
+      "Eyessence": "眼精华",
+      "Sorcerer Essence": "法师精华",
+      "Bear Essence": "熊熊精华",
+      "Golem Essence": "魔像精华",
+      "Twilight Essence": "暮光精华",
+      "Abyssal Essence": "地狱精华",
+      "Chimerical Essence": "奇幻精华",
+      "Sinister Essence": "阴森精华",
+      "Enchanted Essence": "秘法精华",
+      "Pirate Essence": "海盗精华",
+      "Labyrinth Essence": "迷宫精华",
+      "Task Crystal": "任务水晶",
+      "Star Fragment": "星光碎片",
+      "Pearl": "珍珠",
+      "Amber": "琥珀",
+      "Garnet": "石榴石",
+      "Jade": "翡翠",
+      "Amethyst": "紫水晶",
+      "Moonstone": "月亮石",
+      "Sunstone": "太阳石",
+      "Philosopher's Stone": "贤者之石",
+      "Crushed Pearl": "珍珠碎片",
+      "Crushed Amber": "琥珀碎片",
+      "Crushed Garnet": "石榴石碎片",
+      "Crushed Jade": "翡翠碎片",
+      "Crushed Amethyst": "紫水晶碎片",
+      "Crushed Moonstone": "月亮石碎片",
+      "Crushed Sunstone": "太阳石碎片",
+      "Crushed Philosopher's Stone": "贤者之石碎片",
+      "Shard Of Protection": "保护碎片",
+      "Mirror Of Protection": "保护之镜",
+      "Philosopher's Mirror": "贤者之镜",
+      "Basic Torch": "基础火把",
+      "Advanced Torch": "进阶火把",
+      "Expert Torch": "专家火把",
+      "Basic Shroud": "基础斗篷",
+      "Advanced Shroud": "进阶斗篷",
+      "Expert Shroud": "专家斗篷",
+      "Basic Beacon": "基础探照灯",
+      "Advanced Beacon": "进阶探照灯",
+      "Expert Beacon": "专家探照灯",
+      "Basic Food Crate": "基础食物箱",
+      "Advanced Food Crate": "进阶食物箱",
+      "Expert Food Crate": "专家食物箱",
+      "Basic Tea Crate": "基础茶叶箱",
+      "Advanced Tea Crate": "进阶茶叶箱",
+      "Expert Tea Crate": "专家茶叶箱",
+      "Basic Coffee Crate": "基础咖啡箱",
+      "Advanced Coffee Crate": "进阶咖啡箱",
+      "Expert Coffee Crate": "专家咖啡箱"
     };
 
     /**
@@ -1002,19 +1042,16 @@
             if (this.isLoaded) return;
             try {
                 const saved = await storage.get(STORAGE_KEY$1, 'settings');
-                if (
-                    saved &&
-                    typeof saved === 'object' &&
-                    saved._version === CACHE_VERSION &&
-                    Object.keys(saved).length > 1
-                ) {
+                if (saved && typeof saved === 'object' && saved._version === CACHE_VERSION && Object.keys(saved).length > 1) {
                     this.cnNames = saved;
                 }
-            } catch (_) {
-                /* ignore */
-            }
+            } catch { /* ignore */ }
             this.isLoaded = true;
-            this._importStaticMapping();
+
+            // Bulk import from static Chinese name mapping (Edible Tools translations)
+            if (Object.keys(this.cnNames).length <= 1) {
+                this._importStaticMapping();
+            }
         }
 
         captureFromDOM(element, itemHrid) {
@@ -1079,88 +1116,19 @@
             }
         }
 
-        getDisplayName(itemHrid) {
-            if (!itemHrid) return '';
-            if (!this.isLoaded) this._lazyLoad();
-
-            const cached = this.cnNames[itemHrid];
-            if (cached) return cached;
-
-            const item = dataManager.getItemDetails(itemHrid);
-            const enName = item?.name;
-            if (!enName) return itemHrid;
-
-            const staticCn = itemNamesZh[enName];
-            if (staticCn) {
-                this.cnNames[itemHrid] = staticCn;
-                return staticCn;
-            }
-
-            return enName;
-        }
-
-        _lazyLoad() {
-            this.load().catch(() => {});
-        }
-
         getHridFromChineseName(chineseName) {
             if (!chineseName) return null;
             const baseName = chineseName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
             for (const [hrid, cnName] of Object.entries(this.cnNames)) {
                 if (cnName === baseName) return hrid;
             }
-            for (const [enName, cnName] of Object.entries(itemNamesZh)) {
-                if (cnName === baseName) {
-                    const initData = dataManager.getInitClientData();
-                    if (initData?.itemDetailMap) {
-                        for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                            if (item.name === enName) return hrid;
-                        }
-                    }
-                }
-            }
             return null;
-        }
-
-        findHridFromDomName(chineseName) {
-            if (!chineseName) return null;
-            for (const [hrid, cnName] of Object.entries(this.cnNames)) {
-                if (cnName === chineseName) return hrid;
-            }
-            for (const [enName, cnName] of Object.entries(itemNamesZh)) {
-                if (cnName === chineseName) {
-                    const initData = dataManager.getInitClientData();
-                    if (initData?.itemDetailMap) {
-                        for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                            if (item.name === enName) return hrid;
-                        }
-                    }
-                }
-            }
-            const initData = dataManager.getInitClientData();
-            if (initData?.itemDetailMap) {
-                for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                    if (item.name === chineseName) return hrid;
-                }
-            }
-            return null;
-        }
-
-        _ensureHRIDMaps() {
-            if (this._hridToEn && this._enToHrid) return;
-            this._enToHrid = {};
-            this._hridToEn = {};
-            const initData = dataManager.getInitClientData();
-            if (!initData?.itemDetailMap) return;
-            for (const [hrid, item] of Object.entries(initData.itemDetailMap)) {
-                this._enToHrid[item.name] = hrid;
-                this._hridToEn[hrid] = item.name;
-            }
         }
 
         startObserver() {
             if (this._observerStarted) return;
             this._observerStarted = true;
+            console.log('[ItemNameTranslator] Observer starting, selectors:', MUTATION_SELECTORS);
 
             const processNode = (node) => {
                 if (!node || node.nodeType !== 1) return;
@@ -1190,7 +1158,7 @@
                     for (const node of mutation.addedNodes) {
                         try {
                             processNode(node);
-                        } catch (_) {
+                        } catch {
                             // Skip errors from processing individual nodes
                         }
                     }
@@ -1238,6 +1206,22 @@
                 }
             }
         }
+
+        /**
+         * Get the display name for an item.
+         * Returns the Chinese name if cached, otherwise the English name from game data,
+         * and as a final fallback parses the HRID into a readable label.
+         * @param {string} itemHrid - Item HRID (e.g., '/items/essence')
+         * @returns {string} Display name
+         */
+        getDisplayName(itemHrid) {
+            const cnName = this.cnNames[itemHrid];
+            if (cnName) return cnName;
+            const enName = dataManager.getItemDetails(itemHrid)?.name;
+            if (enName) return enName;
+            return itemHrid.split('/').pop().replace(/_/g, ' ');
+        }
+
     }
 
     const itemNameTranslator = new ItemNameTranslator();
@@ -1448,7 +1432,7 @@
             // No mirror used - return traditional result
             optimalStrategy = {
                 protectFrom: optimalTraditional.protectFrom,
-                label: optimalTraditional.protectFrom === 0 ? i18n_js.t('Never') : `+${optimalTraditional.protectFrom}`,
+                label: optimalTraditional.protectFrom === 0 ? t('Never') : `+${optimalTraditional.protectFrom}`,
                 expectedAttempts: optimalTraditional.expectedAttempts,
                 totalTime: optimalTraditional.totalTime,
                 baseCost: optimalTraditional.baseCost,
@@ -1631,7 +1615,7 @@
 
         return {
             protectFrom: optimalTraditional.protectFrom,
-            label: optimalTraditional.protectFrom === 0 ? i18n_js.t('Never') : `From +${optimalTraditional.protectFrom}`,
+            label: optimalTraditional.protectFrom === 0 ? t('Never') : `From +${optimalTraditional.protectFrom}`,
             expectedAttempts: totalAttempts,
             totalTime: totalTime,
             baseCost: 0, // Not applicable for mirror phase
@@ -2085,8 +2069,10 @@
                 .filter((item) => item.quantity > 0)
                 .sort((a, b) => b.level - a.level);
 
+            const gameData = dataManager.getInitClientData();
             const consumedHrid = optimalStrategy.consumedItemHrid ?? itemHrid;
-            const baseItemName = itemNameTranslator.getDisplayName(consumedHrid);
+            const baseItemDetails = gameData?.itemDetailMap[consumedHrid];
+            const baseItemName = baseItemDetails?.name || consumedHrid;
 
             const consumedRows = sortedConsumed.map((item) => {
                 const prices = marketData_js.getItemPrices(consumedHrid, item.level);
@@ -2154,7 +2140,7 @@
             const rows = [];
 
             // Base item row
-            const baseItemLabel = optimalStrategy.baseAskIsCrafted ? i18n_js.t('Craft Item') : i18n_js.t('Buy Item');
+            const baseItemLabel = optimalStrategy.baseAskIsCrafted ? t('Craft Item') : t('Buy Item');
             rows.push({
                 name: toolashaConfig.isFeatureEnabled('enhanceSim_baseItemCraftingCost') ? baseItemLabel : 'Base Item',
                 count: 1,
@@ -2184,9 +2170,13 @@
                 totalAsk += askPrice * count;
                 totalBid += bidPrice * count;
 
-                let protName = i18n_js.t('Protection');
+                let protName = t('Protection');
                 if (optimalStrategy.protectionItemHrid) {
-                    protName = itemNameTranslator.getDisplayName(optimalStrategy.protectionItemHrid);
+                    const gameData = dataManager.getInitClientData();
+                    const protDetails = gameData?.itemDetailMap[optimalStrategy.protectionItemHrid];
+                    if (protDetails?.name) {
+                        protName = protDetails.name;
+                    }
                 }
                 rows.push({ name: protName, count, askPrice, bidPrice });
             }
@@ -2255,10 +2245,10 @@
         }
 
         if (xpPerHour !== null && xpPerHour > 0) {
-            html += '<div style="margin-top: 4px;">XP/hr: ' + xpPerHour.toLocaleString() + '</div>';
+            html += '<div style="margin-top: 4px;">XP/hr: ' + formatters_js.formatLargeNumber(xpPerHour) + '</div>';
         }
         if (totalExpectedXP !== null && totalExpectedXP > 0) {
-            html += '<div>Total XP: ~' + totalExpectedXP.toLocaleString() + '</div>';
+            html += '<div>Total XP: ~' + formatters_js.formatLargeNumber(totalExpectedXP) + '</div>';
         }
 
         html += '</div>'; // Close margin-left div
@@ -2284,7 +2274,7 @@
         if (!itemDetails?.enhancementCosts?.length) return '';
 
         const showPrices = config.getSetting('itemTooltip_prices');
-        const useKMB = config.getSetting('formatting_useKMBFormat');
+        const useKMB = formatters_js.isAbbreviationEnabled();
         const fmt = (n) => (n != null && n > 0 ? (useKMB ? formatters_js.formatLargeNumber(n, 0) : formatters_js.numberFormatter(Math.round(n))) : '—');
         const fmtCost = (n) =>
             n != null && n > 0 ? (useKMB ? formatters_js.formatLargeNumber(n, 1) : formatters_js.numberFormatter(Math.round(n))) : '—';
@@ -2577,7 +2567,7 @@
             const pricingMode = config.getSettingValue('profitCalc_pricingMode', 'hybrid');
 
             return {
-                itemName: itemNameTranslator.getDisplayName(itemHrid),
+                itemName: itemDetails.name,
                 itemHrid,
                 actionTime: effectiveActionTime,
                 actionsPerHour,
@@ -2717,7 +2707,7 @@
 
                     costs.push({
                         itemHrid: actionDetails.upgradeItemHrid,
-                        itemName: itemNameTranslator.getDisplayName(actionDetails.upgradeItemHrid),
+                        itemName: itemDetails.name,
                         baseAmount: 1,
                         amount: reducedAmount,
                         askPrice: resolved.price,
@@ -2754,7 +2744,7 @@
 
                     costs.push({
                         itemHrid: input.itemHrid,
-                        itemName: itemNameTranslator.getDisplayName(input.itemHrid),
+                        itemName: itemDetails.name,
                         baseAmount: baseAmount,
                         amount: reducedAmount,
                         askPrice: resolved.price,
@@ -3518,7 +3508,7 @@ self.onmessage = function (e) {
             const expectedReturn = drops.reduce((sum, drop) => sum + drop.expectedValue, 0);
 
             return {
-                itemName: itemNameTranslator.getDisplayName(itemHrid),
+                itemName: itemDetails.name,
                 itemHrid,
                 expectedValue: expectedReturn,
                 drops,
@@ -3591,7 +3581,7 @@ self.onmessage = function (e) {
 
                 drops.push({
                     itemHrid,
-                    itemName: itemNameTranslator.getDisplayName(itemHrid),
+                    itemName: itemDetails.name,
                     dropRate,
                     avgCount,
                     priceEach: price || 0,
@@ -5518,7 +5508,7 @@ self.onmessage = function (e) {
      * @returns {string} Formatted number
      */
     function formatTooltipPrice(num) {
-        const useKMB = config.getSetting('formatting_useKMBFormat');
+        const useKMB = formatters_js.isAbbreviationEnabled();
         return useKMB ? formatters_js.networthFormatter(num) : formatters_js.numberFormatter(num);
     }
 
@@ -5746,13 +5736,14 @@ self.onmessage = function (e) {
                     if (chestKeyHrid) {
                         const keyPricingSetting = config.getSettingValue('profitCalc_keyPricingMode') || 'ask';
                         const keyPrices = marketAPI.getPrice(chestKeyHrid);
+                        const keyDetails = dataManager.getItemDetails(chestKeyHrid);
                         keyPrice = keyPrices?.[keyPricingSetting] ?? keyPrices?.ask ?? 0;
                         this.injectExpectedValueDisplay(
                             tooltipElement,
                             evData,
                             isCollectionTooltip,
                             keyPrice,
-                            itemNameTranslator.getDisplayName(chestKeyHrid)
+                            keyDetails?.name
                         );
                     } else {
                         this.injectExpectedValueDisplay(tooltipElement, evData, isCollectionTooltip);
@@ -5777,7 +5768,7 @@ self.onmessage = function (e) {
                 // Get item amount from tooltip (for stacks)
                 const amount = this.extractItemAmount(tooltipElement);
                 const artisanAmount = this._getArtisanAdjustedAmount(tooltipElement, amount);
-                this.injectPriceDisplay(tooltipElement, price, amount, isCollectionTooltip, artisanAmount);
+                this.injectPriceDisplay(tooltipElement, price, amount, isCollectionTooltip, artisanAmount, itemHrid);
             }
 
             // Always show detailed craft profit if enabled
@@ -6028,8 +6019,16 @@ self.onmessage = function (e) {
          * @param {number} amount - Item amount (base recipe amount)
          * @param {boolean} isCollectionTooltip - True if this is a collection tooltip
          * @param {number|null} artisanAmount - Artisan-adjusted amount, or null if not applicable
+         * @param {string|null} itemHrid - Item HRID for tax rate lookup
          */
-        injectPriceDisplay(tooltipElement, price, amount, isCollectionTooltip = false, artisanAmount = null) {
+        injectPriceDisplay(
+            tooltipElement,
+            price,
+            amount,
+            isCollectionTooltip = false,
+            artisanAmount = null,
+            itemHrid = null
+        ) {
             const tooltipText = isCollectionTooltip
                 ? tooltipElement.querySelector('.Collection_tooltipContent__2IcSJ')
                 : tooltipElement.querySelector('.ItemTooltipText_itemTooltipText__zFq3A');
@@ -6048,7 +6047,7 @@ self.onmessage = function (e) {
 
             // Show message if no market data at all
             if (price.ask <= 0 && price.bid <= 0) {
-                priceDiv.innerHTML = `${i18n_js.t('Price:')} <span style="color: ${config.COLOR_TEXT_SECONDARY}; font-style: italic;">${i18n_js.t('No market data')}</span>`;
+                priceDiv.innerHTML = `${t('Price:')} <span style="color: ${config.COLOR_TEXT_SECONDARY}; font-style: italic;">${t('No market data')}</span>`;
                 tooltipText.appendChild(priceDiv);
                 return;
             }
@@ -6068,7 +6067,14 @@ self.onmessage = function (e) {
             }
 
             // Format: "Price: 1,200 / 950" or "Price: 1,200 / -" or "Price: - / 950"
-            priceDiv.innerHTML = `${i18n_js.t('Price:')} ${askDisplay} / ${bidDisplay}${totalDisplay}`;
+            priceDiv.innerHTML = `${t('Price:')} ${askDisplay} / ${bidDisplay}${totalDisplay}`;
+
+            if (config.getSetting('itemTooltip_effectivePrices') && (price.ask > 0 || price.bid > 0)) {
+                const taxRate = itemHrid === profitConstants_js.COWBELL_BAG_HRID ? profitConstants_js.COWBELL_BAG_TAX : profitConstants_js.MARKET_TAX;
+                const effAsk = price.ask > 0 ? formatTooltipPrice(profitHelpers_js.calculatePriceAfterTax(price.ask, taxRate)) : '-';
+                const effBid = price.bid > 0 ? formatTooltipPrice(profitHelpers_js.calculatePriceAfterTax(price.bid, taxRate)) : '-';
+                priceDiv.innerHTML += `<br><span style="color: ${config.COLOR_TEXT_SECONDARY};">Eff: ${effAsk} / ${effBid}</span>`;
+            }
 
             tooltipText.appendChild(priceDiv);
         }
@@ -6107,13 +6113,13 @@ self.onmessage = function (e) {
 
             if (profitData.itemPrice.bid > 0 && profitData.itemPrice.ask > 0) {
                 // Market data available - show profit
-                html += `<div style="font-weight: bold; margin-bottom: 4px;">${i18n_js.t('PROFIT')}</div>`;
+                html += `<div style="font-weight: bold; margin-bottom: 4px;">${t('PROFIT')}</div>`;
                 html += '<div style="font-size: 0.9em; margin-left: 8px;">';
 
                 const profitPerDay = profitData.profitPerDay;
                 const profitColor = profitData.profitPerHour >= 0 ? config.COLOR_TOOLTIP_PROFIT : config.COLOR_TOOLTIP_LOSS;
 
-                html += `<div style="color: ${profitColor}; font-weight: bold;">${i18n_js.t('Net: {0}/hr ({1}/day)', formatters_js.formatKMB(profitData.profitPerHour), formatters_js.formatKMB(profitPerDay))}</div>`;
+                html += `<div style="color: ${profitColor}; font-weight: bold;">${t('Net: {0}/hr ({1}/day)', formatters_js.formatKMB(profitData.profitPerHour), formatters_js.formatKMB(profitPerDay))}</div>`;
 
                 // Show detailed breakdown if enabled
                 if (showDetailed) {
@@ -6126,7 +6132,7 @@ self.onmessage = function (e) {
                 if (showDetailed) {
                     html += this.buildDetailedProfitDisplay(profitData, false);
                 } else {
-                    html += `<div style="font-weight: bold; color: ${config.COLOR_TOOLTIP_INFO};">${i18n_js.t('Cost: {0}/item', formatters_js.formatKMB(profitData.totalMaterialCost))}</div>`;
+                    html += `<div style="font-weight: bold; color: ${config.COLOR_TOOLTIP_INFO};">${t('Cost: {0}/item', formatters_js.formatKMB(profitData.totalMaterialCost))}</div>`;
                 }
             }
 
@@ -6174,22 +6180,11 @@ self.onmessage = function (e) {
                 const deeperBid = deeperRows.reduce((s, r) => s + r.bidPrice * r.amount, 0);
                 askPrice = craftAsk - deeperAsk;
                 bidPrice = (craftBid || craftAsk) - deeperBid;
-                return [
-                    {
-                        itemName: `Craft ${itemNameTranslator.getDisplayName(upgradeHrid)}`,
-                        amount: 1,
-                        askPrice,
-                        bidPrice,
-                        depth,
-                    },
-                    ...deeperRows,
-                ];
+                return [{ itemName: `Craft ${upgradeDetails.name}`, amount: 1, askPrice, bidPrice, depth }, ...deeperRows];
             }
 
             if (craftBid > 0 && (bidPrice === 0 || craftBid < bidPrice)) bidPrice = craftBid;
-            return [
-                { itemName: `Buy ${itemNameTranslator.getDisplayName(upgradeHrid)}`, amount: 1, askPrice, bidPrice, depth },
-            ];
+            return [{ itemName: `Buy ${upgradeDetails.name}`, amount: 1, askPrice, bidPrice, depth }];
         }
 
         /**
@@ -6207,10 +6202,10 @@ self.onmessage = function (e) {
 
                 // Table header
                 html += `<tr style="border-bottom: 1px solid ${config.COLOR_BORDER};">`;
-                html += `<th style="padding: 2px 4px; text-align: left;">${i18n_js.t('Material')}</th>`;
-                html += `<th style="padding: 2px 4px; text-align: center;">${i18n_js.t('Count')}</th>`;
-                html += `<th style="padding: 2px 4px; text-align: right;">${i18n_js.t('Ask')}</th>`;
-                html += `<th style="padding: 2px 4px; text-align: right;">${i18n_js.t('Bid')}</th>`;
+                html += `<th style="padding: 2px 4px; text-align: left;">${t('Material')}</th>`;
+                html += `<th style="padding: 2px 4px; text-align: center;">${t('Count')}</th>`;
+                html += `<th style="padding: 2px 4px; text-align: right;">${t('Ask')}</th>`;
+                html += `<th style="padding: 2px 4px; text-align: right;">${t('Bid')}</th>`;
                 html += '</tr>';
 
                 // Resolve prices for all materials through unified chain
@@ -6262,7 +6257,7 @@ self.onmessage = function (e) {
 
                 // Total row
                 html += `<tr style="border-bottom: 1px solid ${config.COLOR_BORDER};">`;
-                html += `<td style="padding: 2px 4px; font-weight: bold;">${i18n_js.t('Total')}</td>`;
+                html += `<td style="padding: 2px 4px; font-weight: bold;">${t('Total')}</td>`;
                 html += `<td style="padding: 2px 4px; text-align: center;">${totalCount.toFixed(1)}</td>`;
                 html += `<td style="padding: 2px 4px; text-align: right;">${formatters_js.formatKMB(totalAsk)}</td>`;
                 html += `<td style="padding: 2px 4px; text-align: right;">${formatters_js.formatKMB(totalBid)}</td>`;
@@ -6300,7 +6295,7 @@ self.onmessage = function (e) {
                 const profitPerDay = profitData.profitPerDay;
                 const profitColor = profitData.profitPerHour >= 0 ? config.COLOR_TOOLTIP_PROFIT : config.COLOR_TOOLTIP_LOSS;
 
-                html += `<div style="color: ${profitColor};">${i18n_js.t('Profit: {0}/action, {1}/hour, {2}/day', formatters_js.formatKMB(profitPerAction), formatters_js.formatKMB(profitData.profitPerHour), formatters_js.formatKMB(profitPerDay))}</div>`;
+                html += `<div style="color: ${profitColor};">${t('Profit: {0}/action, {1}/hour, {2}/day', formatters_js.formatKMB(profitPerAction), formatters_js.formatKMB(profitData.profitPerHour), formatters_js.formatKMB(profitPerDay))}</div>`;
                 html += '</div>';
             }
 
@@ -6337,15 +6332,15 @@ self.onmessage = function (e) {
             let html = '<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">';
 
             // Header
-            html += `<div style="font-weight: bold; margin-bottom: 4px;">${i18n_js.t('EXPECTED VALUE')}</div>`;
+            html += `<div style="font-weight: bold; margin-bottom: 4px;">${t('EXPECTED VALUE')}</div>`;
             html += '<div style="font-size: 0.9em; margin-left: 8px;">';
 
             // Expected value (simple display)
-            html += `<div style="color: ${config.COLOR_TOOLTIP_PROFIT}; font-weight: bold;">${i18n_js.t('Expected Return: {0}', formatTooltipPrice(evData.expectedValue))}</div>`;
+            html += `<div style="color: ${config.COLOR_TOOLTIP_PROFIT}; font-weight: bold;">${t('Expected Return: {0}', formatTooltipPrice(evData.expectedValue))}</div>`;
             if (keyPrice > 0) {
-                const keyLabel = keyName ? `${i18n_js.t('Key Cost')} (${keyName})` : i18n_js.t('Key Cost');
+                const keyLabel = keyName ? `${t('Key Cost')} (${keyName})` : t('Key Cost');
                 html += `<div style="color: ${config.COLOR_TOOLTIP_LOSS};">- ${keyLabel}: ${formatTooltipPrice(keyPrice)}</div>`;
-                html += `<div style="color: ${config.COLOR_TOOLTIP_PROFIT}; font-weight: bold;">${i18n_js.t('Net Value: {0}', formatTooltipPrice(evData.expectedValue - keyPrice))}</div>`;
+                html += `<div style="color: ${config.COLOR_TOOLTIP_PROFIT}; font-weight: bold;">${t('Net Value: {0}', formatTooltipPrice(evData.expectedValue - keyPrice))}</div>`;
             }
 
             html += '</div>'; // Close summary section
@@ -6358,14 +6353,14 @@ self.onmessage = function (e) {
 
                 // Determine how many drops to show
                 let dropsToShow = evData.drops;
-                let headerLabel = i18n_js.t('All Drops');
+                let headerLabel = t('All Drops');
 
                 if (showDropsSetting === 'Top 5') {
                     dropsToShow = evData.drops.slice(0, 5);
-                    headerLabel = i18n_js.t('Top 5 Drops');
+                    headerLabel = t('Top 5 Drops');
                 } else if (showDropsSetting === 'Top 10') {
                     dropsToShow = evData.drops.slice(0, 10);
-                    headerLabel = i18n_js.t('Top 10 Drops');
+                    headerLabel = t('Top 10 Drops');
                 }
 
                 html += `<div style="font-weight: bold; margin-bottom: 4px;">${headerLabel} (${evData.drops.length} total):</div>`;
@@ -6375,7 +6370,7 @@ self.onmessage = function (e) {
                 for (const drop of dropsToShow) {
                     if (!drop.hasPriceData) {
                         // Show item without price data in gray
-                        html += `<div style="color: ${config.COLOR_TEXT_SECONDARY};">• ${drop.itemName} (${formatters_js.formatPercentage(drop.dropRate, 2)}): ${drop.avgCount.toFixed(2)} avg → ${i18n_js.t('No price data')}</div>`;
+                        html += `<div style="color: ${config.COLOR_TEXT_SECONDARY};">• ${drop.itemName} (${formatters_js.formatPercentage(drop.dropRate, 2)}): ${drop.avgCount.toFixed(2)} avg → ${t('No price data')}</div>`;
                     } else {
                         // Format drop rate percentage
                         const dropRatePercent = formatters_js.formatPercentage(drop.dropRate, 2);
@@ -6389,9 +6384,9 @@ self.onmessage = function (e) {
 
                 // Show total
                 html += '<div style="border-top: 1px solid rgba(255,255,255,0.2); margin: 4px 0;"></div>';
-                html += `<div style="font-size: 0.9em; margin-left: 8px; font-weight: bold;">${i18n_js.t('Total from {0} drops: {1}', evData.drops.length, formatTooltipPrice(evData.expectedValue))}</div>`;
+                html += `<div style="font-size: 0.9em; margin-left: 8px; font-weight: bold;">${t('Total from {0} drops: {1}', evData.drops.length, formatTooltipPrice(evData.expectedValue))}</div>`;
                 if (keyPrice > 0) {
-                    html += `<div style="font-size: 0.9em; margin-left: 8px; font-weight: bold;">${i18n_js.t('Net after key: {0}', formatTooltipPrice(evData.expectedValue - keyPrice))}</div>`;
+                    html += `<div style="font-size: 0.9em; margin-left: 8px; font-weight: bold;">${t('Net after key: {0}', formatTooltipPrice(evData.expectedValue - keyPrice))}</div>`;
                 }
             }
 
@@ -6459,7 +6454,7 @@ self.onmessage = function (e) {
                 if (foundInDrop || isSolo) {
                     const actionData = {
                         actionHrid,
-                        actionName: itemNameTranslator.getDisplayName(actionHrid),
+                        actionName: action.name,
                         dropRate,
                     };
 
@@ -6545,12 +6540,12 @@ self.onmessage = function (e) {
             );
 
             let html = '<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">';
-            html += `<div style="font-weight: bold; margin-bottom: 4px;">${i18n_js.t('GATHERING')}</div>`;
+            html += `<div style="font-weight: bold; margin-bottom: 4px;">${t('GATHERING')}</div>`;
 
             // Solo actions section
             if (gatheringData.soloActions.length > 0) {
                 html += '<div style="font-size: 0.9em; margin-left: 8px; margin-bottom: 6px;">';
-                html += `<div style="font-weight: 500; margin-bottom: 2px;">${i18n_js.t('Solo:')}</div>`;
+                html += `<div style="font-weight: 500; margin-bottom: 2px;">${t('Solo:')}</div>`;
 
                 for (const action of gatheringData.soloActions) {
                     const itemsPerHourStr = action.itemsPerHour ? Math.round(action.itemsPerHour) : '?';
@@ -6566,7 +6561,7 @@ self.onmessage = function (e) {
             // Zone actions section
             if (zoneActions.length > 0) {
                 html += '<div style="font-size: 0.9em; margin-left: 8px;">';
-                html += `<div style="font-weight: 500; margin-bottom: 2px;">${i18n_js.t('Found in:')}</div>`;
+                html += `<div style="font-weight: 500; margin-bottom: 2px;">${t('Found in:')}</div>`;
 
                 for (const action of zoneActions) {
                     // Use more decimal places for very rare drops (< 0.1%)
@@ -6655,7 +6650,7 @@ self.onmessage = function (e) {
             let html = '<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">';
 
             // Show heading based on whether item is craftable
-            const heading = isCraftable ? i18n_js.t('Alternative Actions:') : i18n_js.t('Profits:');
+            const heading = isCraftable ? t('Alternative Actions:') : t('Profits:');
             html += `<div style="font-weight: bold; margin-bottom: 4px;">${heading}</div>`;
             html += '<div style="font-size: 0.9em; margin-left: 8px;">';
 
@@ -6728,7 +6723,7 @@ self.onmessage = function (e) {
                 // Not learned
                 return {
                     learned: false,
-                    abilityName: itemNameTranslator.getDisplayName(abilityHrid),
+                    abilityName: abilityDetails.name,
                 };
             }
 
@@ -6741,7 +6736,7 @@ self.onmessage = function (e) {
                 return {
                     learned: true,
                     level: currentLevel,
-                    abilityName: itemNameTranslator.getDisplayName(abilityHrid),
+                    abilityName: abilityDetails.name,
                 };
             }
 
@@ -6752,7 +6747,7 @@ self.onmessage = function (e) {
                 return {
                     learned: true,
                     level: currentLevel,
-                    abilityName: itemNameTranslator.getDisplayName(abilityHrid),
+                    abilityName: abilityDetails.name,
                     maxLevel: true,
                 };
             }
@@ -7235,7 +7230,7 @@ self.onmessage = function (e) {
                 'MarketplacePanel_itemFilterContainer',
                 (filterContainer) => {
                     this.injectFilterUI(filterContainer);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             this.unregisterHandlers.push(unregister);
@@ -7246,7 +7241,7 @@ self.onmessage = function (e) {
                 'MarketplacePanel_marketItems',
                 (_marketItemsContainer) => {
                     this.applyFilters();
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             this.unregisterHandlers.push(unregisterItems);
@@ -7302,7 +7297,7 @@ self.onmessage = function (e) {
             container.style.cssText = 'display: flex; align-items: center; gap: 4px;';
 
             const label = document.createElement('label');
-            label.textContent = type === 'min' ? i18n_js.t('Level >= ') : i18n_js.t('Level < ');
+            label.textContent = type === 'min' ? t('Level >= ') : t('Level < ');
             label.style.cssText = 'font-size: 12px; color: rgba(255, 255, 255, 0.7);';
 
             const select = document.createElement('select');
@@ -7319,7 +7314,7 @@ self.onmessage = function (e) {
             levels.forEach((level) => {
                 const option = document.createElement('option');
                 option.value = level;
-                option.textContent = level === 1000 ? i18n_js.t('All') : level;
+                option.textContent = level === 1000 ? t('All') : level;
                 if ((type === 'min' && level === 1) || (type === 'max' && level === 1000)) {
                     option.selected = true;
                 }
@@ -7350,7 +7345,7 @@ self.onmessage = function (e) {
             container.style.cssText = 'display: flex; align-items: center; gap: 4px;';
 
             const label = document.createElement('label');
-            label.textContent = i18n_js.t('Class: ');
+            label.textContent = t('Class: ');
             label.style.cssText = 'font-size: 12px; color: rgba(255, 255, 255, 0.7);';
 
             const select = document.createElement('select');
@@ -7359,7 +7354,7 @@ self.onmessage = function (e) {
                 'padding: 4px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.3); color: #fff; border: 1px solid rgba(91, 141, 239, 0.3);';
 
             const classes = [
-                { value: 'all', label: i18n_js.t('All') },
+                { value: 'all', label: t('All') },
                 { value: 'attack', label: 'Attack' },
                 { value: 'melee', label: 'Melee' },
                 { value: 'defense', label: 'Defense' },
@@ -7394,7 +7389,7 @@ self.onmessage = function (e) {
             container.style.cssText = 'display: flex; align-items: center; gap: 4px;';
 
             const label = document.createElement('label');
-            label.textContent = i18n_js.t('Slot: ');
+            label.textContent = t('Slot: ');
             label.style.cssText = 'font-size: 12px; color: rgba(255, 255, 255, 0.7);';
 
             const select = document.createElement('select');
@@ -7403,7 +7398,7 @@ self.onmessage = function (e) {
                 'padding: 4px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.3); color: #fff; border: 1px solid rgba(91, 141, 239, 0.3);';
 
             const slots = [
-                { value: 'all', label: i18n_js.t('All') },
+                { value: 'all', label: t('All') },
                 { value: 'main_hand', label: 'Main Hand' },
                 { value: 'off_hand', label: 'Off Hand' },
                 { value: 'two_hand', label: 'Two Hand' },
@@ -7623,7 +7618,7 @@ self.onmessage = function (e) {
                 'MarketplacePanel_itemFilterContainer',
                 (filterContainer) => {
                     this.injectSortUI(filterContainer);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             this.unregisterHandlers.push(unregister);
@@ -7642,9 +7637,9 @@ self.onmessage = function (e) {
                     this.hasSorted = false;
                     this.sortDirection = 'desc';
                     if (this.sortButton) {
-                        this.sortButton.textContent = i18n_js.t('Sort by Profit');
+                        this.sortButton.textContent = t('Sort by Profit');
                     }
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             this.unregisterHandlers.push(unregisterNav);
@@ -7657,7 +7652,7 @@ self.onmessage = function (e) {
                 this.hasSorted = false;
                 this.sortDirection = 'desc';
                 if (this.sortButton) {
-                    this.sortButton.textContent = i18n_js.t('Sort by Profit');
+                    this.sortButton.textContent = t('Sort by Profit');
                 }
                 // Remove profit indicators from any stale elements
                 document.querySelectorAll('.toolasha-profit-indicator').forEach((el) => el.remove());
@@ -7690,7 +7685,7 @@ self.onmessage = function (e) {
             // Create sort button
             const sortButton = document.createElement('button');
             sortButton.id = 'toolasha-sort-profit-btn';
-            sortButton.textContent = i18n_js.t('Sort by Profit');
+            sortButton.textContent = t('Sort by Profit');
             sortButton.style.cssText = `
             padding: 6px 12px;
             border-radius: 4px;
@@ -7721,7 +7716,7 @@ self.onmessage = function (e) {
 
             // Create reset button
             const resetButton = document.createElement('button');
-            resetButton.textContent = i18n_js.t('Reset Order');
+            resetButton.textContent = t('Reset Order');
             resetButton.style.cssText = `
             padding: 6px 12px;
             border-radius: 4px;
@@ -7762,7 +7757,7 @@ self.onmessage = function (e) {
                 this.sortDirection = this.sortDirection === 'desc' ? 'asc' : 'desc';
             }
 
-            this.sortButton.textContent = this.sortDirection === 'desc' ? i18n_js.t('Sorting... ▼') : i18n_js.t('Sorting... ▲');
+            this.sortButton.textContent = this.sortDirection === 'desc' ? t('Sorting... ▼') : t('Sorting... ▲');
             this.sortButton.style.background = 'rgba(91, 141, 239, 0.6)';
             this.isSorting = true;
 
@@ -7770,7 +7765,7 @@ self.onmessage = function (e) {
                 await this.sortByProfitability();
             } finally {
                 this.isSorting = false;
-                this.sortButton.textContent = this.sortDirection === 'desc' ? i18n_js.t('Sort by Profit ▼') : i18n_js.t('Sort by Profit ▲');
+                this.sortButton.textContent = this.sortDirection === 'desc' ? t('Sort by Profit ▼') : t('Sort by Profit ▲');
                 this.sortButton.style.background = 'rgba(91, 141, 239, 0.2)';
             }
         }
@@ -8011,7 +8006,7 @@ self.onmessage = function (e) {
             // Reset sort direction
             this.sortDirection = 'desc';
             if (this.sortButton) {
-                this.sortButton.textContent = i18n_js.t('Sort by Profit');
+                this.sortButton.textContent = t('Sort by Profit');
             }
         }
 
@@ -8328,6 +8323,7 @@ self.onmessage = function (e) {
         constructor() {
             this.unregisterObserver = null;
             this.isInitialized = false;
+            this.itemsUpdatedHandler = null;
         }
 
         /**
@@ -8344,6 +8340,7 @@ self.onmessage = function (e) {
 
             this.isInitialized = true;
             this.setupObserver();
+            this.setupInventoryListener();
         }
 
         /**
@@ -8356,7 +8353,7 @@ self.onmessage = function (e) {
                 'MarketplacePanel_marketItems',
                 (marketContainer) => {
                     this.updateItemCounts(marketContainer);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             // Check for existing market container
@@ -8364,6 +8361,23 @@ self.onmessage = function (e) {
             if (existingContainer) {
                 this.updateItemCounts(existingContainer);
             }
+        }
+
+        /**
+         * Listen for inventory changes and refresh counts
+         */
+        setupInventoryListener() {
+            let debounceTimer = null;
+            this.itemsUpdatedHandler = () => {
+                if (debounceTimer) clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    const container = document.querySelector('[class*="MarketplacePanel_marketItems"]');
+                    if (container) {
+                        this.updateItemCounts(container);
+                    }
+                }, 250);
+            };
+            dataManager.on('items_updated', this.itemsUpdatedHandler);
         }
 
         /**
@@ -8479,6 +8493,11 @@ self.onmessage = function (e) {
                 this.unregisterObserver = null;
             }
 
+            if (this.itemsUpdatedHandler) {
+                dataManager.off('items_updated', this.itemsUpdatedHandler);
+                this.itemsUpdatedHandler = null;
+            }
+
             // Remove all injected count displays and reset opacity
             document.querySelectorAll('.mwi-item-count').forEach((el) => el.remove());
             document.querySelectorAll('[class*="Item_clickable"]').forEach((tile) => {
@@ -8527,25 +8546,7 @@ self.onmessage = function (e) {
                 return formatters_js.formatRelativeTime(ageMs);
             } else {
                 // Show date/time (e.g., "01-13 14:30:45" or "01-13 2:30:45 PM")
-                const timeFormat = config.getSettingValue('market_listingTimeFormat', '24hour');
-                const dateFormat = config.getSettingValue('market_listingDateFormat', 'MM-DD');
-                const use12Hour = timeFormat === '12hour';
-
-                const date = new Date(timestamp);
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                const datePart = dateFormat === 'DD-MM' ? `${day}-${month}` : `${month}-${day}`;
-
-                const timePart = date
-                    .toLocaleString('en-US', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: use12Hour,
-                    })
-                    .trim();
-
-                return `${datePart} ${timePart}`;
+                return formatters_js.formatDateTime(new Date(timestamp));
             }
         }
 
@@ -8939,7 +8940,7 @@ self.onmessage = function (e) {
                 'MarketplacePanel_orderBooksContainer',
                 (container) => {
                     this.processOrderBook(container);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
         }
 
@@ -8953,7 +8954,7 @@ self.onmessage = function (e) {
                 'MarketplacePanel_myListingsTableContainer__2s6pm',
                 (container) => {
                     this.checkForExpiredListings(container);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
         }
 
@@ -9134,8 +9135,8 @@ self.onmessage = function (e) {
             // Add header
             const header = document.createElement('th');
             header.classList.add('mwi-estimated-age-header');
-            header.textContent = i18n_js.t('~Age');
-            header.title = i18n_js.t('Estimated listing age (based on listing ID)');
+            header.textContent = '~Age';
+            header.title = 'Estimated listing age (based on listing ID)';
             thead.appendChild(header);
 
             // Track which of user's listings have been matched to prevent duplicates
@@ -9172,7 +9173,7 @@ self.onmessage = function (e) {
                         // Estimated timestamp for other listings
                         const estimatedTimestamp = this.estimateTimestamp(listingId);
                         const formatted = this.formatTimestamp(estimatedTimestamp);
-                        cell.textContent = i18n_js.t('~{0}', formatted);
+                        cell.textContent = `~${formatted}`;
                         cell.style.color = '#999999'; // Gray to indicate estimate
                         cell.style.fontSize = '0.9em';
                     }
@@ -9183,9 +9184,7 @@ self.onmessage = function (e) {
                     cell.style.fontSize = '0.9em';
                 } else {
                     // Beyond top 20 - YOUR listings only
-                    const hasCancel = row.querySelector(
-                        '[class*="Cancel_"], [class*="Button_cancel"], button[class*="cancel"]'
-                    );
+                    const hasCancel = row.textContent.includes('Cancel');
                     if (hasCancel) {
                         // Extract price and quantity for matching
                         const priceText = row.querySelector('[class*="price"]')?.textContent || '';
@@ -9222,7 +9221,7 @@ self.onmessage = function (e) {
                             cell.style.color = '#00FF00'; // Green for YOUR listing
                             cell.style.fontSize = '0.9em';
                         } else {
-                            cell.textContent = i18n_js.t('~Unknown');
+                            cell.textContent = '~Unknown';
                             cell.style.color = '#666666';
                             cell.style.fontSize = '0.9em';
                         }
@@ -9268,9 +9267,7 @@ self.onmessage = function (e) {
             for (const table of tables) {
                 const rows = table.querySelectorAll('tbody tr');
                 for (const row of rows) {
-                    const hasCancel = row.querySelector(
-                        '[class*="Cancel_"], [class*="Button_cancel"], button[class*="cancel"]'
-                    );
+                    const hasCancel = row.textContent.includes('Cancel');
                     if (hasCancel) {
                         const priceText = row.querySelector('[class*="price"]')?.textContent || '';
                         const quantityText = row.children[0]?.textContent || '';
@@ -9380,12 +9377,12 @@ self.onmessage = function (e) {
          */
         getStalenessTooltip(lastUpdated) {
             if (!lastUpdated) {
-                return i18n_js.t('Order book data - Visit market page to refresh');
+                return 'Order book data - Visit market page to refresh';
             }
 
             const age = Date.now() - lastUpdated;
             const relativeTime = formatters_js.formatRelativeTime(age);
-            return i18n_js.t('Order book data from {0} ago - Visit market page to refresh', relativeTime);
+            return `Order book data from ${relativeTime} ago - Visit market page to refresh`;
         }
 
         /**
@@ -9704,7 +9701,7 @@ self.onmessage = function (e) {
                 'MarketplacePanel_myListingsTable',
                 (tableNode) => {
                     this.scheduleTableRefresh(tableNode);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             this.cleanupRegistry.registerCleanup(() => {
@@ -9904,28 +9901,28 @@ self.onmessage = function (e) {
             // Create "Top Order Price" header
             const topOrderHeader = document.createElement('th');
             topOrderHeader.classList.add('mwi-listing-price-header');
-            topOrderHeader.textContent = i18n_js.t('Top Order Price');
+            topOrderHeader.textContent = t('Top Order Price');
 
             // Create "Top Order Age" header (if setting enabled)
             let topOrderAgeHeader = null;
             if (config.getSetting('market_showTopOrderAge')) {
                 topOrderAgeHeader = document.createElement('th');
                 topOrderAgeHeader.classList.add('mwi-listing-price-header');
-                topOrderAgeHeader.textContent = i18n_js.t('Top Order Age');
-                topOrderAgeHeader.title = i18n_js.t('Estimated age of the top competing order');
+                topOrderAgeHeader.textContent = t('Top Order Age');
+                topOrderAgeHeader.title = t('Estimated age of the top competing order');
             }
 
             // Create "Total Price" header
             const totalPriceHeader = document.createElement('th');
             totalPriceHeader.classList.add('mwi-listing-price-header');
-            totalPriceHeader.textContent = i18n_js.t('Total Price');
+            totalPriceHeader.textContent = t('Total Price');
 
             // Create "Listed" header (if setting enabled)
             let listedHeader = null;
             if (config.getSetting('market_showListingAge')) {
                 listedHeader = document.createElement('th');
                 listedHeader.classList.add('mwi-listing-price-header');
-                listedHeader.textContent = i18n_js.t('Listed');
+                listedHeader.textContent = t('Listed');
             }
 
             // Insert headers (order: Top Order Price, Top Order Age, Total Price, Listed)
@@ -9967,9 +9964,17 @@ self.onmessage = function (e) {
 
                     // If quantity info is available from row, use it for precise matching
                     if (rowInfo.filledQuantity !== null && rowInfo.orderQuantity !== null) {
-                        const quantityMatch =
-                            listing.filledQuantity === rowInfo.filledQuantity &&
-                            listing.orderQuantity === rowInfo.orderQuantity;
+                        const filledMatch =
+                            rowInfo.filledSuffixMultiplier > 1
+                                ? Math.floor(listing.filledQuantity / rowInfo.filledSuffixMultiplier) ===
+                                  Math.floor(rowInfo.filledQuantity / rowInfo.filledSuffixMultiplier)
+                                : listing.filledQuantity === rowInfo.filledQuantity;
+                        const orderMatch =
+                            rowInfo.orderSuffixMultiplier > 1
+                                ? Math.floor(listing.orderQuantity / rowInfo.orderSuffixMultiplier) ===
+                                  Math.floor(rowInfo.orderQuantity / rowInfo.orderSuffixMultiplier)
+                                : listing.orderQuantity === rowInfo.orderQuantity;
+                        const quantityMatch = filledMatch && orderMatch;
                         return quantityMatch;
                     }
 
@@ -10028,26 +10033,35 @@ self.onmessage = function (e) {
             let isSell = null;
             const typeCell = row.children[1];
             if (typeCell) {
-                // Detect sell/buy from CSS class on the type cell
-                if (typeCell.querySelector('[class*="sell"]') || typeCell.querySelector('[class*="Sell"]')) {
+                const text = (typeCell.textContent || '').toLowerCase();
+                if (text.includes('sell')) {
                     isSell = true;
-                } else if (typeCell.querySelector('[class*="buy"]') || typeCell.querySelector('[class*="Buy"]')) {
+                } else if (text.includes('buy')) {
                     isSell = false;
                 }
             }
 
-            // Extract quantity (3rd cell) - format: "+7 0 / 1" or "0 / 1" (enhancement level may prefix)
+            // Extract quantity (3rd cell) - format: "+7 0 / 1" or "0 / 1" or "62075 / 405K"
             let filledQuantity = null;
             let orderQuantity = null;
+            let filledSuffixMultiplier = 1;
+            let orderSuffixMultiplier = 1;
             const quantityCell = row.children[2];
             if (quantityCell) {
                 let text = quantityCell.textContent.trim();
                 // Strip leading enhancement level prefix (e.g., "+7" from "+70 / 1")
                 text = text.replace(/^\+\d+\s*/, '');
-                const match = text.match(/(\d+)\s*\/\s*(\d+)/);
+                const match = text.match(/([0-9,.]+)\s*([KMB]?)\s*\/\s*([0-9,.]+)\s*([KMB]?)/i);
                 if (match) {
-                    filledQuantity = Number(match[1]);
-                    orderQuantity = Number(match[2]);
+                    const getSuffixMultiplier = (s) => {
+                        if (!s) return 1;
+                        const c = s.toUpperCase();
+                        return c === 'K' ? 1000 : c === 'M' ? 1000000 : c === 'B' ? 1000000000 : 1;
+                    };
+                    filledSuffixMultiplier = getSuffixMultiplier(match[2]);
+                    orderSuffixMultiplier = getSuffixMultiplier(match[4]);
+                    filledQuantity = Math.round(parseFloat(match[1].replace(/,/g, '')) * filledSuffixMultiplier);
+                    orderQuantity = Math.round(parseFloat(match[3].replace(/,/g, '')) * orderSuffixMultiplier);
                 }
             }
 
@@ -10108,7 +10122,16 @@ self.onmessage = function (e) {
                 price = numStr ? Number(numStr) * multiplier : NaN;
             }
 
-            return { itemHrid, enhancementLevel, isSell, price, filledQuantity, orderQuantity };
+            return {
+                itemHrid,
+                enhancementLevel,
+                isSell,
+                price,
+                filledQuantity,
+                orderQuantity,
+                filledSuffixMultiplier,
+                orderSuffixMultiplier,
+            };
         }
 
         /**
@@ -10281,7 +10304,7 @@ self.onmessage = function (e) {
 
             if (!cacheEntry) {
                 // No order book data available
-                return createStyledCell(i18n_js.t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
+                return createStyledCell(t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
             }
 
             // Support both old format (direct data) and new format ({data, lastUpdated})
@@ -10290,14 +10313,14 @@ self.onmessage = function (e) {
 
             if (!orderBookData || !orderBookData.orderBooks || orderBookData.orderBooks.length === 0) {
                 // No order book data available
-                return createStyledCell(i18n_js.t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
+                return createStyledCell(t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
             }
 
             // Order books are indexed by enhancement level (same as createTopOrderPriceCell)
             const orderBook = orderBookData.orderBooks[enhancementLevel] ?? null;
 
             if (!orderBook) {
-                return createStyledCell(i18n_js.t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
+                return createStyledCell(t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
             }
 
             // Get top order — asks sorted ascending (best = index 0), bids sorted descending (best = index 0)
@@ -10305,7 +10328,7 @@ self.onmessage = function (e) {
 
             if (!topOrders || topOrders.length === 0) {
                 // No competing orders
-                return createStyledCell(i18n_js.t('None'), '#00FF00', { fontSize: '0.9em' }); // Green = you're the only one
+                return createStyledCell(t('None'), '#00FF00', { fontSize: '0.9em' }); // Green = you're the only one
             }
 
             const topOrder = topOrders[0];
@@ -10318,7 +10341,7 @@ self.onmessage = function (e) {
             const ageMs = Date.now() - estimatedTimestamp;
             const formatted = formatters_js.formatRelativeTime(ageMs);
 
-            return createStyledCell(i18n_js.t('~{0}', formatted), estimatedListingAge.getStalenessColor(lastUpdated), {
+            return createStyledCell(t('~{0}', formatted), estimatedListingAge.getStalenessColor(lastUpdated), {
                 fontSize: '0.9em',
                 title: lastUpdated ? estimatedListingAge.getStalenessTooltip(lastUpdated) : undefined,
             });
@@ -10382,7 +10405,7 @@ self.onmessage = function (e) {
          * @returns {HTMLElement} Empty table cell element
          */
         createPlaceholderCell() {
-            return createStyledCell(i18n_js.t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
+            return createStyledCell(t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
         }
 
         /**
@@ -10514,7 +10537,7 @@ self.onmessage = function (e) {
                 'MarketplacePanel_orderBooksContainer',
                 (container) => {
                     this.processOrderBook(container);
-                }
+                }, { debounce: true, debounceDelay: 150 }
             );
 
             this.cleanupRegistry.registerCleanup(() => {
@@ -10636,12 +10659,12 @@ self.onmessage = function (e) {
 
             // Add tooltip
             if (isEstimated) {
-                displayElement.title = i18n_js.t(
+                displayElement.title = t(
                     'Estimated total queue depth (extrapolated from {0} visible orders)',
                     listings.length
                 );
             } else {
-                displayElement.title = i18n_js.t('Total quantity at best {0} price', isAsk ? 'sell' : 'buy');
+                displayElement.title = t('Total quantity at best {0} price', isAsk ? 'sell' : 'buy');
             }
 
             // Insert into button container
@@ -10912,8 +10935,8 @@ self.onmessage = function (e) {
                 <button
                     type="button"
                     class="mwi-market-order-totals-link"
-                    title="${i18n_js.t('No market orders')}"
-                    aria-label="${i18n_js.t('No market orders')}"
+                    title="${t('No market orders')}"
+                    aria-label="${t('No market orders')}"
                     style="background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center;"
                 >
                     ${marketplaceIcon}
@@ -10935,15 +10958,15 @@ self.onmessage = function (e) {
 
             // Update display
             this.displayElement.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 4px;" title="${i18n_js.t('Buy Orders (coins locked in buy orders)')}">
+            <div style="display: flex; align-items: center; gap: 4px;" title="${t('Buy Orders (coins locked in buy orders)')}">
                 <span style="color: #888; font-weight: 500;">BO:</span>
                 ${boDisplay}
             </div>
-            <div style="display: flex; align-items: center; gap: 4px;" title="${i18n_js.t('Sell Orders (expected proceeds after tax)')}">
+            <div style="display: flex; align-items: center; gap: 4px;" title="${t('Sell Orders (expected proceeds after tax)')}">
                 <span style="color: #888; font-weight: 500;">SO:</span>
                 ${soDisplay}
             </div>
-            <div style="display: flex; align-items: center; gap: 4px;" title="${i18n_js.t('Unclaimed coins (waiting to be collected)')}">
+            <div style="display: flex; align-items: center; gap: 4px;" title="${t('Unclaimed coins (waiting to be collected)')}">
                 <span style="font-weight: 500;">💰:</span>
                 ${unclaimedDisplay}
             </div>
@@ -11019,40 +11042,6 @@ self.onmessage = function (e) {
     }
 
     const marketOrderTotals = new MarketOrderTotals();
-
-    /**
-     * Locale-safe DOM matching utilities for game UI interactions.
-     * All functions use CSS classes, data attributes, or structural positions
-     * instead of textContent matching, which breaks when the game is in Chinese.
-     */
-
-    /**
-     * Check if a tabs container belongs to the marketplace panel.
-     * Uses the panel's CSS module class (partial match for hash stability).
-     *
-     * @param {Element} tablistContainer - A tablist container element
-     * @returns {boolean} True if the container is part of the marketplace panel
-     */
-    function isMarketplacePanel(tablistContainer) {
-        return !!tablistContainer.closest('[class*="MarketplacePanel_marketplacePanel"]');
-    }
-
-    /**
-     * Get the "My Listings" tab from a marketplace tablist.
-     * "My Listings" tab is at index 1 in the marketplace MUI tab bar.
-     * Index 0 = search/filter tab (verified via the panel detection above).
-     *
-     * @param {Element} tablist - The marketplace tablist element
-     * @returns {Element|null} The "My Listings" tab element, or null if not found
-     */
-    function getMyListingsTab(tablist) {
-        // Skip non-native tabs (Toolasha inventory tabs, missing material tabs)
-        // to find the second native marketplace tab
-        const nativeTabs = Array.from(tablist.children).filter(
-            (child) => !child.hasAttribute('data-mwi-custom-tab') && !child.classList.contains('toolasha-inv-tab')
-        );
-        return nativeTabs[1] || null;
-    }
 
     /**
      * Market History Viewer Module
@@ -11187,8 +11176,11 @@ self.onmessage = function (e) {
                 const tabsContainer = document.querySelector('.MuiTabs-flexContainer[role="tablist"]');
                 if (!tabsContainer) return;
 
-                // Verify this is the marketplace tabs
-                if (!isMarketplacePanel(tabsContainer)) return;
+                // Verify this is the marketplace tabs (check for Market Listings tab)
+                const hasMarketListingsTab = Array.from(tabsContainer.children).some((btn) =>
+                    btn.textContent.includes('Market Listings')
+                );
+                if (!hasMarketListingsTab) return;
 
                 // Check if tab already exists
                 if (tabsContainer.querySelector('[data-mwi-market-history-tab="true"]')) {
@@ -11196,7 +11188,9 @@ self.onmessage = function (e) {
                 }
 
                 // Get reference tab (My Listings) to clone structure
-                const referenceTab = getMyListingsTab(tabsContainer);
+                const referenceTab = Array.from(tabsContainer.children).find((btn) =>
+                    btn.textContent.includes('My Listings')
+                );
                 if (!referenceTab) return;
 
                 // Clone reference tab
@@ -11210,7 +11204,7 @@ self.onmessage = function (e) {
                 if (badgeSpan) {
                     badgeSpan.innerHTML = `
                     <div style="text-align: center;">
-                        <div>${i18n_js.t('Market History')}</div>
+                        <div>Market History</div>
                     </div>
                 `;
                 }
@@ -11257,8 +11251,10 @@ self.onmessage = function (e) {
                             return;
                         }
 
-                        // Check if this is still the marketplace
-                        const hasMarketListingsTab = isMarketplacePanel(tabsContainer);
+                        // Check if this is still the marketplace (Market Listings tab exists)
+                        const hasMarketListingsTab = Array.from(tabsContainer.children).some((btn) =>
+                            btn.textContent.includes('Market Listings')
+                        );
 
                         if (!hasMarketListingsTab) {
                             // No longer on marketplace, clean up
@@ -11351,9 +11347,9 @@ self.onmessage = function (e) {
                     const statusCell = row.querySelector('td:nth-child(1)');
                     if (!statusCell) continue;
 
-                    // Check for expired/canceled status using CSS class instead of text
-                    const isExpired = statusCell.querySelector('[class*="Status_cancel"], [class*="Cancel_"]');
-                    if (!isExpired) continue;
+                    const statusText = statusCell.textContent.trim();
+
+                    if (statusText !== 'Expired') continue;
 
                     // This row is expired - now match it to our stored listings
                     // Extract identifying information from the row
@@ -11367,8 +11363,7 @@ self.onmessage = function (e) {
                         continue;
                     }
 
-                    // Determine buy/sell from CSS class instead of text content
-                    const isSell = typeCell.querySelector('[class*="sell"], [class*="Sell"]') !== null;
+                    const isSell = typeCell.textContent.trim() === 'Sell';
                     const priceText = priceCell.textContent.trim();
                     const price = this.parsePrice(priceText);
                     const progressText = progressCell.textContent.trim();
@@ -11644,11 +11639,14 @@ self.onmessage = function (e) {
          * Get item name from HRID (with caching for performance)
          */
         getItemName(itemHrid) {
+            // Check cache first
             if (this.itemNameCache.has(itemHrid)) {
                 return this.itemNameCache.get(itemHrid);
             }
 
-            const name = itemNameTranslator.getDisplayName(itemHrid);
+            // Get item name and cache it
+            const itemDetails = dataManager.getItemDetails(itemHrid);
+            const name = itemDetails?.name || itemHrid.split('/').pop().replace(/_/g, ' ');
             this.itemNameCache.set(itemHrid, name);
             return name;
         }
@@ -11756,7 +11754,7 @@ self.onmessage = function (e) {
         `;
 
             const title = document.createElement('h2');
-            title.textContent = i18n_js.t('Market History');
+            title.textContent = 'Market History';
             title.style.cssText = `
             margin: 0;
             color: #fff;
@@ -11845,7 +11843,7 @@ self.onmessage = function (e) {
             // Search box
             const searchBox = document.createElement('input');
             searchBox.type = 'text';
-            searchBox.placeholder = i18n_js.t('Search items...');
+            searchBox.placeholder = 'Search items...';
             searchBox.value = this.searchTerm;
             searchBox.className = 'mwi-search-box';
             searchBox.style.cssText = `
@@ -11872,9 +11870,9 @@ self.onmessage = function (e) {
             color: #fff;
         `;
             const typeOptions = [
-                { value: 'all', label: i18n_js.t('All Types') },
-                { value: 'buy', label: i18n_js.t('Buy Orders') },
-                { value: 'sell', label: i18n_js.t('Sell Orders') },
+                { value: 'all', label: 'All Types' },
+                { value: 'buy', label: 'Buy Orders' },
+                { value: 'sell', label: 'Sell Orders' },
             ];
             typeOptions.forEach((opt) => {
                 const option = document.createElement('option');
@@ -11901,13 +11899,13 @@ self.onmessage = function (e) {
             color: #fff;
         `;
             const statusOptions = [
-                { value: 'all', label: i18n_js.t('All Statuses') },
-                { value: 'active', label: i18n_js.t('Active Only') },
-                { value: 'filled', label: i18n_js.t('Filled Only') },
-                { value: 'filled_active', label: i18n_js.t('Filled or Active') },
-                { value: 'canceled', label: i18n_js.t('Canceled Only') },
-                { value: 'expired', label: i18n_js.t('Expired Only') },
-                { value: 'unknown', label: i18n_js.t('Unknown Only') },
+                { value: 'all', label: 'All Statuses' },
+                { value: 'active', label: 'Active Only' },
+                { value: 'filled', label: 'Filled Only' },
+                { value: 'filled_active', label: 'Filled or Active' },
+                { value: 'canceled', label: 'Canceled Only' },
+                { value: 'expired', label: 'Expired Only' },
+                { value: 'unknown', label: 'Unknown Only' },
             ];
             statusOptions.forEach((opt) => {
                 const option = document.createElement('option');
@@ -11950,7 +11948,7 @@ self.onmessage = function (e) {
 
             // Export button
             const exportBtn = document.createElement('button');
-            exportBtn.textContent = i18n_js.t('Export CSV');
+            exportBtn.textContent = 'Export CSV';
             exportBtn.style.cssText = `
             padding: 6px 12px;
             background: #4a90e2;
@@ -11963,7 +11961,7 @@ self.onmessage = function (e) {
 
             // Import button
             const importBtn = document.createElement('button');
-            importBtn.textContent = i18n_js.t('Import Market Data');
+            importBtn.textContent = 'Import Market Data';
             importBtn.style.cssText = `
             padding: 6px 12px;
             background: #9b59b6;
@@ -11976,7 +11974,7 @@ self.onmessage = function (e) {
 
             // Clear History button (destructive action - red)
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = i18n_js.t('Clear History');
+            clearBtn.textContent = 'Clear History';
             clearBtn.style.cssText = `
             padding: 6px 12px;
             background: #dc2626;
@@ -12023,7 +12021,7 @@ self.onmessage = function (e) {
 
             const kmbLabel = document.createElement('label');
             kmbLabel.htmlFor = 'mwi-kmb-format';
-            kmbLabel.textContent = i18n_js.t('K/M/B Format');
+            kmbLabel.textContent = 'K/M/B Format';
             kmbLabel.style.cssText = `
             cursor: pointer;
             color: #aaa;
@@ -12042,7 +12040,7 @@ self.onmessage = function (e) {
             font-size: 14px;
             white-space: nowrap;
         `;
-            stats.textContent = i18n_js.t('Total: {0} listings', this.filteredListings.length);
+            stats.textContent = `Total: ${this.filteredListings.length} listings`;
 
             rightGroup.appendChild(kmbLabel);
             rightGroup.appendChild(stats);
@@ -12065,7 +12063,7 @@ self.onmessage = function (e) {
         updateStats() {
             const stats = this.modal.querySelector('.mwi-market-history-stats');
             if (stats) {
-                stats.textContent = i18n_js.t('Total: {0} listings', this.filteredListings.length);
+                stats.textContent = `Total: ${this.filteredListings.length} listings`;
             }
 
             // Update Clear All Filters button visibility
@@ -12093,13 +12091,13 @@ self.onmessage = function (e) {
             if (this.filters.dateFrom || this.filters.dateTo) {
                 const dateText = [];
                 if (this.filters.dateFrom) {
-                    dateText.push(this.filters.dateFrom.toLocaleDateString());
+                    dateText.push(formatters_js.formatDateTime(this.filters.dateFrom, { includeTime: false }));
                 }
                 if (this.filters.dateTo) {
-                    dateText.push(this.filters.dateTo.toLocaleDateString());
+                    dateText.push(formatters_js.formatDateTime(this.filters.dateTo, { includeTime: false }));
                 }
                 badges.push({
-                    label: i18n_js.t('Date: {0}', dateText.join(' - ')),
+                    label: `Date: ${dateText.join(' - ')}`,
                     onRemove: () => {
                         this.filters.dateFrom = null;
                         this.filters.dateTo = null;
@@ -12125,7 +12123,7 @@ self.onmessage = function (e) {
                     });
                 } else {
                     badges.push({
-                        label: i18n_js.t('{0} items selected', this.filters.selectedItems.length),
+                        label: `${this.filters.selectedItems.length} items selected`,
                         icon: this.filters.selectedItems[0], // Show first item's icon
                         onRemove: () => {
                             this.filters.selectedItems = [];
@@ -12143,7 +12141,7 @@ self.onmessage = function (e) {
                 if (levels.length === 1) {
                     const levelText = levels[0] > 0 ? `+${levels[0]}` : 'No Enhancement';
                     badges.push({
-                        label: i18n_js.t('Enh Lvl: {0}', levelText),
+                        label: `Enh Lvl: ${levelText}`,
                         onRemove: () => {
                             this.filters.selectedEnhLevels = [];
                             this.saveFilters();
@@ -12153,7 +12151,7 @@ self.onmessage = function (e) {
                     });
                 } else {
                     badges.push({
-                        label: i18n_js.t('Enh Lvl: {0} selected', levels.length),
+                        label: `Enh Lvl: ${levels.length} selected`,
                         onRemove: () => {
                             this.filters.selectedEnhLevels = [];
                             this.saveFilters();
@@ -12167,7 +12165,7 @@ self.onmessage = function (e) {
             // Type filters
             if (this.filters.selectedTypes.length > 0 && this.filters.selectedTypes.length < 2) {
                 badges.push({
-                    label: i18n_js.t('Type: {0}', this.filters.selectedTypes.includes('buy') ? i18n_js.t('Buy') : i18n_js.t('Sell')),
+                    label: `Type: ${this.filters.selectedTypes.includes('buy') ? 'Buy' : 'Sell'}`,
                     onRemove: () => {
                         this.filters.selectedTypes = [];
                         this.saveFilters();
@@ -12258,7 +12256,7 @@ self.onmessage = function (e) {
                 // Create button
                 const clearFiltersBtn = document.createElement('button');
                 clearFiltersBtn.className = 'mwi-clear-filters-button';
-                clearFiltersBtn.textContent = i18n_js.t('Clear All Filters');
+                clearFiltersBtn.textContent = 'Clear All Filters';
                 clearFiltersBtn.style.cssText = `
                 padding: 6px 12px;
                 background: #e67e22;
@@ -12315,15 +12313,15 @@ self.onmessage = function (e) {
         `;
 
             const columns = [
-                { key: 'createdTimestamp', label: i18n_js.t('Date') },
-                { key: 'itemHrid', label: i18n_js.t('Item') },
-                { key: 'enhancementLevel', label: i18n_js.t('Enh Lvl') },
-                { key: 'isSell', label: i18n_js.t('Type') },
-                { key: 'status', label: i18n_js.t('Status') },
-                { key: 'price', label: i18n_js.t('Price') },
-                { key: 'orderQuantity', label: i18n_js.t('Quantity') },
-                { key: 'filledQuantity', label: i18n_js.t('Filled') },
-                { key: 'total', label: i18n_js.t('Total') },
+                { key: 'createdTimestamp', label: 'Date' },
+                { key: 'itemHrid', label: 'Item' },
+                { key: 'enhancementLevel', label: 'Enh Lvl' },
+                { key: 'isSell', label: 'Type' },
+                { key: 'status', label: 'Status' },
+                { key: 'price', label: 'Price' },
+                { key: 'orderQuantity', label: 'Quantity' },
+                { key: 'filledQuantity', label: 'Filled' },
+                { key: 'total', label: 'Total' },
                 { key: '_delete', label: '' },
             ];
 
@@ -12419,7 +12417,7 @@ self.onmessage = function (e) {
                 const row = document.createElement('tr');
                 const cell = document.createElement('td');
                 cell.colSpan = columns.length;
-                cell.textContent = i18n_js.t('No listings found');
+                cell.textContent = 'No listings found';
                 cell.style.cssText = `
                 padding: 20px;
                 text-align: center;
@@ -12439,7 +12437,7 @@ self.onmessage = function (e) {
                     const dateCell = document.createElement('td');
                     // Use createdTimestamp if available, otherwise fall back to numeric timestamp
                     const dateValue = listing.createdTimestamp || listing.timestamp;
-                    dateCell.textContent = new Date(dateValue).toLocaleString();
+                    dateCell.textContent = formatters_js.formatDateTime(new Date(dateValue));
                     dateCell.style.padding = '4px 10px';
                     row.appendChild(dateCell);
 
@@ -12484,7 +12482,7 @@ self.onmessage = function (e) {
 
                     // Type
                     const typeCell = document.createElement('td');
-                    typeCell.textContent = listing.isSell ? i18n_js.t('Sell') : i18n_js.t('Buy');
+                    typeCell.textContent = listing.isSell ? 'Sell' : 'Buy';
                     typeCell.style.cssText = `
                     padding: 4px 10px;
                     color: ${listing.isSell ? '#4ade80' : '#60a5fa'};
@@ -12494,8 +12492,7 @@ self.onmessage = function (e) {
                     // Status
                     const statusCell = document.createElement('td');
                     const status = listing.status || 'unknown';
-                    const statusKey = status.charAt(0).toUpperCase() + status.slice(1);
-                    statusCell.textContent = i18n_js.t(statusKey);
+                    statusCell.textContent = status.charAt(0).toUpperCase() + status.slice(1);
                     const statusColors = {
                         active: '#60a5fa',
                         filled: '#4ade80',
@@ -12540,7 +12537,7 @@ self.onmessage = function (e) {
                     deleteCell.style.cssText = 'padding: 4px 6px; text-align: center;';
                     const deleteBtn = document.createElement('button');
                     deleteBtn.textContent = '✕';
-                    deleteBtn.title = i18n_js.t('Delete this listing');
+                    deleteBtn.title = 'Delete this listing';
                     deleteBtn.style.cssText = `
                     background: none;
                     border: none;
@@ -12598,7 +12595,7 @@ self.onmessage = function (e) {
         `;
 
             const label = document.createElement('span');
-            label.textContent = i18n_js.t('Rows per page:');
+            label.textContent = 'Rows per page:';
 
             const rowsInput = document.createElement('input');
             rowsInput.type = 'number';
@@ -12635,7 +12632,7 @@ self.onmessage = function (e) {
             });
 
             const showAllLabel = document.createElement('label');
-            showAllLabel.textContent = i18n_js.t('Show All');
+            showAllLabel.textContent = 'Show All';
             showAllLabel.style.cssText = `
             cursor: pointer;
             color: #aaa;
@@ -12677,7 +12674,7 @@ self.onmessage = function (e) {
                 });
 
                 const pageInfo = document.createElement('span');
-                pageInfo.textContent = i18n_js.t('Page {0} of {1}', this.currentPage, totalPages);
+                pageInfo.textContent = `Page ${this.currentPage} of ${totalPages}`;
 
                 const nextBtn = document.createElement('button');
                 nextBtn.textContent = '▶';
@@ -12702,7 +12699,7 @@ self.onmessage = function (e) {
                 rightSide.appendChild(nextBtn);
             } else {
                 const showingInfo = document.createElement('span');
-                showingInfo.textContent = i18n_js.t('Showing all {0} listings', this.filteredListings.length);
+                showingInfo.textContent = `Showing all ${this.filteredListings.length} listings`;
                 rightSide.appendChild(showingInfo);
             }
 
@@ -12714,23 +12711,12 @@ self.onmessage = function (e) {
          * Export listings to CSV
          */
         exportCSV() {
-            const headers = [
-                i18n_js.t('Date'),
-                i18n_js.t('Item'),
-                i18n_js.t('Enhancement'),
-                i18n_js.t('Type'),
-                i18n_js.t('Status'),
-                i18n_js.t('Price'),
-                i18n_js.t('Quantity'),
-                i18n_js.t('Filled'),
-                i18n_js.t('Total'),
-                'ID',
-            ];
+            const headers = ['Date', 'Item', 'Enhancement', 'Type', 'Status', 'Price', 'Quantity', 'Filled', 'Total', 'ID'];
             const rows = this.filteredListings.map((listing) => [
                 new Date(listing.createdTimestamp || listing.timestamp).toISOString(),
                 this.getItemName(listing.itemHrid),
                 listing.enhancementLevel || 0,
-                listing.isSell ? i18n_js.t('Sell') : i18n_js.t('Buy'),
+                listing.isSell ? 'Sell' : 'Buy',
                 listing.status || 'unknown',
                 listing.price,
                 listing.orderQuantity,
@@ -12758,7 +12744,7 @@ self.onmessage = function (e) {
                 // Parse CSV
                 const lines = csvText.trim().split('\n');
                 if (lines.length < 2) {
-                    throw new Error(i18n_js.t('CSV file is empty or invalid'));
+                    throw new Error('CSV file is empty or invalid');
                 }
 
                 // Parse header
@@ -12789,7 +12775,7 @@ self.onmessage = function (e) {
                 z-index: 10001;
                 box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
             `;
-                progressMsg.textContent = i18n_js.t('Importing {0} listings from CSV...', lines.length - 1);
+                progressMsg.textContent = `Importing ${lines.length - 1} listings from CSV...`;
                 document.body.appendChild(progressMsg);
 
                 // Load existing listings
@@ -12886,12 +12872,7 @@ self.onmessage = function (e) {
 
                 // Show success message
                 alert(
-                    i18n_js.t(
-                        'Import complete!\n\nImported: {0} new listings\nSkipped: {1} duplicates or invalid rows\nTotal: {2} listings',
-                        imported,
-                        skipped,
-                        existingListings.length
-                    )
+                    `Import complete!\n\nImported: ${imported} new listings\nSkipped: ${skipped} duplicates or invalid rows\nTotal: ${existingListings.length} listings`
                 );
 
                 // Reload and render table
@@ -12928,7 +12909,7 @@ self.onmessage = function (e) {
                     }
                 } catch (error) {
                     console.error('[MarketHistoryViewer] Import failed:', error);
-                    alert(i18n_js.t('Import failed: {0}', error.message));
+                    alert(`Import failed: ${error.message}`);
                 }
             });
 
@@ -12950,10 +12931,8 @@ self.onmessage = function (e) {
                 const trimmed = jsonText.trim();
                 if (trimmed.startsWith('{') && !trimmed.endsWith('}')) {
                     throw new Error(
-                        i18n_js.t('File appears to be truncated or incomplete. The JSON does not end properly. ') +
-                            i18n_js.t(
-                                'Try exporting from Edible Tools again, or export to CSV from the Market History Viewer and import that instead.'
-                            )
+                        'File appears to be truncated or incomplete. The JSON does not end properly. ' +
+                            'Try exporting from Edible Tools again, or export to CSV from the Market History Viewer and import that instead.'
                     );
                 }
 
@@ -12982,18 +12961,15 @@ self.onmessage = function (e) {
                 // Unrecognized format
                 else {
                     throw new Error(
-                        i18n_js.t('Unrecognized format. Expected:') +
-                            '\n' +
-                            i18n_js.t('- Direct array: [{listing1}, {listing2}, ...]') +
-                            '\n' +
-                            i18n_js.t('- Object format: {"market_list": [...]}') +
-                            '\n' +
-                            i18n_js.t('- Edible Tools format: {"market_list": "[...]"}')
+                        'Unrecognized format. Expected:\n' +
+                            '- Direct array: [{listing1}, {listing2}, ...]\n' +
+                            '- Object format: {"market_list": [...]}\n' +
+                            '- Edible Tools format: {"market_list": "[...]"}'
                     );
                 }
 
                 if (!Array.isArray(marketList) || marketList.length === 0) {
-                    throw new Error(i18n_js.t('No listings found in file or array is empty'));
+                    throw new Error('No listings found in file or array is empty');
                 }
 
                 // Show progress message
@@ -13010,7 +12986,7 @@ self.onmessage = function (e) {
                 z-index: 10001;
                 box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
             `;
-                progressMsg.textContent = i18n_js.t('Importing {0} listings...', marketList.length);
+                progressMsg.textContent = `Importing ${marketList.length} listings...`;
                 document.body.appendChild(progressMsg);
 
                 // Convert imported format to Toolasha format
@@ -13052,12 +13028,7 @@ self.onmessage = function (e) {
 
                 // Show success message
                 alert(
-                    i18n_js.t(
-                        'Import complete!\n\nImported: {0} new listings\nSkipped: {1} duplicates\nTotal: {2} listings',
-                        imported,
-                        skipped,
-                        existingListings.length
-                    )
+                    `Import complete!\n\nImported: ${imported} new listings\nSkipped: ${skipped} duplicates\nTotal: ${existingListings.length} listings`
                 );
 
                 // Reload and render table
@@ -13086,11 +13057,11 @@ self.onmessage = function (e) {
         async clearHistory() {
             // Strong confirmation dialog
             const confirmed = confirm(
-                i18n_js.t('⚠️ WARNING: This will permanently delete ALL market history data!\n') +
-                    i18n_js.t('You are about to delete {0} listings.\n', this.listings.length) +
-                    i18n_js.t('RECOMMENDATION: Export to CSV first using the "Export CSV" button.\n') +
-                    i18n_js.t('This action CANNOT be undone!\n') +
-                    i18n_js.t('Are you absolutely sure you want to continue?')
+                `⚠️ WARNING: This will permanently delete ALL market history data!\n` +
+                    `You are about to delete ${this.listings.length} listings.\n` +
+                    `RECOMMENDATION: Export to CSV first using the "Export CSV" button.\n` +
+                    `This action CANNOT be undone!\n` +
+                    `Are you absolutely sure you want to continue?`
             );
 
             if (!confirmed) {
@@ -13109,14 +13080,14 @@ self.onmessage = function (e) {
                 await estimatedListingAge.loadHistoricalData();
 
                 // Show success message
-                alert(i18n_js.t('Market history cleared successfully.'));
+                alert('Market history cleared successfully.');
 
                 // Reload and render table (will show empty state)
                 await this.loadListings();
                 this.renderTable();
             } catch (error) {
                 console.error('[MarketHistoryViewer] Failed to clear history:', error);
-                alert(i18n_js.t('Failed to clear history: {0}', error.message));
+                alert(`Failed to clear history: ${error.message}`);
             }
         }
 
@@ -13309,7 +13280,7 @@ self.onmessage = function (e) {
 
             // Title
             const title = document.createElement('div');
-            title.textContent = i18n_js.t('Filter by Date');
+            title.textContent = 'Filter by Date';
             title.style.cssText = `
             color: #fff;
             font-weight: bold;
@@ -13347,17 +13318,13 @@ self.onmessage = function (e) {
                 background: #1a1a1a;
                 border-radius: 3px;
             `;
-                rangeInfo.textContent = i18n_js.t(
-                    'Available: {0} - {1}',
-                    minDate.toLocaleDateString(),
-                    maxDate.toLocaleDateString()
-                );
+                rangeInfo.textContent = `Available: ${formatters_js.formatDateTime(minDate, { includeTime: false })} - ${formatters_js.formatDateTime(maxDate, { includeTime: false })}`;
                 popup.appendChild(rangeInfo);
             }
 
             // From date
             const fromLabel = document.createElement('label');
-            fromLabel.textContent = i18n_js.t('From:');
+            fromLabel.textContent = 'From:';
             fromLabel.style.cssText = `
             display: block;
             color: #aaa;
@@ -13382,7 +13349,7 @@ self.onmessage = function (e) {
 
             // To date
             const toLabel = document.createElement('label');
-            toLabel.textContent = i18n_js.t('To:');
+            toLabel.textContent = 'To:';
             toLabel.style.cssText = `
             display: block;
             color: #aaa;
@@ -13414,7 +13381,7 @@ self.onmessage = function (e) {
         `;
 
             const applyBtn = document.createElement('button');
-            applyBtn.textContent = i18n_js.t('Apply');
+            applyBtn.textContent = 'Apply';
             applyBtn.style.cssText = `
             flex: 1;
             padding: 6px;
@@ -13436,7 +13403,7 @@ self.onmessage = function (e) {
             });
 
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = i18n_js.t('Clear');
+            clearBtn.textContent = 'Clear';
             clearBtn.style.cssText = `
             flex: 1;
             padding: 6px;
@@ -13489,7 +13456,7 @@ self.onmessage = function (e) {
 
             // Title
             const title = document.createElement('div');
-            title.textContent = i18n_js.t('Filter by Item');
+            title.textContent = 'Filter by Item';
             title.style.cssText = `
             color: #fff;
             font-weight: bold;
@@ -13500,7 +13467,7 @@ self.onmessage = function (e) {
             // Search box
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
-            searchInput.placeholder = i18n_js.t('Search items...');
+            searchInput.placeholder = 'Search items...';
             searchInput.style.cssText = `
             width: 100%;
             padding: 6px;
@@ -13587,7 +13554,7 @@ self.onmessage = function (e) {
         `;
 
             const applyBtn = document.createElement('button');
-            applyBtn.textContent = i18n_js.t('Apply');
+            applyBtn.textContent = 'Apply';
             applyBtn.style.cssText = `
             flex: 1;
             padding: 6px;
@@ -13607,7 +13574,7 @@ self.onmessage = function (e) {
             });
 
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = i18n_js.t('Clear');
+            clearBtn.textContent = 'Clear';
             clearBtn.style.cssText = `
             flex: 1;
             padding: 6px;
@@ -13651,7 +13618,7 @@ self.onmessage = function (e) {
 
             // Title
             const title = document.createElement('div');
-            title.textContent = i18n_js.t('Filter by Enhancement Level');
+            title.textContent = 'Filter by Enhancement Level';
             title.style.cssText = `
             color: #fff;
             font-weight: bold;
@@ -13686,7 +13653,7 @@ self.onmessage = function (e) {
                 checkbox.checked = this.filters.selectedEnhLevels.includes(level);
                 checkbox.style.marginRight = '6px';
 
-                const levelText = level > 0 ? `+${level}` : i18n_js.t('No Enhancement');
+                const levelText = level > 0 ? `+${level}` : 'No Enhancement';
 
                 label.appendChild(checkbox);
                 label.appendChild(document.createTextNode(levelText));
@@ -13716,7 +13683,7 @@ self.onmessage = function (e) {
         `;
 
             const applyBtn = document.createElement('button');
-            applyBtn.textContent = i18n_js.t('Apply');
+            applyBtn.textContent = 'Apply';
             applyBtn.style.cssText = `
             flex: 1;
             padding: 6px;
@@ -13736,7 +13703,7 @@ self.onmessage = function (e) {
             });
 
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = i18n_js.t('Clear');
+            clearBtn.textContent = 'Clear';
             clearBtn.style.cssText = `
             flex: 1;
             padding: 6px;
@@ -13780,7 +13747,7 @@ self.onmessage = function (e) {
 
             // Title
             const title = document.createElement('div');
-            title.textContent = i18n_js.t('Filter by Type');
+            title.textContent = 'Filter by Type';
             title.style.cssText = `
             color: #fff;
             font-weight: bold;
@@ -13810,7 +13777,7 @@ self.onmessage = function (e) {
                 buyCheckbox.style.marginRight = '6px';
 
                 buyLabel.appendChild(buyCheckbox);
-                buyLabel.appendChild(document.createTextNode(i18n_js.t('Buy Orders')));
+                buyLabel.appendChild(document.createTextNode('Buy Orders'));
                 popup.appendChild(buyLabel);
 
                 buyCheckbox.addEventListener('change', (e) => {
@@ -13843,7 +13810,7 @@ self.onmessage = function (e) {
                 sellCheckbox.style.marginRight = '6px';
 
                 sellLabel.appendChild(sellCheckbox);
-                sellLabel.appendChild(document.createTextNode(i18n_js.t('Sell Orders')));
+                sellLabel.appendChild(document.createTextNode('Sell Orders'));
                 popup.appendChild(sellLabel);
 
                 sellCheckbox.addEventListener('change', (e) => {
@@ -13869,7 +13836,7 @@ self.onmessage = function (e) {
         `;
 
             const applyBtn = document.createElement('button');
-            applyBtn.textContent = i18n_js.t('Apply');
+            applyBtn.textContent = 'Apply';
             applyBtn.style.cssText = `
             flex: 1;
             padding: 6px;
@@ -13889,7 +13856,7 @@ self.onmessage = function (e) {
             });
 
             const clearBtn = document.createElement('button');
-            clearBtn.textContent = i18n_js.t('Clear');
+            clearBtn.textContent = 'Clear';
             clearBtn.style.cssText = `
             flex: 1;
             padding: 6px;
@@ -14049,7 +14016,7 @@ self.onmessage = function (e) {
 
                 const button = document.createElement('button');
                 button.className = 'mwi-philo-calc-button';
-                button.textContent = i18n_js.t('Philo Gamba');
+                button.textContent = t('Philo Gamba');
                 button.style.cssText = `
                 margin: 10px;
                 padding: 8px 16px;
@@ -14476,7 +14443,7 @@ self.onmessage = function (e) {
             border-bottom: 1px solid #444;
         `;
             header.innerHTML = `
-            <span style="font-size: 18px; font-weight: bold;">${i18n_js.t("Philosopher's Stone Calculator")}</span>
+            <span style="font-size: 18px; font-weight: bold;">${t("Philosopher's Stone Calculator")}</span>
         `;
 
             const closeBtn = document.createElement('button');
@@ -14552,7 +14519,7 @@ self.onmessage = function (e) {
             // Philo price input
             const philoLabel = document.createElement('label');
             philoLabel.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px;';
-            philoLabel.textContent = i18n_js.t('Philo Price: ');
+            philoLabel.textContent = t('Philo Price: ');
             const philoInput = document.createElement('input');
             philoInput.type = 'text';
             philoInput.value = this.philoPrice.toLocaleString();
@@ -14577,7 +14544,7 @@ self.onmessage = function (e) {
             // Catalyst price input
             const catLabel = document.createElement('label');
             catLabel.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px;';
-            catLabel.textContent = i18n_js.t('Catalyst Price: ');
+            catLabel.textContent = t('Catalyst Price: ');
             const catInput = document.createElement('input');
             catInput.type = 'text';
             catInput.value = this.catalystPrice.toLocaleString();
@@ -14643,7 +14610,7 @@ self.onmessage = function (e) {
             // Drink Concentration Dropdown
             const drinkLabel = document.createElement('label');
             drinkLabel.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px;';
-            drinkLabel.textContent = i18n_js.t('Drink Concentration: ');
+            drinkLabel.textContent = t('Drink Concentration: ');
             const drinkSelect = document.createElement('select');
             drinkSelect.style.cssText = `
             padding: 4px 8px;
@@ -14694,10 +14661,10 @@ self.onmessage = function (e) {
             // Filter label
             const filterLabel = document.createElement('label');
             filterLabel.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px;';
-            filterLabel.textContent = i18n_js.t('Filter: ');
+            filterLabel.textContent = t('Filter: ');
             const filterInput = document.createElement('input');
             filterInput.type = 'text';
-            filterInput.placeholder = i18n_js.t('Item name...');
+            filterInput.placeholder = t('Item name...');
             filterInput.value = this.filterText;
             filterInput.style.cssText = `
             width: 140px;
@@ -14718,7 +14685,7 @@ self.onmessage = function (e) {
 
             // Refresh prices button
             const refreshBtn = document.createElement('button');
-            refreshBtn.textContent = i18n_js.t('Refresh Prices');
+            refreshBtn.textContent = t('Refresh Prices');
             refreshBtn.style.cssText = `
             padding: 4px 12px;
             background: #4a90e2;
@@ -14736,7 +14703,7 @@ self.onmessage = function (e) {
             });
             refreshBtn.addEventListener('click', async () => {
                 refreshBtn.disabled = true;
-                refreshBtn.textContent = i18n_js.t('Refreshing...');
+                refreshBtn.textContent = t('Refreshing...');
                 refreshBtn.style.opacity = '0.6';
                 try {
                     await marketAPI.fetch(true);
@@ -14750,7 +14717,7 @@ self.onmessage = function (e) {
                     console.error('[PhiloCalculator] Failed to refresh prices:', error);
                 }
                 refreshBtn.disabled = false;
-                refreshBtn.textContent = i18n_js.t('Refresh Prices');
+                refreshBtn.textContent = t('Refresh Prices');
                 refreshBtn.style.opacity = '1';
             });
 
@@ -15285,7 +15252,7 @@ self.onmessage = function (e) {
             if (history.buy) {
                 const buyColor = this.getBuyColor(history.buy, currentPrices, comparisonMode);
                 parts.push(
-                    `<span style="color: ${buyColor}; font-weight: 600;" title="${i18n_js.t('Your last buy price')}">Buy ${formatters_js.formatKMB3Digits(history.buy)}</span>`
+                    `<span style="color: ${buyColor}; font-weight: 600;" title="${t('Your last buy price')}">Buy ${formatters_js.formatKMB3Digits(history.buy)}</span>`
                 );
             }
 
@@ -15296,7 +15263,7 @@ self.onmessage = function (e) {
             if (history.sell) {
                 const sellColor = this.getSellColor(history.sell, currentPrices, comparisonMode);
                 parts.push(
-                    `<span style="color: ${sellColor}; font-weight: 600;" title="${i18n_js.t('Your last sell price')}">Sell ${formatters_js.formatKMB3Digits(history.sell)}</span>`
+                    `<span style="color: ${sellColor}; font-weight: 600;" title="${t('Your last sell price')}">Sell ${formatters_js.formatKMB3Digits(history.sell)}</span>`
                 );
             }
 
@@ -15504,7 +15471,7 @@ self.onmessage = function (e) {
          * Show the network alert
          * @param {string} message - Alert message to display
          */
-        show(message = i18n_js.t('⚠️ Market data unavailable')) {
+        show(message = t('⚠️ Market data unavailable')) {
             if (!config.getSetting('networkAlert')) {
                 return;
             }
@@ -15733,7 +15700,7 @@ self.onmessage = function (e) {
                         const ageMs = Date.now() - new Date(topAsk.createdTimestamp).getTime();
                         if (ageMs > 0) {
                             const ageStr = formatters_js.formatRelativeTime(ageMs);
-                            ageHtml = `<div style="font-size: 0.7em; opacity: 0.7; margin-top: 1px;">${i18n_js.t('Top ask: ~{0}', ageStr)}</div>`;
+                            ageHtml = `<div style="font-size: 0.7em; opacity: 0.7; margin-top: 1px;">${t('Top ask: ~{0}', ageStr)}</div>`;
                         }
                     }
                 }
@@ -15741,7 +15708,7 @@ self.onmessage = function (e) {
 
             toggle.innerHTML =
                 '<span style="flex: 1; text-align: center;">' +
-                i18n_js.t('Marketplace Action') +
+                t('Marketplace Action') +
                 ageHtml +
                 '</span>' +
                 '<span class="mwi-mp-chevron" style="font-size: 0.65em; transition: transform 0.15s; display: inline-block;">▼</span>';
@@ -15769,10 +15736,10 @@ self.onmessage = function (e) {
 
             // Action buttons
             const actions = [
-                { label: i18n_js.t('Sell Now'), type: 'sell', color: '#c2410c' },
-                { label: i18n_js.t('Buy Now'), type: 'buy', color: '#2fc4a7' },
-                { label: i18n_js.t('New Sell Listing'), type: 'sell-listing', color: '#9a3412' },
-                { label: i18n_js.t('New Buy Listing'), type: 'buy-listing', color: '#2fc4a7' },
+                { label: t('Sell Now'), type: 'sell', color: '#c2410c' },
+                { label: t('Buy Now'), type: 'buy', color: '#2fc4a7' },
+                { label: t('New Sell Listing'), type: 'sell-listing', color: '#9a3412' },
+                { label: t('New Buy Listing'), type: 'buy-listing', color: '#2fc4a7' },
             ];
 
             for (const action of actions) {
@@ -16054,7 +16021,7 @@ self.onmessage = function (e) {
                 // + toggle button
                 const addToggle = document.createElement('button');
                 addToggle.textContent = '+';
-                addToggle.title = i18n_js.t('Toggle add mode: click to accumulate counts instead of setting them');
+                addToggle.title = t('Toggle add mode: click to accumulate counts instead of setting them');
                 addToggle.style.cssText = `
                 font-size: 11px;
                 font-weight: 700;
@@ -16197,7 +16164,7 @@ self.onmessage = function (e) {
                 const ownedEl = document.createElement('div');
                 ownedEl.className = 'mwi-owned-count';
                 ownedEl.style.cssText = `text-align: center; font-size: 13px; color: ${config.COLOR_TEXT_SECONDARY}; margin: 4px 0;`;
-                ownedEl.innerHTML = `${i18n_js.t('Owned: ')}<span style="color: ${config.COLOR_ACCENT}; font-weight: 600;">${formatters_js.formatWithSeparator(count)}</span>`;
+                ownedEl.innerHTML = `${t('Owned: ')}<span style="color: ${config.COLOR_ACCENT}; font-weight: 600;">${formatters_js.formatWithSeparator(count)}</span>`;
                 quantityRow.insertAdjacentElement('beforebegin', ownedEl);
             }, 100);
         }
@@ -16394,7 +16361,7 @@ self.onmessage = function (e) {
             link.href = url;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
-            link.textContent = i18n_js.t('MilkyWay Market ↗');
+            link.textContent = t('MilkyWay Market ↗');
             link.style.cssText = `
             font-size: 10px;
             color: #888;
@@ -18372,7 +18339,7 @@ self.onmessage = function (e) {
 
             // Check exclusions in priority order: assetType > item > loadout
             if (entireEquippedExcluded) {
-                trackExcluded('assetType', 'equipped', i18n_js.t('All Equipped Items'), value);
+                trackExcluded('assetType', 'equipped', t('All Equipped Items'), value);
                 continue;
             }
             if (isExcluded('item', item.itemHrid)) {
@@ -18444,12 +18411,12 @@ self.onmessage = function (e) {
             }
             // Coin is never excluded by category — it must be excluded individually
             if (item.itemHrid !== '/items/coin' && isExcluded('category', categoryHrid)) {
-                const categoryName = gameData.itemCategoryDetailMap?.[categoryHrid]?.name || i18n_js.t('Other');
+                const categoryName = gameData.itemCategoryDetailMap?.[categoryHrid]?.name || t('Other');
                 trackExcluded('category', categoryHrid, `${categoryName} (category)`, value);
                 continue;
             }
             if (isAbilityBook && !booksAsInventory && isExcluded('assetType', 'abilityBooks')) {
-                trackExcluded('assetType', 'abilityBooks', i18n_js.t('All Ability Books'), value);
+                trackExcluded('assetType', 'abilityBooks', t('All Ability Books'), value);
                 continue;
             }
 
@@ -18464,7 +18431,7 @@ self.onmessage = function (e) {
 
                 // Coin is never excluded by category — it must be excluded individually
                 if (item.itemHrid !== '/items/coin') {
-                    const categoryName = gameData.itemCategoryDetailMap?.[categoryHrid]?.name || i18n_js.t('Other');
+                    const categoryName = gameData.itemCategoryDetailMap?.[categoryHrid]?.name || t('Other');
 
                     if (!inventoryByCategory[categoryName]) {
                         inventoryByCategory[categoryName] = {
@@ -18540,14 +18507,14 @@ self.onmessage = function (e) {
 
         // Apply listings exclusion
         if (isExcluded('assetType', 'listings') && listingsValue > 0) {
-            trackExcluded('assetType', 'listings', i18n_js.t('All Market Listings'), listingsValue);
+            trackExcluded('assetType', 'listings', t('All Market Listings'), listingsValue);
             listingsValue = 0;
         }
 
         // Calculate houses value — apply per-room and whole-section exclusions
         let housesData = calculateAllHousesCost(characterHouseRooms);
         if (isExcluded('assetType', 'houses') && housesData.totalCost > 0) {
-            trackExcluded('assetType', 'houses', i18n_js.t('All Houses'), housesData.totalCost);
+            trackExcluded('assetType', 'houses', t('All Houses'), housesData.totalCost);
             housesData = { totalCost: 0, breakdown: [] };
         } else {
             let excludedRoomCost = 0;
@@ -18568,7 +18535,7 @@ self.onmessage = function (e) {
         // Calculate abilities value — apply per-ability and whole-section exclusions
         let abilitiesData = calculateAllAbilitiesCost(characterAbilities, abilityCombatTriggersMap);
         if (isExcluded('assetType', 'abilities') && abilitiesData.totalCost > 0) {
-            trackExcluded('assetType', 'abilities', i18n_js.t('All Abilities'), abilitiesData.totalCost);
+            trackExcluded('assetType', 'abilities', t('All Abilities'), abilitiesData.totalCost);
             abilitiesData = {
                 totalCost: 0,
                 equippedCost: 0,
@@ -18928,12 +18895,12 @@ self.onmessage = function (e) {
     };
 
     const CATEGORIES = [
-        { key: 'gold', label: i18n_js.t('Gold'), color: '#eab308' },
-        { key: 'inventory', label: i18n_js.t('Inventory'), color: '#3b82f6' },
-        { key: 'equipment', label: i18n_js.t('Equipment'), color: '#ef4444' },
-        { key: 'listings', label: i18n_js.t('Listings'), color: '#8b5cf6' },
-        { key: 'house', label: i18n_js.t('House'), color: '#f97316' },
-        { key: 'abilities', label: i18n_js.t('Abilities'), color: '#06b6d4' },
+        { key: 'gold', label: t('Gold'), color: '#eab308' },
+        { key: 'inventory', label: t('Inventory'), color: '#3b82f6' },
+        { key: 'equipment', label: t('Equipment'), color: '#ef4444' },
+        { key: 'listings', label: t('Listings'), color: '#8b5cf6' },
+        { key: 'house', label: t('House'), color: '#f97316' },
+        { key: 'abilities', label: t('Abilities'), color: '#06b6d4' },
     ];
 
     class NetworthHistoryChart {
@@ -19053,7 +19020,7 @@ self.onmessage = function (e) {
         `;
 
             const title = document.createElement('h3');
-            title.textContent = i18n_js.t('Net Worth History');
+            title.textContent = t('Net Worth History');
             title.style.cssText = 'color: #ccc; margin: 0; font-size: 18px;';
 
             const closeBtn = document.createElement('button');
@@ -19085,7 +19052,7 @@ self.onmessage = function (e) {
             const ranges = ['24h', '7d', '30d', 'all'];
             for (const range of ranges) {
                 const btn = document.createElement('button');
-                btn.textContent = range === 'all' ? i18n_js.t('All') : range.toUpperCase();
+                btn.textContent = range === 'all' ? t('All') : range.toUpperCase();
                 btn.dataset.range = range;
                 btn.className = 'mwi-nw-range-btn';
                 btn.style.cssText = `
@@ -19105,7 +19072,7 @@ self.onmessage = function (e) {
 
             // Connect Gaps toggle
             const gapToggle = document.createElement('button');
-            gapToggle.textContent = i18n_js.t('Connect Gaps');
+            gapToggle.textContent = t('Connect Gaps');
             gapToggle.className = 'mwi-nw-gap-toggle';
             const updateGapToggleStyle = () => {
                 gapToggle.style.cssText = `
@@ -19130,7 +19097,7 @@ self.onmessage = function (e) {
 
             // Show Bars toggle
             const barToggle = document.createElement('button');
-            barToggle.textContent = i18n_js.t('Show Bars');
+            barToggle.textContent = t('Show Bars');
             barToggle.className = 'mwi-nw-bar-toggle';
             const updateBarToggleStyle = () => {
                 barToggle.style.cssText = `
@@ -19155,7 +19122,7 @@ self.onmessage = function (e) {
 
             // Moving Average dropdown
             const maLabel = document.createElement('span');
-            maLabel.textContent = i18n_js.t('Avg:');
+            maLabel.textContent = t('Avg:');
             maLabel.style.cssText = 'color: #999; font-size: 12px; margin-left: 8px;';
             rangeRow.appendChild(maLabel);
 
@@ -19172,7 +19139,7 @@ self.onmessage = function (e) {
             color-scheme: dark;
         `;
             const maOptions = [
-                { value: 0, label: i18n_js.t('Off') },
+                { value: 0, label: t('Off') },
                 { value: 3, label: '3h' },
                 { value: 6, label: '6h' },
                 { value: 12, label: '12h' },
@@ -19185,7 +19152,7 @@ self.onmessage = function (e) {
             if (isCustomValue) {
                 maOptions.push({ value: this.movingAvgWindow, label: `${this.movingAvgWindow}h` });
             }
-            maOptions.push({ value: -1, label: i18n_js.t('Custom…') });
+            maOptions.push({ value: -1, label: t('Custom…') });
             for (const opt of maOptions) {
                 const option = document.createElement('option');
                 option.value = opt.value;
@@ -19196,7 +19163,7 @@ self.onmessage = function (e) {
             maSelect.addEventListener('change', () => {
                 const val = parseInt(maSelect.value, 10);
                 if (val === -1) {
-                    const input = prompt(i18n_js.t('Enter moving average window in hours:'));
+                    const input = prompt(t('Enter moving average window in hours:'));
                     const parsed = parseInt(input, 10);
                     if (parsed > 0) {
                         this.movingAvgWindow = parsed;
@@ -19240,7 +19207,7 @@ self.onmessage = function (e) {
 
             // From label + input
             const fromLabel = document.createElement('span');
-            fromLabel.textContent = i18n_js.t('From:');
+            fromLabel.textContent = t('From:');
             fromLabel.style.cssText = 'color: #999; font-size: 12px;';
             rangeRow.appendChild(fromLabel);
 
@@ -19255,7 +19222,7 @@ self.onmessage = function (e) {
 
             // To label + input
             const toLabel = document.createElement('span');
-            toLabel.textContent = i18n_js.t('To:');
+            toLabel.textContent = t('To:');
             toLabel.style.cssText = 'color: #999; font-size: 12px;';
             rangeRow.appendChild(toLabel);
 
@@ -19307,7 +19274,7 @@ self.onmessage = function (e) {
             flex-shrink: 0;
         `;
             totalBtn.appendChild(totalDot);
-            totalBtn.appendChild(document.createTextNode(i18n_js.t('Total')));
+            totalBtn.appendChild(document.createTextNode(t('Total')));
             updateTotalBtnStyle();
             totalBtn.addEventListener('click', () => {
                 this.categoryVisibility.showTotal = !this.categoryVisibility.showTotal;
@@ -19349,7 +19316,7 @@ self.onmessage = function (e) {
             flex-shrink: 0;
         `;
             nonExclBtn.appendChild(nonExclDot);
-            nonExclBtn.appendChild(document.createTextNode(i18n_js.t('Non-Excluded')));
+            nonExclBtn.appendChild(document.createTextNode(t('Non-Excluded')));
             updateNonExclBtnStyle();
             nonExclBtn.addEventListener('click', () => {
                 this.categoryVisibility.showNonExcluded = !this.categoryVisibility.showNonExcluded;
@@ -19390,7 +19357,7 @@ self.onmessage = function (e) {
                 flex-shrink: 0;
             `;
                 btn.appendChild(dot);
-                btn.appendChild(document.createTextNode(i18n_js.t(cat.label)));
+                btn.appendChild(document.createTextNode(t(cat.label)));
                 updateCatBtnStyle();
                 btn.addEventListener('click', () => {
                     this.categoryVisibility[cat.key] = !this.categoryVisibility[cat.key];
@@ -19726,7 +19693,7 @@ self.onmessage = function (e) {
 
             const visibleCategories = CATEGORIES.filter((c) => this.categoryVisibility[c.key]);
             const yAxisTitle =
-                !this.categoryVisibility.showTotal && visibleCategories.length > 0 ? i18n_js.t('Category Value') : i18n_js.t('Net Worth');
+                !this.categoryVisibility.showTotal && visibleCategories.length > 0 ? t('Category Value') : t('Net Worth');
 
             this.chartInstance = new Chart(ctx, {
                 type: 'line',
@@ -19772,15 +19739,9 @@ self.onmessage = function (e) {
                                 callback: (value) => {
                                     const d = new Date(value);
                                     if (isShortRange) {
-                                        return d.toLocaleTimeString([], {
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                        });
+                                        return formatters_js.formatDateTime(d, { includeDate: false, includeSeconds: false });
                                     }
-                                    return d.toLocaleDateString([], {
-                                        month: 'short',
-                                        day: 'numeric',
-                                    });
+                                    return formatters_js.formatDateTime(d, { includeTime: false });
                                 },
                             },
                             grid: { color: '#333' },
@@ -19812,7 +19773,7 @@ self.onmessage = function (e) {
             if (!statsRow) return;
 
             if (filtered.length === 0) {
-                statsRow.innerHTML = `<span style="color: #666;">${i18n_js.t('No data available for this range')}</span>`;
+                statsRow.innerHTML = `<span style="color: #666;">${t('No data available for this range')}</span>`;
                 return;
             }
 
@@ -19836,21 +19797,21 @@ self.onmessage = function (e) {
                 const rangeChange = currentTotal - first.total;
                 const rangePercent = first.total > 0 ? (rangeChange / first.total) * 100 : 0;
 
-                const ratePerHour = hoursElapsed > 0 ? (last.total - first.total) / hoursElapsed : 0;
+                const ratePerHour = hoursElapsed > 0 ? (currentTotal - first.total) / hoursElapsed : 0;
 
                 parts.push(
-                    `<span>${i18n_js.t('Current:')} <strong style="color: ${config.COLOR_ACCENT};">${formatters_js.networthFormatter(Math.round(currentTotal))}</strong></span>`
+                    `<span>${t('Current:')} <strong style="color: ${config.COLOR_ACCENT};">${formatters_js.networthFormatter(Math.round(currentTotal))}</strong></span>`
                 );
 
                 if (filtered.length >= 2) {
                     const color = rangeChange >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                     const sign = rangeChange >= 0 ? '+' : '';
                     const breakdownAttr = is24hRange
-                        ? ` id="mwi-nw-24h-toggle" style="cursor: pointer;" title="${i18n_js.t('Click for item breakdown')}"`
+                        ? ` id="mwi-nw-24h-toggle" style="cursor: pointer;" title="${t('Click for item breakdown')}"`
                         : '';
                     const breakdownArrow = is24hRange ? ' <span style="font-size: 10px; color: #666;">▼</span>' : '';
                     parts.push(
-                        `<span${breakdownAttr}>${i18n_js.t('Last {0}:', rangeLabel)} <strong style="color: ${color};">${sign}${formatters_js.networthFormatter(Math.round(rangeChange))} (${sign}${rangePercent.toFixed(1)}%)</strong>${breakdownArrow}</span>`
+                        `<span${breakdownAttr}>${t('Last {0}:', rangeLabel)} <strong style="color: ${color};">${sign}${formatters_js.networthFormatter(Math.round(rangeChange))} (${sign}${rangePercent.toFixed(1)}%)</strong>${breakdownArrow}</span>`
                     );
                 }
 
@@ -19858,7 +19819,7 @@ self.onmessage = function (e) {
                     const color = ratePerHour >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                     const sign = ratePerHour >= 0 ? '+' : '';
                     parts.push(
-                        `<span>${i18n_js.t('Rate:')} <strong style="color: ${color};">${sign}${formatters_js.networthFormatter(Math.round(ratePerHour))}/hr</strong></span>`
+                        `<span>${t('Rate:')} <strong style="color: ${color};">${sign}${formatters_js.networthFormatter(Math.round(ratePerHour))}/hr</strong></span>`
                     );
                 }
             }
@@ -19868,10 +19829,9 @@ self.onmessage = function (e) {
             if (this.categoryVisibility.showNonExcluded && hasNonExclStats) {
                 const currentNE = this.networthFeature?.currentData?.totalNetworth ?? last.nonExcluded ?? last.total;
                 const firstNE = first.nonExcluded ?? first.total;
-                const lastNE = last.nonExcluded ?? last.total;
-                const neRate = hoursElapsed > 0 ? (lastNE - firstNE) / hoursElapsed : 0;
+                const neRate = hoursElapsed > 0 ? (currentNE - firstNE) / hoursElapsed : 0;
 
-                let neStatHtml = `<span style="color: #a78bfa;">${i18n_js.t('Non-Excl')}</span>: <strong style="color: #a78bfa;">${formatters_js.networthFormatter(Math.round(currentNE))}</strong>`;
+                let neStatHtml = `<span style="color: #a78bfa;">${t('Non-Excl')}</span>: <strong style="color: #a78bfa;">${formatters_js.networthFormatter(Math.round(currentNE))}</strong>`;
 
                 if (filtered.length >= 2) {
                     const neChange = currentNE - firstNE;
@@ -19905,7 +19865,7 @@ self.onmessage = function (e) {
                 const catChangeColor = catChange >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                 const catChangeSign = catChange >= 0 ? '+' : '';
 
-                let statHtml = `${i18n_js.t(cat.label)}: <strong style="color: ${catChangeColor};">${i18n_js.t('Last {0}:', rangeLabel)} ${catChangeSign}${formatters_js.networthFormatter(Math.round(catChange))}</strong>`;
+                let statHtml = `${t(cat.label)}: <strong style="color: ${catChangeColor};">${t('Last {0}:', rangeLabel)} ${catChangeSign}${formatters_js.networthFormatter(Math.round(catChange))}</strong>`;
 
                 if (hoursElapsed >= 1) {
                     statHtml += ` <span style="font-size: 11px; color: #aaa;">${rateSign}<span style="color: ${rateColor};">${formatters_js.networthFormatter(Math.round(rate))}/hr</span></span>`;
@@ -19915,7 +19875,7 @@ self.onmessage = function (e) {
             }
 
             if (parts.length === 0) {
-                statsRow.innerHTML = `<span style="color: #666;">${i18n_js.t('No data available for this range')}</span>`;
+                statsRow.innerHTML = `<span style="color: #666;">${t('No data available for this range')}</span>`;
                 return;
             }
 
@@ -19988,25 +19948,26 @@ self.onmessage = function (e) {
         render24hBreakdown(container) {
             const currentData = this.networthFeature?.currentData;
             if (!currentData) {
-                container.innerHTML = `<span style="color: #666;">${i18n_js.t('No live data available')}</span>`;
+                container.innerHTML = `<span style="color: #666;">${t('No live data available')}</span>`;
                 return;
             }
 
             const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
             const oldSnapshot = networthHistory.getDetailSnapshot(oneDayAgo);
             if (!oldSnapshot) {
-                container.innerHTML = `<span style="color: #666;">${i18n_js.t('No detail snapshot available yet (data collected hourly)')}</span>`;
+                container.innerHTML = `<span style="color: #666;">${t('No detail snapshot available yet (data collected hourly)')}</span>`;
                 return;
             }
 
             // Build current items map from live data
             const currentItems = {};
+            const gameData = dataManager.getInitClientData();
 
             // Gold
             currentItems['/items/coin:0'] = {
                 count: Math.round(currentData.coins),
                 value: Math.round(currentData.coins),
-                name: i18n_js.t('Gold'),
+                name: t('Gold'),
             };
 
             // Inventory items
@@ -20016,7 +19977,7 @@ self.onmessage = function (e) {
                 currentItems[key] = {
                     count: item.count || 0,
                     value: Math.round(item.value || 0),
-                    name: itemNameTranslator.getDisplayName(item.itemHrid) || item.name,
+                    name: item.name,
                 };
             }
 
@@ -20027,7 +19988,7 @@ self.onmessage = function (e) {
                 currentItems[key] = {
                     count: 1,
                     value: Math.round(item.value || 0),
-                    name: itemNameTranslator.getDisplayName(item.itemHrid) || item.name,
+                    name: item.name,
                 };
             }
 
@@ -20036,7 +19997,7 @@ self.onmessage = function (e) {
                 currentItems[`house:${room.hrid}`] = {
                     count: room.level,
                     value: Math.round(room.cost),
-                    name: itemNameTranslator.getDisplayName(room.hrid) || room.name,
+                    name: room.name,
                 };
             }
 
@@ -20045,7 +20006,7 @@ self.onmessage = function (e) {
                 currentItems[`ability:${ability.hrid}`] = {
                     count: 1,
                     value: Math.round(ability.cost),
-                    name: itemNameTranslator.getDisplayName(ability.hrid) || ability.name,
+                    name: ability.name,
                 };
             }
 
@@ -20055,7 +20016,7 @@ self.onmessage = function (e) {
                 currentItems[`abilitybook:${book.itemHrid}`] = {
                     count: book.count || 1,
                     value: Math.round(book.value || 0),
-                    name: itemNameTranslator.getDisplayName(book.itemHrid) || book.name,
+                    name: book.name,
                 };
             }
 
@@ -20071,7 +20032,7 @@ self.onmessage = function (e) {
                     currentItems[key] = {
                         count: 1,
                         value: Math.round(listing.value),
-                        name: itemNameTranslator.getDisplayName(listing.itemHrid) || listing.name,
+                        name: listing.name,
                         isSell: listing.isSell,
                     };
                 }
@@ -20117,10 +20078,11 @@ self.onmessage = function (e) {
                         const parts = key.split(':');
                         const itemHrid = parts[2];
                         const enhLevel = parts[3];
-                        const baseName = itemNameTranslator.getDisplayName(itemHrid);
+                        const details = gameData?.itemDetailMap?.[itemHrid];
+                        const baseName = details?.name || itemHrid.replace('/items/', '');
                         name = Number(enhLevel) > 0 ? `${baseName} +${enhLevel}` : baseName;
                     }
-                    const prefix = key.startsWith('listing:sell:') ? i18n_js.t('Sell Listing') : i18n_js.t('Buy Listing');
+                    const prefix = key.startsWith('listing:sell:') ? t('Sell Listing') : t('Buy Listing');
                     otherTotal += totalDiff;
                     otherItems.push({ name: `${prefix}: ${name}`, key, value: totalDiff });
                     continue;
@@ -20130,7 +20092,8 @@ self.onmessage = function (e) {
                 let name = curr.name;
                 if (!name) {
                     const [itemHrid, enhLevel] = key.split(':');
-                    const baseName = itemNameTranslator.getDisplayName(itemHrid);
+                    const details = gameData?.itemDetailMap?.[itemHrid];
+                    const baseName = details?.name || itemHrid.replace('/items/', '');
                     name = Number(enhLevel) > 0 ? `${baseName} +${enhLevel}` : baseName;
                 }
 
@@ -20177,7 +20140,7 @@ self.onmessage = function (e) {
             }
 
             if (activityItems.length === 0 && marketItems.length === 0 && otherItems.length === 0) {
-                container.innerHTML = `<span style="color: #666;">${i18n_js.t('No item-level changes in the last 24h')}</span>`;
+                container.innerHTML = `<span style="color: #666;">${t('No item-level changes in the last 24h')}</span>`;
                 return;
             }
 
@@ -20193,7 +20156,7 @@ self.onmessage = function (e) {
                 const actColor = activityTotal >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                 const actSign = activityTotal >= 0 ? '+' : '';
                 html += `<div style="font-weight: bold; margin-bottom: 4px; display: flex; justify-content: space-between;">`;
-                html += `<span>${i18n_js.t('Activity')}</span>`;
+                html += `<span>${t('Activity')}</span>`;
                 html += `<span style="color: ${actColor};">${actSign}${formatters_js.networthFormatter(activityTotal)}</span>`;
                 html += `</div>`;
 
@@ -20220,7 +20183,7 @@ self.onmessage = function (e) {
                 const mktColor = marketTotal >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                 const mktSign = marketTotal >= 0 ? '+' : '';
                 html += `<div style="font-weight: bold; margin-top: 8px; margin-bottom: 4px; display: flex; justify-content: space-between;${activityItems.length > 0 ? ' padding-top: 6px; border-top: 1px solid #333;' : ''}">`;
-                html += `<span>${i18n_js.t('Market Movement')}</span>`;
+                html += `<span>${t('Market Movement')}</span>`;
                 html += `<span style="color: ${mktColor};">${mktSign}${formatters_js.networthFormatter(marketTotal)}</span>`;
                 html += `</div>`;
 
@@ -20251,7 +20214,7 @@ self.onmessage = function (e) {
                 const residual = last24hChange - activityTotal - marketTotal - otherTotal;
                 if (Math.abs(residual) > 0) {
                     otherTotal += residual;
-                    otherItems.push({ name: i18n_js.t('Rounding'), key: '_rounding', value: residual });
+                    otherItems.push({ name: t('Rounding'), key: '_rounding', value: residual });
                 }
             }
 
@@ -20260,7 +20223,7 @@ self.onmessage = function (e) {
                 const otherColor = otherTotal >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                 const otherSign = otherTotal >= 0 ? '+' : '';
                 html += `<div style="font-weight: bold; margin-top: 8px; margin-bottom: 4px; display: flex; justify-content: space-between;${hasPrevSections ? ' padding-top: 6px; border-top: 1px solid #333;' : ''}">`;
-                html += `<span>${i18n_js.t('Other')}</span>`;
+                html += `<span>${t('Other')}</span>`;
                 html += `<span style="color: ${otherColor};">${otherSign}${formatters_js.networthFormatter(otherTotal)}</span>`;
                 html += `</div>`;
 
@@ -20278,7 +20241,7 @@ self.onmessage = function (e) {
 
             // Snapshot age note
             const ageHours = Math.round((Date.now() - oldSnapshot.t) / 3_600_000);
-            html += `<div style="color: #555; font-size: 10px; margin-top: 6px; text-align: right;">${i18n_js.t('Compared to snapshot from {0}h ago', ageHours)}</div>`;
+            html += `<div style="color: #555; font-size: 10px; margin-top: 6px; text-align: right;">${t('Compared to snapshot from {0}h ago', ageHours)}</div>`;
 
             container.innerHTML = html;
         }
@@ -20355,36 +20318,31 @@ self.onmessage = function (e) {
             const prevRaw = this._getPreviousRaw(totalPoint.dataset.data, totalPoint.dataIndex);
 
             // Title
-            const title = new Date(totalPoint.raw.x).toLocaleString([], {
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-            });
+            const title = formatters_js.formatDateTime(new Date(totalPoint.raw.x), { includeSeconds: false });
 
             // Build lines
             let html = `<div style="font-weight:bold; color:#fff; margin-bottom:4px;">${title}</div>`;
 
             // Total
             const totalDelta = this._formatDelta(raw.total, prevRaw?.total);
-            html += `<div style="color:#4ade80;">&#9632; ${i18n_js.t('Total:')} ${formatters_js.networthFormatter(raw.total)}${totalDelta}</div>`;
+            html += `<div style="color:#4ade80;">&#9632; ${t('Total:')} ${formatters_js.networthFormatter(raw.total)}${totalDelta}</div>`;
 
             // Category breakdown
             const categories = [];
-            categories.push({ label: i18n_js.t('Gold'), value: raw.gold || 0, prev: prevRaw?.gold });
+            categories.push({ label: t('Gold'), value: raw.gold || 0, prev: prevRaw?.gold });
 
             const inventoryExGold = (raw.inventory || 0) - (raw.gold || 0);
             const prevInventoryExGold = prevRaw ? (prevRaw.inventory || 0) - (prevRaw.gold || 0) : null;
-            categories.push({ label: i18n_js.t('Inventory'), value: inventoryExGold, prev: prevInventoryExGold });
+            categories.push({ label: t('Inventory'), value: inventoryExGold, prev: prevInventoryExGold });
 
-            categories.push({ label: i18n_js.t('Equipment'), value: raw.equipment || 0, prev: prevRaw?.equipment });
-            categories.push({ label: i18n_js.t('Listings'), value: raw.listings || 0, prev: prevRaw?.listings });
-            categories.push({ label: i18n_js.t('House'), value: raw.house || 0, prev: prevRaw?.house });
-            categories.push({ label: i18n_js.t('Abilities'), value: raw.abilities || 0, prev: prevRaw?.abilities });
+            categories.push({ label: t('Equipment'), value: raw.equipment || 0, prev: prevRaw?.equipment });
+            categories.push({ label: t('Listings'), value: raw.listings || 0, prev: prevRaw?.listings });
+            categories.push({ label: t('House'), value: raw.house || 0, prev: prevRaw?.house });
+            categories.push({ label: t('Abilities'), value: raw.abilities || 0, prev: prevRaw?.abilities });
             if (raw.nonExcluded != null && raw.nonExcluded !== raw.total) {
                 const excluded = raw.total - raw.nonExcluded;
                 const prevExcluded = prevRaw?.nonExcluded != null ? prevRaw.total - prevRaw.nonExcluded : null;
-                categories.push({ label: i18n_js.t('Excluded'), value: excluded, prev: prevExcluded });
+                categories.push({ label: t('Excluded'), value: excluded, prev: prevExcluded });
             }
 
             for (const cat of categories) {
@@ -20465,18 +20423,13 @@ self.onmessage = function (e) {
             min-width: 180px;
         `;
 
-            const date = new Date(snapshot.t).toLocaleString([], {
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-            });
+            const date = formatters_js.formatDateTime(new Date(snapshot.t), { includeSeconds: false });
 
             popup.innerHTML = `
             <div style="margin-bottom:4px;font-weight:500;color:#fff;">${date}</div>
             <div style="margin-bottom:10px;color:${config.COLOR_ACCENT};">${formatters_js.networthFormatter(snapshot.total)}</div>
-            <button id="mwi-nw-delete-confirm" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:11px;margin-right:6px;">${i18n_js.t('Delete point')}</button>
-            <button id="mwi-nw-delete-cancel" style="background:#2a2a2a;color:#999;border:1px solid #444;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:11px;">${i18n_js.t('Cancel')}</button>
+            <button id="mwi-nw-delete-confirm" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:11px;margin-right:6px;">${t('Delete point')}</button>
+            <button id="mwi-nw-delete-cancel" style="background:#2a2a2a;color:#999;border:1px solid #444;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:11px;">${t('Cancel')}</button>
         `;
 
             document.body.appendChild(popup);
@@ -20814,7 +20767,7 @@ self.onmessage = function (e) {
 
             const title = document.createElement('span');
             title.style.cssText = `font-size: 0.9rem; font-weight: 600; color: ${config.COLOR_ACCENT};`;
-            title.textContent = i18n_js.t('Net Worth Exclusions');
+            title.textContent = t('Net Worth Exclusions');
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '×';
@@ -20871,12 +20824,12 @@ self.onmessage = function (e) {
             currentLabel.style.cssText = `font-size: 0.75rem; color: rgba(255,255,255,0.45); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: space-between;`;
 
             const labelText = document.createElement('span');
-            labelText.textContent = exclusions.length > 0 ? i18n_js.t('Current Exclusions') : i18n_js.t('No exclusions configured');
+            labelText.textContent = exclusions.length > 0 ? t('Current Exclusions') : t('No exclusions configured');
             currentLabel.appendChild(labelText);
 
             if (exclusions.length > 0) {
                 const clearBtn = document.createElement('button');
-                clearBtn.textContent = i18n_js.t('Clear All');
+                clearBtn.textContent = t('Clear All');
                 clearBtn.style.cssText = `
                 background: transparent;
                 border: 1px solid rgba(255,100,100,0.4);
@@ -20927,7 +20880,7 @@ self.onmessage = function (e) {
             // ── Search section ──
             const searchInput = document.createElement('input');
             searchInput.type = 'search';
-            searchInput.placeholder = i18n_js.t('Search items, categories, houses, loadouts...');
+            searchInput.placeholder = t('Search items, categories, houses, loadouts...');
             searchInput.style.cssText = `
             width: 100%;
             box-sizing: border-box;
@@ -21019,9 +20972,10 @@ self.onmessage = function (e) {
                 const snapshot = loadoutSnapshot.getAllSnapshots().find((s) => s.name === entry.value);
                 if (snapshot) {
                     return snapshot.equipment.map((eq) => {
-                        const name = itemNameTranslator.getDisplayName(eq.itemHrid);
+                        const details = dataManager.getItemDetails(eq.itemHrid);
+                        const name = details?.name || eq.itemHrid.replace('/items/', '');
                         const price = marketAPI.getPrice(eq.itemHrid);
-                        return { name, value: price?.ask ?? 0, itemHrid: eq.itemHrid };
+                        return { name, value: price?.ask ?? 0 };
                     });
                 }
             }
@@ -21041,7 +20995,7 @@ self.onmessage = function (e) {
             if (filtered.length === 0) {
                 const empty = document.createElement('div');
                 empty.style.cssText = `color: rgba(255,255,255,0.3); font-size: 0.8rem; text-align: center; padding: 12px 0;`;
-                empty.textContent = i18n_js.t('No results');
+                empty.textContent = t('No results');
                 container.appendChild(empty);
                 return;
             }
@@ -21091,7 +21045,7 @@ self.onmessage = function (e) {
                     });
                 }
 
-                nameSpan.appendChild(document.createTextNode(itemNameTranslator.getDisplayName(entry.value) || entry.name));
+                nameSpan.appendChild(document.createTextNode(entry.name));
 
                 const amountSpan = document.createElement('span');
                 amountSpan.style.cssText = `color: rgba(255,255,255,0.5); white-space: nowrap; font-size: 0.78rem;`;
@@ -21109,7 +21063,7 @@ self.onmessage = function (e) {
                 white-space: nowrap;
                 flex-shrink: 0;
             `;
-                actionBtn.textContent = alreadyExcluded ? i18n_js.t('✕ Remove') : i18n_js.t('+ Exclude');
+                actionBtn.textContent = alreadyExcluded ? t('✕ Remove') : t('+ Exclude');
                 actionBtn.addEventListener('mouseenter', () => {
                     actionBtn.style.opacity = '1';
                     actionBtn.style.borderColor = alreadyExcluded ? 'rgba(255,100,100,0.9)' : config.COLOR_ACCENT;
@@ -21148,7 +21102,7 @@ self.onmessage = function (e) {
                     `;
                         const subName = document.createElement('span');
                         subName.style.cssText = `flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;`;
-                        subName.textContent = itemNameTranslator.getDisplayName(sub.itemHrid) || sub.name;
+                        subName.textContent = sub.name;
 
                         const subVal = document.createElement('span');
                         subVal.style.cssText = `white-space: nowrap; color: rgba(255,255,255,0.4);`;
@@ -21177,23 +21131,23 @@ self.onmessage = function (e) {
             if (entry) return entry.name;
 
             const ASSET_TYPE_NAMES = {
-                equipped: i18n_js.t('All Equipped Items'),
-                listings: i18n_js.t('All Market Listings'),
-                houses: i18n_js.t('All Houses'),
-                abilities: i18n_js.t('All Abilities'),
-                abilityBooks: i18n_js.t('All Ability Books'),
+                equipped: t('All Equipped Items'),
+                listings: t('All Market Listings'),
+                houses: t('All Houses'),
+                abilities: t('All Abilities'),
+                abilityBooks: t('All Ability Books'),
             };
             if (exc.type === 'assetType') return ASSET_TYPE_NAMES[exc.value] ?? exc.value;
-            if (exc.type === 'loadout') return i18n_js.t('Loadout: {name}', { name: exc.value });
+            if (exc.type === 'loadout') return t('Loadout: {name}', { name: exc.value });
 
             const gd = dataManager.getInitClientData();
             if (!gd) return exc.value;
 
             if (exc.type === 'category') {
                 const name = gd.itemCategoryDetailMap?.[exc.value]?.name;
-                return name ? i18n_js.t('{name} (category)', { name }) : exc.value;
+                return name ? t('{name} (category)', { name }) : exc.value;
             }
-            if (exc.type === 'item') return itemNameTranslator.getDisplayName(exc.value);
+            if (exc.type === 'item') return gd.itemDetailMap?.[exc.value]?.name ?? exc.value;
             if (exc.type === 'houseRoom') return gd.houseRoomDetailMap?.[exc.value]?.name ?? exc.value;
             if (exc.type === 'ability') return gd.abilityDetailMap?.[exc.value]?.name ?? exc.value;
             return exc.value;
@@ -21225,7 +21179,7 @@ self.onmessage = function (e) {
 
             const removeBtn = document.createElement('span');
             removeBtn.textContent = '×';
-            removeBtn.title = i18n_js.t('Remove exclusion');
+            removeBtn.title = t('Remove exclusion');
             removeBtn.style.cssText = `cursor: pointer; color: rgba(255,100,100,0.7); font-size: 0.9rem; line-height: 1;`;
             removeBtn.addEventListener('mouseenter', () => (removeBtn.style.color = 'rgba(255,100,100,1)'));
             removeBtn.addEventListener('mouseleave', () => (removeBtn.style.color = 'rgba(255,100,100,0.7)'));
@@ -21438,7 +21392,7 @@ self.onmessage = function (e) {
             totalLevelElem.insertAdjacentElement('afterend', this.container);
 
             // Initial render with loading state
-            this.renderGoldDisplay(i18n_js.t('Loading...'));
+            this.renderGoldDisplay(t('Loading...'));
 
             // Trigger recalculation immediately to update from "Loading..." to actual value
             if (this.networthFeature && typeof this.networthFeature.recalculate === 'function') {
@@ -21486,7 +21440,7 @@ self.onmessage = function (e) {
 
             // Create text span
             const textSpan = document.createElement('span');
-            textSpan.textContent = i18n_js.t('Gold: {0}', value);
+            textSpan.textContent = t('Gold: {0}', value);
 
             // Assemble
             wrapper.appendChild(textSpan);
@@ -21606,7 +21560,7 @@ self.onmessage = function (e) {
             } else {
                 this.container.innerHTML = `
                 <div style="font-weight: bold; cursor: pointer;">
-                    ${i18n_js.t('Networth: Loading...')}
+                    ${t('Networth: Loading...')}
                 </div>
             `;
             }
@@ -21683,11 +21637,11 @@ self.onmessage = function (e) {
             this.container.innerHTML = `
             <div style="display: flex; align-items: center; gap: 6px;">
                 <div style="cursor: pointer; font-weight: bold; flex: 1;" id="mwi-networth-toggle">
-                        + ${i18n_js.t('Net Worth: {0}', totalNetworth)}
+                        + ${t('Net Worth: {0}', totalNetworth)}
                 </div>
                 ${
                     showChartBtn
-                        ? `<span id="mwi-networth-chart-btn" title="${i18n_js.t('Net Worth History Chart')}" style="
+                        ? `<span id="mwi-networth-chart-btn" title="${t('Net Worth History Chart')}" style="
                     cursor: pointer;
                     font-size: 14px;
                     opacity: 0.7;
@@ -21697,7 +21651,7 @@ self.onmessage = function (e) {
                 ">&#x1F4C8;</span>`
                         : ''
                 }
-                <span id="mwi-networth-exclusions-btn" title="${i18n_js.t('Configure Net Worth Exclusions')}" style="
+                <span id="mwi-networth-exclusions-btn" title="${t('Configure Net Worth Exclusions')}" style="
                     cursor: pointer;
                     font-size: 12px;
                     opacity: 0.6;
@@ -21712,7 +21666,7 @@ self.onmessage = function (e) {
                         ? `
                 <!-- Current Assets -->
                 <div style="cursor: pointer; margin-top: 8px;" id="mwi-current-assets-toggle">
-                    + ${i18n_js.t('Current Assets: {0}', formatters_js.networthFormatter(Math.round(ca.total)))}
+                    + ${t('Current Assets: {0}', formatters_js.networthFormatter(Math.round(ca.total)))}
                 </div>
                 <div id="mwi-current-assets-details" style="display: none; margin-left: 20px;">
                     ${
@@ -21720,7 +21674,7 @@ self.onmessage = function (e) {
                             ? `
                     <!-- Equipment Value -->
                     <div style="cursor: pointer; margin-top: 4px;" id="mwi-equipment-toggle">
-                        + ${i18n_js.t('Equipment value: {0}', formatters_js.networthFormatter(Math.round(ca.equipped.value)))}
+                        + ${t('Equipment value: {0}', formatters_js.networthFormatter(Math.round(ca.equipped.value)))}
                     </div>
                     <div id="mwi-equipment-breakdown" style="display: none; margin-left: 20px; font-size: 0.8rem; color: #bbb; white-space: pre-line;">${this.renderEquipmentBreakdown(ca.equipped.breakdown)}</div>
                     `
@@ -21732,7 +21686,7 @@ self.onmessage = function (e) {
                             ? `
                     <!-- Inventory Value -->
                     <div style="cursor: pointer; margin-top: 4px;" id="mwi-inventory-toggle">
-                        + ${i18n_js.t('Inventory value: {0}', formatters_js.networthFormatter(Math.round(ca.inventory.value)))}
+                        + ${t('Inventory value: {0}', formatters_js.networthFormatter(Math.round(ca.inventory.value)))}
                     </div>
                     <div id="mwi-inventory-breakdown" style="display: none; margin-left: 20px;">
                         ${this.renderInventoryBreakdown(ca.inventory)}
@@ -21746,7 +21700,7 @@ self.onmessage = function (e) {
                             ? `
                     <!-- Market Listings -->
                     <div style="cursor: pointer; margin-top: 4px;" id="mwi-listings-toggle">
-                        + ${i18n_js.t('Market listings: {0}', formatters_js.networthFormatter(Math.round(ca.listings.value)))}
+                        + ${t('Market listings: {0}', formatters_js.networthFormatter(Math.round(ca.listings.value)))}
                     </div>
                     <div id="mwi-listings-breakdown" style="display: none; margin-left: 20px; font-size: 0.8rem; color: #bbb; white-space: pre-line;">${this.renderListingsBreakdown(ca.listings.breakdown)}</div>
                     `
@@ -21762,7 +21716,7 @@ self.onmessage = function (e) {
                         ? `
                 <!-- Fixed Assets -->
                 <div style="cursor: pointer; margin-top: 8px;" id="mwi-fixed-assets-toggle">
-                    + ${i18n_js.t('Fixed Assets: {0}', formatters_js.networthFormatter(Math.round(fa.total)))}
+                    + ${t('Fixed Assets: {0}', formatters_js.networthFormatter(Math.round(fa.total)))}
                 </div>
                 <div id="mwi-fixed-assets-details" style="display: none; margin-left: 20px;">
                     ${
@@ -21770,7 +21724,7 @@ self.onmessage = function (e) {
                             ? `
                     <!-- Houses -->
                     <div style="cursor: pointer; margin-top: 4px;" id="mwi-houses-toggle">
-                        + ${i18n_js.t('Houses: {0}', formatters_js.networthFormatter(Math.round(fa.houses.totalCost)))}
+                        + ${t('Houses: {0}', formatters_js.networthFormatter(Math.round(fa.houses.totalCost)))}
                     </div>
                     <div id="mwi-houses-breakdown" style="display: none; margin-left: 20px; font-size: 0.8rem; color: #bbb; white-space: pre-line;">${this.renderHousesBreakdown(fa.houses.breakdown)}</div>
                     `
@@ -21782,12 +21736,12 @@ self.onmessage = function (e) {
                             ? `
                     <!-- Abilities -->
                     <div style="cursor: pointer; margin-top: 4px;" id="mwi-abilities-toggle">
-                        + ${i18n_js.t('Abilities: {0}', formatters_js.networthFormatter(Math.round(fa.abilities.totalCost)))}
+                        + ${t('Abilities: {0}', formatters_js.networthFormatter(Math.round(fa.abilities.totalCost)))}
                     </div>
                     <div id="mwi-abilities-details" style="display: none; margin-left: 20px;">
                         <!-- Equipped Abilities -->
                         <div style="cursor: pointer; margin-top: 4px;" id="mwi-equipped-abilities-toggle">
-                            + ${i18n_js.t('Equipped ({0}): {1}', fa.abilities.equippedBreakdown.length, formatters_js.networthFormatter(Math.round(fa.abilities.equippedCost)))}
+                            + ${t('Equipped ({0}): {1}', fa.abilities.equippedBreakdown.length, formatters_js.networthFormatter(Math.round(fa.abilities.equippedCost)))}
                         </div>
                         <div id="mwi-equipped-abilities-breakdown" style="display: none; margin-left: 20px; font-size: 0.8rem; color: #bbb; white-space: pre-line;">${this.renderAbilitiesBreakdown(fa.abilities.equippedBreakdown)}</div>
 
@@ -21795,7 +21749,7 @@ self.onmessage = function (e) {
                             fa.abilities.otherBreakdown.length > 0
                                 ? `
                             <div style="cursor: pointer; margin-top: 4px;" id="mwi-other-abilities-toggle">
-                                + ${i18n_js.t('Other Abilities ({0}): {1}', fa.abilities.otherBreakdown.length, formatters_js.networthFormatter(Math.round(fa.abilities.totalCost - fa.abilities.equippedCost)))}
+                                + ${t('Other Abilities ({0}): {1}', fa.abilities.otherBreakdown.length, formatters_js.networthFormatter(Math.round(fa.abilities.totalCost - fa.abilities.equippedCost)))}
                             </div>
                             <div id="mwi-other-abilities-breakdown" style="display: none; margin-left: 20px; font-size: 0.8rem; color: #bbb; white-space: pre-line;">${this.renderAbilitiesBreakdown(fa.abilities.otherBreakdown)}</div>
                         `
@@ -21810,7 +21764,7 @@ self.onmessage = function (e) {
                         fa.abilityBooks.breakdown.length > 0
                             ? `
                         <div style="cursor: pointer; margin-top: 4px;" id="mwi-ability-books-toggle">
-                            + ${i18n_js.t('Ability Books ({0}): {1}', fa.abilityBooks.breakdown.length, formatters_js.networthFormatter(Math.round(fa.abilityBooks.totalCost)))}
+                            + ${t('Ability Books ({0}): {1}', fa.abilityBooks.breakdown.length, formatters_js.networthFormatter(Math.round(fa.abilityBooks.totalCost)))}
                         </div>
                         <div id="mwi-ability-books-breakdown" style="display: none; margin-left: 20px; font-size: 0.8rem; color: #bbb; white-space: pre-line;">${this.renderAbilityBooksBreakdown(fa.abilityBooks.breakdown)}</div>
                     `
@@ -21826,15 +21780,15 @@ self.onmessage = function (e) {
                         ? `
                 <!-- Excluded -->
                 <div style="cursor: pointer; margin-top: 8px; opacity: 0.6;" id="mwi-excluded-toggle">
-                    + ${i18n_js.t('Excluded: {0}', formatters_js.networthFormatter(Math.round(excl.total)))}
+                    + ${t('Excluded: {0}', formatters_js.networthFormatter(Math.round(excl.total)))}
                 </div>
                 <div id="mwi-excluded-details" style="display: none; margin-left: 20px; font-size: 0.8rem;">
                     ${excl.items
                         .map(
                             (item) => `
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 3px; color: rgba(255,255,255,0.45);">
-                            <span style="text-decoration: line-through;">${itemNameTranslator.getDisplayName(item.value) || item.name}: ${formatters_js.networthFormatter(Math.round(item.amount))}</span>
-                             <span class="mwi-excluded-remove" data-type="${item.type}" data-value="${item.value.replace(/"/g, '&quot;')}" style="cursor: pointer; color: rgba(255,100,100,0.7); margin-left: 8px; font-size: 0.75rem;" title="${i18n_js.t('Remove exclusion')}">✕</span>
+                            <span style="text-decoration: line-through;">${item.name}: ${formatters_js.networthFormatter(Math.round(item.amount))}</span>
+                             <span class="mwi-excluded-remove" data-type="${item.type}" data-value="${item.value.replace(/"/g, '&quot;')}" style="cursor: pointer; color: rgba(255,100,100,0.7); margin-left: 8px; font-size: 0.75rem;" title="${t('Remove exclusion')}">✕</span>
                         </div>
                     `
                         )
@@ -21882,12 +21836,12 @@ self.onmessage = function (e) {
          */
         renderHousesBreakdown(breakdown) {
             if (breakdown.length === 0) {
-                return `<div>${i18n_js.t('No houses built')}</div>`;
+                return `<div>${t('No houses built')}</div>`;
             }
 
             return breakdown
                 .map((house) => {
-                    return `${itemNameTranslator.getDisplayName(house.hrid) || house.name} ${house.level}: ${formatters_js.networthFormatter(Math.round(house.cost))}`;
+                    return `${house.name} ${house.level}: ${formatters_js.networthFormatter(Math.round(house.cost))}`;
                 })
                 .join('\n');
         }
@@ -21899,12 +21853,12 @@ self.onmessage = function (e) {
          */
         renderAbilitiesBreakdown(breakdown) {
             if (breakdown.length === 0) {
-                return `<div>${i18n_js.t('No abilities')}</div>`;
+                return `<div>${t('No abilities')}</div>`;
             }
 
             return breakdown
                 .map((ability) => {
-                    return `${itemNameTranslator.getDisplayName(ability.hrid) || ability.name}: ${formatters_js.networthFormatter(Math.round(ability.cost))}`;
+                    return `${ability.name}: ${formatters_js.networthFormatter(Math.round(ability.cost))}`;
                 })
                 .join('\n');
         }
@@ -21916,12 +21870,12 @@ self.onmessage = function (e) {
          */
         renderAbilityBooksBreakdown(breakdown) {
             if (breakdown.length === 0) {
-                return `<div>${i18n_js.t('No ability books')}</div>`;
+                return `<div>${t('No ability books')}</div>`;
             }
 
             return breakdown
                 .map((book) => {
-                    return `${itemNameTranslator.getDisplayName(book.itemHrid) || book.name} (${formatters_js.formatKMB(book.count)}): ${formatters_js.networthFormatter(Math.round(book.value))}`;
+                    return `${book.name} (${formatters_js.formatKMB(book.count)}): ${formatters_js.networthFormatter(Math.round(book.value))}`;
                 })
                 .join('\n');
         }
@@ -21933,12 +21887,12 @@ self.onmessage = function (e) {
          */
         renderEquipmentBreakdown(breakdown) {
             if (breakdown.length === 0) {
-                return `<div>${i18n_js.t('No equipment')}</div>`;
+                return `<div>${t('No equipment')}</div>`;
             }
 
             return breakdown
                 .map((item) => {
-                    return `${itemNameTranslator.getDisplayName(item.itemHrid) || item.name}: ${formatters_js.networthFormatter(Math.round(item.value))}`;
+                    return `${item.name}: ${formatters_js.networthFormatter(Math.round(item.value))}`;
                 })
                 .join('\n');
         }
@@ -21950,13 +21904,13 @@ self.onmessage = function (e) {
          */
         renderListingsBreakdown(breakdown) {
             if (!breakdown || breakdown.length === 0) {
-                return `<div>${i18n_js.t('No market listings')}</div>`;
+                return `<div>${t('No market listings')}</div>`;
             }
 
             return breakdown
                 .map((listing) => {
-                    const typeLabel = listing.isSell ? i18n_js.t('Sell') : i18n_js.t('Buy');
-                    return `${itemNameTranslator.getDisplayName(listing.itemHrid) || listing.name} (${typeLabel}): ${formatters_js.networthFormatter(Math.round(listing.value))}`;
+                    const typeLabel = listing.isSell ? t('Sell') : t('Buy');
+                    return `${listing.name} (${typeLabel}): ${formatters_js.networthFormatter(Math.round(listing.value))}`;
                 })
                 .join('\n');
         }
@@ -21971,7 +21925,7 @@ self.onmessage = function (e) {
             const coinItem = inventory.breakdown?.find((item) => item.itemHrid === '/items/coin') ?? null;
 
             if (Object.keys(byCategory).length === 0 && !coinItem) {
-                return `<div>${i18n_js.t('No inventory')}</div>`;
+                return `<div>${t('No inventory')}</div>`;
             }
 
             // Sort categories by total value descending
@@ -21986,7 +21940,7 @@ self.onmessage = function (e) {
                         if (item.isOpenable && item.itemHrid) {
                             return this.renderOpenableItemRow(item);
                         }
-                        return `<div>${itemNameTranslator.getDisplayName(item.itemHrid) || item.name} x${formatters_js.formatKMB(item.count)}: ${formatters_js.networthFormatter(Math.round(item.value))}</div>`;
+                        return `<div>${item.name} x${formatters_js.formatKMB(item.count)}: ${formatters_js.networthFormatter(Math.round(item.value))}</div>`;
                     })
                     .join('');
 
@@ -22001,7 +21955,7 @@ self.onmessage = function (e) {
             };
 
             const coinHTML = coinItem
-                ? `<div style="margin-top: 4px; font-size: 0.85rem;">${i18n_js.t('Coin: {0}', formatters_js.networthFormatter(Math.round(coinItem.value)))}</div>`
+                ? `<div style="margin-top: 4px; font-size: 0.85rem;">${t('Coin: {0}', formatters_js.networthFormatter(Math.round(coinItem.value)))}</div>`
                 : '';
 
             // Insert coin at the right position based on value (sorted descending with categories)
@@ -22034,7 +21988,7 @@ self.onmessage = function (e) {
             this.setupToggle(
                 'mwi-networth-toggle',
                 'mwi-networth-details',
-                i18n_js.t('Net Worth: {0}', formatters_js.networthFormatter(Math.round(networthData.totalNetworth)))
+                t('Net Worth: {0}', formatters_js.networthFormatter(Math.round(networthData.totalNetworth)))
             );
 
             // Chart button
@@ -22074,7 +22028,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-current-assets-toggle',
                     'mwi-current-assets-details',
-                    i18n_js.t('Current Assets: {0}', formatters_js.networthFormatter(Math.round(ca.total)))
+                    t('Current Assets: {0}', formatters_js.networthFormatter(Math.round(ca.total)))
                 );
             }
 
@@ -22083,7 +22037,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-equipment-toggle',
                     'mwi-equipment-breakdown',
-                    i18n_js.t('Equipment value: {0}', formatters_js.networthFormatter(Math.round(ca.equipped.value)))
+                    t('Equipment value: {0}', formatters_js.networthFormatter(Math.round(ca.equipped.value)))
                 );
             }
 
@@ -22092,7 +22046,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-inventory-toggle',
                     'mwi-inventory-breakdown',
-                    i18n_js.t('Inventory value: {0}', formatters_js.networthFormatter(Math.round(ca.inventory.value)))
+                    t('Inventory value: {0}', formatters_js.networthFormatter(Math.round(ca.inventory.value)))
                 );
 
                 // Inventory category toggles
@@ -22114,7 +22068,7 @@ self.onmessage = function (e) {
                             this.setupToggle(
                                 `mwi-chest-${slug}-toggle`,
                                 `mwi-chest-${slug}-detail`,
-                                `${itemNameTranslator.getDisplayName(item.itemHrid) || item.name} x${formatters_js.formatKMB(item.count)}: ${formatters_js.networthFormatter(Math.round(item.value))}`
+                                `${item.name} x${formatters_js.formatKMB(item.count)}: ${formatters_js.networthFormatter(Math.round(item.value))}`
                             );
                         }
                     }
@@ -22126,7 +22080,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-listings-toggle',
                     'mwi-listings-breakdown',
-                    i18n_js.t('Market listings: {0}', formatters_js.networthFormatter(Math.round(ca.listings.value)))
+                    t('Market listings: {0}', formatters_js.networthFormatter(Math.round(ca.listings.value)))
                 );
             }
 
@@ -22135,7 +22089,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-fixed-assets-toggle',
                     'mwi-fixed-assets-details',
-                    i18n_js.t('Fixed Assets: {0}', formatters_js.networthFormatter(Math.round(fa.total)))
+                    t('Fixed Assets: {0}', formatters_js.networthFormatter(Math.round(fa.total)))
                 );
             }
 
@@ -22144,7 +22098,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-houses-toggle',
                     'mwi-houses-breakdown',
-                    i18n_js.t('Houses: {0}', formatters_js.networthFormatter(Math.round(fa.houses.totalCost)))
+                    t('Houses: {0}', formatters_js.networthFormatter(Math.round(fa.houses.totalCost)))
                 );
             }
 
@@ -22153,14 +22107,14 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-abilities-toggle',
                     'mwi-abilities-details',
-                    i18n_js.t('Abilities: {0}', formatters_js.networthFormatter(Math.round(fa.abilities.totalCost)))
+                    t('Abilities: {0}', formatters_js.networthFormatter(Math.round(fa.abilities.totalCost)))
                 );
 
                 // Equipped abilities toggle
                 this.setupToggle(
                     'mwi-equipped-abilities-toggle',
                     'mwi-equipped-abilities-breakdown',
-                    i18n_js.t(
+                    t(
                         'Equipped ({0}): {1}',
                         fa.abilities.equippedBreakdown.length,
                         formatters_js.networthFormatter(Math.round(fa.abilities.equippedCost))
@@ -22172,7 +22126,7 @@ self.onmessage = function (e) {
                     this.setupToggle(
                         'mwi-other-abilities-toggle',
                         'mwi-other-abilities-breakdown',
-                        i18n_js.t(
+                        t(
                             'Other Abilities ({0}): {1}',
                             fa.abilities.otherBreakdown.length,
                             formatters_js.networthFormatter(Math.round(fa.abilities.totalCost - fa.abilities.equippedCost))
@@ -22186,7 +22140,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-ability-books-toggle',
                     'mwi-ability-books-breakdown',
-                    i18n_js.t(
+                    t(
                         'Ability Books ({0}): {1}',
                         fa.abilityBooks.breakdown.length,
                         formatters_js.networthFormatter(Math.round(fa.abilityBooks.totalCost))
@@ -22199,7 +22153,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-excluded-toggle',
                     'mwi-excluded-details',
-                    i18n_js.t('Excluded: {0}', formatters_js.networthFormatter(Math.round(excl.total)))
+                    t('Excluded: {0}', formatters_js.networthFormatter(Math.round(excl.total)))
                 );
 
                 // ✕ remove buttons on excluded rows
@@ -22243,14 +22197,14 @@ self.onmessage = function (e) {
                     const setting = config.getSettingValue('profitCalc_keyPricingMode') || 'ask';
                     const keyPrices = marketAPI.getPrice(chestKeyHrid);
                     keyPrice = keyPrices?.[setting] ?? keyPrices?.ask ?? 0;
-                    keyName = itemNameTranslator.getDisplayName(chestKeyHrid);
+                    keyName = dataManager.getItemDetails(chestKeyHrid)?.name;
                 }
                 detailsHTML = this.buildChestDropsHTML(evData, keyPrice, keyName);
             }
 
             return `
             <div id="${toggleId}" style="cursor: pointer; padding: 1px 0;">
-                + ${itemNameTranslator.getDisplayName(item.itemHrid) || item.name} x${formatters_js.formatKMB(item.count)}: ${formatters_js.networthFormatter(Math.round(item.value))}
+                + ${item.name} x${formatters_js.formatKMB(item.count)}: ${formatters_js.networthFormatter(Math.round(item.value))}
             </div>
             <div id="${detailId}" style="display: none; margin-left: 16px; color: #bbb; margin-bottom: 2px;">
                 ${detailsHTML}
@@ -22265,11 +22219,11 @@ self.onmessage = function (e) {
          * @returns {string} HTML string
          */
         buildChestDropsHTML(evData, keyPrice, keyName) {
-            let html = `<div>${i18n_js.t('EV: {0}/chest', formatters_js.networthFormatter(Math.round(evData.expectedValue)))}</div>`;
+            let html = `<div>${t('EV: {0}/chest', formatters_js.networthFormatter(Math.round(evData.expectedValue)))}</div>`;
             if (keyPrice > 0) {
-                const label = keyName ? i18n_js.t('Key ({0})', keyName) : i18n_js.t('Key Cost');
+                const label = keyName ? t('Key ({0})', keyName) : t('Key Cost');
                 html += `<div>\u2212 ${label}: ${formatters_js.networthFormatter(Math.round(keyPrice))}</div>`;
-                html += `<div>${i18n_js.t('Net: {0}/chest', formatters_js.networthFormatter(Math.round(evData.expectedValue - keyPrice)))}</div>`;
+                html += `<div>${t('Net: {0}/chest', formatters_js.networthFormatter(Math.round(evData.expectedValue - keyPrice)))}</div>`;
             }
             const pricedDrops = evData.drops.filter((d) => d.hasPriceData);
             if (pricedDrops.length > 0) {
@@ -23523,11 +23477,11 @@ self.onmessage = function (e) {
 
             // Sort label and buttons
             const sortLabel = document.createElement('span');
-            sortLabel.textContent = i18n_js.t('Sort:');
+            sortLabel.textContent = t('Sort:');
 
-            const askButton = this.createSortButton(i18n_js.t('Ask'), 'ask');
-            const bidButton = this.createSortButton(i18n_js.t('Bid'), 'bid');
-            const noneButton = this.createSortButton(i18n_js.t('None'), 'none');
+            const askButton = this.createSortButton(t('Ask'), 'ask');
+            const bidButton = this.createSortButton(t('Bid'), 'bid');
+            const noneButton = this.createSortButton(t('None'), 'none');
 
             // Assemble controls
             this.controlsContainer.appendChild(sortLabel);
@@ -24266,7 +24220,7 @@ self.onmessage = function (e) {
             const shopItems = this._getDungeonShopItems(tokenHrid);
             if (!shopItems || shopItems.length === 0) return;
 
-            this._injectShopTable(tooltipElement, shopItems, i18n_js.t('Token Shop Value:'), i18n_js.t('Gold/Token'), isCollectionTooltip);
+            this._injectShopTable(tooltipElement, shopItems, t('Token Shop Value:'), t('Gold/Token'), isCollectionTooltip);
             dom.fixTooltipOverflow(tooltipElement);
         }
 
@@ -24278,7 +24232,7 @@ self.onmessage = function (e) {
             const shopItems = this._getTaskShopItems();
             if (!shopItems || shopItems.length === 0) return;
 
-            this._injectShopTable(tooltipElement, shopItems, i18n_js.t('Task Shop Value:'), i18n_js.t('Gold/Token'), isCollectionTooltip);
+            this._injectShopTable(tooltipElement, shopItems, t('Task Shop Value:'), t('Gold/Token'), isCollectionTooltip);
             dom.fixTooltipOverflow(tooltipElement);
         }
 
@@ -24292,8 +24246,8 @@ self.onmessage = function (e) {
             this._injectShopTable(
                 tooltipElement,
                 shopItems,
-                i18n_js.t('Labyrinth Shop Value:'),
-                i18n_js.t('Gold/Token'),
+                t('Labyrinth Shop Value:'),
+                t('Gold/Token'),
                 isCollectionTooltip
             );
             dom.fixTooltipOverflow(tooltipElement);
@@ -24384,6 +24338,7 @@ self.onmessage = function (e) {
             return Object.values(gameData.shopItemDetailMap)
                 .filter((shopItem) => shopItem.costs && shopItem.costs[0]?.itemHrid === tokenHrid)
                 .map((shopItem) => {
+                    const itemDetails = gameData.itemDetailMap[shopItem.itemHrid];
                     const tokenCost = shopItem.costs[0].count;
 
                     const prices = marketData_js.getItemPrices(shopItem.itemHrid, 0);
@@ -24392,7 +24347,7 @@ self.onmessage = function (e) {
                     if (!askPrice || askPrice <= 0) return null;
 
                     return {
-                        name: itemNameTranslator.getDisplayName(shopItem.itemHrid),
+                        name: itemDetails?.name || t('Unknown Item'),
                         cost: tokenCost,
                         askPrice,
                         goldPerToken: askPrice / tokenCost,
@@ -24441,7 +24396,7 @@ self.onmessage = function (e) {
                     if (itemValue <= 0) return null;
 
                     return {
-                        name: itemNameTranslator.getDisplayName(shopItem.itemHrid),
+                        name: itemDetails?.name || t('Unknown Item'),
                         cost: tokenCost,
                         askPrice: itemValue,
                         goldPerToken: itemValue / tokenCost,
@@ -24464,6 +24419,7 @@ self.onmessage = function (e) {
 
             return Object.values(gameData.labyrinthShopItemDetailMap)
                 .map((shopItem) => {
+                    const itemDetails = gameData.itemDetailMap[shopItem.itemHrid];
                     const tokenCost = shopItem.cost?.count || 0;
                     const outputCount = shopItem.outputCount || 1;
                     if (tokenCost <= 0) return null;
@@ -24477,7 +24433,7 @@ self.onmessage = function (e) {
                     const totalValue = askPrice * outputCount;
 
                     return {
-                        name: itemNameTranslator.getDisplayName(shopItem.itemHrid),
+                        name: itemDetails?.name || t('Unknown Item'),
                         cost: tokenCost,
                         askPrice: totalValue,
                         goldPerToken: totalValue / tokenCost,
@@ -26054,6 +26010,7 @@ self.onmessage = function (e) {
             this._actionBtnsEl = null; // +Tab/Export/Import appended to sort controls row on Toolasha tab
             this._tileObserver = null; // MutationObserver for instant tile visibility on React swaps
             this._observedContainer = null; // Container currently being observed by _tileObserver
+            this._dragBoundTiles = new WeakSet();
         }
 
         // -----------------------------------------------------------------------
@@ -26166,10 +26123,13 @@ self.onmessage = function (e) {
         // -----------------------------------------------------------------------
 
         _findCharacterTabList() {
-            const tablist = document.querySelector('.MuiTabs-root [role="tablist"]');
-            if (!tablist) return null;
-            // Inventory tab is always the first tab (index 0) in the character panel
-            return tablist.children[0] ? tablist : null;
+            const allTabLists = document.querySelectorAll('[role="tablist"]');
+            for (const tl of allTabLists) {
+                for (const tab of tl.querySelectorAll('[role="tab"]')) {
+                    if (tab.textContent.trim() === 'Inventory') return tl;
+                }
+            }
+            return null;
         }
 
         _tryInjectTabButton() {
@@ -26184,14 +26144,16 @@ self.onmessage = function (e) {
                     'toolasha-inv-tab ' + (existingTab ? existingTab.className.replace(/Mui-selected/g, '') : '');
                 btn.setAttribute('role', 'tab');
                 btn.setAttribute('type', 'button');
-                btn.textContent = i18n_js.t('Toolasha');
+                btn.textContent = 'Toolasha';
                 btn.style.minWidth = 'auto';
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     this._activatePanel();
                 });
 
-                const inventoryTab = tabList.children[0];
+                const inventoryTab = [...tabList.querySelectorAll('[role="tab"]')].find(
+                    (t) => t.textContent.trim() === 'Inventory'
+                );
                 if (inventoryTab) this._inventoryTabEl = inventoryTab;
                 if (inventoryTab?.nextSibling) {
                     tabList.insertBefore(btn, inventoryTab.nextSibling);
@@ -26373,7 +26335,6 @@ self.onmessage = function (e) {
                 tile.style.order = '';
                 tile.draggable = false;
                 delete tile.dataset.toolashaTabId;
-                delete tile.dataset.toolashaDragBound;
             }
 
             // Force full rebuild when tile count OR config item count changed — the lightweight path
@@ -26402,7 +26363,7 @@ self.onmessage = function (e) {
                 if (this._config.tabs.length === 0) {
                     const empty = document.createElement('div');
                     empty.className = 'toolasha-ct-empty';
-                    empty.textContent = i18n_js.t('No custom tabs yet. Click "+ Tab" to create one.');
+                    empty.textContent = 'No custom tabs yet. Click "+ Tab" to create one.';
                     empty.style.order = orderCounter++;
                     invContainer.appendChild(empty);
                     this._injectedEls.push(empty);
@@ -26675,19 +26636,19 @@ self.onmessage = function (e) {
 
             const addBtn = document.createElement('button');
             addBtn.className = 'toolasha-ct-add-btn';
-            addBtn.textContent = i18n_js.t('+ Tab');
+            addBtn.textContent = '+ Tab';
             addBtn.addEventListener('click', () => this._onAddTab(null));
 
             const exportBtn = document.createElement('button');
             exportBtn.className = 'toolasha-ct-add-btn';
-            exportBtn.textContent = i18n_js.t('Export');
+            exportBtn.textContent = 'Export';
             exportBtn.addEventListener('click', () => this._exportLayout());
 
             const importBtn = document.createElement('div');
             importBtn.className = 'toolasha-ct-add-btn';
             importBtn.style.position = 'relative';
             importBtn.style.overflow = 'hidden';
-            importBtn.textContent = i18n_js.t('Import');
+            importBtn.textContent = 'Import';
             const importInput = document.createElement('input');
             importInput.type = 'file';
             importInput.accept = '.json,application/json';
@@ -26742,7 +26703,7 @@ self.onmessage = function (e) {
                 const text = await file.text();
                 const parsed = JSON.parse(text);
                 if (parsed._toolasha !== 'tabs-v1' || !Array.isArray(parsed.tabs)) {
-                    alert(i18n_js.t('[Toolasha] Invalid layout file.'));
+                    alert('[Toolasha] Invalid layout file.');
                     console.error('[CustomTabs] Import failed: missing _toolasha marker or tabs array', parsed);
                     return;
                 }
@@ -26755,7 +26716,7 @@ self.onmessage = function (e) {
                 await this._applyLayout();
                 this._save();
             } catch (err) {
-                alert(i18n_js.t('[Toolasha] Failed to read layout file.'));
+                alert('[Toolasha] Failed to read layout file.');
                 console.error('[CustomTabs] Import error:', err);
             }
         }
@@ -26992,7 +26953,7 @@ self.onmessage = function (e) {
             const editBtn = document.createElement('button');
             editBtn.className = 'toolasha-ct-node-btn';
             editBtn.textContent = '✏';
-            editBtn.title = i18n_js.t('Edit tab');
+            editBtn.title = 'Edit tab';
             editBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this._openEditor(tab.id);
@@ -27002,7 +26963,7 @@ self.onmessage = function (e) {
             const addSubBtn = document.createElement('button');
             addSubBtn.className = 'toolasha-ct-node-btn';
             addSubBtn.textContent = '+';
-            addSubBtn.title = i18n_js.t('Add subtab');
+            addSubBtn.title = 'Add subtab';
             addSubBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this._onAddTab(tab.id);
@@ -27012,7 +26973,7 @@ self.onmessage = function (e) {
             const delBtn = document.createElement('button');
             delBtn.className = 'toolasha-ct-node-btn';
             delBtn.textContent = '×';
-            delBtn.title = i18n_js.t('Delete tab');
+            delBtn.title = 'Delete tab';
             delBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this._onDeleteTab(tab.id);
@@ -27252,13 +27213,13 @@ self.onmessage = function (e) {
 
         /**
          * Make a tile draggable and attach drag/drop event handlers.
-         * Uses dataset.toolashaDragBound to prevent duplicate listeners.
+         * Uses a WeakSet to prevent duplicate listeners (immune to layout resets).
          * @param {HTMLElement} tile
          */
         _setupTileDrag(tile) {
             tile.draggable = true;
-            if (tile.dataset.toolashaDragBound) return;
-            tile.dataset.toolashaDragBound = '1';
+            if (this._dragBoundTiles.has(tile)) return;
+            this._dragBoundTiles.add(tile);
 
             tile.addEventListener('dragstart', (e) => {
                 const hrid = this._getHridFromTile(tile);
@@ -27372,7 +27333,7 @@ self.onmessage = function (e) {
 
             const headerEl = document.createElement('div');
             headerEl.className = 'toolasha-ct-unorg-header';
-            headerEl.innerHTML = `<span>${this._unorgOpen ? '▼' : '▶'}</span> <span>${i18n_js.t('Unorganized ({0})', totalTiles)}</span>`;
+            headerEl.innerHTML = `<span>${this._unorgOpen ? '▼' : '▶'}</span> <span>Unorganized (${totalTiles})</span>`;
             headerEl.style.order = orderCounter++;
             headerEl.addEventListener('click', () => {
                 this._unorgOpen = !this._unorgOpen;
@@ -27613,7 +27574,7 @@ self.onmessage = function (e) {
             const colorPicker = document.createElement('input');
             colorPicker.type = 'color';
             colorPicker.className = 'toolasha-ct-color-picker';
-            colorPicker.title = i18n_js.t('Custom color');
+            colorPicker.title = 'Custom color';
             colorPicker.value = tab.color && tab.color.startsWith('#') ? tab.color : '#888888';
             colorPicker.addEventListener('input', () => {
                 const hex = colorPicker.value;
@@ -27686,7 +27647,7 @@ self.onmessage = function (e) {
                     this._applyLayout();
                 } else {
                     this._deleteConfirmId = tabId;
-                    deleteBtn.textContent = i18n_js.t('Confirm Delete?');
+                    deleteBtn.textContent = 'Confirm Delete?';
                     deleteBtn.style.background = '#a03030';
                 }
             });
@@ -27705,12 +27666,12 @@ self.onmessage = function (e) {
                         this._renderAssignedItems(modal.querySelector('.toolasha-ct-assigned-list'), tabId);
                         if (this._isActive) this._applyLayout();
                     }
-                    clearBtn.textContent = i18n_js.t('Clear All');
+                    clearBtn.textContent = 'Clear All';
                     clearBtn.style.background = '';
                     clearConfirm = false;
                 } else {
                     clearConfirm = true;
-                    clearBtn.textContent = i18n_js.t('Confirm Clear?');
+                    clearBtn.textContent = 'Confirm Clear?';
                     clearBtn.style.background = '#6a3a00';
                 }
             });
@@ -27764,7 +27725,7 @@ self.onmessage = function (e) {
                         // Collapse header row
                         const headerRow = document.createElement('div');
                         headerRow.className = 'toolasha-ct-search-result toolasha-ct-search-group-header';
-                        headerRow.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(itemNameTranslator.getDisplayName(hrid))}</span><span class="toolasha-ct-expand-btn">▲</span>`;
+                        headerRow.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(details.name)}</span><span class="toolasha-ct-expand-btn">▲</span>`;
                         headerRow.addEventListener('click', () => {
                             this._expandedSearchHrids.delete(hrid);
                             this._renderSearchResults(container, query, tabId, categoryFilter);
@@ -27800,12 +27761,9 @@ self.onmessage = function (e) {
                             const owned = ownedLevels?.has(level);
                             const levelRow = document.createElement('div');
                             levelRow.className = 'toolasha-ct-search-result toolasha-ct-search-level-row';
-                            const displayName =
-                                level === 0
-                                    ? itemNameTranslator.getDisplayName(hrid)
-                                    : `${itemNameTranslator.getDisplayName(hrid)} +${level}`;
+                            const displayName = level === 0 ? details.name : `${details.name} +${level}`;
                             const ownedDot = owned
-                                ? `<span style="color:#7dcea0;margin-left:4px;" title="${i18n_js.t('In inventory')}">●</span>`
+                                ? `<span style="color:#7dcea0;margin-left:4px;" title="In inventory">●</span>`
                                 : '';
                             levelRow.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(displayName)}</span>${ownedDot}`;
                             levelRow.addEventListener('click', () => {
@@ -27831,7 +27789,7 @@ self.onmessage = function (e) {
 
                         const row = document.createElement('div');
                         row.className = 'toolasha-ct-search-result toolasha-ct-search-group-header';
-                        row.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(itemNameTranslator.getDisplayName(hrid))}</span>${ownedBadges ? `<span class="toolasha-ct-level-badges">${this._escHtml(ownedBadges)}</span>` : ''}<span class="toolasha-ct-expand-btn">▶</span>`;
+                        row.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(details.name)}</span>${ownedBadges ? `<span class="toolasha-ct-level-badges">${this._escHtml(ownedBadges)}</span>` : ''}<span class="toolasha-ct-expand-btn">▶</span>`;
                         // Clicking the expand button expands the group
                         row.querySelector('.toolasha-ct-expand-btn').addEventListener('click', (e) => {
                             e.stopPropagation();
@@ -27856,7 +27814,7 @@ self.onmessage = function (e) {
                     // Flat row — no enhanced variants in inventory
                     const row = document.createElement('div');
                     row.className = 'toolasha-ct-search-result';
-                    row.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(itemNameTranslator.getDisplayName(hrid))}</span>`;
+                    row.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(details.name)}</span>`;
                     row.addEventListener('click', () => {
                         this._config = addItem(this._config, tabId, hrid);
                         this._save();
@@ -27879,10 +27837,14 @@ self.onmessage = function (e) {
         }
 
         _renderAssignedItems(container, tabId) {
+            const scrollParent = container.closest('.toolasha-ct-modal-body');
+            const scrollPos = scrollParent?.scrollTop ?? 0;
+
             container.innerHTML = '';
             const tab = findTab(this._config, tabId)?.tab;
             if (!tab || tab.items.length === 0) {
                 container.innerHTML = '<div style="color:#555;font-size:12px;padding:4px;">No items assigned</div>';
+                if (scrollParent) scrollParent.scrollTop = scrollPos;
                 return;
             }
 
@@ -27907,7 +27869,8 @@ self.onmessage = function (e) {
                     const enhanceMatch = hrid.match(/\+(\d+)$/);
                     const baseHrid = enhanceMatch ? hrid.slice(0, hrid.length - enhanceMatch[0].length) : hrid;
                     const level = enhanceMatch ? parseInt(enhanceMatch[1], 10) : 0;
-                    const baseName = itemNameTranslator.getDisplayName(baseHrid);
+                    const details = dataManager.getItemDetails(baseHrid);
+                    const baseName = details?.name || baseHrid;
                     const name = level > 0 ? `${baseName} +${level}` : baseName;
                     const iconId = baseHrid.replace('/items/', '');
                     const spriteUrl = getSpriteBaseUrl();
@@ -27957,25 +27920,44 @@ self.onmessage = function (e) {
                     dragFromIndex = null;
                 });
 
-                if (index > 0) {
-                    const toTopBtn = document.createElement('button');
-                    toTopBtn.className = 'toolasha-ct-node-btn';
-                    toTopBtn.textContent = '⇈';
-                    toTopBtn.title = i18n_js.t('Move to top');
-                    toTopBtn.style.marginLeft = '0';
+                const toTopBtn = document.createElement('button');
+                toTopBtn.className = 'toolasha-ct-node-btn';
+                toTopBtn.textContent = '⇈';
+                toTopBtn.title = 'Move to top';
+                toTopBtn.style.marginLeft = '0';
+                if (index === 0) {
+                    toTopBtn.style.visibility = 'hidden';
+                } else {
                     toTopBtn.addEventListener('click', () => {
                         this._config = reorderItem(this._config, tabId, index, 0);
                         this._save();
                         this._renderAssignedItems(container, tabId);
                         if (this._isActive) this._applyLayout();
                     });
-                    row.appendChild(toTopBtn);
                 }
+                row.appendChild(toTopBtn);
+
+                const toBottomBtn = document.createElement('button');
+                toBottomBtn.className = 'toolasha-ct-node-btn';
+                toBottomBtn.textContent = '⇊';
+                toBottomBtn.title = 'Move to bottom';
+                toBottomBtn.style.marginLeft = '0';
+                if (index >= tab.items.length - 1) {
+                    toBottomBtn.style.visibility = 'hidden';
+                } else {
+                    toBottomBtn.addEventListener('click', () => {
+                        this._config = reorderItem(this._config, tabId, index, tab.items.length - 1);
+                        this._save();
+                        this._renderAssignedItems(container, tabId);
+                        if (this._isActive) this._applyLayout();
+                    });
+                }
+                row.appendChild(toBottomBtn);
 
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'toolasha-ct-node-btn';
                 removeBtn.textContent = '×';
-                removeBtn.title = i18n_js.t('Remove');
+                removeBtn.title = 'Remove';
                 removeBtn.addEventListener('click', () => {
                     this._config = removeItemAtIndex(this._config, tabId, index);
                     // Clean item from loadout bindings so it won't be re-added on sync
@@ -27989,6 +27971,8 @@ self.onmessage = function (e) {
                 row.appendChild(removeBtn);
                 container.appendChild(row);
             });
+
+            if (scrollParent) scrollParent.scrollTop = scrollPos;
         }
 
         // -----------------------------------------------------------------------
@@ -28114,6 +28098,9 @@ self.onmessage = function (e) {
             const loadoutSnapshot = getLoadoutSnapshot();
 
             for (const baseHrid of relevantBases) {
+                // Cache may have been invalidated by a prior iteration's snapshot update
+                if (!this._boundBaseHrids) break;
+
                 // Find highest enhancement level of this item in current inventory
                 let highestOwned = -1;
                 for (const item of inventory) {
@@ -28139,8 +28126,8 @@ self.onmessage = function (e) {
                 // Also update the loadout snapshot
                 loadoutSnapshot.updateEnhancementLevel(baseHrid, highestOwned);
 
-                // Update the cached level
-                this._boundBaseHrids.set(baseHrid, highestOwned);
+                // Update the cached level (may have been nulled by the snapshot update listener)
+                if (this._boundBaseHrids) this._boundBaseHrids.set(baseHrid, highestOwned);
             }
 
             if (anyChanged) {
@@ -28278,7 +28265,7 @@ self.onmessage = function (e) {
             if (entries.length === 0) {
                 const msg = document.createElement('span');
                 msg.style.cssText = 'font-size:11px;color:#888;';
-                msg.textContent = i18n_js.t('No loadout snapshots — open your loadout panel first.');
+                msg.textContent = 'No loadout snapshots — open your loadout panel first.';
                 container.appendChild(msg);
                 return;
             }
@@ -28446,7 +28433,7 @@ self.onmessage = function (e) {
 
             const label = document.createElement('span');
             label.style.cssText = 'flex: 1; text-align: center;';
-            label.textContent = i18n_js.t('Add to Tab');
+            label.textContent = 'Add to Tab';
             const chevron = document.createElement('span');
             chevron.style.cssText = 'font-size: 0.65em; transition: transform 0.15s; display: inline-block;';
             chevron.textContent = '▼';
@@ -28494,7 +28481,7 @@ self.onmessage = function (e) {
             `;
                 if (tab.color && !alreadyAdded) btn.style.borderLeft = `3px solid ${tab.color}`;
                 if (alreadyAdded) {
-                    btn.title = i18n_js.t('Already in this tab');
+                    btn.title = 'Already in this tab';
                 } else {
                     btn.addEventListener('mouseenter', () => {
                         btn.style.opacity = '0.8';
@@ -28660,4 +28647,4 @@ self.onmessage = function (e) {
 
     console.log('[Toolasha] Market library loaded');
 
-})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.marketAPI, Toolasha.Utils.houseEfficiency, Toolasha.Utils.efficiency, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.formatters, Toolasha.Utils.marketData, Toolasha.Utils.teaParser, Toolasha.Core.i18n, Toolasha.Core.storage, Toolasha.Utils.profitConstants, Toolasha.Utils.profitHelpers, Toolasha.Utils.buffParser, Toolasha.Utils.equipmentParser, Toolasha.Utils.actionCalculator, Toolasha.Utils.tokenValuation, Toolasha.Utils.enhancementConfig, Toolasha.Utils.dom, Toolasha.Utils.materialCalculator, Toolasha.Utils.timerRegistry, Toolasha.Utils.cleanupRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.enhancementMultipliers, Toolasha.Utils.reactInput, Toolasha.Core.webSocketHook, Toolasha.Utils.abilityCalc, Toolasha.Utils.houseCostCalculator);
+})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.marketAPI, Toolasha.Utils.houseEfficiency, Toolasha.Utils.efficiency, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.formatters, Toolasha.Utils.marketData, Toolasha.Utils.teaParser, Toolasha.Core.storage, Toolasha.Utils.profitConstants, Toolasha.Utils.profitHelpers, Toolasha.Utils.buffParser, Toolasha.Utils.equipmentParser, Toolasha.Utils.actionCalculator, Toolasha.Utils.tokenValuation, Toolasha.Utils.enhancementConfig, Toolasha.Utils.dom, Toolasha.Utils.materialCalculator, Toolasha.Utils.timerRegistry, Toolasha.Utils.cleanupRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.enhancementMultipliers, Toolasha.Utils.reactInput, Toolasha.Core.webSocketHook, Toolasha.Utils.abilityCalc, Toolasha.Utils.houseCostCalculator);

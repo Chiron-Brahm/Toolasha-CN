@@ -1,7 +1,7 @@
 /**
  * Toolasha Core Library
  * Core infrastructure and API clients
- * Version: 2.59.10
+ * Version: 2.58.6
  * License: CC-BY-NC-SA-4.0
  */
 
@@ -2580,14 +2580,12 @@
         '📊 Costs by Enhancement Level': '📊 各等级强化成本',
         '🔄 Fetch Latest Prices': '🔄 获取最新价格',
         '🔍 Auto': '🔍 自动',
-        queued: '已排队',
+        'queued': '已排队',
         's/action': '秒/次',
         'actions/hr': '次/时',
         'items/hr': '个/时',
         '📊 Tracked {0} - No consumption yet (rate decreases over time)': '📊 已追踪 {0} - 暂无消耗（速率随时间衰减）',
-        'Total time': '总时间',
-        'Total profit': '总利润',
-        'Estimated value': '预估价值',
+
     });
 
     /**
@@ -2864,13 +2862,6 @@
                     type: 'checkbox',
                     default: true,
                     help: t('Displays XP and level progress estimates inside action panels'),
-                },
-                actionPanel_showSpeedTime: {
-                    id: 'actionPanel_showSpeedTime',
-                    label: 'Action panel: Show action speed & time',
-                    type: 'checkbox',
-                    default: true,
-                    help: 'Displays speed breakdown, efficiency, and total time inside action panels',
                 },
                 actionPanel_showExpPerHour: {
                     id: 'actionPanel_showExpPerHour',
@@ -3975,13 +3966,6 @@
                     type: 'checkbox',
                     default: true,
                 },
-                taskCombatEstimate: {
-                    id: 'taskCombatEstimate',
-                    label: 'Show combat estimate on combat tasks',
-                    type: 'checkbox',
-                    default: true,
-                    help: 'Displays a loadout dropdown and estimate button on combat task cards.',
-                },
                 taskEfficiencyRating: {
                     id: 'taskEfficiencyRating',
                     label: t('Show task efficiency rating (tokens/profit per hour)'),
@@ -4862,7 +4846,7 @@
                     }
 
                     // Copy other properties
-                    if (settingDef.options) {
+                    if (settingDef.options && typeof settingDef.options !== 'function') {
                         settings[settingId].options = settingDef.options;
                     }
                     if (settingDef.min !== undefined) {
@@ -4890,6 +4874,12 @@
                             settings[settingId].value = savedValue.value;
                         }
                     }
+                }
+
+                // Migrate: formatting_useKMBFormat changed from checkbox to select
+                const fmtSaved = saved['formatting_useKMBFormat'];
+                if (fmtSaved && fmtSaved.hasOwnProperty('isTrue') && !fmtSaved.hasOwnProperty('value')) {
+                    settings['formatting_useKMBFormat'].value = fmtSaved.isTrue ? 'compact' : 'full';
                 }
             }
 
@@ -5925,99 +5915,6 @@
 
     const connectionState = new ConnectionState();
 
-    // Monster name English → Chinese translation map.
-    // Used to match Chinese monster names from the game DOM to their
-    // English names in the game data.
-    var monsterNamesZh = {
-        'Abyssal Imp': '深渊小鬼',
-        Acroche: '杂技师',
-        'Anchor Shark': '锚鲨',
-        Aquahorse: '海马',
-        'Black Bear': '黑熊',
-        'Brine Marksman': '盐水神射手',
-        Butterjerry: '黄油杰瑞',
-        'Captain Fishhook': '鱼钩船长',
-        'Centaur Archer': '半人马弓手',
-        'Chronofrost Sorcerer': '时霜巫妖',
-        'I Pinch': '捏捏蟹',
-        'Crystal Colossus': '水晶巨像',
-        Cyclops: '独眼巨人',
-        'Demonic Overlord': '魔王',
-        'Deranged Jester': '疯狂小丑',
-        Dodocamel: '呆驼',
-        Dryad: '树人',
-        'Dusk Revenant': '暮光亡魂',
-        Elementalist: '元素师',
-        'Enchanted Bishop': '魔化主教',
-        'Enchanted King': '魔化国王',
-        'Enchanted Knight': '魔化骑士',
-        'Enchanted Pawn': '魔化步兵',
-        'Enchanted Queen': '魔化皇后',
-        'Enchanted Rook': '魔化车兵',
-        Eye: '眼魔',
-        Eyes: '多眼',
-        'Flame Sorcerer': '烈焰巫妖',
-        Fly: '苍蝇',
-        Frogger: '青蛙',
-        'Frost Sniper': '冰霜狙击手',
-        'Giant Mantis': '巨型螳螂',
-        'Giant Scorpion': '巨型蝎子',
-        'Giant Shoebill': '巨型鲸头鹳',
-        Boomy: '砰砰',
-        'Gobo Chieftain': '哥布林酋长',
-        Shooty: '突突',
-        Slashy: '斩斩',
-        Smashy: '砸砸',
-        Stabby: '戳戳',
-        'Granite Golem': '花岗岩魔像',
-        Griffin: '狮鹫',
-        'Grizzly Bear': '灰熊',
-        'Gummy Bear': '小熊软糖',
-        'Ice Sorcerer': '冰巫妖',
-        'Infernal Warlock': '地狱术士',
-        Jackalope: '鹿角兔',
-        Juggler: '杂耍者',
-        'Jungle Sprite': '丛林精灵',
-        'Luna Empress': '月神女皇',
-        Magician: '魔法师',
-        'Magnetic Golem': '磁石魔像',
-        Manticore: '蝎尾狮',
-        'Marine Huntress': '海洋女猎手',
-        Mimic: '拟态怪',
-        Myconid: '菌人',
-        'Nom Nom': '咕咕',
-        'Novice Sorcerer': '新手巫师',
-        Panda: '熊猫',
-        'Polar Bear': '北极熊',
-        Porcupine: '豪猪',
-        'Pyre Hunter': '火猎手',
-        'Rabid Rabbit': '狂兔',
-        Jerry: '杰瑞',
-        'Red Panda': '小熊猫',
-        Salamander: '蝾螈',
-        Gary: '加里',
-        'Shadow Archer': '暗影弓手',
-        Siren: '海妖',
-        Skunk: '臭鼬',
-        Slimy: '史莱姆',
-        Thnake: '蛇蛇',
-        'Soul Hunter': '灵魂猎手',
-        Squawker: '嘎嘎',
-        'Stalactite Golem': '钟乳石魔像',
-        Swampy: '沼泽怪',
-        'The Kraken': '海怪',
-        'The Watcher': '观察者',
-        'Tidal Conjuror': '潮汐召唤师',
-        Treant: '树人守卫',
-        Turuto: '图鲁托',
-        Vampire: '吸血鬼',
-        Veyes: '眼魔群',
-        Werewolf: '狼人',
-        Zombie: '僵尸',
-        'Zombie Bear': '僵尸熊',
-        Sherlock: '福尔摩斯',
-    };
-
     /**
      * Merge market listing updates into the current list.
      * @param {Array} currentListings - Existing market listings.
@@ -6229,9 +6126,6 @@
 
                         // Build monster sort index map for task sorting
                         this.buildMonsterSortIndexMap();
-
-                        // Load monster Chinese→English name map (async, non-blocking)
-                        this._loadMonsterCnMap();
 
                         return true;
                     }
@@ -7101,103 +6995,14 @@
                 return null;
             }
 
-            const monsterMap = this.initClientData.combatMonsterDetailMap;
-            const cleanName = (monsterName || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
-
-            for (const [hrid, monster] of Object.entries(monsterMap)) {
-                if (monster.name === cleanName) {
+            // Search for monster by display name
+            for (const [hrid, monster] of Object.entries(this.initClientData.combatMonsterDetailMap)) {
+                if (monster.name === monsterName) {
                     return hrid;
                 }
             }
 
-            if (this._monsterCnToEn && this._monsterCnToEn[cleanName]) {
-                const enName = this._monsterCnToEn[cleanName];
-                for (const [hrid, monster] of Object.entries(monsterMap)) {
-                    if (monster.name === enName) {
-                        return hrid;
-                    }
-                }
-            }
-
             return null;
-        }
-
-        _loadMonsterCnMap() {
-            if (this._monsterCnToEnLoaded) return;
-            this._monsterCnToEnLoaded = true;
-            this._monsterCnToEn = {};
-
-            for (const [enName, cnName] of Object.entries(monsterNamesZh)) {
-                if (cnName) this._monsterCnToEn[cnName] = enName;
-            }
-
-            try {
-                const saved = JSON.parse(localStorage.getItem('Toolasha_monsterCnMap') || '{}');
-                for (const [cnName, enName] of Object.entries(saved)) {
-                    if (cnName && enName) this._monsterCnToEn[cnName] = enName;
-                }
-            } catch (e) {}
-
-            this._setupMonsterDomObserver();
-        }
-
-        _setupMonsterDomObserver() {
-            if (this._monsterObserverStarted) return;
-            this._monsterObserverStarted = true;
-
-            const harvest = () => {
-                const monsterMap = this.initClientData?.combatMonsterDetailMap;
-                if (!monsterMap) return;
-
-                const found = {};
-                const seen = new Set();
-
-                const walk = (root) => {
-                    if (!root) return;
-                    if (root.nodeType === 3) {
-                        const text = root.textContent?.trim();
-                        if (text && /^[一-龥]{2,15}$/.test(text) && !seen.has(text)) {
-                            seen.add(text);
-                            let elem = root.parentElement;
-                            for (let d = 0; elem && d < 4; d++, elem = elem.parentElement) {
-                                if (!elem.attributes) continue;
-                                for (const attr of elem.attributes) {
-                                    if (attr.value && attr.value.startsWith('/monsters/') && monsterMap[attr.value]) {
-                                        found[text] = monsterMap[attr.value].name;
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                        return;
-                    }
-                    for (const child of root.childNodes || []) walk(child);
-                };
-                walk(document.body);
-
-                if (Object.keys(found).length === 0) return;
-
-                let dirty = false;
-                for (const [cn, en] of Object.entries(found)) {
-                    if (!this._monsterCnToEn[cn]) {
-                        this._monsterCnToEn[cn] = en;
-                        dirty = true;
-                    }
-                }
-
-                if (dirty) {
-                    try {
-                        const existing = JSON.parse(localStorage.getItem('Toolasha_monsterCnMap') || '{}');
-                        localStorage.setItem('Toolasha_monsterCnMap', JSON.stringify({ ...existing, ...found }));
-                    } catch (e) {}
-                }
-            };
-
-            setTimeout(harvest, 2000);
-            setInterval(harvest, 5000);
-
-            const observer = new MutationObserver(() => harvest());
-            observer.observe(document.body, { childList: true, subtree: true, characterData: true });
         }
 
         /**
@@ -7683,8 +7488,22 @@
 
             settingsStorage.setCharacterId(characterId);
 
+            const previousMap = this.settingsMap;
+
             // Load settings from settings-storage (which uses settings-schema as source of truth)
             this.settingsMap = await settingsStorage.loadSettings();
+
+            // Fire change callbacks for settings that differ from what was previously loaded
+            for (const key of Object.keys(this.settingChangeCallbacks)) {
+                const prev = previousMap[key];
+                const curr = this.settingsMap[key];
+                if (!prev || !curr) continue;
+                const prevVal = prev.hasOwnProperty('value') ? prev.value : prev.isTrue;
+                const currVal = curr.hasOwnProperty('value') ? curr.value : curr.isTrue;
+                if (prevVal !== currVal) {
+                    for (const cb of this.settingChangeCallbacks[key]) cb(currVal);
+                }
+            }
         }
 
         /**
@@ -8412,7 +8231,7 @@
                     // Check if node matches any of the target classes
                     for (const targetClass of classArray) {
                         if (className.includes(targetClass)) {
-                            callback(node);
+                            callback(node, true);
                             return; // Only call once per node
                         }
                     }
@@ -8421,10 +8240,13 @@
                     // Only applies when the node has children — leaf nodes are skipped,
                     // which eliminates the bulk of querySelectorAll cost during React's
                     // init burst (thousands of individual leaf additions).
-                    if (node.childElementCount > 0) {
-                        for (const targetClass of classArray) {
-                            const matches = node.querySelectorAll(`[class*="${targetClass}"]`);
-                            matches.forEach((match) => callback(match));
+                    if (node.childElementCount >= 3) {
+                        const combinedSelector = classArray.length === 1
+                            ? `[class*="${classArray[0]}"]`
+                            : classArray.map(c => `[class*="${c}"]`).join(',');
+                        const matches = node.querySelectorAll(combinedSelector);
+                        for (let i = 0; i < matches.length; i++) {
+                            callback(matches[i], false);
                         }
                     }
                 },
@@ -9466,7 +9288,6 @@
         },
         marketAPI,
         performanceMonitor,
-        i18n: { t, registerLocale },
     };
 
     console.log('[Toolasha] Core library loaded');
