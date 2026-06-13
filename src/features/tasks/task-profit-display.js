@@ -4,6 +4,7 @@
  * Expandable breakdown on click
  */
 
+import { t } from '../../core/i18n.js';
 import config from '../../core/config.js';
 import dataManager from '../../core/data-manager.js';
 import domObserver from '../../core/dom-observer.js';
@@ -124,14 +125,14 @@ function calculateTaskEfficiencyRating(profitData, ratingMode) {
         if (profitData.rewards?.error || profitData.totalProfit === null || profitData.totalProfit === undefined) {
             return {
                 value: null,
-                unitLabel: 'gold/hr',
-                error: profitData.rewards?.error || 'Missing price data',
+                unitLabel: t('gold/hr'),
+                error: profitData.rewards?.error || t('Missing price data'),
             };
         }
 
         return {
             value: profitData.totalProfit / hours,
-            unitLabel: 'gold/hr',
+            unitLabel: t('gold/hr'),
             error: null,
         };
     }
@@ -139,7 +140,7 @@ function calculateTaskEfficiencyRating(profitData, ratingMode) {
     const tokensReceived = profitData.rewards?.breakdown?.tokensReceived ?? 0;
     return {
         value: tokensReceived / hours,
-        unitLabel: 'tokens/hr',
+        unitLabel: t('tokens/hr'),
         error: null,
     };
 }

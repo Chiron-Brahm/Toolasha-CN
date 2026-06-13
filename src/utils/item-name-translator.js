@@ -43,7 +43,7 @@ class ItemNameTranslator {
             if (saved && typeof saved === 'object' && saved._version === CACHE_VERSION && Object.keys(saved).length > 1) {
                 this.cnNames = saved;
             }
-        } catch  { /* ignore */ }
+        } catch { /* ignore */ }
         this.isLoaded = true;
 
         // Bulk import from static Chinese name mapping (Edible Tools translations)
@@ -156,7 +156,7 @@ class ItemNameTranslator {
                 for (const node of mutation.addedNodes) {
                     try {
                         processNode(node);
-                    } catch  {
+                    } catch {
                         // Skip errors from processing individual nodes
                     }
                 }
@@ -204,6 +204,22 @@ class ItemNameTranslator {
             }
         }
     }
+
+    /**
+     * Get the display name for an item.
+     * Returns the Chinese name if cached, otherwise the English name from game data,
+     * and as a final fallback parses the HRID into a readable label.
+     * @param {string} itemHrid - Item HRID (e.g., '/items/essence')
+     * @returns {string} Display name
+     */
+    getDisplayName(itemHrid) {
+        const cnName = this.cnNames[itemHrid];
+        if (cnName) return cnName;
+        const enName = dataManager.getItemDetails(itemHrid)?.name;
+        if (enName) return enName;
+        return itemHrid.split('/').pop().replace(/_/g, ' ');
+    }
+
 }
 
 export const itemNameTranslator = new ItemNameTranslator();

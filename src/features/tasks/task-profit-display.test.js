@@ -3,11 +3,18 @@
  */
 
 import { describe, test, expect } from 'vitest';
+import { registerLocale } from '../../core/i18n.js';
 import {
     calculateTaskCompletionSeconds,
     calculateTaskEfficiencyRating,
     getRelativeEfficiencyGradientColor,
 } from './task-profit-display.js';
+
+registerLocale('zh-CN', {
+    'tokens/hr': '代币/时',
+    'gold/hr': '金币/时',
+    'Missing price data': '缺失价格数据',
+});
 
 const createProfitData = ({
     actionsPerHour = 600,
@@ -115,6 +122,13 @@ describe('calculateTaskEfficiencyRating', () => {
     });
 });
 
+beforeEach(() => {
+    registerLocale("zh-CN", {
+        "tokens/hr": "代币/时",
+        "gold/hr": "金币/时",
+        "Missing price data": "缺失价格数据",
+    });
+});
 describe('getRelativeEfficiencyGradientColor', () => {
     test('returns fallback color for invalid values', () => {
         expect(getRelativeEfficiencyGradientColor(Number.NaN, 0, 10, '#ff0000', '#00ff00', '#888')).toBe('#888');
