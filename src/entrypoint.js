@@ -837,7 +837,7 @@ if (isCombatSimulatorPage()) {
     // Expose minimal user-facing API
     const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
-    targetWindow.Toolasha.version = '2.63.0';
+    targetWindow.Toolasha.version = '2.63.1';
 
     // Feature toggle API (for users to manage settings via console)
     targetWindow.Toolasha.features = {
