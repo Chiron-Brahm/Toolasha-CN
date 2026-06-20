@@ -9,6 +9,7 @@ import dataManager from '../../core/data-manager.js';
 import webSocketHook from '../../core/websocket.js';
 import domObserver from '../../core/dom-observer.js';
 import { formatKMB } from '../../utils/formatters.js';
+import { t } from '../../core/i18n.js';
 import { createTimerRegistry } from '../../utils/timer-registry.js';
 import { chatBlockList } from './chat-block-list.js';
 
@@ -459,7 +460,7 @@ class PopOutChat {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MWI Chat</title>
+<title${t('MWI Chat')}t</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -609,7 +610,7 @@ class PopOutChat {
 </head>
 <body>
 <div id="topbar">
-  <span id="topbar-title">MWI Chat</span>
+  <span id="topbar-title"${t('MWI Chat')}t</span>
   <span id="topbar-name"></span>
   <button id="add-pane-btn">+ Pane</button>
   <label id="vertical-label"><input type="checkbox" id="vertical-toggle"> Vertical</label>

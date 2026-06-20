@@ -15,6 +15,7 @@ import domObserver from '../../../core/dom-observer.js';
 import dataManager from '../../../core/data-manager.js';
 import inventorySort from '../inventory-sort.js';
 import inventoryBadgeManager from '../inventory-badge-manager.js';
+import { t } from '../../../core/i18n.js';
 // Lazy accessor: in production multi-bundle builds, the Market bundle can't statically import
 // from Combat (it loads first). Resolve at runtime via window.Toolasha.Combat, with a fallback
 // to the static import for dev single-bundle builds.
@@ -2039,7 +2040,7 @@ export default class CustomTabsUI {
 
             <div class="toolasha-ct-modal-footer">
                 <button class="toolasha-ct-delete-btn">Delete Tab</button>
-                <button class="toolasha-ct-clear-btn">Clear All</button>
+                <button class="toolasha-ct-clear-btn"${t('Clear All')}l</button>
                 <button class="toolasha-ct-close-btn">Close</button>
             </div>
         `;
@@ -2289,7 +2290,7 @@ export default class CustomTabsUI {
                         levelRow.className = 'toolasha-ct-search-result toolasha-ct-search-level-row';
                         const displayName = level === 0 ? details.name : `${details.name} +${level}`;
                         const ownedDot = owned
-                            ? `<span style="color:#7dcea0;margin-left:4px;" title="In inventory">●</span>`
+                            ? `<span style="color:#7dcea0;margin-left:4px;" ${t('In inventory')}ventory">●</span>`
                             : '';
                         levelRow.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(displayName)}</span>${ownedDot}`;
                         levelRow.addEventListener('click', () => {

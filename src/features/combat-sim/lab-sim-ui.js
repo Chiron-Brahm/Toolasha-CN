@@ -7,6 +7,7 @@
 import config from '../../core/config.js';
 import dataManager from '../../core/data-manager.js';
 import storage from '../../core/storage.js';
+import { t } from '../../core/i18n.js';
 import {
     buildGameDataPayload,
     buildAllPlayerDTOs,
@@ -105,7 +106,7 @@ class LabSimUI {
             flex-shrink: 0;
         `;
         header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:${ACCENT};">Lab Simulator</span>
+            <span style="font-weight:700; font-size:14px; color:${ACCENT};"${t('Lab Simulator')}r</span>
             <button id="mwi-labsim-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">\u00d7</button>
@@ -132,7 +133,7 @@ class LabSimUI {
         `;
         tabBar.innerHTML = `
             <button id="mwi-labsim-tab-configure" style="${tabStyle(true)}">Configure</button>
-            <button id="mwi-labsim-tab-maxlevel" style="${tabStyle(false)}">Max Level</button>
+            <button id="mwi-labsim-tab-maxlevel" style="${tabStyle(false)}"${t('Max Level')}l</button>
             <button id="mwi-labsim-tab-upgrade" style="${tabStyle(false)}">Upgrade</button>
             <button id="mwi-labsim-tab-skilling" style="${tabStyle(false)}">Skilling</button>
         `;
@@ -196,7 +197,7 @@ class LabSimUI {
         buffsHeader.style.cssText =
             'display:flex; align-items:center; justify-content:space-between; padding:6px 14px; cursor:pointer; color:#888; font-size:12px;';
         buffsHeader.innerHTML = `
-            <span>Labyrinth Buffs</span>
+            <span${t('Labyrinth Buffs')}s</span>
             <span id="mwi-labsim-buffs-toggle" style="font-size:10px;">\u25B6</span>
         `;
 
@@ -302,11 +303,10 @@ class LabSimUI {
         upgradeControls.innerHTML = `
             <label style="color:#888; font-size:12px;">Player</label>
             <select id="mwi-labsim-upgrade-player" style="${selectStyle}"></select>
-            <label style="color:#888; font-size:12px;">Enemy Level</label>
+            <label style="color:#888; font-size:12px;"${t('Enemy Level')}l</label>
             <input id="mwi-labsim-upgrade-level" type="number" min="20" max="300" value="100" style="${inputStyle}"
                 title="Defaults to Max Level result when available">
-            <button id="mwi-labsim-upgrade-run" style="
-                margin-left: auto;
+            <button${t('Defaults to Max Level result when available')}          margin-left: auto;
                 background: ${ACCENT_BTN_BG};
                 color: ${ACCENT};
                 border: 1px solid ${ACCENT_BTN_BORDER};
@@ -360,7 +360,7 @@ class LabSimUI {
             padding: 10px 14px; border-bottom: 1px solid #222; flex-shrink: 0;
         `;
         skillingControls.innerHTML = `
-            <label style="color:#888; font-size:12px;">Room Level</label>
+            <label style="color:#888; font-size:12px;"${t('Room Level')}l</label>
             <input id="mwi-labsim-skilling-level" type="number" min="1" max="300" value="100" style="${inputStyle}">
             <button id="mwi-labsim-skilling-calc" style="
                 background: ${ACCENT_BTN_BG};
@@ -380,7 +380,7 @@ class LabSimUI {
                 padding: 5px 10px;
                 font-size: 12px;
                 cursor: pointer;
-                font-family: inherit;">Analyze Upgrades</button>
+                font-family: inherit;"${t('Analyze Upgrades')}s</button>
             <button id="mwi-labsim-skilling-stop" style="
                 display:none;
                 background:rgba(244, 67, 54, 0.2);
@@ -401,7 +401,7 @@ class LabSimUI {
                 font-size:11px;
                 font-family:inherit;
                 margin-left:auto;">
-                <option value="">All Skills</option>
+                <option value=""${t('All Skills')}s</option>
                 <option value="/skills/woodcutting">Woodcutting</option>
                 <option value="/skills/foraging">Foraging</option>
                 <option value="/skills/milking">Milking</option>
@@ -901,10 +901,10 @@ class LabSimUI {
                     ${monsterName} \u2014 Level ${roomLevel}
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 20px; font-size:12px;">
-                    <div><span style="color:#888;">Win Rate:</span> <span style="color:${parseFloat(winRate) >= 95 ? '#4caf50' : parseFloat(winRate) >= 50 ? '#ff9800' : '#f44336'}; font-weight:600;">${winRate}%</span></div>
-                    <div><span style="color:#888;">Encounters:</span> ${formatWithSeparator(attempts)}</div>
-                    <div><span style="color:#888;">Deaths:</span> <span style="color:${deaths > 0 ? '#f44336' : '#4caf50'};">${formatWithSeparator(deaths)}</span></div>
-                    <div><span style="color:#888;">Sim Time:</span> ${simHours.toFixed(1)}h</div>
+                    <div><span style="color:#888;"${t('Win Rate:')}:</span> <span style="color:${parseFloat(winRate) >= 95 ? '#4caf50' : parseFloat(winRate) >= 50 ? '#ff9800' : '#f44336'}; font-weight:600;">${winRate}%</span></div>
+                    <div><span style="color:#888;"${t('Encounters:')}:</span> ${formatWithSeparator(attempts)}</div>
+                    <div><span style="color:#888;"${t('Deaths:')}:</span> <span style="color:${deaths > 0 ? '#f44336' : '#4caf50'};">${formatWithSeparator(deaths)}</span></div>
+                    <div><span style="color:#888;"${t('Sim Time:')}:</span> ${simHours.toFixed(1)}h</div>
                 </div>
                 <div style="color:#555; font-size:10px; margin-top:6px;">Completed in ${totalElapsed}</div>
             </div>
@@ -1136,7 +1136,7 @@ class LabSimUI {
                 return `<th data-sort-key="${key}" data-table="token" style="${style}">${label}${ind}</th>`;
             };
 
-            let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">Token Upgrades</div>`;
+            let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;"${t('Token Upgrades')}s</div>`;
             html += '<table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:12px;">';
             html += `<thead><tr>
                 ${th('Upgrade', 'desc', 'left')}
@@ -1167,7 +1167,7 @@ class LabSimUI {
                 return `<th data-sort-key="${key}" data-table="gold" style="${style}">${label}${ind}</th>`;
             };
 
-            let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">Gold Upgrades</div>`;
+            let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;"${t('Gold Upgrades')}s</div>`;
             html += '<table style="width:100%; border-collapse:collapse; font-size:11px;">';
             html += `<thead><tr>
                 ${th('Upgrade', 'desc', 'left')}

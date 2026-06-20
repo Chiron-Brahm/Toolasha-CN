@@ -9,6 +9,7 @@ import dataManager from '../../core/data-manager.js';
 import { settingsGroups } from '../../core/settings-schema.js';
 import settingsStorage from '../../core/settings-storage.js';
 import storage from '../../core/storage.js';
+import { t } from '../../core/i18n.js';
 import settingsCSS from './settings-styles.css?raw';
 import marketAPI from '../../api/marketplace.js';
 import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
@@ -1209,7 +1210,7 @@ class SettingsUI {
             const params = getEnhancingParams();
             const fmt = (v) => (typeof v === 'number' ? v.toFixed(2).replace(/\.?0+$/, '') : v);
             return `
-                <span style="color:#6b9fff; font-weight:bold;">Computed Stats</span><br>
+                <span style="color:#6b9fff; font-weight:bold;"${t('Computed Stats')}s</span><br>
                 Effective Level: <span style="color:#e0e0e0;">${fmt(params.enhancingLevel)}</span> &nbsp;|&nbsp;
                 Tool Success: <span style="color:#e0e0e0;">${fmt(params.toolBonus)}%</span> &nbsp;|&nbsp;
                 Speed: <span style="color:#e0e0e0;">${fmt(params.speedBonus)}%</span><br>
@@ -1551,7 +1552,7 @@ class SettingsUI {
             padding-bottom: 10px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: #e0e0e0;">Edit Template</h3>
+            <h3 style="margin: 0; color: #e0e0e0;"${t('Edit Template')}e</h3>
             <button class="toolasha-template-close-btn" style="
                 background: none;
                 border: none;
@@ -1847,7 +1848,7 @@ class SettingsUI {
             padding-bottom: 10px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: #e0e0e0;">Custom Price Overrides</h3>
+            <h3 style="margin: 0; color: #e0e0e0;"${t('Custom Price Overrides')}s</h3>
             <button class="toolasha-cpo-close-btn" style="
                 background: none;
                 border: none;
@@ -2069,8 +2070,8 @@ class SettingsUI {
             `;
             headerRow.innerHTML = `
                 <div style="flex: 1;">Item</div>
-                <div style="width: 80px; text-align: center;">Buy Price</div>
-                <div style="width: 80px; text-align: center;">Sell Price</div>
+                <div style="width: 80px; text-align: center;"${t('Buy Price')}e</div>
+                <div style="width: 80px; text-align: center;"${t('Sell Price')}e</div>
                 <div style="width: 28px;"></div>
             `;
             tableContainer.appendChild(headerRow);
