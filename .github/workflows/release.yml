@@ -1,4 +1,4 @@
-name: Release
+name: Release Please
 
 on:
     push:
@@ -6,34 +6,48 @@ on:
 
 permissions:
     contents: write
+    pull-requests: write
 
 jobs:
-    build-and-release:
+    release-please:
         runs-on: ubuntu-latest
+
         steps:
+            - name: Run release-please
+              id: release
+              uses: googleapis/release-please-action@v4
+              with:
+                  token: ${{ secrets.PAT }}
+                  config-file: .release-please-config.json
+                  manifest-file: .release-please-manifest.json
+                  skip-github-pull-request: ${{ startsWith(github.event.head_commit.message, 'Merge pull request') && contains(github.event.head_commit.message, 'release-please--') }}
+
+            # Build and upload assets if a release was created
             - name: Checkout code
+              if: ${{ steps.release.outputs.release_created }}
               uses: actions/checkout@v6
 
             - name: Setup Node.js
+              if: ${{ steps.release.outputs.release_created }}
               uses: actions/setup-node@v6
               with:
                   node-version: '20'
                   cache: 'npm'
 
-            - name: Get version
-              id: version
-              run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-
             - name: Install dependencies
+              if: ${{ steps.release.outputs.release_created }}
               run: npm ci
 
             - name: Build (production bundles)
+              if: ${{ steps.release.outputs.release_created }}
               run: npm run build
 
             - name: Build (Standalone enhancement library)
+              if: ${{ steps.release.outputs.release_created }}
               run: npm run build:enhancement
 
             - name: Commit built files to releases branch
+              if: ${{ steps.release.outputs.release_created }}
               run: |
                   # Configure git
                   git config user.name "github-actions[bot]"
@@ -56,26 +70,39 @@ jobs:
                   git add dist/Toolasha.user.js dist/libraries/*.js
 
                   # Commit libraries
-                  git commit -m "chore: release v${{ steps.version.outputs.VERSION }}"
+                  git commit -m "chore(main): release ${{ steps.release.outputs.version }}"
 
                   # Pin entrypoint @require URLs to the library commit SHA
                   lib_sha=$(git rev-parse HEAD)
                   LIB_SHA="$lib_sha" node -e "const fs=require('fs');const path='dist/Toolasha.user.js';const base='https://cdn.jsdelivr.net/gh/${{ github.repository }}@'+process.env.LIB_SHA+'/dist/libraries/';const content=fs.readFileSync(path,'utf8');const updated=content.split('https://UPDATE-THIS-URL/').join(base);fs.writeFileSync(path,updated);"
 
                   git add dist/Toolasha.user.js
-                  git commit -m "chore: pin library requires"
+                  git commit -m "chore(main): pin library requires ${{ steps.release.outputs.version }}"
 
                   # Push releases branch
-                  git push origin releases --force
+                  git push origin releases
 
-            - name: Upload userscripts as release artifact
+            - name: Upload userscripts and publish release
+              if: ${{ steps.release.outputs.release_created }}
               uses: softprops/action-gh-release@v2
               with:
-                  tag_name: v${{ steps.version.outputs.VERSION }}
-                  name: v${{ steps.version.outputs.VERSION }}
-                  generate_release_notes: true
+                  tag_name: ${{ steps.release.outputs.tag_name }}
                   files: |
                       dist/Toolasha.user.js
                       dist/libraries/*.js
+                  draft: false
               env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_TOKEN: ${{ secrets.PAT }}
+
+            - name: Delete release PR branches
+              if: ${{ steps.release.outputs.release_created }}
+              run: |
+                  echo "Cleaning up release-please branches..."
+                  gh api "repos/${{ github.repository }}/git/matching-refs/heads/release-please--" --jq '.[].ref' | while read ref; do
+                    branch=$(echo "$ref" | sed 's|refs/heads/||')
+                    echo "Deleting: $branch"
+                    gh api "repos/${{ github.repository }}/git/$ref" -X DELETE && echo "  ✅ Deleted" || echo "  ⚠️  Failed"
+                  done
+                  echo "Cleanup complete."
+              env:
+                  GH_TOKEN: ${{ secrets.PAT }}
