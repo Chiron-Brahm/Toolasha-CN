@@ -93,3 +93,16 @@ jobs:
                   draft: false
               env:
                   GITHUB_TOKEN: ${{ secrets.PAT }}
+
+            - name: Delete release PR branches
+              if: ${{ steps.release.outputs.release_created }}
+              run: |
+                  echo "Cleaning up release-please branches..."
+                  gh api "repos/${{ github.repository }}/git/matching-refs/heads/release-please--" --jq '.[].ref' | while read ref; do
+                    branch=$(echo "$ref" | sed 's|refs/heads/||')
+                    echo "Deleting: $branch"
+                    gh api "repos/${{ github.repository }}/git/$ref" -X DELETE && echo "  ✅ Deleted" || echo "  ⚠️  Failed"
+                  done
+                  echo "Cleanup complete."
+              env:
+                  GH_TOKEN: ${{ secrets.PAT }}
