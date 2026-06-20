@@ -17,7 +17,10 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEEKLY_WEBHOOK }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          REPO="${{ github.repository }}"
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "⚠️  DISCORD_WEEKLY_WEBHOOK secret not configured, skipping weekly summary"
+            exit 0
+          fi
           SINCE=$(date -u -d '7 days ago' +"%Y-%m-%dT%H:%M:%SZ")
           TODAY=$(date -u +"%b %-d, %Y")
           WEEK_START=$(date -u -d '7 days ago' +"%b %-d")
