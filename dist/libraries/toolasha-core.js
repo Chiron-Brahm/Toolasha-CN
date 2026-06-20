@@ -1,7 +1,7 @@
 /**
  * Toolasha Core Library
  * Core infrastructure and API clients
- * Version: 2.58.6
+ * Version: 2.63.2
  * License: CC-BY-NC-SA-4.0
  */
 
@@ -2580,12 +2580,11 @@
         '📊 Costs by Enhancement Level': '📊 各等级强化成本',
         '🔄 Fetch Latest Prices': '🔄 获取最新价格',
         '🔍 Auto': '🔍 自动',
-        'queued': '已排队',
+        queued: '已排队',
         's/action': '秒/次',
         'actions/hr': '次/时',
         'items/hr': '个/时',
         '📊 Tracked {0} - No consumption yet (rate decreases over time)': '📊 已追踪 {0} - 暂无消耗（速率随时间衰减）',
-
     });
 
     /**
@@ -8241,9 +8240,10 @@
                     // which eliminates the bulk of querySelectorAll cost during React's
                     // init burst (thousands of individual leaf additions).
                     if (node.childElementCount >= 3) {
-                        const combinedSelector = classArray.length === 1
-                            ? `[class*="${classArray[0]}"]`
-                            : classArray.map(c => `[class*="${c}"]`).join(',');
+                        const combinedSelector =
+                            classArray.length === 1
+                                ? `[class*="${classArray[0]}"]`
+                                : classArray.map((c) => `[class*="${c}"]`).join(',');
                         const matches = node.querySelectorAll(combinedSelector);
                         for (let i = 0; i < matches.length; i++) {
                             callback(matches[i], false);
