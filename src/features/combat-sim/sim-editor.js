@@ -454,9 +454,7 @@ export class SimEditor {
                 continue;
             }
 
-            const detail = abilityDetailMap[ability.hrid];
-            const name = detail?.name || ability.hrid.split('/').pop();
-            // Cant translate abilities (game data names only, no Chinese equivalent in DOM)
+            const name = itemNameTranslator.getDisplayName(ability.hrid) || ability.hrid.split('/').pop();
 
             html += `<div style="display:flex; align-items:center; gap:6px; padding:2px 0; font-size:12px;">`;
             html += `<span style="color:#888; width:50px; flex-shrink:0;">${slotLabel}</span>`;
@@ -935,7 +933,7 @@ export class SimEditor {
 
             items.push({
                 hrid,
-                name: ability.name || hrid.split('/').pop(),
+                name: itemNameTranslator.getDisplayName(hrid) || ability.name || hrid.split('/').pop(),
                 categoryLabel,
                 conflict: usedHrids.has(hrid),
             });

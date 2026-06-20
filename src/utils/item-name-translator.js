@@ -7,6 +7,7 @@
 import dataManager from '../core/data-manager.js';
 import storage from '../core/storage.js';
 import itemNamesZh from './item-names-zh.js';
+import abilityNamesZh from './ability-names-zh.js';
 
 const STORAGE_KEY = 'Toolasha_cnItemNames';
 const CACHE_VERSION = 2;
@@ -18,6 +19,11 @@ const MUTATION_SELECTORS = [
     '[class*="ItemTooltipText_name"]',
     '[class*="Item_craftingItemName"]',
     'svg[aria-label]',
+    '[class*="Ability_"][class*="name"]',
+    '[class*="AbilitiesPanel_"]',
+    '[class*="SkillActionDetail_"]',
+    '[class*="CombatPanel_"]',
+    '[class*="SimEditor_"]',
 ];
 
 const ENHANCEMENT_STRIP_REGEX = /\s*\+\d+$/;
@@ -121,6 +127,50 @@ class ItemNameTranslator {
         }
     }
 
+    getDisplayName(itemHrid) {
+        if (!itemHrid) return '';
+        if (!this.isLoaded) this._lazyLoad();
+
+        const cached = this.cnNames[itemHrid];
+        if (cached) return cached;
+
+        const item = dataManager.getItemDetails(itemHrid);
+        const enName = item?.name;
+        if (enName) {
+            const staticCn = itemNamesZh[enName];
+            if (staticCn) {
+                this.cnNames[itemHrid] = staticCn;
+                return staticCn;
+            }
+            return enName;
+        }
+
+        const ability = this._getAbilityDetails(itemHrid);
+        if (ability?.name) {
+            const staticCn = itemNamesZh[ability.name] || abilityNamesZh[ability.name];
+            if (staticCn) {
+                this.cnNames[itemHrid] = staticCn;
+                return staticCn;
+            }
+            return ability.name;
+        }
+
+        return itemHrid;
+    }
+
+    _getAbilityDetails(abilityHrid) {
+        if (!abilityHrid || !abilityHrid.startsWith('/abilities/')) return null;
+        try {
+            const initData = dataManager.getInitClientData();
+            return initData?.abilityDetailMap?.[abilityHrid] || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    _lazyLoad() {
+        this.load().catch(() => {});
+    }
     getHridFromChineseName(chineseName) {
         if (!chineseName) return null;
         const baseName = chineseName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
