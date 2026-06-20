@@ -821,7 +821,7 @@ if (!LIBRARIES_LOADED) {
         targetWindow.Toolasha = {};
     }
 
-    targetWindow.Toolasha.version = '2.66.0';
+    targetWindow.Toolasha.version = '2.64.0';
 
     // Feature toggle API (for users to manage settings via console)
     if (config) {

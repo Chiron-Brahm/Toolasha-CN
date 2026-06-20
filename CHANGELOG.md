@@ -2,29 +2,25 @@
 
 ## [2.64.0](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.63.2...v2.64.0) (2026-06-20)
 
-
 ### Features
 
-* add Chinese translations for ability names and combat sim UI ([686ed19](https://github.com/Chiron-Brahm/Toolasha-CN/commit/686ed19e90fa47eb75656ae574b0192ffb2fed35))
-
+- add Chinese translations for ability names and combat sim UI ([686ed19](https://github.com/Chiron-Brahm/Toolasha-CN/commit/686ed19e90fa47eb75656ae574b0192ffb2fed35))
 
 ### Bug Fixes
 
-* skip Discord notification when webhook secret not configured ([21b4a5e](https://github.com/Chiron-Brahm/Toolasha-CN/commit/21b4a5e3fae847f072c67af7e97e034c29028b03))
-* skip weekly Discord summary when webhook secret not configured ([76d9662](https://github.com/Chiron-Brahm/Toolasha-CN/commit/76d966219f0bce48c3159c18d8561ae5c3c94cd2))
-
+- skip Discord notification when webhook secret not configured ([21b4a5e](https://github.com/Chiron-Brahm/Toolasha-CN/commit/21b4a5e3fae847f072c67af7e97e034c29028b03))
+- skip weekly Discord summary when webhook secret not configured ([76d9662](https://github.com/Chiron-Brahm/Toolasha-CN/commit/76d966219f0bce48c3159c18d8561ae5c3c94cd2))
 
 ### Continuous Integration
 
-* auto-approve and auto-merge release-please PRs ([20d3a01](https://github.com/Chiron-Brahm/Toolasha-CN/commit/20d3a0166b543b7214210cf55c320b9ef1f31c27))
-* auto-delete release-please branches after release ([c004e4a](https://github.com/Chiron-Brahm/Toolasha-CN/commit/c004e4a980cb8345e33dc50e15a5ddc1f98c8ab7))
-
+- auto-approve and auto-merge release-please PRs ([20d3a01](https://github.com/Chiron-Brahm/Toolasha-CN/commit/20d3a0166b543b7214210cf55c320b9ef1f31c27))
+- auto-delete release-please branches after release ([c004e4a](https://github.com/Chiron-Brahm/Toolasha-CN/commit/c004e4a980cb8345e33dc50e15a5ddc1f98c8ab7))
 
 ### Miscellaneous Chores
 
-* remove unused Discord notification workflows ([ec84954](https://github.com/Chiron-Brahm/Toolasha-CN/commit/ec84954423b2eaf4c4def7c9559bd0552656034e))
-* sync upstream (2.64.4 → 2.66.0) ([13097df](https://github.com/Chiron-Brahm/Toolasha-CN/commit/13097dfeb21704883b7e592bbb7b99ebc5831c4f))
-* sync upstream, restore CN i18n and fix lint errors ([ae2e248](https://github.com/Chiron-Brahm/Toolasha-CN/commit/ae2e24842d12fb8664c86b07ff921cfef4d4b6d6))
+- remove unused Discord notification workflows ([ec84954](https://github.com/Chiron-Brahm/Toolasha-CN/commit/ec84954423b2eaf4c4def7c9559bd0552656034e))
+- sync upstream (2.64.4 → 2.66.0) ([13097df](https://github.com/Chiron-Brahm/Toolasha-CN/commit/13097dfeb21704883b7e592bbb7b99ebc5831c4f))
+- sync upstream, restore CN i18n and fix lint errors ([ae2e248](https://github.com/Chiron-Brahm/Toolasha-CN/commit/ae2e24842d12fb8664c86b07ff921cfef4d4b6d6))
 
 ## [2.63.2](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.63.1...v2.63.2) (2026-06-20)
 
