@@ -12,20 +12,24 @@
  */
 
 // Access libraries from global namespace
-const Core = window.Toolasha.Core;
-const Utils = window.Toolasha.Utils;
-const Market = window.Toolasha.Market;
-const Actions = window.Toolasha.Actions;
-const Combat = window.Toolasha.Combat;
-const UI = window.Toolasha.UI;
+// Use optional chaining to prevent crashes when libraries fail to load
+const Core = window.Toolasha?.Core;
+const Utils = window.Toolasha?.Utils;
+const Market = window.Toolasha?.Market;
+const Actions = window.Toolasha?.Actions;
+const Combat = window.Toolasha?.Combat;
+const UI = window.Toolasha?.UI;
 
 // Import item name translator (not in global namespace, part of this bundle)
 import { itemNameTranslator } from './utils/item-name-translator.js';
 
-// Destructure core modules
-const { storage, config, webSocketHook, domObserver, dataManager, featureRegistry } = Core;
+// Destructure core modules (safe: Core may be undefined if libraries failed to load)
+const { storage, config, webSocketHook, domObserver, dataManager, featureRegistry } = Core || {};
 
-const { setupScrollTooltipDismissal } = Utils.dom;
+const { setupScrollTooltipDismissal } = Utils?.dom || {};
+
+// Check if required libraries are available before proceeding
+const LIBRARIES_LOADED = !!(Core && Utils && Market && Actions && Combat && UI);
 
 /**
  * Detect if running on Combat Simulator page
@@ -705,7 +709,12 @@ function registerFeatures() {
     featureRegistry.replaceFeatures(features);
 }
 
-if (isCombatSimulatorPage()) {
+if (!LIBRARIES_LOADED) {
+    console.error(
+        '[Toolasha] Required libraries (Core, Utils, Market, Actions, Combat, UI) not loaded. ' +
+            'Initialization aborted. Check that @require URLs are correct in the userscript header.'
+    );
+} else if (isCombatSimulatorPage()) {
     // Initialize combat sim integration only
     Combat.combatSimIntegration.initialize();
 
@@ -837,37 +846,48 @@ if (isCombatSimulatorPage()) {
     // Expose minimal user-facing API
     const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
+    // Guard: ensure Toolasha namespace exists (core library may not have loaded)
+    if (!targetWindow.Toolasha) {
+        targetWindow.Toolasha = {};
+    }
+
     targetWindow.Toolasha.version = '2.63.1';
 
     // Feature toggle API (for users to manage settings via console)
-    targetWindow.Toolasha.features = {
-        list: () => config.getFeaturesByCategory(),
-        enable: (key) => config.setFeatureEnabled(key, true),
-        disable: (key) => config.setFeatureEnabled(key, false),
-        toggle: (key) => config.toggleFeature(key),
-        status: (key) => config.isFeatureEnabled(key),
-        info: (key) => config.getFeatureInfo(key),
-    };
+    if (config) {
+        targetWindow.Toolasha.features = {
+            list: () => config.getFeaturesByCategory(),
+            enable: (key) => config.setFeatureEnabled(key, true),
+            disable: (key) => config.setFeatureEnabled(key, false),
+            toggle: (key) => config.toggleFeature(key),
+            status: (key) => config.isFeatureEnabled(key),
+            info: (key) => config.getFeatureInfo(key),
+        };
+    }
 
     // Guild XP data management
-    targetWindow.Toolasha.guild = {
-        resetMemberXP: () => UI.guildXPTracker.resetMemberData(),
-    };
+    if (UI?.guildXPTracker) {
+        targetWindow.Toolasha.guild = {
+            resetMemberXP: () => UI.guildXPTracker.resetMemberData(),
+        };
+    }
 
     // Debug utilities (for diagnosing issues via console)
-    targetWindow.Toolasha.debug = {
-        storage: () => {
-            const diag = storage.diagnostics();
-            console.log('=== Storage Diagnostics ===');
-            console.log('DB connection exists:', diag.dbExists);
-            console.log('Storage available:', diag.available);
-            console.log('DB name:', diag.dbName);
-            console.log('DB version:', diag.dbVersion);
-            console.log('Reconnecting:', diag.reconnecting);
-            console.log('Last null reason:', diag.lastNullReason || 'never');
-            console.log('Pending writes:', diag.pendingWrites);
-            console.log('Active timers:', diag.activeTimers);
-            return diag;
-        },
-    };
+    if (storage) {
+        targetWindow.Toolasha.debug = {
+            storage: () => {
+                const diag = storage.diagnostics();
+                console.log('=== Storage Diagnostics ===');
+                console.log('DB connection exists:', diag.dbExists);
+                console.log('Storage available:', diag.available);
+                console.log('DB name:', diag.dbName);
+                console.log('DB version:', diag.dbVersion);
+                console.log('Reconnecting:', diag.reconnecting);
+                console.log('Last null reason:', diag.lastNullReason || 'never');
+                console.log('Pending writes:', diag.pendingWrites);
+                console.log('Active timers:', diag.activeTimers);
+                return diag;
+            },
+        };
+    }
 }
