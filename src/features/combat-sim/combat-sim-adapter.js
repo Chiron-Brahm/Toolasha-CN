@@ -777,22 +777,28 @@ export function applyLoadoutSnapshotToDTO(dto, snapshotName, gameData) {
     const abilityDetailMap = gameData.abilityDetailMap || {};
 
     // Convert equipment: snapshot uses itemHrid, DTO keys by equipmentDetail.type.
-    // Cross-reference live data for accurate enhancement levels (loadouts with
-    // useExactEnhancement=false store 0 for most levels in the wearable hash).
-    const liveEquipment = dataManager.characterEquipment;
+    // When useExactEnhancement=false, the wearable hash may store 0 for enhancement.
+    // Resolve by finding the highest enhancement of each item across all owned inventory,
+    // matching how the game treats "highest owned" loadout mode.
+    const characterData = dataManager.characterData;
+    const maxEnhancementByItem = new Map();
+    for (const item of characterData?.characterItems || []) {
+        if (!item?.itemHrid || !(item.count > 0)) continue;
+        const level = item.enhancementLevel || 0;
+        const existing = maxEnhancementByItem.get(item.itemHrid);
+        if (existing === undefined || level > existing) {
+            maxEnhancementByItem.set(item.itemHrid, level);
+        }
+    }
+
     const newEquipment = {};
     for (const equip of snapshot.equipment || []) {
         const itemDetail = itemDetailMap[equip.itemHrid];
         const equipType = itemDetail?.equipmentDetail?.type;
         if (equipType) {
             let enhancementLevel = equip.enhancementLevel || 0;
-            if (enhancementLevel === 0 && liveEquipment) {
-                for (const [, liveItem] of liveEquipment) {
-                    if (liveItem.itemHrid === equip.itemHrid) {
-                        enhancementLevel = liveItem.enhancementLevel || 0;
-                        break;
-                    }
-                }
+            if (enhancementLevel === 0) {
+                enhancementLevel = maxEnhancementByItem.get(equip.itemHrid) || 0;
             }
             newEquipment[equipType] = {
                 hrid: equip.itemHrid,
@@ -804,7 +810,6 @@ export function applyLoadoutSnapshotToDTO(dto, snapshotName, gameData) {
 
     // Ability levels come from current character (not the snapshot)
     // Use characterAbilities (all learned) not combatUnit.combatAbilities (equipped only)
-    const characterData = dataManager.characterData;
     const currentAbilityLevels = {};
     for (const ability of characterData?.characterAbilities || []) {
         if (ability?.abilityHrid) {
@@ -899,13 +904,21 @@ export function calculateExpectedDrops(simResult, gameData, playerHrid = 'player
             const rewardDropTable = actionDetail?.combatZoneInfo?.dungeonInfo?.rewardDropTable;
 
             if (rewardDropTable) {
+                const baseChestCount = 5;
+                const chestsPerCompletion = (baseChestCount / numberOfPlayers) * (1 + combatDropQuantity);
+
                 for (const drop of rewardDropTable) {
                     const baseRate = drop.dropRate + (drop.dropRatePerDifficultyTier ?? 0) * difficultyTier;
                     const adjustedRate = Math.min(1.0, Math.max(0, baseRate));
                     if (adjustedRate <= 0) continue;
 
                     const avgCount = (drop.minCount + drop.maxCount) / 2;
-                    const expected = simResult.dungeonsCompleted * adjustedRate * avgCount;
+                    let expected;
+                    if (adjustedRate >= 1.0) {
+                        expected = simResult.dungeonsCompleted * chestsPerCompletion * avgCount;
+                    } else {
+                        expected = simResult.dungeonsCompleted * adjustedRate * avgCount;
+                    }
 
                     totalDropMap.set(drop.itemHrid, (totalDropMap.get(drop.itemHrid) || 0) + expected);
                 }

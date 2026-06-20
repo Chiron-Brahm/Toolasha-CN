@@ -5,7 +5,6 @@
  */
 
 import config from '../../core/config.js';
-import { t } from '../../core/i18n.js';
 import dataManager from '../../core/data-manager.js';
 import webSocketHook from '../../core/websocket.js';
 import domObserver from '../../core/dom-observer.js';
@@ -30,9 +29,17 @@ const CHANNELS = [
     { hrid: '/chat_channel_types/beginner', name: 'Beginner' },
     { hrid: '/chat_channel_types/recruit', name: 'Recruit' },
     { hrid: '/chat_channel_types/ironcow', name: 'Ironcow' },
+    { hrid: '/chat_channel_types/russian', name: 'Русский' },
+    { hrid: '/chat_channel_types/chinese', name: '中文' },
+    { hrid: '/chat_channel_types/korean', name: '한국어' },
+    { hrid: '/chat_channel_types/japanese', name: '日本語' },
+    { hrid: '/chat_channel_types/portuguese', name: 'Português' },
+    { hrid: '/chat_channel_types/spanish', name: 'Español' },
+    { hrid: '/chat_channel_types/french', name: 'Français' },
+    { hrid: '/chat_channel_types/german', name: 'Deutsch' },
 ];
 
-const _CHANNEL_NAME_MAP = Object.fromEntries(CHANNELS.map((c) => [c.hrid, c.name]));
+const CHANNEL_NAME_MAP = Object.fromEntries(CHANNELS.map((c) => [c.hrid, c.name]));
 
 const SKILL_HRID_TO_NAME = {
     '/skills/total_level': 'Total Level',
@@ -64,7 +71,7 @@ const SKILL_HRID_TO_NAME = {
 function resolveSystemMessage(messageKey, meta) {
     if (messageKey === 'systemChatMessage.characterLeveledUp') {
         const skillName = SKILL_HRID_TO_NAME[meta.skillHrid] || meta.skillHrid.split('/').pop().replace(/_/g, ' ');
-        return t('🎉 {0} reached {1} {2}!', meta.name, skillName, meta.level);
+        return `🎉 ${meta.name} reached ${skillName} ${meta.level}!`;
     }
     return null;
 }
@@ -81,7 +88,7 @@ function resolveLink(link) {
         const enhancement = link.itemEnhancementLevel > 0 ? ` +${link.itemEnhancementLevel}` : '';
         const count = link.itemCount > 1 ? ` ×${link.itemCount}` : '';
         const price = formatKMB(link.price);
-        const side = link.isSell ? t('Sell') : t('Buy');
+        const side = link.isSell ? 'Sell' : 'Buy';
         return `[${itemName}${enhancement}${count} @ ${price} ${side}]`;
     }
     if (link.linkType === '/chat_link_types/item') {
@@ -221,7 +228,7 @@ class PopOutChat {
         const btn = document.createElement('button');
         btn.setAttribute('data-mwi-popout-chat', 'true');
         btn.textContent = '⧉';
-        btn.title = t('Pop out chat');
+        btn.title = 'Pop out chat';
         btn.style.cssText = `
             padding: 2px 6px;
             font-size: 13px;
@@ -326,14 +333,24 @@ class PopOutChat {
                 .map((btn) => {
                     const hrid = btn.getAttribute('data-mention-channel');
                     const name = btn.textContent?.trim().replace(/\d+$/, '').trim();
-                    return hrid && name ? { hrid, name } : null;
+                    if (!name) return null;
+                    if (hrid) return { hrid, name };
+                    // Tab without data-mention-channel: resolve HRID from known lists
+                    const known = CHANNELS.find((c) => c.name === name);
+                    if (known) return { hrid: known.hrid, name };
+                    const discovered = Array.from(this.discoveredChannels.values()).find((c) => c.name === name);
+                    if (discovered) return { hrid: discovered.hrid, name };
+                    return { hrid: `__label__/${name}`, name };
                 })
                 .filter(Boolean);
         }
 
-        // Merge in any channels discovered via incoming messages (e.g. language channels without data-mention-channel)
-        const knownHrids = new Set(domChannels.map((c) => c.hrid));
-        const extra = Array.from(this.discoveredChannels.values()).filter((c) => !knownHrids.has(c.hrid));
+        // Merge in discovered channels only if they correspond to a visible tab name
+        const visibleHrids = new Set(domChannels.map((c) => c.hrid));
+        const visibleNames = new Set(domChannels.map((c) => c.name));
+        const extra = Array.from(this.discoveredChannels.values()).filter(
+            (c) => !visibleHrids.has(c.hrid) && visibleNames.has(c.name)
+        );
 
         return [...domChannels, ...extra];
     }
@@ -392,11 +409,20 @@ class PopOutChat {
         const chatPanel = document.querySelector('[class*="GamePage_chatPanel"]');
         if (!chatPanel) return;
 
+        // Resolve channel name from HRID
+        let channelName;
+        if (channelHrid.startsWith('__label__/')) {
+            channelName = channelHrid.slice('__label__/'.length);
+        } else {
+            channelName = CHANNEL_NAME_MAP[channelHrid] || this.discoveredChannels.get(channelHrid)?.name;
+        }
+        if (!channelName) return;
+
         const tabButtons = Array.from(chatPanel.querySelectorAll('button[role="tab"]'));
         const tabBtn = tabButtons.find((btn) => {
-            return btn.getAttribute('data-mention-channel') === channelHrid;
+            const label = btn.textContent?.trim().replace(/\d+$/, '').trim();
+            return label === channelName;
         });
-        if (!tabBtn) return;
 
         const doSend = () => {
             const input = chatPanel.querySelector('[class*="Chat_chatInputContainer"] input');
@@ -433,7 +459,7 @@ class PopOutChat {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${t('MWI Chat')}</title>
+<title>MWI Chat</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -583,11 +609,11 @@ class PopOutChat {
 </head>
 <body>
 <div id="topbar">
-  <span id="topbar-title">${t('MWI Chat')}</span>
+  <span id="topbar-title">MWI Chat</span>
   <span id="topbar-name"></span>
-  <button id="add-pane-btn">${t('+ Pane')}</button>
-  <label id="vertical-label"><input type="checkbox" id="vertical-toggle"> ${t('Vertical')}</label>
-  <div id="disconnect-banner">${t('⚠ Disconnected from game tab')}</div>
+  <button id="add-pane-btn">+ Pane</button>
+  <label id="vertical-label"><input type="checkbox" id="vertical-toggle"> Vertical</label>
+  <div id="disconnect-banner">⚠ Disconnected from game tab</div>
 </div>
 <div id="panes"></div>
 
@@ -601,12 +627,12 @@ class PopOutChat {
   const STORAGE_KEY = 'mwi-chat-popout-layout';
 
   const FILTER_PRESETS = [
-    { value: 'none',         label: '${t('No filter')}',      regex: null },
-    { value: 'enhanced_buy', label: '${t('Enhanced Buy')}',   regex: /\\+\\d+.*Buy\\]/i },
-    { value: 'enhanced_sell',label: '${t('Enhanced Sell')}',  regex: /\\+\\d+.*Sell\\]/i },
-    { value: 'buy_only',     label: '${t('Buy only')}',       regex: /Buy\\]/i },
-    { value: 'sell_only',    label: '${t('Sell only')}',      regex: /Sell\\]/i },
-    { value: 'custom',       label: '${t('Custom\u2026')}',   regex: null },
+    { value: 'none',         label: 'No filter',      regex: null },
+    { value: 'enhanced_buy', label: 'Enhanced Buy',   regex: /\\+\\d+.*Buy\\]/i },
+    { value: 'enhanced_sell',label: 'Enhanced Sell',  regex: /\\+\\d+.*Sell\\]/i },
+    { value: 'buy_only',     label: 'Buy only',       regex: /Buy\\]/i },
+    { value: 'sell_only',    label: 'Sell only',      regex: /Sell\\]/i },
+    { value: 'custom',       label: 'Custom\u2026',   regex: null },
   ];
 
   function buildCustomRegex(text) {
@@ -704,7 +730,7 @@ class PopOutChat {
     const dragHandle = document.createElement('span');
     dragHandle.className = 'pane-drag-handle';
     dragHandle.textContent = '⠿';
-    dragHandle.title = '${t('Drag to reorder')}';
+    dragHandle.title = 'Drag to reorder';
 
     const select = document.createElement('select');
     select.className = 'pane-channel-select';
@@ -713,7 +739,7 @@ class PopOutChat {
     const closeBtn = document.createElement('button');
     closeBtn.className = 'pane-close-btn';
     closeBtn.textContent = '✕';
-    closeBtn.title = '${t('Close pane')}';
+    closeBtn.title = 'Close pane';
     closeBtn.addEventListener('click', () => removePane(id));
 
     header.appendChild(dragHandle);
@@ -737,7 +763,7 @@ class PopOutChat {
     const filterInput = document.createElement('input');
     filterInput.className = 'pane-filter-input';
     filterInput.type = 'text';
-    filterInput.placeholder = '${t('text or /regex/')}';
+    filterInput.placeholder = 'text or /regex/';
     filterInput.value = savedFilterCustom || '';
     filterInput.style.display = filterSelect.value === 'custom' ? '' : 'none';
 
@@ -755,12 +781,12 @@ class PopOutChat {
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'pane-input';
-    input.placeholder = '${t('Type a message...')}';
+    input.placeholder = 'Type a message...';
     input.maxLength = 500;
 
     const sendBtn = document.createElement('button');
     sendBtn.className = 'pane-send-btn';
-    sendBtn.textContent = '${t('SEND')}';
+    sendBtn.textContent = 'SEND';
 
     const doSend = () => {
       const text = input.value.trim();

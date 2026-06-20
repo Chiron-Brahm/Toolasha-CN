@@ -1932,7 +1932,7 @@ export default class CustomTabsUI {
             newConfig = moveItem(this._config, sourceTabId, targetTabId, hrid);
         }
         this._config = newConfig;
-        await saveConfig(this._characterId, this._config);
+        await this._save();
         this._removeInjectedEls();
         this._applyLayout();
     }
@@ -1946,7 +1946,7 @@ export default class CustomTabsUI {
         if (!sourceTabId) return;
         const newConfig = removeItem(this._config, sourceTabId, hrid);
         this._config = newConfig;
-        await saveConfig(this._characterId, this._config);
+        await this._save();
         this._removeInjectedEls();
         this._applyLayout();
     }
@@ -1974,7 +1974,7 @@ export default class CustomTabsUI {
         if (fromIndex < toIndex) toIndex--;
         const newConfig = reorderItem(this._config, tabId, fromIndex, toIndex);
         this._config = newConfig;
-        await saveConfig(this._characterId, this._config);
+        await this._save();
         this._removeInjectedEls();
         this._applyLayout();
     }
@@ -2622,10 +2622,22 @@ export default class CustomTabsUI {
         const inventory = dataManager.characterItems || [];
         let anyChanged = false;
         const loadoutSnapshot = getLoadoutSnapshot();
+        const snapshots = loadoutSnapshot.snapshots || {};
 
         for (const baseHrid of relevantBases) {
             // Cache may have been invalidated by a prior iteration's snapshot update
             if (!this._boundBaseHrids) break;
+
+            // Only auto-upgrade if all source loadouts use "highest enhancement" mode
+            // (useExactEnhancement: false means the game auto-equips highest owned)
+            const loadoutNames = this._boundBaseLoadouts?.get(baseHrid);
+            if (loadoutNames) {
+                const allUseHighest = [...loadoutNames].every((name) => {
+                    const snap = Object.values(snapshots).find((s) => s.name === name);
+                    return snap && !snap.useExactEnhancement;
+                });
+                if (!allUseHighest) continue;
+            }
 
             // Find highest enhancement level of this item in current inventory
             let highestOwned = -1;
@@ -2668,10 +2680,11 @@ export default class CustomTabsUI {
      */
     _rebuildBoundBaseHrids() {
         this._boundBaseHrids = new Map();
+        this._boundBaseLoadouts = new Map(); // baseHrid → Set<loadoutName>
         const walk = (tabs) => {
             for (const tab of tabs) {
                 if (tab.loadoutBindings) {
-                    for (const items of Object.values(tab.loadoutBindings)) {
+                    for (const [loadoutName, items] of Object.entries(tab.loadoutBindings)) {
                         for (const hrid of items) {
                             const base = getBaseHrid(hrid);
                             const plusIdx = hrid.lastIndexOf('+');
@@ -2681,6 +2694,10 @@ export default class CustomTabsUI {
                                     : 0;
                             const existing = this._boundBaseHrids.get(base) ?? -1;
                             if (level > existing) this._boundBaseHrids.set(base, level);
+                            if (!this._boundBaseLoadouts.has(base)) {
+                                this._boundBaseLoadouts.set(base, new Set());
+                            }
+                            this._boundBaseLoadouts.get(base).add(loadoutName);
                         }
                     }
                 }
@@ -3041,25 +3058,37 @@ export default class CustomTabsUI {
         }
 
         let open = false;
+        let outsideBound = false;
+        const outsideClick = (e) => {
+            if (!wrapper.contains(e.target)) {
+                closePanel();
+            }
+        };
         const closePanel = () => {
             open = false;
             panel.style.display = 'none';
             chevron.style.transform = '';
+            if (outsideBound) {
+                document.removeEventListener('click', outsideClick);
+                outsideBound = false;
+            }
         };
-        const outsideClick = () => closePanel();
-        document.addEventListener('click', outsideClick);
 
         toggle.addEventListener('click', (e) => {
             e.stopPropagation();
             e.preventDefault();
-            open = !open;
-            panel.style.display = open ? 'flex' : 'none';
-            chevron.style.transform = open ? 'rotate(180deg)' : '';
             if (open) {
-                // Defer adding the outside-click listener so this click doesn't immediately close it
-                setTimeout(() => document.addEventListener('click', outsideClick), 0);
-            } else {
-                document.removeEventListener('click', outsideClick);
+                closePanel();
+                return;
+            }
+            open = true;
+            panel.style.display = 'flex';
+            chevron.style.transform = 'rotate(180deg)';
+            if (!outsideBound) {
+                setTimeout(() => {
+                    document.addEventListener('click', outsideClick);
+                    outsideBound = true;
+                }, 0);
             }
         });
 

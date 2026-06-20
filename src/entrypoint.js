@@ -12,24 +12,17 @@
  */
 
 // Access libraries from global namespace
-// Use optional chaining to prevent crashes when libraries fail to load
-const Core = window.Toolasha?.Core;
-const Utils = window.Toolasha?.Utils;
-const Market = window.Toolasha?.Market;
-const Actions = window.Toolasha?.Actions;
-const Combat = window.Toolasha?.Combat;
-const UI = window.Toolasha?.UI;
+const Core = window.Toolasha.Core;
+const Utils = window.Toolasha.Utils;
+const Market = window.Toolasha.Market;
+const Actions = window.Toolasha.Actions;
+const Combat = window.Toolasha.Combat;
+const UI = window.Toolasha.UI;
 
-// Import item name translator (not in global namespace, part of this bundle)
-import { itemNameTranslator } from './utils/item-name-translator.js';
+// Destructure core modules
+const { storage, config, webSocketHook, domObserver, dataManager, featureRegistry } = Core;
 
-// Destructure core modules (safe: Core may be undefined if libraries failed to load)
-const { storage, config, webSocketHook, domObserver, dataManager, featureRegistry } = Core || {};
-
-const { setupScrollTooltipDismissal } = Utils?.dom || {};
-
-// Check if required libraries are available before proceeding
-const LIBRARIES_LOADED = !!(Core && Utils && Market && Actions && Combat && UI);
+const { setupScrollTooltipDismissal } = Utils.dom;
 
 /**
  * Detect if running on Combat Simulator page
@@ -372,7 +365,7 @@ function registerFeatures() {
             module: Combat.combatSummary,
             async: false,
         },
-        { key: 'combatStats', name: 'Combat Stats', category: 'Combat', module: Combat.combatStats, async: true },
+        { key: 'combatStats', name: 'Combat Stats', category: 'Combat', module: Combat.combatStats, async: false },
         {
             key: 'labyrinthTracker',
             name: 'Labyrinth Tracker',
@@ -499,7 +492,7 @@ function registerFeatures() {
             customCheck: () =>
                 config.isFeatureEnabled('collectionFilters') || config.isFeatureEnabled('collectionFavorites'),
         },
-        { key: 'chatCommands', name: 'Chat Commands', category: 'Chat', module: UI.chatCommands, async: true },
+        { key: 'chatCommands', name: 'Chat Commands', category: 'Chat', module: UI.chatCommands, async: false },
         { key: 'mentionTracker', name: 'Mention Tracker', category: 'Chat', module: UI.mentionTracker, async: true },
         { key: 'popOutChat', name: 'Pop-Out Chat', category: 'Chat', module: UI.popOutChat, async: true },
         { key: 'chatBlockList', name: 'Chat Block List', category: 'Chat', module: UI.chatBlockList, async: false },
@@ -661,21 +654,6 @@ function registerFeatures() {
             async: false,
         },
         {
-            key: 'guildActivityCalculator',
-            name: 'Guild Activity Calculator',
-            category: 'Guild',
-            module: UI.guildActivityCalculator,
-            async: false,
-        },
-        {
-            key: 'guildActivityDisplay',
-            name: 'Guild Activity Display',
-            category: 'Guild',
-            module: UI.guildActivityDisplay,
-            async: false,
-            customCheck: () => config.getSetting('guildActivityCalculator'),
-        },
-        {
             key: 'emptyQueueNotification',
             name: 'Empty Queue Notification',
             category: 'Notifications',
@@ -709,12 +687,7 @@ function registerFeatures() {
     featureRegistry.replaceFeatures(features);
 }
 
-if (!LIBRARIES_LOADED) {
-    console.error(
-        '[Toolasha] Required libraries (Core, Utils, Market, Actions, Combat, UI) not loaded. ' +
-            'Initialization aborted. Check that @require URLs are correct in the userscript header.'
-    );
-} else if (isCombatSimulatorPage()) {
+if (isCombatSimulatorPage()) {
     // Initialize combat sim integration only
     Combat.combatSimIntegration.initialize();
 
@@ -754,20 +727,11 @@ if (!LIBRARIES_LOADED) {
             // Add beforeunload handler to flush all pending writes
             window.addEventListener('beforeunload', () => {
                 storage.flushAll();
-                itemNameTranslator.flush();
             });
 
             // Initialize Data Manager immediately
             // Don't wait for localStorageUtil - it handles missing data gracefully
             dataManager.initialize();
-
-            // Load Chinese item name cache from storage + bulk import from game i18n
-            await itemNameTranslator.load();
-            if (document.body) {
-                itemNameTranslator.startObserver();
-            } else {
-                document.addEventListener('DOMContentLoaded', () => itemNameTranslator.startObserver(), { once: true });
-            }
         } catch (error) {
             console.error('[Toolasha] Storage/config initialization failed:', error);
             // Initialize anyway
@@ -846,48 +810,37 @@ if (!LIBRARIES_LOADED) {
     // Expose minimal user-facing API
     const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
-    // Guard: ensure Toolasha namespace exists (core library may not have loaded)
-    if (!targetWindow.Toolasha) {
-        targetWindow.Toolasha = {};
-    }
-
-    targetWindow.Toolasha.version = '2.63.2';
+    targetWindow.Toolasha.version = '2.66.0';
 
     // Feature toggle API (for users to manage settings via console)
-    if (config) {
-        targetWindow.Toolasha.features = {
-            list: () => config.getFeaturesByCategory(),
-            enable: (key) => config.setFeatureEnabled(key, true),
-            disable: (key) => config.setFeatureEnabled(key, false),
-            toggle: (key) => config.toggleFeature(key),
-            status: (key) => config.isFeatureEnabled(key),
-            info: (key) => config.getFeatureInfo(key),
-        };
-    }
+    targetWindow.Toolasha.features = {
+        list: () => config.getFeaturesByCategory(),
+        enable: (key) => config.setFeatureEnabled(key, true),
+        disable: (key) => config.setFeatureEnabled(key, false),
+        toggle: (key) => config.toggleFeature(key),
+        status: (key) => config.isFeatureEnabled(key),
+        info: (key) => config.getFeatureInfo(key),
+    };
 
     // Guild XP data management
-    if (UI?.guildXPTracker) {
-        targetWindow.Toolasha.guild = {
-            resetMemberXP: () => UI.guildXPTracker.resetMemberData(),
-        };
-    }
+    targetWindow.Toolasha.guild = {
+        resetMemberXP: () => UI.guildXPTracker.resetMemberData(),
+    };
 
     // Debug utilities (for diagnosing issues via console)
-    if (storage) {
-        targetWindow.Toolasha.debug = {
-            storage: () => {
-                const diag = storage.diagnostics();
-                console.log('=== Storage Diagnostics ===');
-                console.log('DB connection exists:', diag.dbExists);
-                console.log('Storage available:', diag.available);
-                console.log('DB name:', diag.dbName);
-                console.log('DB version:', diag.dbVersion);
-                console.log('Reconnecting:', diag.reconnecting);
-                console.log('Last null reason:', diag.lastNullReason || 'never');
-                console.log('Pending writes:', diag.pendingWrites);
-                console.log('Active timers:', diag.activeTimers);
-                return diag;
-            },
-        };
-    }
+    targetWindow.Toolasha.debug = {
+        storage: () => {
+            const diag = storage.diagnostics();
+            console.log('=== Storage Diagnostics ===');
+            console.log('DB connection exists:', diag.dbExists);
+            console.log('Storage available:', diag.available);
+            console.log('DB name:', diag.dbName);
+            console.log('DB version:', diag.dbVersion);
+            console.log('Reconnecting:', diag.reconnecting);
+            console.log('Last null reason:', diag.lastNullReason || 'never');
+            console.log('Pending writes:', diag.pendingWrites);
+            console.log('Active timers:', diag.activeTimers);
+            return diag;
+        },
+    };
 }

@@ -10,7 +10,6 @@ import webSocketHook from '../../core/websocket.js';
 import { buildPlayerDTO, buildGameDataPayload, applyLoadoutSnapshotToDTO } from '../combat-sim/combat-sim-adapter.js';
 import { runLabyrinthSimulation } from '../combat-sim/combat-sim-runner.js';
 import loadoutSnapshot from './loadout-snapshot.js';
-import { t } from '../../core/i18n.js';
 
 const ROOM_DURATION = 120;
 const BASE_SKILLING_TIME = 10;
@@ -169,6 +168,119 @@ class LabyrinthClearRate {
     }
 
     /**
+     * Get crate buffs for combat rooms (coffee + food only, no tea)
+     */
+    getCombatCrateBuffs() {
+        const labyrinth = dataManager.characterData?.characterLabyrinth;
+        const setting = dataManager.characterData?.characterSetting;
+        const gameData = dataManager.getInitClientData();
+        if (!gameData?.labyrinthCrateDetailMap) return [];
+
+        const crateHrids = [
+            labyrinth?.coffeeCrateItemHrid || setting?.labyrinthCoffeeCrateHrid || '',
+            labyrinth?.foodCrateItemHrid || setting?.labyrinthFoodCrateHrid || '',
+        ];
+
+        const allBuffs = [];
+        for (const hrid of crateHrids) {
+            if (!hrid) continue;
+            const buffs = gameData.labyrinthCrateDetailMap[hrid];
+            if (Array.isArray(buffs)) {
+                allBuffs.push(...buffs);
+            }
+        }
+        return allBuffs;
+    }
+
+    /**
+     * Get crate buffs for tea crate only (used for room-assignment effective level)
+     */
+    getTeaCrateBuffs() {
+        const labyrinth = dataManager.characterData?.characterLabyrinth;
+        const setting = dataManager.characterData?.characterSetting;
+        const gameData = dataManager.getInitClientData();
+        if (!gameData?.labyrinthCrateDetailMap) return [];
+
+        const teaHrid = labyrinth?.teaCrateItemHrid || setting?.labyrinthTeaCrateHrid || '';
+        if (!teaHrid) return [];
+
+        const buffs = gameData.labyrinthCrateDetailMap[teaHrid];
+        return Array.isArray(buffs) ? buffs : [];
+    }
+
+    /**
+     * Get the labyrinth loadout ID for a skill from characterSetting
+     */
+    getSkillingLoadoutId(skillHrid) {
+        const charSetting = dataManager.characterData?.characterSetting;
+        if (!charSetting) return 0;
+
+        const skillId = skillHrid.replace('/skills/', '');
+        const pascal = skillId.charAt(0).toUpperCase() + skillId.slice(1);
+        return Number(charSetting[`labyrinthLoadout${pascal}`]) || 0;
+    }
+
+    /**
+     * Compute equipment noncombat stat buffs from a loadout snapshot's equipment.
+     * Replicates the reference's buildLoadoutNoncombatStatTotals + buildSkillingEquipmentBuffsFromTotals.
+     * @param {number} loadoutId - Loadout ID
+     * @param {string} skillId - e.g. "milking"
+     * @returns {Array} Array of buff-like objects with typeHrid and flatBoost/ratioBoost
+     */
+    getLoadoutEquipmentBuffs(loadoutId, skillId) {
+        const snapshot = loadoutSnapshot.snapshots[loadoutId];
+        if (!snapshot?.equipment?.length) return [];
+
+        const gameData = dataManager.getInitClientData();
+        if (!gameData?.itemDetailMap) return [];
+
+        const enhTable = gameData.enhancementLevelTotalBonusMultiplierTable || {};
+        const toolSlot = `/item_locations/${skillId}_tool`;
+
+        const totals = {};
+        for (const equip of snapshot.equipment) {
+            if (!equip.itemHrid || !equip.itemLocationHrid) continue;
+
+            // Filter tool slots: only include the tool slot matching this skill
+            if (equip.itemLocationHrid.endsWith('_tool') && equip.itemLocationHrid !== toolSlot) {
+                continue;
+            }
+
+            const itemDetail = gameData.itemDetailMap[equip.itemHrid];
+            const equipDetail = itemDetail?.equipmentDetail;
+            if (!equipDetail) continue;
+
+            const baseStats = equipDetail.noncombatStats || {};
+            const enhStats = equipDetail.noncombatEnhancementBonuses || {};
+            const enhLevel = equip.enhancementLevel || 0;
+            const enhMultiplier = enhTable[enhLevel] ?? enhLevel;
+
+            for (const [key, value] of Object.entries(baseStats)) {
+                if (!Number.isFinite(value)) continue;
+                totals[key] = (totals[key] || 0) + value;
+            }
+            for (const [key, value] of Object.entries(enhStats)) {
+                if (!Number.isFinite(value)) continue;
+                totals[key] = (totals[key] || 0) + value * enhMultiplier;
+            }
+        }
+
+        // Convert totals to buff array matching the format expected by applyBuff
+        const buffs = [];
+        const actionSpeed = (totals[`${skillId}Speed`] || 0) + (totals.skillingSpeed || 0);
+        const efficiency = (totals[`${skillId}Efficiency`] || 0) + (totals.skillingEfficiency || 0);
+        const success = totals[`${skillId}Success`] || 0;
+        const gathering = totals.gatheringQuantity || 0;
+
+        if (actionSpeed) buffs.push({ typeHrid: '/buff_types/action_speed', flatBoost: actionSpeed, ratioBoost: 0 });
+        if (efficiency) buffs.push({ typeHrid: '/buff_types/efficiency', flatBoost: efficiency, ratioBoost: 0 });
+        if (success) buffs.push({ typeHrid: `/buff_types/${skillId}_success`, flatBoost: 0, ratioBoost: success });
+        if (gathering) buffs.push({ typeHrid: '/buff_types/gathering', flatBoost: gathering, ratioBoost: 0 });
+
+        return buffs;
+    }
+
+    /**
      * Aggregate all buff sources into skilling metrics for a given skill
      * @param {string} skillId - e.g. "woodcutting"
      * @param {string} actionTypeHrid - e.g. "/action_types/woodcutting"
@@ -180,6 +292,7 @@ class LabyrinthClearRate {
             actionSpeedBonus: 0,
             successBonus: 0,
             doubleProgressBonus: 0,
+            gatheringBonus: 0,
         };
         const charData = dataManager.characterData;
         if (!charData) return metrics;
@@ -187,8 +300,12 @@ class LabyrinthClearRate {
         const skillLevelType = `/buff_types/${skillId}_level`;
         const skillSuccessType = `/buff_types/${skillId}_success`;
 
+        // Equipment buffs come from the labyrinth loadout, not currently worn gear
+        const loadoutId = this.getSkillingLoadoutId(`/skills/${skillId}`);
+        const loadoutEquipBuffs = loadoutId ? this.getLoadoutEquipmentBuffs(loadoutId, skillId) : null;
+
         const buffSources = [
-            charData.equipmentActionTypeBuffsMap?.[actionTypeHrid],
+            loadoutEquipBuffs || charData.equipmentActionTypeBuffsMap?.[actionTypeHrid],
             charData.communityActionTypeBuffsMap?.[actionTypeHrid],
             charData.houseActionTypeBuffsMap?.[actionTypeHrid],
             charData.achievementActionTypeBuffsMap?.[actionTypeHrid],
@@ -201,7 +318,7 @@ class LabyrinthClearRate {
                 if (!buff?.typeHrid) continue;
                 const amount = (buff.flatBoost || 0) + (buff.ratioBoost || 0);
                 if (amount === 0) continue;
-                this.applyBuff(metrics, buff.typeHrid, amount, skillLevelType, skillSuccessType);
+                this.applyBuff(metrics, buff.typeHrid, amount, skillLevelType, skillSuccessType, skillId);
             }
         }
 
@@ -210,7 +327,7 @@ class LabyrinthClearRate {
             if (!buff?.typeHrid) continue;
             const amount = (buff.flatBoost || 0) + (buff.ratioBoost || 0);
             if (amount === 0) continue;
-            this.applyBuff(metrics, buff.typeHrid, amount, skillLevelType, skillSuccessType);
+            this.applyBuff(metrics, buff.typeHrid, amount, skillLevelType, skillSuccessType, skillId);
         }
 
         const upgrades = this.getLabyrinthUpgrades();
@@ -225,7 +342,7 @@ class LabyrinthClearRate {
     /**
      * Apply a single buff to metrics based on its type
      */
-    applyBuff(metrics, typeHrid, amount, skillLevelType, skillSuccessType) {
+    applyBuff(metrics, typeHrid, amount, skillLevelType, skillSuccessType, skillId) {
         if (typeHrid === skillLevelType) {
             metrics.skillLevelBonus += amount;
         } else if (typeHrid === '/buff_types/efficiency') {
@@ -236,6 +353,12 @@ class LabyrinthClearRate {
             metrics.doubleProgressBonus += amount;
         } else if (typeHrid === '/buff_types/success_rate' || typeHrid === skillSuccessType) {
             metrics.successBonus += amount;
+        } else if (
+            (typeHrid === '/buff_types/gathering' &&
+                (skillId === 'milking' || skillId === 'foraging' || skillId === 'woodcutting')) ||
+            (typeHrid === '/buff_types/gourmet' && (skillId === 'cooking' || skillId === 'brewing'))
+        ) {
+            metrics.gatheringBonus += amount;
         }
     }
 
@@ -255,7 +378,7 @@ class LabyrinthClearRate {
         const levelDelta = effectiveLevel - roomLevel;
         const levelBonus = levelDelta >= 0 ? levelDelta * 0.005 : levelDelta * 0.01;
         const successChance = Math.min(1, Math.max(0, 0.8 * (1 + levelBonus + metrics.successBonus)));
-        const doubleChance = Math.min(1, Math.max(0, metrics.doubleProgressBonus));
+        const doubleChance = Math.min(1, Math.max(0, metrics.doubleProgressBonus + (metrics.gatheringBonus || 0)));
 
         const workPower = effectiveLevel * (1 + metrics.efficiencyBonus);
         const progressPerSuccess = Math.max(0, Math.floor(workPower));
@@ -446,17 +569,27 @@ class LabyrinthClearRate {
     }
 
     /**
-     * Get effective level for a skill (base + buff bonuses)
+     * Get effective level for room assignment (base + tea crate only).
+     * The game uses this to determine what room level a skip threshold maps to.
      */
     getEffectiveLevel(skillHrid) {
         const skillId = skillHrid.replace('/skills/', '');
-        const actionTypeHrid = `/action_types/${skillId}`;
-        const metrics = this.getSkillingMetrics(skillId, actionTypeHrid);
 
         const skills = dataManager.getSkills();
         const skill = skills?.find((s) => s.skillHrid === skillHrid);
         const baseLevel = skill?.level || 1;
-        return baseLevel + metrics.skillLevelBonus;
+
+        const teaCrateBuffs = this.getTeaCrateBuffs();
+        const skillLevelType = `/buff_types/${skillId}_level`;
+        let teaLevelBonus = 0;
+        for (const buff of teaCrateBuffs) {
+            if (!buff?.typeHrid) continue;
+            if (buff.typeHrid === skillLevelType) {
+                teaLevelBonus += (buff.flatBoost || 0) + (buff.ratioBoost || 0);
+            }
+        }
+
+        return baseLevel + teaLevelBonus;
     }
 
     /**
@@ -478,7 +611,7 @@ class LabyrinthClearRate {
      * skill level types (averaged).
      */
     _getCrateCombatLevelBonus() {
-        const crateBuffs = this.getCrateBuffs();
+        const crateBuffs = this.getCombatCrateBuffs();
         if (crateBuffs.length === 0) return 0;
 
         const skillLevelTypes = new Set([
@@ -729,9 +862,9 @@ class LabyrinthClearRate {
     findRecommendedThreshold(skillHrid, targetRate) {
         const effectiveLevel = this.getEffectiveLevel(skillHrid);
         const isEnhancing = skillHrid === '/skills/enhancing';
-        let low = 0;
+        let low = -300;
         let high = 300;
-        let bestThreshold = 0;
+        let bestThreshold = null;
 
         while (low <= high) {
             const mid = Math.floor((low + high) / 2);
@@ -758,9 +891,9 @@ class LabyrinthClearRate {
      */
     async findRecommendedThresholdCombat(monsterHrid, targetRate) {
         const effectiveCombatLevel = this.getPlayerEffectiveCombatLevel();
-        let low = 0;
+        let low = -300;
         let high = 300;
-        let bestThreshold = 0;
+        let bestThreshold = null;
 
         while (low <= high) {
             const mid = Math.floor((low + high) / 2);
@@ -820,14 +953,14 @@ class LabyrinthClearRate {
                 const threshold = this.findRecommendedThreshold(roomHrid, targetRate);
                 this.recommendations.set(roomHrid, { threshold });
             } else {
-                if (button) button.textContent = t('Recommending... ({0}/{1})', completed + 1, totalRooms);
+                if (button) button.textContent = `Recommending... (${completed + 1}/${totalRooms})`;
                 const threshold = await this.findRecommendedThresholdCombat(roomHrid, targetRate);
                 this.recommendations.set(roomHrid, { threshold });
             }
             completed++;
         }
 
-        if (button) button.textContent = t('Recommend');
+        if (button) button.textContent = 'Recommend';
         this.recommendRunning = false;
         this.injectRecommendationBadges();
     }
@@ -845,7 +978,7 @@ class LabyrinthClearRate {
             if (!roomHrid) continue;
 
             const rec = this.recommendations.get(roomHrid);
-            if (!rec) continue;
+            if (!rec || rec.threshold === null) continue;
 
             const isSkill = roomHrid.startsWith('/skills/');
             const currentThreshold = isSkill ? this.getSkipThreshold(roomHrid) : this.getCombatSkipThreshold(roomHrid);
@@ -853,9 +986,9 @@ class LabyrinthClearRate {
             const badge = document.createElement('span');
             badge.className = RECOMMEND_CLASS;
             badge.style.cssText = 'font-size:0.7rem; margin-left:6px; white-space:nowrap; font-weight:bold;';
-            badge.textContent = t('Rec: +{0}', rec.threshold);
+            badge.textContent = `Rec: ${rec.threshold >= 0 ? '+' : ''}${rec.threshold}`;
 
-            badge.title = t('Recommended skip threshold for ≥{0}% clear rate', this._recommendTargetPct);
+            badge.title = `Recommended skip threshold for ≥${this._recommendTargetPct}% clear rate`;
 
             if (currentThreshold <= rec.threshold) {
                 badge.style.color = '#00c896';
@@ -898,7 +1031,7 @@ class LabyrinthClearRate {
 
         const rateLabel = document.createElement('span');
         rateLabel.style.cssText = labelStyle;
-        rateLabel.textContent = t('Target Win %');
+        rateLabel.textContent = 'Target Win %';
 
         const rateInput = document.createElement('input');
         rateInput.type = 'number';
@@ -914,7 +1047,7 @@ class LabyrinthClearRate {
 
         const hoursLabel = document.createElement('span');
         hoursLabel.style.cssText = labelStyle;
-        hoursLabel.textContent = t('Sim Hours');
+        hoursLabel.textContent = 'Sim Hours';
 
         const hoursInput = document.createElement('input');
         hoursInput.type = 'number';
@@ -929,7 +1062,7 @@ class LabyrinthClearRate {
         });
 
         const button = document.createElement('button');
-        button.textContent = t('Recommend');
+        button.textContent = 'Recommend';
         button.style.cssText =
             'padding:2px 10px; cursor:pointer; font-size:0.75rem; border-radius:4px; border:1px solid #555; background:#333; color:#ccc;';
         button.addEventListener('click', () => this.runRecommendations());
@@ -1046,29 +1179,19 @@ class LabyrinthClearRate {
 
         const chancePct = (estimate.clearChance * 100).toFixed(1);
         if (estimate.isEnhancing) {
-            node.textContent = t(
-                ' [Clear {0}% | +{1}/+{2} | {3} left]',
-                chancePct,
-                estimate.currentLevel,
-                estimate.targetLevel,
-                estimate.attemptsLeft
-            );
+            node.textContent = ` [Clear ${chancePct}% | +${estimate.currentLevel}/+${estimate.targetLevel} | ${estimate.attemptsLeft} left]`;
         } else {
-            node.textContent = t(' [Clear {0}% | {1} left]', chancePct, estimate.attemptsLeft);
+            node.textContent = ` [Clear ${chancePct}% | ${estimate.attemptsLeft} left]`;
         }
 
         const tooltipLines = [
-            t(
-                'Success: {0}% | Double: {1}%',
-                (estimate.successChance * 100).toFixed(1),
-                (estimate.doubleChance * 100).toFixed(1)
-            ),
-            t('Actions: {0}/{1}', estimate.actionCounter, estimate.totalAttempts),
+            `Success: ${(estimate.successChance * 100).toFixed(1)}% | Double: ${(estimate.doubleChance * 100).toFixed(1)}%`,
+            `Actions: ${estimate.actionCounter}/${estimate.totalAttempts}`,
         ];
         if (estimate.isEnhancing) {
-            tooltipLines.push(t('Enhance: +{0}/+{1}', estimate.currentLevel, estimate.targetLevel));
+            tooltipLines.push(`Enhance: +${estimate.currentLevel}/+${estimate.targetLevel}`);
         } else {
-            tooltipLines.push(t('Progress: {0}/{1}', estimate.currentWorkValue, estimate.targetWorkValue));
+            tooltipLines.push(`Progress: ${estimate.currentWorkValue}/${estimate.targetWorkValue}`);
         }
         node.title = tooltipLines.join('\n');
     }
@@ -1175,7 +1298,7 @@ class LabyrinthClearRate {
         badge.className = BADGE_CLASS;
         badge.style.cssText = 'font-size:0.7rem; margin-left:6px; white-space:nowrap; color:#999;';
         badge.textContent = '...';
-        badge.title = t('Simulating combat...');
+        badge.title = 'Simulating combat...';
         cell.appendChild(badge);
         return badge;
     }
@@ -1234,44 +1357,34 @@ class LabyrinthClearRate {
 
         if (result.type === 'skilling') {
             return [
-                t('Success: {0} | Double: {1}', pct(result.successChance), pct(result.doubleChance)),
-                t('Actions: {0} @ {1}s each', result.attempts, result.actionSeconds.toFixed(2)),
-                t(
-                    'Work Power: {0} → Progress: {1}/{2} per success',
-                    Math.floor(result.workPower),
-                    result.progressPerSuccess,
-                    result.targetProgress
-                ),
-                t(
-                    'Effective Level: {0} (base {1} + {2})',
-                    Math.floor(result.effectiveLevel),
-                    result.baseLevel,
-                    Math.floor(result.effectiveLevel - result.baseLevel)
-                ),
-                t('Room Level: {0} | XP/room: {1}', result.roomLevel, result.xpPerRoom),
+                `Success: ${pct(result.successChance)} | Double: ${pct(result.doubleChance)}`,
+                `Actions: ${result.attempts} @ ${result.actionSeconds.toFixed(2)}s each`,
+                `Work Power: ${Math.floor(result.workPower)} → Progress: ${result.progressPerSuccess}/${result.targetProgress} per success`,
+                `Effective Level: ${Math.floor(result.effectiveLevel)} (base ${result.baseLevel} + ${Math.floor(result.effectiveLevel - result.baseLevel)})`,
+                `Room Level: ${result.roomLevel} | XP/room: ${result.xpPerRoom}`,
             ].join('\n');
         }
 
         if (result.type === 'enhancing') {
             return [
-                t('Success: {0} | Double: {1}', pct(result.successChance), pct(result.doubleChance)),
-                t('Actions: {0} @ {1}s each', result.attempts, result.actionSeconds.toFixed(2)),
-                t('Target: +{0} | Effective Level: {1}', result.targetLevel, Math.floor(result.effectiveLevel)),
-                t('Room Level: {0}', result.roomLevel),
+                `Success: ${pct(result.successChance)} | Double: ${pct(result.doubleChance)}`,
+                `Actions: ${result.attempts} @ ${result.actionSeconds.toFixed(2)}s each`,
+                `Target: +${result.targetLevel} | Effective Level: ${Math.floor(result.effectiveLevel)}`,
+                `Room Level: ${result.roomLevel}`,
             ].join('\n');
         }
 
         if (result.type === 'combat') {
             return [
-                t('Win Rate: {0} | Avg Fight: {1}s', pct(result.winRate), Math.round(result.avgFightSeconds)),
-                t('Monster: {0} | Room Level: {1}', result.monsterName, result.roomLevel),
-                t('Loadout: "{0}"', result.loadoutName),
+                `Win Rate: ${pct(result.winRate)} | Avg Fight: ${Math.round(result.avgFightSeconds)}s`,
+                `Monster: ${result.monsterName} | Room Level: ${result.roomLevel}`,
+                `Loadout: "${result.loadoutName}"`,
             ].join('\n');
         }
 
         const clearPct = Math.round(result.clearChance * 100);
         const timeText = this.formatTime(result.expectedSeconds);
-        return t('Clear: {0}% | Expected: {1} | Room level: {2}', clearPct, timeText, roomLevel);
+        return `Clear: ${clearPct}% | Expected: ${timeText} | Room level: ${roomLevel}`;
     }
 
     getBadgeColor(clearChance) {
@@ -1349,7 +1462,7 @@ class LabyrinthClearRate {
         const levelDelta = effectiveLevel - roomLevel;
         const levelBonus = levelDelta >= 0 ? levelDelta * 0.005 : levelDelta * 0.01;
         const successChance = Math.min(1, Math.max(0, 0.8 * (1 + levelBonus + metrics.successBonus)));
-        const doubleChance = Math.min(1, Math.max(0, metrics.doubleProgressBonus));
+        const doubleChance = Math.min(1, Math.max(0, metrics.doubleProgressBonus + (metrics.gatheringBonus || 0)));
 
         const workPower = effectiveLevel * (1 + metrics.efficiencyBonus);
         const progressPerSuccess = Math.max(0, Math.floor(workPower));
