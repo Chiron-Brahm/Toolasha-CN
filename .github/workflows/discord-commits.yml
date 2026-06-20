@@ -30,9 +30,14 @@ jobs:
           DISCORD_COMMITS_WEBHOOK: ${{ secrets.DISCORD_COMMITS_WEBHOOK }}
           DISCORD_FEAT_WEBHOOK: ${{ secrets.DISCORD_FEAT_WEBHOOK }}
         run: |
+          if [ -z "$DISCORD_COMMITS_WEBHOOK" ]; then
+            echo "⚠️  DISCORD_COMMITS_WEBHOOK secret not configured, skipping Discord notification"
+            exit 0
+          fi
+
           ESCAPED_TITLE=$(echo "${{ github.event.pull_request.title }}" | sed 's/^chore([^)]*): //' | sed 's/^chore: //' | sed 's/\b\w/\u&/' | sed 's/"/\\"/g')
           BODY=$(python3 -c "import json,os; print(json.dumps(os.environ.get('COMMIT_LINES','')))")
-
+          
           PAYLOAD=$(cat <<EOF
           {
             "embeds": [{
@@ -43,15 +48,16 @@ jobs:
           }
           EOF
           )
-
+          
           curl -s -X POST "$DISCORD_COMMITS_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD"
-
+          
           # Post only feat commits to #feats if any exist
           if [ "$HAS_FEATS" = "true" ]; then
-            FEAT_BODY=$(python3 -c "import json,os; print(json.dumps(os.environ.get('FEAT_LINES','')))")
-            FEAT_PAYLOAD=$(cat <<EOF
+            if [ -n "$DISCORD_FEAT_WEBHOOK" ]; then
+              FEAT_BODY=$(python3 -c "import json,os; print(json.dumps(os.environ.get('FEAT_LINES','')))")
+              FEAT_PAYLOAD=$(cat <<EOF
           {
             "embeds": [{
               "title": "${ESCAPED_TITLE}",
@@ -60,8 +66,9 @@ jobs:
             }]
           }
           EOF
-            )
-            curl -s -X POST "$DISCORD_FEAT_WEBHOOK" \
-              -H "Content-Type: application/json" \
-              -d "$FEAT_PAYLOAD"
+              )
+              curl -s -X POST "$DISCORD_FEAT_WEBHOOK" \
+                -H "Content-Type: application/json" \
+                -d "$FEAT_PAYLOAD"
+            fi
           fi
