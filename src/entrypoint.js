@@ -256,6 +256,13 @@ function registerFeatures() {
             async: false,
         },
         {
+            key: 'costSummary',
+            name: 'Cost Summary',
+            category: 'Actions',
+            module: Actions.costSummary,
+            async: false,
+        },
+        {
             key: 'craftingPlan',
             name: 'Crafting Plan',
             category: 'Actions',
@@ -817,11 +824,7 @@ if (!LIBRARIES_LOADED) {
     // Expose minimal user-facing API
     const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
-    if (!targetWindow.Toolasha) {
-        targetWindow.Toolasha = {};
-    }
-
-    targetWindow.Toolasha.version = '2.66.0';
+    targetWindow.Toolasha.version = '2.68.0';
 
     // Feature toggle API (for users to manage settings via console)
     if (config) {

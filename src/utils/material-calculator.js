@@ -9,6 +9,7 @@ import { parseArtisanBonus, getDrinkConcentration } from './tea-parser.js';
 import { getEnhancingParams } from './enhancement-config.js';
 import { calculateEnhancement } from './enhancement-calculator.js';
 import { itemNameTranslator } from './item-name-translator.js';
+import { resolveActionContext } from './action-context.js';
 
 export const ARTISAN_MATERIAL_MODE = {
     EXPECTED: 'expected',
@@ -235,13 +236,12 @@ export function calculateArtisanBonus(actionDetails) {
             return 0;
         }
 
-        // Get character data
-        const equipment = dataManager.getEquipment();
+        // Get character data (loadout-snapshot aware)
+        const { equipment, drinks: activeDrinks } = resolveActionContext(actionDetails.type);
         const itemDetailMap = gameData.itemDetailMap || {};
 
         // Calculate artisan bonus (material reduction from Artisan Tea)
         const drinkConcentration = getDrinkConcentration(equipment, itemDetailMap);
-        const activeDrinks = dataManager.getActionDrinkSlots(actionDetails.type);
         const artisanBonus = parseArtisanBonus(activeDrinks, itemDetailMap, drinkConcentration);
 
         return artisanBonus;

@@ -305,7 +305,7 @@ class LabSimUI {
             <select id="mwi-labsim-upgrade-player" style="${selectStyle}"></select>
             <label style="color:#888; font-size:12px;"${t('Enemy Level')}l</label>
             <input id="mwi-labsim-upgrade-level" type="number" min="20" max="300" value="100" style="${inputStyle}"
-                title="Defaults to Max Level result when available">
+                ${t('Defaults to Max Level result when available')}ailable">
             <button${t('Defaults to Max Level result when available')}          margin-left: auto;
                 background: ${ACCENT_BTN_BG};
                 color: ${ACCENT};

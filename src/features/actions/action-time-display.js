@@ -94,6 +94,7 @@ class ActionTimeDisplay {
             'actionBar_showActionDuration',
             'actionBar_showActionsPerHour',
             'actionBar_showTimeRemaining',
+            'profitCalc_pricingMode',
         ];
         for (const key of actionBarSettings) {
             config.onSettingChange(key, (newValue) => {
@@ -332,7 +333,8 @@ class ActionTimeDisplay {
                 if (!hasInfinite && !result.isTrulyInfinite) {
                     const completionDate = new Date();
                     completionDate.setSeconds(completionDate.getSeconds() + accumulatedTime);
-                    timeText += ` Complete at ${formatCompletionTime(completionDate, false)}`;
+                    const isToday = completionDate.toDateString() === new Date().toDateString();
+                    timeText += ` Complete at ${formatCompletionTime(completionDate, !isToday)}`;
                 }
 
                 this.appendTimeToActionDiv(actionDiv, timeText);
@@ -1215,7 +1217,7 @@ class ActionTimeDisplay {
                 const recycleClockTime = formatCompletionTime(recycleCompletion, !recycleIsToday);
                 recycleHtml = `<span style="color:#4dd0a0; margin-left:12px; font-size:11px;">Est. w/ recycle: ${recycleTimeStr} → ${recycleClockTime}</span>`;
             }
-            this.displayElement.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${matsLabel} ${timeStr} → ${clockTime}${recycleHtml}`;
+            this.displayElement.innerHTML = `<span style="display: inline-flex; flex-wrap: nowrap; align-items: baseline; gap: 0.25em;"><span>⏱</span>${matsLabel} ${timeStr} → ${clockTime}</span>${recycleHtml}`;
         } else {
             this.displayElement.innerHTML = '';
         }
@@ -1436,7 +1438,7 @@ class ActionTimeDisplay {
 
             const itemIconHtml = this.getItemIconHtml(limitingItemHrid);
             const matsLabel = itemIconHtml ? `${itemIconHtml}:` : 'Mats:';
-            this.displayElement.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${matsLabel} ${timeStr} → ${clockTime} (${formatWithSeparator(materialLimit)} actions)`;
+            this.displayElement.innerHTML = `<span style="display: inline-flex; flex-wrap: nowrap; align-items: baseline; gap: 0.25em;"><span>⏱</span>${matsLabel} ${timeStr} → ${clockTime} (${formatWithSeparator(materialLimit)} actions)</span>`;
         } else {
             this.displayElement.innerHTML = '';
         }
@@ -2325,8 +2327,9 @@ class ActionTimeDisplay {
                 if (!hasInfinite && !isTrulyInfinite) {
                     const completionDate = new Date();
                     completionDate.setSeconds(completionDate.getSeconds() + accumulatedTime);
+                    const isToday = completionDate.toDateString() === new Date().toDateString();
 
-                    completionText = ` Complete at ${formatCompletionTime(completionDate, false)}`;
+                    completionText = ` Complete at ${formatCompletionTime(completionDate, !isToday)}`;
                 }
 
                 // Create time display element

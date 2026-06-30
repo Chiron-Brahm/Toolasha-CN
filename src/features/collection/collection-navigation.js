@@ -36,6 +36,7 @@ class CollectionNavigation {
         this.isInitialized = false;
         this.activePopover = null;
         this.outsideClickHandler = null;
+        this.outsideClickTimer = null;
         this.escapeKeyHandler = null;
         this.itemNameToHridCache = null;
         this.itemNameToHridCacheSource = null;
@@ -235,7 +236,10 @@ class CollectionNavigation {
                 this.dismissPopover();
             }
         };
-        setTimeout(() => {
+        const queuedHandler = this.outsideClickHandler;
+        this.outsideClickTimer = setTimeout(() => {
+            this.outsideClickTimer = null;
+            if (this.outsideClickHandler !== queuedHandler) return;
             document.addEventListener('mousedown', this.outsideClickHandler);
         }, 0);
 
@@ -255,6 +259,11 @@ class CollectionNavigation {
         if (this.activePopover) {
             this.activePopover.remove();
             this.activePopover = null;
+        }
+
+        if (this.outsideClickTimer !== null) {
+            clearTimeout(this.outsideClickTimer);
+            this.outsideClickTimer = null;
         }
 
         if (this.outsideClickHandler) {

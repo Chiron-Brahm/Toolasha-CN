@@ -292,8 +292,13 @@ class InventoryBadgeManager {
         }
         const priceCache = marketAPI.getPricesBatch(itemsToPrice);
 
-        // Get settings for high enhancement cost mode
-        const useHighEnhancementCost = config.getSetting('networth_highEnhancementUseCost');
+        // Get settings for high enhancement cost mode. The expensive
+        // calculateEnhancementPath path only runs when the Net Worth feature
+        // is enabled — disabling that feature skips the per-item enhancement
+        // simulation that can take 100+ ms for each +20 piece and freeze the
+        // tab during init when the inventory has many high-enhancement items.
+        const useHighEnhancementCost =
+            config.getSetting('networth_highEnhancementUseCost') && config.isFeatureEnabled('networth');
         const minLevel = config.getSetting('networth_highEnhancementMinLevel') || 13;
 
         // Currency items to skip (actual currencies, not category)
@@ -443,8 +448,16 @@ class InventoryBadgeManager {
                     bidPrice = marketPrice.bid > 0 ? marketPrice.bid : 0;
                 }
 
-                // For enhanced equipment, fill in missing prices with enhancement cost
-                if (isEquipment && enhancementLevel > 0 && (askPrice === 0 || bidPrice === 0)) {
+                // For enhanced equipment, fill in missing prices with enhancement cost.
+                // Same gate as the primary high-enhancement branch above: this fallback
+                // runs calculateEnhancementPath per item, which is the actual freeze
+                // source for +20 inventories. Skip it when Net Worth is disabled.
+                if (
+                    useHighEnhancementCost &&
+                    isEquipment &&
+                    enhancementLevel > 0 &&
+                    (askPrice === 0 || bidPrice === 0)
+                ) {
                     // Check cache first
                     const cachedCost = networthCache.get(itemHrid, enhancementLevel);
                     let enhancementCost = cachedCost;

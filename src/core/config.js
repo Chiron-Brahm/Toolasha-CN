@@ -226,6 +226,13 @@ class Config {
                 ),
                 settingKey: 'dungeonTracker',
             },
+            combatStats: {
+                enabled: true,
+                name: 'Combat Statistics',
+                category: 'Combat',
+                description: 'Tracks combat data and consumable usage; shows Statistics tab in Combat panel',
+                settingKey: 'combatStats',
+            },
             combatSimIntegration: {
                 enabled: true,
                 name: t('Combat Simulator Integration'),

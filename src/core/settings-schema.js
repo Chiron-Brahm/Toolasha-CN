@@ -358,6 +358,13 @@ export const settingsGroups = {
                 default: true,
                 help: 'Adds a budget input below the Missing Mats button. Enter a gold budget (e.g. 50m) to calculate how many units you can produce by buying missing tradeable materials at ask price.',
             },
+            actions_costSummary: {
+                id: 'actions_costSummary',
+                label: 'Action panel: Show cost summary',
+                type: 'checkbox',
+                default: true,
+                help: 'Compact 4-line cost comparison for the selected produce quantity: direct recipe cost, missing direct mats, best crafting plan, and finished item market price.',
+            },
             actionPanel_bestCraftingPlan: {
                 id: 'actionPanel_bestCraftingPlan',
                 label: 'Action panel: Show best crafting plan',
@@ -822,16 +829,17 @@ export const settingsGroups = {
         settings: {
             networth: {
                 id: 'networth',
-                label: 'Top right: Show current assets (net worth)',
+                label: 'Top right: Show gold count',
                 type: 'checkbox',
                 default: true,
-                help: 'Enhanced items valued by enhancement simulator',
+                help: 'Displays your current gold count next to Total Level in the page header',
             },
             invWorth: {
                 id: 'invWorth',
-                label: 'Below inventory: Show inventory summary',
+                label: 'Below inventory: Show net worth breakdown',
                 type: 'checkbox',
                 default: true,
+                help: 'Shows total net worth with a per-category breakdown (equipment, inventory, listings, houses, abilities) below the inventory panel',
             },
             invSort: {
                 id: 'invSort',
@@ -1589,7 +1597,7 @@ export const settingsGroups = {
                 label: 'Loadout panel: Use saved loadout snapshots in profit calculations',
                 type: 'checkbox',
                 default: true,
-                help: 'Saves your loadout equipment when you view loadouts, so profit/hr calculations use the correct tool bonuses even when that loadout is not equipped. Disable to always use currently-equipped gear.',
+                help: "When you queue an action, Toolasha predicts its XP, time, and profit using the saved loadout for that skill (skill-default → all-skills-default → any saved loadout → currently-equipped). Save your loadouts in-game so they're captured. Disable to always predict using currently-equipped gear.",
             },
             showsKeyInfoInIcon: {
                 id: 'showsKeyInfoInIcon',
