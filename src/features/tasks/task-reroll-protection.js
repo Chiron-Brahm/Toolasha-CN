@@ -29,6 +29,9 @@ class TaskRerollProtection {
     constructor() {
         this.isInitialized = false;
         this.protectedHrids = new Set();
+        this.capProtectionEnabled = false;
+        this.coinThreshold = 320000;
+        this.cowbellThreshold = 32;
         this.unregisterHandlers = [];
         this.confirmTimers = new WeakMap(); // taskCard → timeout ID
     }
@@ -42,6 +45,10 @@ class TaskRerollProtection {
         // Load protected list from storage
         const saved = await storage.getJSON(getStorageKey(), 'settings', []);
         this.protectedHrids = new Set(saved);
+
+        this.capProtectionEnabled = await storage.get('taskCapProtection', 'settings', false);
+        this.coinThreshold = await storage.get('taskCapCoinThreshold', 'settings', 320000);
+        this.cowbellThreshold = await storage.get('taskCapCowbellThreshold', 'settings', 32);
 
         // Watch for task cards appearing
         const unregister = domObserver.onClass('TaskRerollProtection', 'RandomTask_randomTask', (taskNode) => {
@@ -118,11 +125,18 @@ class TaskRerollProtection {
         const hrid = quest?.actionHrid || quest?.monsterHrid || '';
         const isProtected = hrid && this.protectedHrids.has(hrid);
 
-        // Update visual state
+        // Check if this card is currently at the reroll cap
+        const isAtCap = this.capProtectionEnabled && this._cardIsAtCap(taskCard);
+
+        // Update visual state — per-task green takes precedence over cap orange
         if (isProtected && !config.getSetting('taskRerollProtection_hideHighlight')) {
             taskCard.style.setProperty('outline', '2px solid rgba(76, 175, 80, 0.7)', 'important');
             taskCard.style.setProperty('outline-offset', '-2px');
             taskCard.style.setProperty('box-shadow', '0 0 8px 2px rgba(76, 175, 80, 0.3)', 'important');
+        } else if (isAtCap) {
+            taskCard.style.setProperty('outline', '2px solid rgba(251, 146, 60, 0.7)', 'important');
+            taskCard.style.setProperty('outline-offset', '-2px');
+            taskCard.style.setProperty('box-shadow', '0 0 8px 2px rgba(251, 146, 60, 0.3)', 'important');
         } else {
             taskCard.style.removeProperty('outline');
             taskCard.style.removeProperty('outline-offset');
@@ -134,6 +148,22 @@ class TaskRerollProtection {
             taskCard.dataset.mwiRerollProtection = '1';
             this._wireRerollInterception(taskCard);
         }
+    }
+
+    /**
+     * Returns true if the task card's reroll cost meets or exceeds the configured threshold.
+     * Coin progression: 10K → 20K → 40K → 80K → 160K → 320K (hard cap)
+     * Cowbell progression: 1 → 2 → 4 → 8 → 16 → 32 (hard cap)
+     * @param {HTMLElement} taskCard
+     * @returns {boolean}
+     * @private
+     */
+    _cardIsAtCap(taskCard) {
+        const quest = this._getQuestFromCard(taskCard);
+        if (!quest) return false;
+        const coinCost = Math.min(10000 * Math.pow(2, quest.coinRerollCount), 320000);
+        const cowbellCost = Math.min(Math.pow(2, quest.cowbellRerollCount), 32);
+        return coinCost >= this.coinThreshold || cowbellCost >= this.cowbellThreshold;
     }
 
     /**
@@ -222,7 +252,20 @@ class TaskRerollProtection {
                     // Check if this task is protected
                     const quest = this._getQuestFromCard(card);
                     const hrid = quest?.actionHrid || quest?.monsterHrid || '';
-                    if (!hrid || !this.protectedHrids.has(hrid)) return;
+                    const isPerTaskProtected = hrid && this.protectedHrids.has(hrid);
+
+                    // Check cap protection (320K gold / 32 cowbells)
+                    const isCapProtected = this.capProtectionEnabled && this._isRerollAtCap(btnText);
+
+                    if (!isPerTaskProtected && !isCapProtected) return;
+
+                    const warningMsg = isPerTaskProtected
+                        ? 'Protected task! Unlocks in 3s...'
+                        : 'Reroll at cap! Unlocks in 3s...';
+
+                    const warningMsg = isPerTaskProtected
+                        ? 'Protected task! Unlocks in 3s...'
+                        : 'Reroll at cap! Unlocks in 3s...';
 
                     // Phase 2: confirmation window is open — allow the reroll through
                     if (card.dataset.mwiRerollConfirmed === '1') {
@@ -241,7 +284,7 @@ class TaskRerollProtection {
 
                     // Initial click — start 3s lockdown
                     card.dataset.mwiRerollLocked = '1';
-                    this._showWarning(card, t('Protected task! Unlocks in 3s...'));
+                    this._showWarning(card, warningMsg);
 
                     // Clear any existing timers for this card
                     const existingTimer = this.confirmTimers.get(card);
@@ -365,6 +408,32 @@ class TaskRerollProtection {
      */
     async _save() {
         await storage.setJSON(getStorageKey(), Array.from(this.protectedHrids), 'settings', true);
+    }
+
+    /**
+     * Returns true if the reroll button text represents a cost meeting the configured threshold.
+     * Coin costs are always >= 10000 (formatted with K); cowbell costs are <= 32.
+     * @param {string} btnText
+     * @returns {boolean}
+     * @private
+     */
+    _isRerollAtCap(btnText) {
+        const match = btnText.match(/([\d,]+)(K?)/);
+        if (!match) return false;
+        const raw = parseInt(match[1].replace(/,/g, ''), 10);
+        const cost = match[2] === 'K' ? raw * 1000 : raw;
+        if (cost >= 1000) return cost >= this.coinThreshold;
+        return cost >= this.cowbellThreshold;
+    }
+
+    /**
+     * Persist cap protection toggle and thresholds.
+     * @private
+     */
+    async _saveCapProtection() {
+        await storage.set('taskCapProtection', this.capProtectionEnabled, 'settings');
+        await storage.set('taskCapCoinThreshold', this.coinThreshold, 'settings');
+        await storage.set('taskCapCowbellThreshold', this.cowbellThreshold, 'settings');
     }
 
     /**
@@ -577,6 +646,79 @@ class TaskRerollProtection {
 
         popup.appendChild(header);
         popup.appendChild(searchDiv);
+
+        // Cap protection toggle row
+        const capRow = document.createElement('div');
+        capRow.style.cssText = `
+            display: flex; align-items: center; gap: 8px;
+            padding: 7px 14px;
+            border-bottom: 1px solid rgba(74, 158, 255, 0.2);
+            border-top: 1px solid rgba(74, 158, 255, 0.2);
+            cursor: pointer;
+            flex-shrink: 0;
+        `;
+
+        const COIN_OPTIONS = [10000, 20000, 40000, 80000, 160000, 320000];
+        const COWBELL_OPTIONS = [1, 2, 4, 8, 16, 32];
+        const selectCss = `
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 4px; color: #e0e0e0; font-size: 11px; padding: 2px 4px; cursor: pointer;
+        `;
+
+        const renderCapRow = () => {
+            const on = this.capProtectionEnabled;
+            if (on) {
+                const coinOpts = COIN_OPTIONS.map(
+                    (v) =>
+                        `<option value="${v}" ${v === this.coinThreshold ? 'selected' : ''}>${v >= 1000 ? v / 1000 + 'K' : v}💰</option>`
+                ).join('');
+                const cowbellOpts = COWBELL_OPTIONS.map(
+                    (v) => `<option value="${v}" ${v === this.cowbellThreshold ? 'selected' : ''}>${v}🔔</option>`
+                ).join('');
+                capRow.innerHTML = `
+                    <span style="width:18px; text-align:center; color:#f0a830; font-weight:700;">✓</span>
+                    <span style="color:#e0e0e0;">Block rerolls at</span>
+                    <select id="mwi-cap-coin" style="${selectCss}">${coinOpts}</select>
+                    <select id="mwi-cap-cowbell" style="${selectCss}">${cowbellOpts}</select>
+                `;
+                const coinSel = capRow.querySelector('#mwi-cap-coin');
+                const cowbellSel = capRow.querySelector('#mwi-cap-cowbell');
+                coinSel.addEventListener('click', (e) => e.stopPropagation());
+                cowbellSel.addEventListener('click', (e) => e.stopPropagation());
+                coinSel.addEventListener('change', async (e) => {
+                    this.coinThreshold = parseInt(e.target.value, 10);
+                    this._processAllCards();
+                    await this._saveCapProtection();
+                });
+                cowbellSel.addEventListener('change', async (e) => {
+                    this.cowbellThreshold = parseInt(e.target.value, 10);
+                    this._processAllCards();
+                    await this._saveCapProtection();
+                });
+            } else {
+                capRow.innerHTML = `
+                    <span style="width:18px; text-align:center; color:#444; font-weight:700;"></span>
+                    <span style="flex:1; color:#aaa;">Block rerolls at cap</span>
+                    <span style="color:#888; font-size:11px;">320K💰 / 32🔔</span>
+                `;
+            }
+        };
+        renderCapRow();
+
+        capRow.addEventListener('click', async () => {
+            this.capProtectionEnabled = !this.capProtectionEnabled;
+            renderCapRow();
+            this._processAllCards();
+            await this._saveCapProtection();
+        });
+        capRow.addEventListener('mouseover', () => {
+            capRow.style.background = 'rgba(255,255,255,0.04)';
+        });
+        capRow.addEventListener('mouseout', () => {
+            capRow.style.background = '';
+        });
+
+        popup.appendChild(capRow);
         popup.appendChild(listContainer);
         document.body.appendChild(popup);
 

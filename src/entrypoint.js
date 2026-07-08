@@ -824,7 +824,7 @@ if (!LIBRARIES_LOADED) {
     // Expose minimal user-facing API
     const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
-    targetWindow.Toolasha.version = '2.68.0';
+    targetWindow.Toolasha.version = '2.69.2';
 
     // Feature toggle API (for users to manage settings via console)
     if (config) {
