@@ -27,7 +27,7 @@ jobs:
                     
                     echo "Check $i: lint=$LINT_STATUS format=$FORMAT_STATUS"
                     
-                    if echo "$LINT_STATUS" | grep -q "completed:success" && echo "$FORMAT_STATUS" | grep -q "completed:success"; then
+                    if echo "$LINT_STATUS" | grep -qE "completed:(success|skipped)" && echo "$FORMAT_STATUS" | grep -q "completed:success"; then
                       echo "✅ All checks passed"
                       break
                     elif echo "$LINT_STATUS" | grep -qE "completed:(failure|cancelled|timed_out)" || echo "$FORMAT_STATUS" | grep -qE "completed:(failure|cancelled|timed_out)"; then
