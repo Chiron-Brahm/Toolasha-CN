@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.70.2](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.1...v2.70.2) (2026-07-10)
+
+### Bug Fixes
+
+- export i18n module to fix Chinese translations in production build ([ad2407d](https://github.com/Chiron-Brahm/Toolasha-CN/commit/ad2407da1cc748745b6d1b784a47bd3c213c21db))
+
 ## [2.70.1](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.0...v2.70.1) (2026-07-10)
 
 ### Bug Fixes
