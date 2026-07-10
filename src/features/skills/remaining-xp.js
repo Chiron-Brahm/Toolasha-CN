@@ -103,8 +103,24 @@ class RemainingXP {
             { debounce: true, debounceDelay: 150 }
         );
 
-        // Store the observer so we can clean it up later
-        this.progressBarObservers.set(progressBar, unwatch);
+        // Auto-disconnect when element is removed from DOM
+        const removalObserver = new MutationObserver(() => {
+            if (!document.body.contains(progressBar)) {
+                unwatch();
+                removalObserver.disconnect();
+                this.progressBarObservers.delete(progressBar);
+            }
+        });
+        removalObserver.observe(progressBar.parentElement || progressBar.parentNode || document.body, {
+            childList: true,
+            subtree: true,
+        });
+
+        // Store both unwatch functions so we can clean up properly
+        this.progressBarObservers.set(progressBar, () => {
+            unwatch();
+            removalObserver.disconnect();
+        });
     }
 
     /**

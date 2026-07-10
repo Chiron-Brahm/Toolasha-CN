@@ -460,7 +460,7 @@ class PopOutChat {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title${t('MWI Chat')}t</title>
+<title>${t('MWI Chat')}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -610,7 +610,7 @@ class PopOutChat {
 </head>
 <body>
 <div id="topbar">
-  <span id="topbar-title"${t('MWI Chat')}t</span>
+  <span id="topbar-title">${t('MWI Chat')}</span>
   <span id="topbar-name"></span>
   <button id="add-pane-btn">+ Pane</button>
   <label id="vertical-label"><input type="checkbox" id="vertical-toggle"> Vertical</label>

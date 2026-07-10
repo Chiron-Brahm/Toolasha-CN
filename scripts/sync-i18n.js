@@ -127,7 +127,8 @@ function findUntranslatedStrings(content, i18nKeys) {
             type: 'hardcoded-label',
             match: label,
             i18nKey,
-            position: match.index,
+            // ponytail: +1 offset matches the regex boundary in line 137 (>text< → keep the >)
+            position: match.index + 1,
             line: content.substring(0, match.index).split('\n').length,
         });
     }
@@ -146,7 +147,8 @@ function findUntranslatedStrings(content, i18nKeys) {
             type: 'hardcoded-attr',
             match: label,
             i18nKey: label,
-            position: match.index,
+            // ponytail: +match[0].indexOf(label) skips the "title="/"placeholder="/"aria-label=" prefix
+            position: match.index + match[0].indexOf(label),
             line: content.substring(0, match.index).split('\n').length,
         });
     }

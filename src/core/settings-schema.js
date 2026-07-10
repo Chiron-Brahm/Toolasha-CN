@@ -1127,6 +1127,12 @@ export const settingsGroups = {
                 type: 'checkbox',
                 default: true,
             },
+            selfCombatScore: {
+                id: 'selfCombatScore',
+                label: 'Inventory panel: Show self gear score breakdown',
+                type: 'checkbox',
+                default: true,
+            },
             abilitiesTriggers: {
                 id: 'abilitiesTriggers',
                 label: 'Profile panel: Show abilities & triggers',

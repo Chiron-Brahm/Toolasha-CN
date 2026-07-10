@@ -384,7 +384,7 @@ class SettingsUI {
             header.innerHTML = `
                 <span class="collapse-icon">▼</span>
                 <span class="icon">${group.icon}</span>
-                ${group.title}
+                ${t(group.title)}
             `;
             // Bind toggleGroup method to this instance
             header.addEventListener('click', this.toggleGroup.bind(this, groupContainer));
@@ -512,13 +512,13 @@ class SettingsUI {
         // Create label
         const label = document.createElement('span');
         label.className = 'toolasha-setting-label';
-        label.textContent = settingDef.label;
+        label.textContent = t(settingDef.label);
 
         // Add help text if present
         if (settingDef.help) {
             const help = document.createElement('span');
             help.className = 'toolasha-setting-help';
-            help.textContent = settingDef.help;
+            help.textContent = t(settingDef.help);
             label.appendChild(help);
         }
 
@@ -614,7 +614,7 @@ class SettingsUI {
                 const optionsHTML = options
                     .map((option) => {
                         const optValue = typeof option === 'object' ? option.value : option;
-                        const optLabel = typeof option === 'object' ? option.label : option;
+                        const optLabel = t(typeof option === 'object' ? option.label : option);
                         const selected = optValue === value ? 'selected' : '';
                         return `<option value="${optValue}" ${selected}>${optLabel}</option>`;
                     })
@@ -648,21 +648,20 @@ class SettingsUI {
             case 'enhanceGear': {
                 const val = currentSetting?.value ?? settingDef.default ?? { enabled: true, level: 0 };
                 const enabled = val.enabled ?? true;
-                const tier = val.tier || '';
                 const level = val.level ?? 0;
                 const hasTiers = settingDef.tiers && settingDef.tiers.length > 0;
                 const checkedMeansAuto = settingDef.checkedMeansAuto || false;
 
-                // Inputs disabled when: gear unchecked (not equipped) OR checkedMeansAuto and checked
                 const inputsDisabled = checkedMeansAuto ? enabled : !enabled;
                 const disabledStyle = inputsDisabled ? 'opacity:0.4; pointer-events:none;' : '';
 
                 let tierHTML = '';
                 if (hasTiers) {
+                    const selectedTier = val.tier || '';
                     const options = settingDef.tiers
                         .map(
-                            (t) =>
-                                `<option value="${t.value}" ${t.value === tier ? 'selected' : ''}>${t.label}</option>`
+                            (_tier) =>
+                                `<option value="${_tier.value}" ${_tier.value === selectedTier ? 'selected' : ''}>${t(_tier.label)}</option>`
                         )
                         .join('');
                     tierHTML = `<select id="${settingId}_tier" class="toolasha-select-input" style="width:100px; font-size:12px; padding:2px 4px; ${disabledStyle}">${options}</select>`;
@@ -1210,7 +1209,7 @@ class SettingsUI {
             const params = getEnhancingParams();
             const fmt = (v) => (typeof v === 'number' ? v.toFixed(2).replace(/\.?0+$/, '') : v);
             return `
-                <span style="color:#6b9fff; font-weight:bold;"${t('Computed Stats')}s</span><br>
+                <span style="color:#6b9fff; font-weight:bold;">${t('Computed Stats')}</span><br>
                 Effective Level: <span style="color:#e0e0e0;">${fmt(params.enhancingLevel)}</span> &nbsp;|&nbsp;
                 Tool Success: <span style="color:#e0e0e0;">${fmt(params.toolBonus)}%</span> &nbsp;|&nbsp;
                 Speed: <span style="color:#e0e0e0;">${fmt(params.speedBonus)}%</span><br>
@@ -1552,7 +1551,7 @@ class SettingsUI {
             padding-bottom: 10px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: #e0e0e0;"${t('Edit Template')}e</h3>
+            <h3 style="margin: 0; color: #e0e0e0;">${t('Edit Template')}</h3>
             <button class="toolasha-template-close-btn" style="
                 background: none;
                 border: none;
@@ -1848,7 +1847,7 @@ class SettingsUI {
             padding-bottom: 10px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: #e0e0e0;"${t('Custom Price Overrides')}s</h3>
+            <h3 style="margin: 0; color: #e0e0e0;">${t('Custom Price Overrides')}</h3>
             <button class="toolasha-cpo-close-btn" style="
                 background: none;
                 border: none;
@@ -2070,8 +2069,8 @@ class SettingsUI {
             `;
             headerRow.innerHTML = `
                 <div style="flex: 1;">Item</div>
-                <div style="width: 80px; text-align: center;"${t('Buy Price')}e</div>
-                <div style="width: 80px; text-align: center;"${t('Sell Price')}e</div>
+                <div style="width: 80px; text-align: center;">${t('Buy Price')}</div>
+                <div style="width: 80px; text-align: center;">${t('Sell Price')}</div>
                 <div style="width: 28px;"></div>
             `;
             tableContainer.appendChild(headerRow);

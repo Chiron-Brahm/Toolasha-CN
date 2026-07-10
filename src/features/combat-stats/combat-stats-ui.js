@@ -1093,7 +1093,7 @@ class CombatStatsUI {
         const formatPrice = (val) => formatKMB(Math.round(val));
         const showDropsSetting = config.getSettingValue('expectedValue_showDrops', 'All');
 
-        let html = `<div style="font-weight:bold;margin-bottom:4px;"${t('EXPECTED VALUE')}E</div>`;
+        let html = `<div style="font-weight:bold;margin-bottom:4px;">${t('EXPECTED VALUE')}</div>`;
         html += `<div style="font-size:0.9em;margin-left:8px;">`;
         html += `<div style="color:${config.COLOR_TOOLTIP_PROFIT};font-weight:bold;">Expected Return: ${formatPrice(evData.expectedValue)}</div>`;
         html += `</div>`;

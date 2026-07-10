@@ -2060,7 +2060,7 @@ export default class CustomTabsUI {
 
             <div class="toolasha-ct-modal-footer">
                 <button class="toolasha-ct-delete-btn">Delete Tab</button>
-                <button class="toolasha-ct-clear-btn"${t('Clear All')}l</button>
+                <button class="toolasha-ct-clear-btn">${t('Clear All')}</button>
                 <button class="toolasha-ct-close-btn">Close</button>
             </div>
         `;
@@ -2310,7 +2310,7 @@ export default class CustomTabsUI {
                         levelRow.className = 'toolasha-ct-search-result toolasha-ct-search-level-row';
                         const displayName = level === 0 ? details.name : `${details.name} +${level}`;
                         const ownedDot = owned
-                            ? `<span style="color:#7dcea0;margin-left:4px;" ${t('In inventory')}ventory">●</span>`
+                            ? `<span style="color:#7dcea0;margin-left:4px;">In inventory</span>`
                             : '';
                         levelRow.innerHTML = `<svg viewBox="0 0 32 32"><use href="${iconHref}"></use></svg><span>${this._escHtml(displayName)}</span>${ownedDot}`;
                         levelRow.addEventListener('click', () => {

@@ -170,7 +170,7 @@ class Config {
                 enabled: true,
                 name: t('Quick Input Buttons'),
                 category: 'Actions',
-                description: t('Adds 1/10/100/1000 buttons to action inputs'),
+                description: t('Adds time/count preset buttons to action inputs'),
                 settingKey: 'actionPanel_totalTime_quickInputs',
             },
             actionPanelProfit: {
@@ -216,6 +216,13 @@ class Config {
                 category: 'Combat',
                 description: t('Shows gear score on profile'),
                 settingKey: 'combatScore',
+            },
+            selfCombatScore: {
+                enabled: true,
+                name: t('Self Gear Score'),
+                category: 'Combat',
+                description: t('Shows combat score breakdown on self inventory panel'),
+                settingKey: 'selfCombatScore',
             },
             dungeonTracker: {
                 enabled: true,

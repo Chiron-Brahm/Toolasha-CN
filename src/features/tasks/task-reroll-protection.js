@@ -263,10 +263,6 @@ class TaskRerollProtection {
                         ? 'Protected task! Unlocks in 3s...'
                         : 'Reroll at cap! Unlocks in 3s...';
 
-                    const warningMsg = isPerTaskProtected
-                        ? 'Protected task! Unlocks in 3s...'
-                        : 'Reroll at cap! Unlocks in 3s...';
-
                     // Phase 2: confirmation window is open — allow the reroll through
                     if (card.dataset.mwiRerollConfirmed === '1') {
                         card.dataset.mwiRerollConfirmed = '';

@@ -36,6 +36,7 @@ import abilityBookCalculator from '../features/abilities/ability-book-calculator
 // Profile (combat score)
 import combatScore from '../features/profile/combat-score.js';
 import characterCardButton from '../features/profile/character-card-button.js';
+import selfCombatScore from '../features/inventory/self-combat-score.js';
 
 // Export to global namespace
 const toolashaRoot = window.Toolasha || {};
@@ -68,6 +69,7 @@ toolashaRoot.Combat = {
     },
     combatStats,
     abilityBookCalculator,
+    selfCombatScore,
     combatScore,
     characterCardButton,
     combatSim,

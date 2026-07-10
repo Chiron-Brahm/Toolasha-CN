@@ -13,6 +13,7 @@ class MentionTracker {
     constructor() {
         this.initialized = false;
         this.mentionLog = new Map(); // channel -> Array<{ sName, m, t }>
+        this.MAX_MENTIONS_PER_CHANNEL = 500; // Cap per channel to prevent unbounded growth
         this.characterName = null;
         this.handlers = {};
         this.unregisterObserver = null;
@@ -74,6 +75,9 @@ class MentionTracker {
         if (this.isMentioned(text)) {
             const log = this.mentionLog.get(channel) || [];
             log.push({ sName: message.sName, m: text, t: message.t });
+            if (log.length > this.MAX_MENTIONS_PER_CHANNEL) {
+                log.splice(0, log.length - this.MAX_MENTIONS_PER_CHANNEL);
+            }
             this.mentionLog.set(channel, log);
             this.updateBadge(channel);
         }

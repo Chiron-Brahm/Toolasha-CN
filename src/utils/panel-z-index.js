@@ -8,6 +8,7 @@
 import config from '../core/config.js';
 
 const panels = new Set();
+const removalObservers = new Map();
 
 /**
  * Register a floating panel element for z-index management
@@ -15,6 +16,22 @@ const panels = new Set();
  */
 export function registerFloatingPanel(el) {
     panels.add(el);
+
+    // Auto-remove when element is removed from DOM
+    if (!removalObservers.has(el)) {
+        const observer = new MutationObserver(() => {
+            if (!document.body.contains(el)) {
+                panels.delete(el);
+                observer.disconnect();
+                removalObservers.delete(el);
+            }
+        });
+        observer.observe(el.parentElement || document.body, {
+            childList: true,
+            subtree: true,
+        });
+        removalObservers.set(el, observer);
+    }
 }
 
 /**
@@ -23,6 +40,11 @@ export function registerFloatingPanel(el) {
  */
 export function unregisterFloatingPanel(el) {
     panels.delete(el);
+    const observer = removalObservers.get(el);
+    if (observer) {
+        observer.disconnect();
+        removalObservers.delete(el);
+    }
 }
 
 /**
