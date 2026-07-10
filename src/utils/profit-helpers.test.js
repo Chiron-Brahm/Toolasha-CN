@@ -179,7 +179,7 @@ describe('calculateTeaCostsPerHour', () => {
         });
 
         expect(result.costs).toHaveLength(1);
-        expect(result.costs[0].itemName).toBe('tea');
+        expect(result.costs[0].itemName).toBe('/items/tea');
         expect(result.costs[0].pricePerDrink).toBe(50);
         expect(result.costs[0].drinksPerHour).toBeCloseTo(15, 6);
         expect(result.totalCostPerHour).toBeCloseTo(750, 6);
