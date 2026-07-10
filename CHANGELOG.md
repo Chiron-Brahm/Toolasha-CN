@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.70.1](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.0...v2.70.1) (2026-07-10)
+
+### Bug Fixes
+
+- remove self-approval in auto-merge workflow ([d109cbc](https://github.com/Chiron-Brahm/Toolasha-CN/commit/d109cbcd087b6c3a01b83b01189c6498f352c2ed))
+
 ## [2.70.0](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.69.2...v2.70.0) (2026-07-10)
 
 ### Features
