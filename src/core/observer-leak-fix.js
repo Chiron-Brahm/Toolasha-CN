@@ -50,7 +50,11 @@ function install() {
 
         if (observers.length >= MAX_OBSERVERS) {
             const oldest = observers.shift();
-            try { oldest.disconnect(); } catch { /* already gone */ }
+            try {
+                oldest.disconnect();
+            } catch {
+                /* already gone */
+            }
         }
 
         observers.push(this);

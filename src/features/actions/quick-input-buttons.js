@@ -327,7 +327,12 @@ class QuickInputButtons {
                 const fallbackInput = numberInput;
                 const fallbackPanel = panel;
                 const fallbackActionName = currentActionName;
-                this._createCountPresetRow(fallbackPanel, fallbackInput, { itemDetailMap: {}, actionDetailMap: {} }, { hrid: '', name: fallbackActionName, type: '', baseTimeCost: 0 });
+                this._createCountPresetRow(
+                    fallbackPanel,
+                    fallbackInput,
+                    { itemDetailMap: {}, actionDetailMap: {} },
+                    { hrid: '', name: fallbackActionName, type: '', baseTimeCost: 0 }
+                );
                 this._finalizeInjection(fallbackPanel, fallbackActionName, fallbackInput);
                 return;
             }

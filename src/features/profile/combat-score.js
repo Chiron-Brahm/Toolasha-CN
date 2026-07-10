@@ -450,8 +450,7 @@ class CombatScore {
             houseToggle.addEventListener('click', () => {
                 const isCollapsed = houseBreakdown.style.display === 'none';
                 houseBreakdown.style.display = isCollapsed ? 'block' : 'none';
-                houseToggle.textContent =
-                    (isCollapsed ? '- ' : '+ ') + t('House: {0}', scoreData.house.toFixed(1));
+                houseToggle.textContent = (isCollapsed ? '- ' : '+ ') + t('House: {0}', scoreData.house.toFixed(1));
             });
         }
 
@@ -487,8 +486,7 @@ class CombatScore {
                 const isCollapsed = skillerScoreDetails.style.display === 'none';
                 skillerScoreDetails.style.display = isCollapsed ? 'block' : 'none';
                 skillerScoreToggle.textContent =
-                    (isCollapsed ? '- ' : '+ ') +
-                    t('Skiller Score: {0}', scoreData.skillerTotal.toFixed(1));
+                    (isCollapsed ? '- ' : '+ ') + t('Skiller Score: {0}', scoreData.skillerTotal.toFixed(1));
             });
         }
 
@@ -500,8 +498,7 @@ class CombatScore {
                 const isCollapsed = skillerEquipmentBreakdown.style.display === 'none';
                 skillerEquipmentBreakdown.style.display = isCollapsed ? 'block' : 'none';
                 skillerEquipmentToggle.textContent =
-                    (isCollapsed ? '- ' : '+ ') +
-                    t('Equipment: {0}', scoreData.skillerEquipment.toFixed(1));
+                    (isCollapsed ? '- ' : '+ ') + t('Equipment: {0}', scoreData.skillerEquipment.toFixed(1));
             });
         }
 

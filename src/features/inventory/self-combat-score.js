@@ -42,8 +42,7 @@ class SelfCombatScore {
                 characterHouseRoomMap:
                     cd?.characterHouseRoomMap || Object.fromEntries(dataManager.characterHouseRooms || new Map()),
                 equippedAbilities: cd?.equippedAbilities || cd?.characterAbilities || [],
-                wearableItemMap:
-                    cd?.wearableItemMap || Object.fromEntries(dataManager.characterEquipment || new Map()),
+                wearableItemMap: cd?.wearableItemMap || Object.fromEntries(dataManager.characterEquipment || new Map()),
                 hideWearableItems: false,
             },
         };
@@ -88,8 +87,16 @@ class SelfCombatScore {
             </div>
         `;
 
-        makeToggle(widget.querySelector('#mwi-self-score-toggle'), widget.querySelector('#mwi-self-score-details'), t('Combat Score: {0}', score));
-        makeToggle(widget.querySelector('#mwi-self-skiller-score-toggle'), widget.querySelector('#mwi-self-skiller-score-details'), t('Skiller Score: {0}', skillerTotal));
+        makeToggle(
+            widget.querySelector('#mwi-self-score-toggle'),
+            widget.querySelector('#mwi-self-score-details'),
+            t('Combat Score: {0}', score)
+        );
+        makeToggle(
+            widget.querySelector('#mwi-self-skiller-score-toggle'),
+            widget.querySelector('#mwi-self-skiller-score-details'),
+            t('Skiller Score: {0}', skillerTotal)
+        );
     }
 
     async renderWidget(inventoryElem) {
@@ -121,9 +128,11 @@ class SelfCombatScore {
     initialize() {
         if (!config.getSetting('selfCombatScore')) return;
 
-        this.cleanup.registerCleanup(domObserver.onClass('SelfCombatScore', 'Inventory_items', (elem) => {
-            this.renderWidget(elem);
-        }));
+        this.cleanup.registerCleanup(
+            domObserver.onClass('SelfCombatScore', 'Inventory_items', (elem) => {
+                this.renderWidget(elem);
+            })
+        );
         const existing = document.querySelector('[class*="Inventory_items"]');
         if (existing) this.renderWidget(existing);
 

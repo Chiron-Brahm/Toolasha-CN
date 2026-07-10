@@ -2026,16 +2026,22 @@ registerLocale('zh-CN', {
     'Action bar: Show current action profit': '操作栏：显示当前行动利润',
     'Action panel: Show action speed & time': '操作面板：显示行动速度与时间',
     'Action panel: Show cost summary': '操作面板：显示成本摘要',
-    'Adds "Philo Gamba" button to settings panel for calculating transmutation ROI into Philosopher\'s Stone': '在设置面板添加"贤者之石赌博"按钮，用于计算转化贤者之石的投资回报',
-    'Adds "View Market History" button to settings panel for viewing and exporting all market listing history': '在设置面板添加"查看市场历史"按钮，用于查看和导出市场订单历史',
-    'Adds colored timer annotations to "Key counts" messages (green if fast, red if slow)': '为"钥匙计数"消息添加彩色计时注释（快则绿，慢则红）',
+    'Adds "Philo Gamba" button to settings panel for calculating transmutation ROI into Philosopher\'s Stone':
+        '在设置面板添加"贤者之石赌博"按钮，用于计算转化贤者之石的投资回报',
+    'Adds "View Market History" button to settings panel for viewing and exporting all market listing history':
+        '在设置面板添加"查看市场历史"按钮，用于查看和导出市场订单历史',
+    'Adds colored timer annotations to "Key counts" messages (green if fast, red if slow)':
+        '为"钥匙计数"消息添加彩色计时注释（快则绿，慢则红）',
     'Always abbreviate (1.25M)': '始终缩写（1.25M）',
     'Ask price (patient sell value)': '卖单价（挂单等待卖出）',
-    'Ask shows what you could get by listing patiently. Bid shows what you could get by selling instantly.': '卖单显示挂单等待能获得的收益。买单显示立即变现能获得的收益。',
+    'Ask shows what you could get by listing patiently. Bid shows what you could get by selling instantly.':
+        '卖单显示挂单等待能获得的收益。买单显示立即变现能获得的收益。',
     'Auto-click "All" button when opening loot boxes': '开宝箱时自动点击"全部"',
     'Auto-click "All": Skip Scroll of... items': '自动"全部"：跳过卷轴类物品',
-    'Automatically clicks the "All" button when opening openable containers (crates, chests, caches)': '打开可开启容器（板条箱、宝箱、缓存）时自动点击"全部"按钮',
-    'Automatically run combat estimates using the default loadout when task cards appear': '任务卡出现时自动使用默认配装运行战斗估算',
+    'Automatically clicks the "All" button when opening openable containers (crates, chests, caches)':
+        '打开可开启容器（板条箱、宝箱、缓存）时自动点击"全部"按钮',
+    'Automatically run combat estimates using the default loadout when task cards appear':
+        '任务卡出现时自动使用默认配装运行战斗估算',
     'Badge type when "None" sort is selected': '"无排序"时的徽章类型',
     'Below inventory: Show net worth breakdown': '背包下方：显示净资产明细',
     'Bid price (instant liquidation value)': '买单价（立即变现价值）',
@@ -2043,43 +2049,61 @@ registerLocale('zh-CN', {
     'Combat Simulator: Auto-run estimate on task cards': '战斗模拟：任务卡自动运行估算',
     'Combat Simulator: Default loadout': '战斗模拟：默认配装',
     'Combat Simulator: Max threads': '战斗模拟：最大线程数',
-    'Compact 4-line cost comparison for the selected produce quantity: direct recipe cost, missing direct mats, best crafting plan, and finished item market price.': '所选生产数量的紧凑4行成本对比：配方直接成本、缺少的直接材料、最佳制作方案、成品市场价格',
+    'Compact 4-line cost comparison for the selected produce quantity: direct recipe cost, missing direct mats, best crafting plan, and finished item market price.':
+        '所选生产数量的紧凑4行成本对比：配方直接成本、缺少的直接材料、最佳制作方案、成品市场价格',
     'Controls how large numbers are displayed throughout the UI': '控制整个界面中数字的显示方式',
     'Date format for date/time display': '日期时间显示的日期格式',
     'Date format used in marketplace listings and action completion times': '市场订单和操作完成时间的日期格式',
     'Date/Time (e.g., "01-13 14:30")': '日期时间（如"01-13 14:30"）',
     'Display avg completion time as "X.XX min" instead of "Xm Ys"': '平均完成时间显示为"X.XX分钟"而非"X分Y秒"',
-    'Display how long ago each listing was created on the My Listings tab (e.g., "3h 45m")': '在"我的订单"标签页显示每个订单的挂单时间（如"3时45分"）',
-    'Displays "Battle #N" for regular zones or "Wave N" for dungeons in the top-left action panel': '在左上操作面板显示普通区域"战斗#N"或地下城"第N波"',
+    'Display how long ago each listing was created on the My Listings tab (e.g., "3h 45m")':
+        '在"我的订单"标签页显示每个订单的挂单时间（如"3时45分"）',
+    'Displays "Battle #N" for regular zones or "Wave N" for dungeons in the top-left action panel':
+        '在左上操作面板显示普通区域"战斗#N"或地下城"第N波"',
     'Displays a loadout dropdown and estimate button on combat task cards.': '在战斗任务卡上显示配装下拉框和估算按钮',
-    'Displays an expandable action speed, efficiency, and timing breakdown on task cards.': '在任务卡上显示可展开的操作速度、效率和计时明细',
-    'Displays profit/hr and remaining profit for the current action (gathering and production)': '在操作栏显示当前行动（采集和生产）的每小时利润和剩余利润',
-    'Displays speed breakdown, efficiency, and total time inside action panels': '在操作面板内显示速度明细、效率和总时间',
-    'Displays success rate percentages in the "Transmuted From (Alchemy)" section': '在"炼金转化来源"区域显示成功率百分比',
+    'Displays an expandable action speed, efficiency, and timing breakdown on task cards.':
+        '在任务卡上显示可展开的操作速度、效率和计时明细',
+    'Displays profit/hr and remaining profit for the current action (gathering and production)':
+        '在操作栏显示当前行动（采集和生产）的每小时利润和剩余利润',
+    'Displays speed breakdown, efficiency, and total time inside action panels':
+        '在操作面板内显示速度明细、效率和总时间',
+    'Displays success rate percentages in the "Transmuted From (Alchemy)" section':
+        '在"炼金转化来源"区域显示成功率百分比',
     'Displays your current gold count next to Total Level in the page header': '在页头顶部总等级旁显示当前金币数量',
     'Elapsed Time (e.g., "3h 45m")': '经过时间（如"3时45分"）',
     'Enhancement Tracker': '强化追踪',
-    'Estimates creation time for all market listings using listing ID interpolation': '通过订单ID插值估算所有市场订单的创建时间',
+    'Estimates creation time for all market listings using listing ID interpolation':
+        '通过订单ID插值估算所有市场订单的创建时间',
     'Full (1,250,000)': '完整（1,250,000）',
-    'How tasks are ordered when clicking Sort Tasks. "Time to Completion" sorts fastest tasks first; combining with "Reverse Direction" sorts slowest first.': '点击排序任务时的排序方式。"完成时间"按最快排前；配合"反向排序"则最慢排前',
-    'Loadout to use by default for combat estimates instead of currently equipped gear': '战斗估算默认使用的配装（替代当前装备）',
+    'How tasks are ordered when clicking Sort Tasks. "Time to Completion" sorts fastest tasks first; combining with "Reverse Direction" sorts slowest first.':
+        '点击排序任务时的排序方式。"完成时间"按最快排前；配合"反向排序"则最慢排前',
+    'Loadout to use by default for combat estimates instead of currently equipped gear':
+        '战斗估算默认使用的配装（替代当前装备）',
     'Marketplace: Show "Marketplace Action" button on item menus': '市场：物品菜单显示"市场操作"按钮',
-    'Maximum Web Worker threads for simulations (0 = auto, uses all available cores)': '模拟的最大Web Worker线程数（0=自动，使用所有可用核心）',
-    'Message format when Ctrl+clicking player card in Statistics. Click "Edit Template" to customize.': '统计中Ctrl+点击玩家卡片的消息格式。点击"编辑模板"自定义',
+    'Maximum Web Worker threads for simulations (0 = auto, uses all available cores)':
+        '模拟的最大Web Worker线程数（0=自动，使用所有可用核心）',
+    'Message format when Ctrl+clicking player card in Statistics. Click "Edit Template" to customize.':
+        '统计中Ctrl+点击玩家卡片的消息格式。点击"编辑模板"自定义',
     'Net worth pricing mode': '净资产定价模式',
     'Number format mode': '数字格式模式',
-    'Number of decimal places shown when numbers are abbreviated with K/M/B suffixes': '数字用K/M/B后缀缩写时显示的小数位数',
+    'Number of decimal places shown when numbers are abbreviated with K/M/B suffixes':
+        '数字用K/M/B后缀缩写时显示的小数位数',
     'Show "Missing Mats Marketplace" button on production panels': '生产面板显示"缺少材料市场"按钮',
     'Show "Queued" indicator on task cards': '任务卡显示"已排队"标识',
-    'Show an "Unorganized" section containing all items not assigned to any tab.': '显示"未分类"分组，包含所有未分配到任何标签页的物品',
+    'Show an "Unorganized" section containing all items not assigned to any tab.':
+        '显示"未分类"分组，包含所有未分配到任何标签页的物品',
     'Show combat estimate on combat tasks': '战斗任务卡显示战斗估算',
     'Show effective (after-tax) prices': '显示税后实际价格',
     'Show expandable speed & time breakdown on tasks': '任务卡显示可展开速度与时间明细',
-    'Show pricing modes as "Instant Buy / Instant Sell" instead of "Buy: Ask / Sell: Bid"': '定价模式显示为"即时买入/即时卖出"而非"买：卖单/卖：买单"',
-    'Shows total net worth with a per-category breakdown (equipment, inventory, listings, houses, abilities) below the inventory panel': '在背包面板下方显示按类别（装备、库存、订单、房屋、技能）细分的总净资产',
-    'Shows what you actually receive after the 2% marketplace tax next to ask/bid prices in item tooltips': '在物品提示的买卖价旁显示扣除2%市场税后的实际收入',
+    'Show pricing modes as "Instant Buy / Instant Sell" instead of "Buy: Ask / Sell: Bid"':
+        '定价模式显示为"即时买入/即时卖出"而非"买：卖单/卖：买单"',
+    'Shows total net worth with a per-category breakdown (equipment, inventory, listings, houses, abilities) below the inventory panel':
+        '在背包面板下方显示按类别（装备、库存、订单、房屋、技能）细分的总净资产',
+    'Shows what you actually receive after the 2% marketplace tax next to ask/bid prices in item tooltips':
+        '在物品提示的买卖价旁显示扣除2%市场税后的实际收入',
     'Time format for date/time display': '日期时间显示的时间格式',
     'Time format used in marketplace listings and action completion times': '市场订单和操作完成时间的时间格式',
     'Top right: Show gold count': '右上角：显示金币数量',
-    'When enabled, shows total probability (base rate × drop rate). When disabled, shows conditional probability (given the drop occurred).': '开启时显示总概率（基础率×掉率）。关闭时显示条件概率（在掉落已发生的前提下）',
+    'When enabled, shows total probability (base rate × drop rate). When disabled, shows conditional probability (given the drop occurred).':
+        '开启时显示总概率（基础率×掉率）。关闭时显示条件概率（在掉落已发生的前提下）',
 });

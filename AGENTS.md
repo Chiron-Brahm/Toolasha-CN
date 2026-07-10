@@ -104,12 +104,14 @@ Skip testing = incomplete work.
 ALL code changes MUST follow this complete autonomous cycle:
 
 #### Phase 1: Build
+
 ```bash
 npm run build:dev
 # Verify: exit code 0, file created at dist/Toolasha-dev.user.js
 ```
 
 #### Phase 2: Serve & Install
+
 ```bash
 # Kill any existing server on port 8099
 lsof -ti:8099 | xargs kill -9 2>/dev/null || true
@@ -124,6 +126,7 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8099/Toolasha-dev.user.j
 ```
 
 #### Phase 3: Trigger Tampermonkey Installation
+
 ```bash
 # Use: chrome-devtools_new_page
 # Open: http://localhost:8099/Toolasha-dev.user.js
@@ -135,6 +138,7 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8099/Toolasha-dev.user.j
 ```
 
 #### Phase 4: Verify Installation
+
 ```bash
 # Navigate to game page
 # Use: chrome-devtools_select_page (game page)
@@ -162,6 +166,7 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8099/Toolasha-dev.user.j
 ```
 
 #### Phase 5: Feature-Specific Testing
+
 ```bash
 # Check console for errors
 # Use: chrome-devtools_list_console_messages
@@ -181,12 +186,14 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8099/Toolasha-dev.user.j
 ```
 
 #### Phase 6: Cleanup Server
+
 ```bash
 # After testing, stop the server
 lsof -ti:8099 | xargs kill -9 2>/dev/null || true
 ```
 
 #### Quick Reference: Full Cycle Command
+
 ```bash
 # One-shot: build + serve + verify server
 npm run build:dev && \

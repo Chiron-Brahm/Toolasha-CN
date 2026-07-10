@@ -51,13 +51,13 @@ class HousePanelObserver {
     _startPeriodicCheck() {
         this._periodicCheckInterval = setInterval(() => {
             if (!this.isActive) return;
-            
+
             const modalContent = document.querySelector('[class*="HousePanel_modalContent"]');
             if (modalContent && !this.processedCards.has(modalContent)) {
                 this.handleHouseModal(modalContent);
             }
         }, 500);
-        
+
         this.cleanupRegistry.registerCleanup(() => {
             if (this._periodicCheckInterval) {
                 clearInterval(this._periodicCheckInterval);
