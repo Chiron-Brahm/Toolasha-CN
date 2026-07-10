@@ -5,6 +5,7 @@ Guide for AI coding agents working on this Tampermonkey userscript for Milky Way
 ## Skills
 
 本项目有自动加载的 skill：
+
 - **toolasha-release** — 提交和发布工作流（格式化、测试、构建、提交、推送）
 
 ## Build, Lint, and Test Commands
