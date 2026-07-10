@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toolasha-CN
 // @namespace    http://tampermonkey.net/
-// @version      2.70.0
+// @version      2.70.1
 // @downloadURL  https://github.com/Chiron-Brahm/Toolasha-CN/releases/latest/download/Toolasha.user.js
 // @updateURL    https://github.com/Chiron-Brahm/Toolasha-CN/releases/latest/download/Toolasha.user.js
 // @description  Toolasha - Enhanced tools for Milky Way Idle.
@@ -21,12 +21,12 @@
 // @require      https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.2/math.js
 // @require      https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js
 // @require      https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0/dist/chartjs-plugin-datalabels.min.js
-// @require      https://cdn.jsdelivr.net/gh/Chiron-Brahm/Toolasha-CN@72a51530ea56bf5e6d1f3db7d4b47113d0f5304f/dist/libraries/toolasha-core.js
-// @require      https://cdn.jsdelivr.net/gh/Chiron-Brahm/Toolasha-CN@72a51530ea56bf5e6d1f3db7d4b47113d0f5304f/dist/libraries/toolasha-utils.js
-// @require      https://cdn.jsdelivr.net/gh/Chiron-Brahm/Toolasha-CN@72a51530ea56bf5e6d1f3db7d4b47113d0f5304f/dist/libraries/toolasha-market.js
-// @require      https://cdn.jsdelivr.net/gh/Chiron-Brahm/Toolasha-CN@72a51530ea56bf5e6d1f3db7d4b47113d0f5304f/dist/libraries/toolasha-actions.js
-// @require      https://cdn.jsdelivr.net/gh/Chiron-Brahm/Toolasha-CN@72a51530ea56bf5e6d1f3db7d4b47113d0f5304f/dist/libraries/toolasha-combat.js
-// @require      https://cdn.jsdelivr.net/gh/Chiron-Brahm/Toolasha-CN@72a51530ea56bf5e6d1f3db7d4b47113d0f5304f/dist/libraries/toolasha-ui.js
+// @require      https://UPDATE-THIS-URL/toolasha-core.js
+// @require      https://UPDATE-THIS-URL/toolasha-utils.js
+// @require      https://UPDATE-THIS-URL/toolasha-market.js
+// @require      https://UPDATE-THIS-URL/toolasha-actions.js
+// @require      https://UPDATE-THIS-URL/toolasha-combat.js
+// @require      https://UPDATE-THIS-URL/toolasha-ui.js
 // ==/UserScript==
 // Note: Combat Sim auto-import requires Tampermonkey for cross-domain storage. Not available on Steam (use manual clipboard copy/paste instead).
 
@@ -869,7 +869,7 @@
         // Expose minimal user-facing API
         const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
-        targetWindow.Toolasha.version = '2.70.0';
+        targetWindow.Toolasha.version = '2.70.1';
 
         // Feature toggle API (for users to manage settings via console)
         if (config) {
