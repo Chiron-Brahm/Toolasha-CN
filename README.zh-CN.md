@@ -235,4 +235,4 @@ npm test -- --coverage      # 覆盖率报告
 **许可证**：[CC-BY-NC-SA-4.0](LICENSE)
 
 **原作者**：bot7420 (MWITools)
-**重写与维护**：Celasha 和 Claude
+**重写与维护**：Celasha、Claude 和 Chiron
