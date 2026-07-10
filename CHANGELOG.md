@@ -2,11 +2,10 @@
 
 ## [2.70.4](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.3...v2.70.4) (2026-07-10)
 
-
 ### 其他杂项
 
-* 忽略 .opencode 目录 ([d8fbb7c](https://github.com/Chiron-Brahm/Toolasha-CN/commit/d8fbb7c20467ba38f7f6f2894d95a8c9f71c942b))
-* 添加 toolasha-release skill 和中文提交规范 ([7724d2d](https://github.com/Chiron-Brahm/Toolasha-CN/commit/7724d2df28a04f3badc64687c1227e6a1b768a95))
+- 忽略 .opencode 目录 ([d8fbb7c](https://github.com/Chiron-Brahm/Toolasha-CN/commit/d8fbb7c20467ba38f7f6f2894d95a8c9f71c942b))
+- 添加 toolasha-release skill 和中文提交规范 ([7724d2d](https://github.com/Chiron-Brahm/Toolasha-CN/commit/7724d2df28a04f3badc64687c1227e6a1b768a95))
 
 ## [2.70.3](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.2...v2.70.3) (2026-07-10)
 
