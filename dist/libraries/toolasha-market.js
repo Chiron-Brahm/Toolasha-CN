@@ -1,11 +1,11 @@
 /**
  * Toolasha Market Library
  * Market, inventory, and economy features
- * Version: 2.70.1
+ * Version: 2.70.2
  * License: CC-BY-NC-SA-4.0
  */
 
-(function (config, dataManager, domObserver, marketAPI, houseEfficiency_js, efficiency_js, bonusRevenueCalculator_js, enhancementCalculator_js, formatters_js, marketData_js, teaParser_js, storage, profitConstants_js, profitHelpers_js, buffParser_js, equipmentParser_js, actionCalculator_js, tokenValuation_js, enhancementConfig_js, dom, materialCalculator_js, timerRegistry_js, cleanupRegistry_js, domObserverHelpers_js, enhancementMultipliers_js, reactInput_js, webSocketHook, abilityCostCalculator_js, houseCostCalculator_js) {
+(function (config, dataManager, domObserver, marketAPI, houseEfficiency_js, efficiency_js, bonusRevenueCalculator_js, enhancementCalculator_js, formatters_js, marketData_js, teaParser_js, i18n_js, storage, profitConstants_js, profitHelpers_js, buffParser_js, equipmentParser_js, actionCalculator_js, tokenValuation_js, enhancementConfig_js, dom, materialCalculator_js, timerRegistry_js, cleanupRegistry_js, domObserverHelpers_js, enhancementMultipliers_js, reactInput_js, webSocketHook, abilityCostCalculator_js, houseCostCalculator_js) {
     'use strict';
 
     function _interopNamespaceDefault(e) {
@@ -26,46 +26,6 @@
     }
 
     var dom__namespace = /*#__PURE__*/_interopNamespaceDefault(dom);
-
-    /**
-     * Internationalization (i18n) Module
-     * Lightweight translation layer with English-as-key fallback.
-     *
-     * Usage:
-     *   import { t, registerLocale } from '../core/i18n.js';
-     *   t('Market Prices in Tooltips')  →  '市场价格提示' (if translated)
-     *   t('Market Prices in Tooltips')  →  'Market Prices in Tooltips' (fallback)
-     *   t('Cost: {0}/hr', '100K')       →  '花费: 100K/时'
-     */
-
-    /** @type {Record<string, string>} */
-    const translations = {};
-
-    /**
-     * Translate a string. Returns the Chinese translation if available, otherwise the English key itself.
-     * Supports positional interpolation with {0}, {1}, etc.
-     *
-     * @param {string} str - English key string
-     * @param {...(string|number)} args - Positional arguments for interpolation
-     * @returns {string} Translated or fallback string
-     *
-     * @example
-     *   t('Hello')                          // '你好'
-     *   t('Unknown key')                    // 'Unknown key' (fallback)
-     *   t('Profit: {0}/hr', '12.3K')        // '利润: 12.3K/时'
-     */
-    function t(str, ...args) {
-        const translated = translations[str] !== undefined ? translations[str] : str;
-
-        if (args.length === 0) {
-            return translated;
-        }
-
-        return translated.replace(/\{(\d+)\}/g, (_, index) => {
-            const arg = args[parseInt(index, 10)];
-            return arg !== undefined ? String(arg) : `{${index}}`;
-        });
-    }
 
     var itemNamesZh = {
         Coin: '金币',
@@ -1483,7 +1443,7 @@
             // No mirror used - return traditional result
             optimalStrategy = {
                 protectFrom: optimalTraditional.protectFrom,
-                label: optimalTraditional.protectFrom === 0 ? t('Never') : `+${optimalTraditional.protectFrom}`,
+                label: optimalTraditional.protectFrom === 0 ? i18n_js.t('Never') : `+${optimalTraditional.protectFrom}`,
                 expectedAttempts: optimalTraditional.expectedAttempts,
                 totalTime: optimalTraditional.totalTime,
                 baseCost: optimalTraditional.baseCost,
@@ -1666,7 +1626,7 @@
 
         return {
             protectFrom: optimalTraditional.protectFrom,
-            label: optimalTraditional.protectFrom === 0 ? t('Never') : `From +${optimalTraditional.protectFrom}`,
+            label: optimalTraditional.protectFrom === 0 ? i18n_js.t('Never') : `From +${optimalTraditional.protectFrom}`,
             expectedAttempts: totalAttempts,
             totalTime: totalTime,
             baseCost: 0, // Not applicable for mirror phase
@@ -2191,7 +2151,7 @@
             const rows = [];
 
             // Base item row
-            const baseItemLabel = optimalStrategy.baseAskIsCrafted ? t('Craft Item') : t('Buy Item');
+            const baseItemLabel = optimalStrategy.baseAskIsCrafted ? i18n_js.t('Craft Item') : i18n_js.t('Buy Item');
             rows.push({
                 name: toolashaConfig.isFeatureEnabled('enhanceSim_baseItemCraftingCost') ? baseItemLabel : 'Base Item',
                 count: 1,
@@ -2221,7 +2181,7 @@
                 totalAsk += askPrice * count;
                 totalBid += bidPrice * count;
 
-                let protName = t('Protection');
+                let protName = i18n_js.t('Protection');
                 if (optimalStrategy.protectionItemHrid) {
                     const gameData = dataManager.getInitClientData();
                     const protDetails = gameData?.itemDetailMap[optimalStrategy.protectionItemHrid];
@@ -6098,7 +6058,7 @@ self.onmessage = function (e) {
 
             // Show message if no market data at all
             if (price.ask <= 0 && price.bid <= 0) {
-                priceDiv.innerHTML = `${t('Price:')} <span style="color: ${config.COLOR_TEXT_SECONDARY}; font-style: italic;">${t('No market data')}</span>`;
+                priceDiv.innerHTML = `${i18n_js.t('Price:')} <span style="color: ${config.COLOR_TEXT_SECONDARY}; font-style: italic;">${i18n_js.t('No market data')}</span>`;
                 tooltipText.appendChild(priceDiv);
                 return;
             }
@@ -6118,7 +6078,7 @@ self.onmessage = function (e) {
             }
 
             // Format: "Price: 1,200 / 950" or "Price: 1,200 / -" or "Price: - / 950"
-            priceDiv.innerHTML = `${t('Price:')} ${askDisplay} / ${bidDisplay}${totalDisplay}`;
+            priceDiv.innerHTML = `${i18n_js.t('Price:')} ${askDisplay} / ${bidDisplay}${totalDisplay}`;
 
             if (config.getSetting('itemTooltip_effectivePrices') && (price.ask > 0 || price.bid > 0)) {
                 const taxRate = itemHrid === profitConstants_js.COWBELL_BAG_HRID ? profitConstants_js.COWBELL_BAG_TAX : profitConstants_js.MARKET_TAX;
@@ -6164,13 +6124,13 @@ self.onmessage = function (e) {
 
             if (profitData.itemPrice.bid > 0 && profitData.itemPrice.ask > 0) {
                 // Market data available - show profit
-                html += `<div style="font-weight: bold; margin-bottom: 4px;">${t('PROFIT')}</div>`;
+                html += `<div style="font-weight: bold; margin-bottom: 4px;">${i18n_js.t('PROFIT')}</div>`;
                 html += '<div style="font-size: 0.9em; margin-left: 8px;">';
 
                 const profitPerDay = profitData.profitPerDay;
                 const profitColor = profitData.profitPerHour >= 0 ? config.COLOR_TOOLTIP_PROFIT : config.COLOR_TOOLTIP_LOSS;
 
-                html += `<div style="color: ${profitColor}; font-weight: bold;">${t('Net: {0}/hr ({1}/day)', formatters_js.formatKMB(profitData.profitPerHour), formatters_js.formatKMB(profitPerDay))}</div>`;
+                html += `<div style="color: ${profitColor}; font-weight: bold;">${i18n_js.t('Net: {0}/hr ({1}/day)', formatters_js.formatKMB(profitData.profitPerHour), formatters_js.formatKMB(profitPerDay))}</div>`;
 
                 // Show detailed breakdown if enabled
                 if (showDetailed) {
@@ -6183,7 +6143,7 @@ self.onmessage = function (e) {
                 if (showDetailed) {
                     html += this.buildDetailedProfitDisplay(profitData, false);
                 } else {
-                    html += `<div style="font-weight: bold; color: ${config.COLOR_TOOLTIP_INFO};">${t('Cost: {0}/item', formatters_js.formatKMB(profitData.totalMaterialCost))}</div>`;
+                    html += `<div style="font-weight: bold; color: ${config.COLOR_TOOLTIP_INFO};">${i18n_js.t('Cost: {0}/item', formatters_js.formatKMB(profitData.totalMaterialCost))}</div>`;
                 }
             }
 
@@ -6253,10 +6213,10 @@ self.onmessage = function (e) {
 
                 // Table header
                 html += `<tr style="border-bottom: 1px solid ${config.COLOR_BORDER};">`;
-                html += `<th style="padding: 2px 4px; text-align: left;">${t('Material')}</th>`;
-                html += `<th style="padding: 2px 4px; text-align: center;">${t('Count')}</th>`;
-                html += `<th style="padding: 2px 4px; text-align: right;">${t('Ask')}</th>`;
-                html += `<th style="padding: 2px 4px; text-align: right;">${t('Bid')}</th>`;
+                html += `<th style="padding: 2px 4px; text-align: left;">${i18n_js.t('Material')}</th>`;
+                html += `<th style="padding: 2px 4px; text-align: center;">${i18n_js.t('Count')}</th>`;
+                html += `<th style="padding: 2px 4px; text-align: right;">${i18n_js.t('Ask')}</th>`;
+                html += `<th style="padding: 2px 4px; text-align: right;">${i18n_js.t('Bid')}</th>`;
                 html += '</tr>';
 
                 // Resolve prices for all materials through unified chain
@@ -6308,7 +6268,7 @@ self.onmessage = function (e) {
 
                 // Total row
                 html += `<tr style="border-bottom: 1px solid ${config.COLOR_BORDER};">`;
-                html += `<td style="padding: 2px 4px; font-weight: bold;">${t('Total')}</td>`;
+                html += `<td style="padding: 2px 4px; font-weight: bold;">${i18n_js.t('Total')}</td>`;
                 html += `<td style="padding: 2px 4px; text-align: center;">${totalCount.toFixed(1)}</td>`;
                 html += `<td style="padding: 2px 4px; text-align: right;">${formatters_js.formatKMB(totalAsk)}</td>`;
                 html += `<td style="padding: 2px 4px; text-align: right;">${formatters_js.formatKMB(totalBid)}</td>`;
@@ -6346,7 +6306,7 @@ self.onmessage = function (e) {
                 const profitPerDay = profitData.profitPerDay;
                 const profitColor = profitData.profitPerHour >= 0 ? config.COLOR_TOOLTIP_PROFIT : config.COLOR_TOOLTIP_LOSS;
 
-                html += `<div style="color: ${profitColor};">${t('Profit: {0}/action, {1}/hour, {2}/day', formatters_js.formatKMB(profitPerAction), formatters_js.formatKMB(profitData.profitPerHour), formatters_js.formatKMB(profitPerDay))}</div>`;
+                html += `<div style="color: ${profitColor};">${i18n_js.t('Profit: {0}/action, {1}/hour, {2}/day', formatters_js.formatKMB(profitPerAction), formatters_js.formatKMB(profitData.profitPerHour), formatters_js.formatKMB(profitPerDay))}</div>`;
                 html += '</div>';
             }
 
@@ -6383,15 +6343,15 @@ self.onmessage = function (e) {
             let html = '<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">';
 
             // Header
-            html += `<div style="font-weight: bold; margin-bottom: 4px;">${t('EXPECTED VALUE')}</div>`;
+            html += `<div style="font-weight: bold; margin-bottom: 4px;">${i18n_js.t('EXPECTED VALUE')}</div>`;
             html += '<div style="font-size: 0.9em; margin-left: 8px;">';
 
             // Expected value (simple display)
-            html += `<div style="color: ${config.COLOR_TOOLTIP_PROFIT}; font-weight: bold;">${t('Expected Return: {0}', formatTooltipPrice(evData.expectedValue))}</div>`;
+            html += `<div style="color: ${config.COLOR_TOOLTIP_PROFIT}; font-weight: bold;">${i18n_js.t('Expected Return: {0}', formatTooltipPrice(evData.expectedValue))}</div>`;
             if (keyPrice > 0) {
-                const keyLabel = keyName ? `${t('Key Cost')} (${keyName})` : t('Key Cost');
+                const keyLabel = keyName ? `${i18n_js.t('Key Cost')} (${keyName})` : i18n_js.t('Key Cost');
                 html += `<div style="color: ${config.COLOR_TOOLTIP_LOSS};">- ${keyLabel}: ${formatTooltipPrice(keyPrice)}</div>`;
-                html += `<div style="color: ${config.COLOR_TOOLTIP_PROFIT}; font-weight: bold;">${t('Net Value: {0}', formatTooltipPrice(evData.expectedValue - keyPrice))}</div>`;
+                html += `<div style="color: ${config.COLOR_TOOLTIP_PROFIT}; font-weight: bold;">${i18n_js.t('Net Value: {0}', formatTooltipPrice(evData.expectedValue - keyPrice))}</div>`;
             }
 
             html += '</div>'; // Close summary section
@@ -6404,14 +6364,14 @@ self.onmessage = function (e) {
 
                 // Determine how many drops to show
                 let dropsToShow = evData.drops;
-                let headerLabel = t('All Drops');
+                let headerLabel = i18n_js.t('All Drops');
 
                 if (showDropsSetting === 'Top 5') {
                     dropsToShow = evData.drops.slice(0, 5);
-                    headerLabel = t('Top 5 Drops');
+                    headerLabel = i18n_js.t('Top 5 Drops');
                 } else if (showDropsSetting === 'Top 10') {
                     dropsToShow = evData.drops.slice(0, 10);
-                    headerLabel = t('Top 10 Drops');
+                    headerLabel = i18n_js.t('Top 10 Drops');
                 }
 
                 html += `<div style="font-weight: bold; margin-bottom: 4px;">${headerLabel} (${evData.drops.length} total):</div>`;
@@ -6421,7 +6381,7 @@ self.onmessage = function (e) {
                 for (const drop of dropsToShow) {
                     if (!drop.hasPriceData) {
                         // Show item without price data in gray
-                        html += `<div style="color: ${config.COLOR_TEXT_SECONDARY};">• ${drop.itemName} (${formatters_js.formatPercentage(drop.dropRate, 2)}): ${drop.avgCount.toFixed(2)} avg → ${t('No price data')}</div>`;
+                        html += `<div style="color: ${config.COLOR_TEXT_SECONDARY};">• ${drop.itemName} (${formatters_js.formatPercentage(drop.dropRate, 2)}): ${drop.avgCount.toFixed(2)} avg → ${i18n_js.t('No price data')}</div>`;
                     } else {
                         // Format drop rate percentage
                         const dropRatePercent = formatters_js.formatPercentage(drop.dropRate, 2);
@@ -6435,9 +6395,9 @@ self.onmessage = function (e) {
 
                 // Show total
                 html += '<div style="border-top: 1px solid rgba(255,255,255,0.2); margin: 4px 0;"></div>';
-                html += `<div style="font-size: 0.9em; margin-left: 8px; font-weight: bold;">${t('Total from {0} drops: {1}', evData.drops.length, formatTooltipPrice(evData.expectedValue))}</div>`;
+                html += `<div style="font-size: 0.9em; margin-left: 8px; font-weight: bold;">${i18n_js.t('Total from {0} drops: {1}', evData.drops.length, formatTooltipPrice(evData.expectedValue))}</div>`;
                 if (keyPrice > 0) {
-                    html += `<div style="font-size: 0.9em; margin-left: 8px; font-weight: bold;">${t('Net after key: {0}', formatTooltipPrice(evData.expectedValue - keyPrice))}</div>`;
+                    html += `<div style="font-size: 0.9em; margin-left: 8px; font-weight: bold;">${i18n_js.t('Net after key: {0}', formatTooltipPrice(evData.expectedValue - keyPrice))}</div>`;
                 }
             }
 
@@ -6591,12 +6551,12 @@ self.onmessage = function (e) {
             );
 
             let html = '<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">';
-            html += `<div style="font-weight: bold; margin-bottom: 4px;">${t('GATHERING')}</div>`;
+            html += `<div style="font-weight: bold; margin-bottom: 4px;">${i18n_js.t('GATHERING')}</div>`;
 
             // Solo actions section
             if (gatheringData.soloActions.length > 0) {
                 html += '<div style="font-size: 0.9em; margin-left: 8px; margin-bottom: 6px;">';
-                html += `<div style="font-weight: 500; margin-bottom: 2px;">${t('Solo:')}</div>`;
+                html += `<div style="font-weight: 500; margin-bottom: 2px;">${i18n_js.t('Solo:')}</div>`;
 
                 for (const action of gatheringData.soloActions) {
                     const itemsPerHourStr = action.itemsPerHour ? Math.round(action.itemsPerHour) : '?';
@@ -6612,7 +6572,7 @@ self.onmessage = function (e) {
             // Zone actions section
             if (zoneActions.length > 0) {
                 html += '<div style="font-size: 0.9em; margin-left: 8px;">';
-                html += `<div style="font-weight: 500; margin-bottom: 2px;">${t('Found in:')}</div>`;
+                html += `<div style="font-weight: 500; margin-bottom: 2px;">${i18n_js.t('Found in:')}</div>`;
 
                 for (const action of zoneActions) {
                     // Use more decimal places for very rare drops (< 0.1%)
@@ -6701,7 +6661,7 @@ self.onmessage = function (e) {
             let html = '<div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">';
 
             // Show heading based on whether item is craftable
-            const heading = isCraftable ? t('Alternative Actions:') : t('Profits:');
+            const heading = isCraftable ? i18n_js.t('Alternative Actions:') : i18n_js.t('Profits:');
             html += `<div style="font-weight: bold; margin-bottom: 4px;">${heading}</div>`;
             html += '<div style="font-size: 0.9em; margin-left: 8px;">';
 
@@ -7350,7 +7310,7 @@ self.onmessage = function (e) {
             container.style.cssText = 'display: flex; align-items: center; gap: 4px;';
 
             const label = document.createElement('label');
-            label.textContent = type === 'min' ? t('Level >= ') : t('Level < ');
+            label.textContent = type === 'min' ? i18n_js.t('Level >= ') : i18n_js.t('Level < ');
             label.style.cssText = 'font-size: 12px; color: rgba(255, 255, 255, 0.7);';
 
             const select = document.createElement('select');
@@ -7367,7 +7327,7 @@ self.onmessage = function (e) {
             levels.forEach((level) => {
                 const option = document.createElement('option');
                 option.value = level;
-                option.textContent = level === 1000 ? t('All') : level;
+                option.textContent = level === 1000 ? i18n_js.t('All') : level;
                 if ((type === 'min' && level === 1) || (type === 'max' && level === 1000)) {
                     option.selected = true;
                 }
@@ -7398,7 +7358,7 @@ self.onmessage = function (e) {
             container.style.cssText = 'display: flex; align-items: center; gap: 4px;';
 
             const label = document.createElement('label');
-            label.textContent = t('Class: ');
+            label.textContent = i18n_js.t('Class: ');
             label.style.cssText = 'font-size: 12px; color: rgba(255, 255, 255, 0.7);';
 
             const select = document.createElement('select');
@@ -7407,7 +7367,7 @@ self.onmessage = function (e) {
                 'padding: 4px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.3); color: #fff; border: 1px solid rgba(91, 141, 239, 0.3);';
 
             const classes = [
-                { value: 'all', label: t('All') },
+                { value: 'all', label: i18n_js.t('All') },
                 { value: 'attack', label: 'Attack' },
                 { value: 'melee', label: 'Melee' },
                 { value: 'defense', label: 'Defense' },
@@ -7442,7 +7402,7 @@ self.onmessage = function (e) {
             container.style.cssText = 'display: flex; align-items: center; gap: 4px;';
 
             const label = document.createElement('label');
-            label.textContent = t('Slot: ');
+            label.textContent = i18n_js.t('Slot: ');
             label.style.cssText = 'font-size: 12px; color: rgba(255, 255, 255, 0.7);';
 
             const select = document.createElement('select');
@@ -7451,7 +7411,7 @@ self.onmessage = function (e) {
                 'padding: 4px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.3); color: #fff; border: 1px solid rgba(91, 141, 239, 0.3);';
 
             const slots = [
-                { value: 'all', label: t('All') },
+                { value: 'all', label: i18n_js.t('All') },
                 { value: 'main_hand', label: 'Main Hand' },
                 { value: 'off_hand', label: 'Off Hand' },
                 { value: 'two_hand', label: 'Two Hand' },
@@ -7691,7 +7651,7 @@ self.onmessage = function (e) {
                     this.hasSorted = false;
                     this.sortDirection = 'desc';
                     if (this.sortButton) {
-                        this.sortButton.textContent = t('Sort by Profit');
+                        this.sortButton.textContent = i18n_js.t('Sort by Profit');
                     }
                 },
                 { debounce: true, debounceDelay: 150 }
@@ -7707,7 +7667,7 @@ self.onmessage = function (e) {
                 this.hasSorted = false;
                 this.sortDirection = 'desc';
                 if (this.sortButton) {
-                    this.sortButton.textContent = t('Sort by Profit');
+                    this.sortButton.textContent = i18n_js.t('Sort by Profit');
                 }
                 // Remove profit indicators from any stale elements
                 document.querySelectorAll('.toolasha-profit-indicator').forEach((el) => el.remove());
@@ -7740,7 +7700,7 @@ self.onmessage = function (e) {
             // Create sort button
             const sortButton = document.createElement('button');
             sortButton.id = 'toolasha-sort-profit-btn';
-            sortButton.textContent = t('Sort by Profit');
+            sortButton.textContent = i18n_js.t('Sort by Profit');
             sortButton.style.cssText = `
             padding: 6px 12px;
             border-radius: 4px;
@@ -7771,7 +7731,7 @@ self.onmessage = function (e) {
 
             // Create reset button
             const resetButton = document.createElement('button');
-            resetButton.textContent = t('Reset Order');
+            resetButton.textContent = i18n_js.t('Reset Order');
             resetButton.style.cssText = `
             padding: 6px 12px;
             border-radius: 4px;
@@ -7812,7 +7772,7 @@ self.onmessage = function (e) {
                 this.sortDirection = this.sortDirection === 'desc' ? 'asc' : 'desc';
             }
 
-            this.sortButton.textContent = this.sortDirection === 'desc' ? t('Sorting... ▼') : t('Sorting... ▲');
+            this.sortButton.textContent = this.sortDirection === 'desc' ? i18n_js.t('Sorting... ▼') : i18n_js.t('Sorting... ▲');
             this.sortButton.style.background = 'rgba(91, 141, 239, 0.6)';
             this.isSorting = true;
 
@@ -7820,7 +7780,7 @@ self.onmessage = function (e) {
                 await this.sortByProfitability();
             } finally {
                 this.isSorting = false;
-                this.sortButton.textContent = this.sortDirection === 'desc' ? t('Sort by Profit ▼') : t('Sort by Profit ▲');
+                this.sortButton.textContent = this.sortDirection === 'desc' ? i18n_js.t('Sort by Profit ▼') : i18n_js.t('Sort by Profit ▲');
                 this.sortButton.style.background = 'rgba(91, 141, 239, 0.2)';
             }
         }
@@ -8061,7 +8021,7 @@ self.onmessage = function (e) {
             // Reset sort direction
             this.sortDirection = 'desc';
             if (this.sortButton) {
-                this.sortButton.textContent = t('Sort by Profit');
+                this.sortButton.textContent = i18n_js.t('Sort by Profit');
             }
         }
 
@@ -9972,28 +9932,28 @@ self.onmessage = function (e) {
             // Create "Top Order Price" header
             const topOrderHeader = document.createElement('th');
             topOrderHeader.classList.add('mwi-listing-price-header');
-            topOrderHeader.textContent = t('Top Order Price');
+            topOrderHeader.textContent = i18n_js.t('Top Order Price');
 
             // Create "Top Order Age" header (if setting enabled)
             let topOrderAgeHeader = null;
             if (config.getSetting('market_showTopOrderAge')) {
                 topOrderAgeHeader = document.createElement('th');
                 topOrderAgeHeader.classList.add('mwi-listing-price-header');
-                topOrderAgeHeader.textContent = t('Top Order Age');
-                topOrderAgeHeader.title = t('Estimated age of the top competing order');
+                topOrderAgeHeader.textContent = i18n_js.t('Top Order Age');
+                topOrderAgeHeader.title = i18n_js.t('Estimated age of the top competing order');
             }
 
             // Create "Total Price" header
             const totalPriceHeader = document.createElement('th');
             totalPriceHeader.classList.add('mwi-listing-price-header');
-            totalPriceHeader.textContent = t('Total Price');
+            totalPriceHeader.textContent = i18n_js.t('Total Price');
 
             // Create "Listed" header (if setting enabled)
             let listedHeader = null;
             if (config.getSetting('market_showListingAge')) {
                 listedHeader = document.createElement('th');
                 listedHeader.classList.add('mwi-listing-price-header');
-                listedHeader.textContent = t('Listed');
+                listedHeader.textContent = i18n_js.t('Listed');
             }
 
             // Insert headers (order: Top Order Price, Top Order Age, Total Price, Listed)
@@ -10402,7 +10362,7 @@ self.onmessage = function (e) {
 
             if (!cacheEntry) {
                 // No order book data available
-                return createStyledCell(t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
+                return createStyledCell(i18n_js.t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
             }
 
             // Support both old format (direct data) and new format ({data, lastUpdated})
@@ -10411,14 +10371,14 @@ self.onmessage = function (e) {
 
             if (!orderBookData || !orderBookData.orderBooks || orderBookData.orderBooks.length === 0) {
                 // No order book data available
-                return createStyledCell(t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
+                return createStyledCell(i18n_js.t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
             }
 
             // Order books are indexed by enhancement level (same as createTopOrderPriceCell)
             const orderBook = orderBookData.orderBooks[enhancementLevel] ?? null;
 
             if (!orderBook) {
-                return createStyledCell(t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
+                return createStyledCell(i18n_js.t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
             }
 
             // Get top order — asks sorted ascending (best = index 0), bids sorted descending (best = index 0)
@@ -10426,7 +10386,7 @@ self.onmessage = function (e) {
 
             if (!topOrders || topOrders.length === 0) {
                 // No competing orders
-                return createStyledCell(t('None'), '#00FF00', { fontSize: '0.9em' }); // Green = you're the only one
+                return createStyledCell(i18n_js.t('None'), '#00FF00', { fontSize: '0.9em' }); // Green = you're the only one
             }
 
             // Skip over the user's own listings to find the top external (competing) order
@@ -10446,7 +10406,7 @@ self.onmessage = function (e) {
             const ageMs = Date.now() - estimatedTimestamp;
             const formatted = formatters_js.formatRelativeTime(ageMs);
 
-            return createStyledCell(t('~{0}', formatted), estimatedListingAge.getStalenessColor(lastUpdated), {
+            return createStyledCell(i18n_js.t('~{0}', formatted), estimatedListingAge.getStalenessColor(lastUpdated), {
                 fontSize: '0.9em',
                 title: lastUpdated ? estimatedListingAge.getStalenessTooltip(lastUpdated) : undefined,
             });
@@ -10510,7 +10470,7 @@ self.onmessage = function (e) {
          * @returns {HTMLElement} Empty table cell element
          */
         createPlaceholderCell() {
-            return createStyledCell(t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
+            return createStyledCell(i18n_js.t('N/A'), config.COLOR_TEXT_SECONDARY, { fontSize: '0.9em' });
         }
 
         /**
@@ -10879,12 +10839,12 @@ self.onmessage = function (e) {
 
             // Add tooltip
             if (isEstimated) {
-                displayElement.title = t(
+                displayElement.title = i18n_js.t(
                     'Estimated total queue depth (extrapolated from {0} visible orders)',
                     listings.length
                 );
             } else {
-                displayElement.title = t('Total quantity at best {0} price', isAsk ? 'sell' : 'buy');
+                displayElement.title = i18n_js.t('Total quantity at best {0} price', isAsk ? 'sell' : 'buy');
             }
 
             // Insert into button container
@@ -11155,8 +11115,8 @@ self.onmessage = function (e) {
                 <button
                     type="button"
                     class="mwi-market-order-totals-link"
-                    title="${t('No market orders')}"
-                    aria-label="${t('No market orders')}"
+                    title="${i18n_js.t('No market orders')}"
+                    aria-label="${i18n_js.t('No market orders')}"
                     style="background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center;"
                 >
                     ${marketplaceIcon}
@@ -11178,15 +11138,15 @@ self.onmessage = function (e) {
 
             // Update display
             this.displayElement.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 4px;" title="${t('Buy Orders (coins locked in buy orders)')}">
+            <div style="display: flex; align-items: center; gap: 4px;" title="${i18n_js.t('Buy Orders (coins locked in buy orders)')}">
                 <span style="color: #888; font-weight: 500;">BO:</span>
                 ${boDisplay}
             </div>
-            <div style="display: flex; align-items: center; gap: 4px;" title="${t('Sell Orders (expected proceeds after tax)')}">
+            <div style="display: flex; align-items: center; gap: 4px;" title="${i18n_js.t('Sell Orders (expected proceeds after tax)')}">
                 <span style="color: #888; font-weight: 500;">SO:</span>
                 ${soDisplay}
             </div>
-            <div style="display: flex; align-items: center; gap: 4px;" title="${t('Unclaimed coins (waiting to be collected)')}">
+            <div style="display: flex; align-items: center; gap: 4px;" title="${i18n_js.t('Unclaimed coins (waiting to be collected)')}">
                 <span style="font-weight: 500;">💰:</span>
                 ${unclaimedDisplay}
             </div>
@@ -14236,7 +14196,7 @@ self.onmessage = function (e) {
 
                 const button = document.createElement('button');
                 button.className = 'mwi-philo-calc-button';
-                button.textContent = t('Philo Gamba');
+                button.textContent = i18n_js.t('Philo Gamba');
                 button.style.cssText = `
                 margin: 10px;
                 padding: 8px 16px;
@@ -14663,7 +14623,7 @@ self.onmessage = function (e) {
             border-bottom: 1px solid #444;
         `;
             header.innerHTML = `
-            <span style="font-size: 18px; font-weight: bold;">${t("Philosopher's Stone Calculator")}</span>
+            <span style="font-size: 18px; font-weight: bold;">${i18n_js.t("Philosopher's Stone Calculator")}</span>
         `;
 
             const closeBtn = document.createElement('button');
@@ -14739,7 +14699,7 @@ self.onmessage = function (e) {
             // Philo price input
             const philoLabel = document.createElement('label');
             philoLabel.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px;';
-            philoLabel.textContent = t('Philo Price: ');
+            philoLabel.textContent = i18n_js.t('Philo Price: ');
             const philoInput = document.createElement('input');
             philoInput.type = 'text';
             philoInput.value = this.philoPrice.toLocaleString();
@@ -14764,7 +14724,7 @@ self.onmessage = function (e) {
             // Catalyst price input
             const catLabel = document.createElement('label');
             catLabel.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px;';
-            catLabel.textContent = t('Catalyst Price: ');
+            catLabel.textContent = i18n_js.t('Catalyst Price: ');
             const catInput = document.createElement('input');
             catInput.type = 'text';
             catInput.value = this.catalystPrice.toLocaleString();
@@ -14830,7 +14790,7 @@ self.onmessage = function (e) {
             // Drink Concentration Dropdown
             const drinkLabel = document.createElement('label');
             drinkLabel.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px;';
-            drinkLabel.textContent = t('Drink Concentration: ');
+            drinkLabel.textContent = i18n_js.t('Drink Concentration: ');
             const drinkSelect = document.createElement('select');
             drinkSelect.style.cssText = `
             padding: 4px 8px;
@@ -14881,10 +14841,10 @@ self.onmessage = function (e) {
             // Filter label
             const filterLabel = document.createElement('label');
             filterLabel.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 13px;';
-            filterLabel.textContent = t('Filter: ');
+            filterLabel.textContent = i18n_js.t('Filter: ');
             const filterInput = document.createElement('input');
             filterInput.type = 'text';
-            filterInput.placeholder = t('Item name...');
+            filterInput.placeholder = i18n_js.t('Item name...');
             filterInput.value = this.filterText;
             filterInput.style.cssText = `
             width: 140px;
@@ -14905,7 +14865,7 @@ self.onmessage = function (e) {
 
             // Refresh prices button
             const refreshBtn = document.createElement('button');
-            refreshBtn.textContent = t('Refresh Prices');
+            refreshBtn.textContent = i18n_js.t('Refresh Prices');
             refreshBtn.style.cssText = `
             padding: 4px 12px;
             background: #4a90e2;
@@ -14923,7 +14883,7 @@ self.onmessage = function (e) {
             });
             refreshBtn.addEventListener('click', async () => {
                 refreshBtn.disabled = true;
-                refreshBtn.textContent = t('Refreshing...');
+                refreshBtn.textContent = i18n_js.t('Refreshing...');
                 refreshBtn.style.opacity = '0.6';
                 try {
                     await marketAPI.fetch(true);
@@ -14937,7 +14897,7 @@ self.onmessage = function (e) {
                     console.error('[PhiloCalculator] Failed to refresh prices:', error);
                 }
                 refreshBtn.disabled = false;
-                refreshBtn.textContent = t('Refresh Prices');
+                refreshBtn.textContent = i18n_js.t('Refresh Prices');
                 refreshBtn.style.opacity = '1';
             });
 
@@ -15472,7 +15432,7 @@ self.onmessage = function (e) {
             if (history.buy) {
                 const buyColor = this.getBuyColor(history.buy, currentPrices, comparisonMode);
                 parts.push(
-                    `<span style="color: ${buyColor}; font-weight: 600;" title="${t('Your last buy price')}">Buy ${formatters_js.formatKMB3Digits(history.buy)}</span>`
+                    `<span style="color: ${buyColor}; font-weight: 600;" title="${i18n_js.t('Your last buy price')}">Buy ${formatters_js.formatKMB3Digits(history.buy)}</span>`
                 );
             }
 
@@ -15483,7 +15443,7 @@ self.onmessage = function (e) {
             if (history.sell) {
                 const sellColor = this.getSellColor(history.sell, currentPrices, comparisonMode);
                 parts.push(
-                    `<span style="color: ${sellColor}; font-weight: 600;" title="${t('Your last sell price')}">Sell ${formatters_js.formatKMB3Digits(history.sell)}</span>`
+                    `<span style="color: ${sellColor}; font-weight: 600;" title="${i18n_js.t('Your last sell price')}">Sell ${formatters_js.formatKMB3Digits(history.sell)}</span>`
                 );
             }
 
@@ -15691,7 +15651,7 @@ self.onmessage = function (e) {
          * Show the network alert
          * @param {string} message - Alert message to display
          */
-        show(message = t('⚠️ Market data unavailable')) {
+        show(message = i18n_js.t('⚠️ Market data unavailable')) {
             if (!config.getSetting('networkAlert')) {
                 return;
             }
@@ -15920,7 +15880,7 @@ self.onmessage = function (e) {
                         const ageMs = Date.now() - new Date(topAsk.createdTimestamp).getTime();
                         if (ageMs > 0) {
                             const ageStr = formatters_js.formatRelativeTime(ageMs);
-                            ageHtml = `<div style="font-size: 0.7em; opacity: 0.7; margin-top: 1px;">${t('Top ask: ~{0}', ageStr)}</div>`;
+                            ageHtml = `<div style="font-size: 0.7em; opacity: 0.7; margin-top: 1px;">${i18n_js.t('Top ask: ~{0}', ageStr)}</div>`;
                         }
                     }
                 }
@@ -15928,7 +15888,7 @@ self.onmessage = function (e) {
 
             toggle.innerHTML =
                 '<span style="flex: 1; text-align: center;">' +
-                t('Marketplace Action') +
+                i18n_js.t('Marketplace Action') +
                 ageHtml +
                 '</span>' +
                 '<span class="mwi-mp-chevron" style="font-size: 0.65em; transition: transform 0.15s; display: inline-block;">▼</span>';
@@ -15956,10 +15916,10 @@ self.onmessage = function (e) {
 
             // Action buttons
             const actions = [
-                { label: t('Sell Now'), type: 'sell', color: '#c2410c' },
-                { label: t('Buy Now'), type: 'buy', color: '#2fc4a7' },
-                { label: t('New Sell Listing'), type: 'sell-listing', color: '#9a3412' },
-                { label: t('New Buy Listing'), type: 'buy-listing', color: '#2fc4a7' },
+                { label: i18n_js.t('Sell Now'), type: 'sell', color: '#c2410c' },
+                { label: i18n_js.t('Buy Now'), type: 'buy', color: '#2fc4a7' },
+                { label: i18n_js.t('New Sell Listing'), type: 'sell-listing', color: '#9a3412' },
+                { label: i18n_js.t('New Buy Listing'), type: 'buy-listing', color: '#2fc4a7' },
             ];
 
             for (const action of actions) {
@@ -16241,7 +16201,7 @@ self.onmessage = function (e) {
                 // + toggle button
                 const addToggle = document.createElement('button');
                 addToggle.textContent = '+';
-                addToggle.title = t('Toggle add mode: click to accumulate counts instead of setting them');
+                addToggle.title = i18n_js.t('Toggle add mode: click to accumulate counts instead of setting them');
                 addToggle.style.cssText = `
                 font-size: 11px;
                 font-weight: 700;
@@ -16384,7 +16344,7 @@ self.onmessage = function (e) {
                 const ownedEl = document.createElement('div');
                 ownedEl.className = 'mwi-owned-count';
                 ownedEl.style.cssText = `text-align: center; font-size: 13px; color: ${config.COLOR_TEXT_SECONDARY}; margin: 4px 0;`;
-                ownedEl.innerHTML = `${t('Owned: ')}<span style="color: ${config.COLOR_ACCENT}; font-weight: 600;">${formatters_js.formatWithSeparator(count)}</span>`;
+                ownedEl.innerHTML = `${i18n_js.t('Owned: ')}<span style="color: ${config.COLOR_ACCENT}; font-weight: 600;">${formatters_js.formatWithSeparator(count)}</span>`;
                 quantityRow.insertAdjacentElement('beforebegin', ownedEl);
             }, 100);
         }
@@ -16581,7 +16541,7 @@ self.onmessage = function (e) {
             link.href = url;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
-            link.textContent = t('MilkyWay Market ↗');
+            link.textContent = i18n_js.t('MilkyWay Market ↗');
             link.style.cssText = `
             font-size: 10px;
             color: #888;
@@ -18568,7 +18528,7 @@ self.onmessage = function (e) {
 
             // Check exclusions in priority order: assetType > item > loadout
             if (entireEquippedExcluded) {
-                trackExcluded('assetType', 'equipped', t('All Equipped Items'), value);
+                trackExcluded('assetType', 'equipped', i18n_js.t('All Equipped Items'), value);
                 continue;
             }
             if (isExcluded('item', item.itemHrid)) {
@@ -18640,12 +18600,12 @@ self.onmessage = function (e) {
             }
             // Coin is never excluded by category — it must be excluded individually
             if (item.itemHrid !== '/items/coin' && isExcluded('category', categoryHrid)) {
-                const categoryName = gameData.itemCategoryDetailMap?.[categoryHrid]?.name || t('Other');
+                const categoryName = gameData.itemCategoryDetailMap?.[categoryHrid]?.name || i18n_js.t('Other');
                 trackExcluded('category', categoryHrid, `${categoryName} (category)`, value);
                 continue;
             }
             if (isAbilityBook && !booksAsInventory && isExcluded('assetType', 'abilityBooks')) {
-                trackExcluded('assetType', 'abilityBooks', t('All Ability Books'), value);
+                trackExcluded('assetType', 'abilityBooks', i18n_js.t('All Ability Books'), value);
                 continue;
             }
 
@@ -18660,7 +18620,7 @@ self.onmessage = function (e) {
 
                 // Coin is never excluded by category — it must be excluded individually
                 if (item.itemHrid !== '/items/coin') {
-                    const categoryName = gameData.itemCategoryDetailMap?.[categoryHrid]?.name || t('Other');
+                    const categoryName = gameData.itemCategoryDetailMap?.[categoryHrid]?.name || i18n_js.t('Other');
 
                     if (!inventoryByCategory[categoryName]) {
                         inventoryByCategory[categoryName] = {
@@ -18736,14 +18696,14 @@ self.onmessage = function (e) {
 
         // Apply listings exclusion
         if (isExcluded('assetType', 'listings') && listingsValue > 0) {
-            trackExcluded('assetType', 'listings', t('All Market Listings'), listingsValue);
+            trackExcluded('assetType', 'listings', i18n_js.t('All Market Listings'), listingsValue);
             listingsValue = 0;
         }
 
         // Calculate houses value — apply per-room and whole-section exclusions
         let housesData = calculateAllHousesCost(characterHouseRooms);
         if (isExcluded('assetType', 'houses') && housesData.totalCost > 0) {
-            trackExcluded('assetType', 'houses', t('All Houses'), housesData.totalCost);
+            trackExcluded('assetType', 'houses', i18n_js.t('All Houses'), housesData.totalCost);
             housesData = { totalCost: 0, breakdown: [] };
         } else {
             let excludedRoomCost = 0;
@@ -18764,7 +18724,7 @@ self.onmessage = function (e) {
         // Calculate abilities value — apply per-ability and whole-section exclusions
         let abilitiesData = calculateAllAbilitiesCost(characterAbilities, abilityCombatTriggersMap);
         if (isExcluded('assetType', 'abilities') && abilitiesData.totalCost > 0) {
-            trackExcluded('assetType', 'abilities', t('All Abilities'), abilitiesData.totalCost);
+            trackExcluded('assetType', 'abilities', i18n_js.t('All Abilities'), abilitiesData.totalCost);
             abilitiesData = {
                 totalCost: 0,
                 equippedCost: 0,
@@ -19124,12 +19084,12 @@ self.onmessage = function (e) {
     };
 
     const CATEGORIES = [
-        { key: 'gold', label: t('Gold'), color: '#eab308' },
-        { key: 'inventory', label: t('Inventory'), color: '#3b82f6' },
-        { key: 'equipment', label: t('Equipment'), color: '#ef4444' },
-        { key: 'listings', label: t('Listings'), color: '#8b5cf6' },
-        { key: 'house', label: t('House'), color: '#f97316' },
-        { key: 'abilities', label: t('Abilities'), color: '#06b6d4' },
+        { key: 'gold', label: i18n_js.t('Gold'), color: '#eab308' },
+        { key: 'inventory', label: i18n_js.t('Inventory'), color: '#3b82f6' },
+        { key: 'equipment', label: i18n_js.t('Equipment'), color: '#ef4444' },
+        { key: 'listings', label: i18n_js.t('Listings'), color: '#8b5cf6' },
+        { key: 'house', label: i18n_js.t('House'), color: '#f97316' },
+        { key: 'abilities', label: i18n_js.t('Abilities'), color: '#06b6d4' },
     ];
 
     class NetworthHistoryChart {
@@ -19251,7 +19211,7 @@ self.onmessage = function (e) {
         `;
 
             const title = document.createElement('h3');
-            title.textContent = t('Net Worth History');
+            title.textContent = i18n_js.t('Net Worth History');
             title.style.cssText = 'color: #ccc; margin: 0; font-size: 18px;';
 
             const closeBtn = document.createElement('button');
@@ -19283,7 +19243,7 @@ self.onmessage = function (e) {
             const ranges = ['24h', '7d', '30d', 'all'];
             for (const range of ranges) {
                 const btn = document.createElement('button');
-                btn.textContent = range === 'all' ? t('All') : range.toUpperCase();
+                btn.textContent = range === 'all' ? i18n_js.t('All') : range.toUpperCase();
                 btn.dataset.range = range;
                 btn.className = 'mwi-nw-range-btn';
                 btn.style.cssText = `
@@ -19303,7 +19263,7 @@ self.onmessage = function (e) {
 
             // Connect Gaps toggle
             const gapToggle = document.createElement('button');
-            gapToggle.textContent = t('Connect Gaps');
+            gapToggle.textContent = i18n_js.t('Connect Gaps');
             gapToggle.className = 'mwi-nw-gap-toggle';
             const updateGapToggleStyle = () => {
                 gapToggle.style.cssText = `
@@ -19328,7 +19288,7 @@ self.onmessage = function (e) {
 
             // Show Bars toggle
             const barToggle = document.createElement('button');
-            barToggle.textContent = t('Show Bars');
+            barToggle.textContent = i18n_js.t('Show Bars');
             barToggle.className = 'mwi-nw-bar-toggle';
             const updateBarToggleStyle = () => {
                 barToggle.style.cssText = `
@@ -19353,7 +19313,7 @@ self.onmessage = function (e) {
 
             // Moving Average dropdown
             const maLabel = document.createElement('span');
-            maLabel.textContent = t('Avg:');
+            maLabel.textContent = i18n_js.t('Avg:');
             maLabel.style.cssText = 'color: #999; font-size: 12px; margin-left: 8px;';
             rangeRow.appendChild(maLabel);
 
@@ -19370,7 +19330,7 @@ self.onmessage = function (e) {
             color-scheme: dark;
         `;
             const maOptions = [
-                { value: 0, label: t('Off') },
+                { value: 0, label: i18n_js.t('Off') },
                 { value: 3, label: '3h' },
                 { value: 6, label: '6h' },
                 { value: 12, label: '12h' },
@@ -19383,7 +19343,7 @@ self.onmessage = function (e) {
             if (isCustomValue) {
                 maOptions.push({ value: this.movingAvgWindow, label: `${this.movingAvgWindow}h` });
             }
-            maOptions.push({ value: -1, label: t('Custom…') });
+            maOptions.push({ value: -1, label: i18n_js.t('Custom…') });
             for (const opt of maOptions) {
                 const option = document.createElement('option');
                 option.value = opt.value;
@@ -19394,7 +19354,7 @@ self.onmessage = function (e) {
             maSelect.addEventListener('change', () => {
                 const val = parseInt(maSelect.value, 10);
                 if (val === -1) {
-                    const input = prompt(t('Enter moving average window in hours:'));
+                    const input = prompt(i18n_js.t('Enter moving average window in hours:'));
                     const parsed = parseInt(input, 10);
                     if (parsed > 0) {
                         this.movingAvgWindow = parsed;
@@ -19438,7 +19398,7 @@ self.onmessage = function (e) {
 
             // From label + input
             const fromLabel = document.createElement('span');
-            fromLabel.textContent = t('From:');
+            fromLabel.textContent = i18n_js.t('From:');
             fromLabel.style.cssText = 'color: #999; font-size: 12px;';
             rangeRow.appendChild(fromLabel);
 
@@ -19453,7 +19413,7 @@ self.onmessage = function (e) {
 
             // To label + input
             const toLabel = document.createElement('span');
-            toLabel.textContent = t('To:');
+            toLabel.textContent = i18n_js.t('To:');
             toLabel.style.cssText = 'color: #999; font-size: 12px;';
             rangeRow.appendChild(toLabel);
 
@@ -19505,7 +19465,7 @@ self.onmessage = function (e) {
             flex-shrink: 0;
         `;
             totalBtn.appendChild(totalDot);
-            totalBtn.appendChild(document.createTextNode(t('Total')));
+            totalBtn.appendChild(document.createTextNode(i18n_js.t('Total')));
             updateTotalBtnStyle();
             totalBtn.addEventListener('click', () => {
                 this.categoryVisibility.showTotal = !this.categoryVisibility.showTotal;
@@ -19547,7 +19507,7 @@ self.onmessage = function (e) {
             flex-shrink: 0;
         `;
             nonExclBtn.appendChild(nonExclDot);
-            nonExclBtn.appendChild(document.createTextNode(t('Non-Excluded')));
+            nonExclBtn.appendChild(document.createTextNode(i18n_js.t('Non-Excluded')));
             updateNonExclBtnStyle();
             nonExclBtn.addEventListener('click', () => {
                 this.categoryVisibility.showNonExcluded = !this.categoryVisibility.showNonExcluded;
@@ -19588,7 +19548,7 @@ self.onmessage = function (e) {
                 flex-shrink: 0;
             `;
                 btn.appendChild(dot);
-                btn.appendChild(document.createTextNode(t(cat.label)));
+                btn.appendChild(document.createTextNode(i18n_js.t(cat.label)));
                 updateCatBtnStyle();
                 btn.addEventListener('click', () => {
                     this.categoryVisibility[cat.key] = !this.categoryVisibility[cat.key];
@@ -19929,7 +19889,7 @@ self.onmessage = function (e) {
 
             const visibleCategories = CATEGORIES.filter((c) => this.categoryVisibility[c.key]);
             const yAxisTitle =
-                !this.categoryVisibility.showTotal && visibleCategories.length > 0 ? t('Category Value') : t('Net Worth');
+                !this.categoryVisibility.showTotal && visibleCategories.length > 0 ? i18n_js.t('Category Value') : i18n_js.t('Net Worth');
 
             this.chartInstance = new Chart(ctx, {
                 type: 'line',
@@ -20009,7 +19969,7 @@ self.onmessage = function (e) {
             if (!statsRow) return;
 
             if (filtered.length === 0) {
-                statsRow.innerHTML = `<span style="color: #666;">${t('No data available for this range')}</span>`;
+                statsRow.innerHTML = `<span style="color: #666;">${i18n_js.t('No data available for this range')}</span>`;
                 return;
             }
 
@@ -20036,18 +19996,18 @@ self.onmessage = function (e) {
                 const ratePerHour = hoursElapsed > 0 ? (currentTotal - first.total) / hoursElapsed : 0;
 
                 parts.push(
-                    `<span>${t('Current:')} <strong style="color: ${config.COLOR_ACCENT};">${formatters_js.networthFormatter(Math.round(currentTotal))}</strong></span>`
+                    `<span>${i18n_js.t('Current:')} <strong style="color: ${config.COLOR_ACCENT};">${formatters_js.networthFormatter(Math.round(currentTotal))}</strong></span>`
                 );
 
                 if (filtered.length >= 2) {
                     const color = rangeChange >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                     const sign = rangeChange >= 0 ? '+' : '';
                     const breakdownAttr = is24hRange
-                        ? ` id="mwi-nw-24h-toggle" style="cursor: pointer;" title="${t('Click for item breakdown')}"`
+                        ? ` id="mwi-nw-24h-toggle" style="cursor: pointer;" title="${i18n_js.t('Click for item breakdown')}"`
                         : '';
                     const breakdownArrow = is24hRange ? ' <span style="font-size: 10px; color: #666;">▼</span>' : '';
                     parts.push(
-                        `<span${breakdownAttr}>${t('Last {0}:', rangeLabel)} <strong style="color: ${color};">${sign}${formatters_js.networthFormatter(Math.round(rangeChange))} (${sign}${rangePercent.toFixed(1)}%)</strong>${breakdownArrow}</span>`
+                        `<span${breakdownAttr}>${i18n_js.t('Last {0}:', rangeLabel)} <strong style="color: ${color};">${sign}${formatters_js.networthFormatter(Math.round(rangeChange))} (${sign}${rangePercent.toFixed(1)}%)</strong>${breakdownArrow}</span>`
                     );
                 }
 
@@ -20055,7 +20015,7 @@ self.onmessage = function (e) {
                     const color = ratePerHour >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                     const sign = ratePerHour >= 0 ? '+' : '';
                     parts.push(
-                        `<span>${t('Rate:')} <strong style="color: ${color};">${sign}${formatters_js.networthFormatter(Math.round(ratePerHour))}/hr</strong></span>`
+                        `<span>${i18n_js.t('Rate:')} <strong style="color: ${color};">${sign}${formatters_js.networthFormatter(Math.round(ratePerHour))}/hr</strong></span>`
                     );
                 }
             }
@@ -20067,7 +20027,7 @@ self.onmessage = function (e) {
                 const firstNE = first.nonExcluded ?? first.total;
                 const neRate = hoursElapsed > 0 ? (currentNE - firstNE) / hoursElapsed : 0;
 
-                let neStatHtml = `<span style="color: #a78bfa;">${t('Non-Excl')}</span>: <strong style="color: #a78bfa;">${formatters_js.networthFormatter(Math.round(currentNE))}</strong>`;
+                let neStatHtml = `<span style="color: #a78bfa;">${i18n_js.t('Non-Excl')}</span>: <strong style="color: #a78bfa;">${formatters_js.networthFormatter(Math.round(currentNE))}</strong>`;
 
                 if (filtered.length >= 2) {
                     const neChange = currentNE - firstNE;
@@ -20101,7 +20061,7 @@ self.onmessage = function (e) {
                 const catChangeColor = catChange >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                 const catChangeSign = catChange >= 0 ? '+' : '';
 
-                let statHtml = `${t(cat.label)}: <strong style="color: ${catChangeColor};">${t('Last {0}:', rangeLabel)} ${catChangeSign}${formatters_js.networthFormatter(Math.round(catChange))}</strong>`;
+                let statHtml = `${i18n_js.t(cat.label)}: <strong style="color: ${catChangeColor};">${i18n_js.t('Last {0}:', rangeLabel)} ${catChangeSign}${formatters_js.networthFormatter(Math.round(catChange))}</strong>`;
 
                 if (hoursElapsed >= 1) {
                     statHtml += ` <span style="font-size: 11px; color: #aaa;">${rateSign}<span style="color: ${rateColor};">${formatters_js.networthFormatter(Math.round(rate))}/hr</span></span>`;
@@ -20111,7 +20071,7 @@ self.onmessage = function (e) {
             }
 
             if (parts.length === 0) {
-                statsRow.innerHTML = `<span style="color: #666;">${t('No data available for this range')}</span>`;
+                statsRow.innerHTML = `<span style="color: #666;">${i18n_js.t('No data available for this range')}</span>`;
                 return;
             }
 
@@ -20188,14 +20148,14 @@ self.onmessage = function (e) {
         render24hBreakdown(container) {
             const currentData = this.networthFeature?.currentData;
             if (!currentData) {
-                container.innerHTML = `<span style="color: #666;">${t('No live data available')}</span>`;
+                container.innerHTML = `<span style="color: #666;">${i18n_js.t('No live data available')}</span>`;
                 return;
             }
 
             const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
             const oldSnapshot = networthHistory.getDetailSnapshot(oneDayAgo);
             if (!oldSnapshot) {
-                container.innerHTML = `<span style="color: #666;">${t('No detail snapshot available yet (data collected hourly)')}</span>`;
+                container.innerHTML = `<span style="color: #666;">${i18n_js.t('No detail snapshot available yet (data collected hourly)')}</span>`;
                 return;
             }
 
@@ -20207,7 +20167,7 @@ self.onmessage = function (e) {
             currentItems['/items/coin:0'] = {
                 count: Math.round(currentData.coins),
                 value: Math.round(currentData.coins),
-                name: t('Gold'),
+                name: i18n_js.t('Gold'),
             };
 
             // Inventory items
@@ -20322,7 +20282,7 @@ self.onmessage = function (e) {
                         const baseName = details?.name || itemHrid.replace('/items/', '');
                         name = Number(enhLevel) > 0 ? `${baseName} +${enhLevel}` : baseName;
                     }
-                    const prefix = key.startsWith('listing:sell:') ? t('Sell Listing') : t('Buy Listing');
+                    const prefix = key.startsWith('listing:sell:') ? i18n_js.t('Sell Listing') : i18n_js.t('Buy Listing');
                     otherTotal += totalDiff;
                     otherItems.push({ name: `${prefix}: ${name}`, key, value: totalDiff });
                     continue;
@@ -20380,7 +20340,7 @@ self.onmessage = function (e) {
             }
 
             if (activityItems.length === 0 && marketItems.length === 0 && otherItems.length === 0) {
-                container.innerHTML = `<span style="color: #666;">${t('No item-level changes in the last 24h')}</span>`;
+                container.innerHTML = `<span style="color: #666;">${i18n_js.t('No item-level changes in the last 24h')}</span>`;
                 return;
             }
 
@@ -20396,7 +20356,7 @@ self.onmessage = function (e) {
                 const actColor = activityTotal >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                 const actSign = activityTotal >= 0 ? '+' : '';
                 html += `<div style="font-weight: bold; margin-bottom: 4px; display: flex; justify-content: space-between;">`;
-                html += `<span>${t('Activity')}</span>`;
+                html += `<span>${i18n_js.t('Activity')}</span>`;
                 html += `<span style="color: ${actColor};">${actSign}${formatters_js.networthFormatter(activityTotal)}</span>`;
                 html += `</div>`;
 
@@ -20423,7 +20383,7 @@ self.onmessage = function (e) {
                 const mktColor = marketTotal >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                 const mktSign = marketTotal >= 0 ? '+' : '';
                 html += `<div style="font-weight: bold; margin-top: 8px; margin-bottom: 4px; display: flex; justify-content: space-between;${activityItems.length > 0 ? ' padding-top: 6px; border-top: 1px solid #333;' : ''}">`;
-                html += `<span>${t('Market Movement')}</span>`;
+                html += `<span>${i18n_js.t('Market Movement')}</span>`;
                 html += `<span style="color: ${mktColor};">${mktSign}${formatters_js.networthFormatter(marketTotal)}</span>`;
                 html += `</div>`;
 
@@ -20454,7 +20414,7 @@ self.onmessage = function (e) {
                 const residual = last24hChange - activityTotal - marketTotal - otherTotal;
                 if (Math.abs(residual) > 0) {
                     otherTotal += residual;
-                    otherItems.push({ name: t('Rounding'), key: '_rounding', value: residual });
+                    otherItems.push({ name: i18n_js.t('Rounding'), key: '_rounding', value: residual });
                 }
             }
 
@@ -20463,7 +20423,7 @@ self.onmessage = function (e) {
                 const otherColor = otherTotal >= 0 ? config.COLOR_PROFIT : config.COLOR_LOSS;
                 const otherSign = otherTotal >= 0 ? '+' : '';
                 html += `<div style="font-weight: bold; margin-top: 8px; margin-bottom: 4px; display: flex; justify-content: space-between;${hasPrevSections ? ' padding-top: 6px; border-top: 1px solid #333;' : ''}">`;
-                html += `<span>${t('Other')}</span>`;
+                html += `<span>${i18n_js.t('Other')}</span>`;
                 html += `<span style="color: ${otherColor};">${otherSign}${formatters_js.networthFormatter(otherTotal)}</span>`;
                 html += `</div>`;
 
@@ -20481,7 +20441,7 @@ self.onmessage = function (e) {
 
             // Snapshot age note
             const ageHours = Math.round((Date.now() - oldSnapshot.t) / 3_600_000);
-            html += `<div style="color: #555; font-size: 10px; margin-top: 6px; text-align: right;">${t('Compared to snapshot from {0}h ago', ageHours)}</div>`;
+            html += `<div style="color: #555; font-size: 10px; margin-top: 6px; text-align: right;">${i18n_js.t('Compared to snapshot from {0}h ago', ageHours)}</div>`;
 
             container.innerHTML = html;
         }
@@ -20565,24 +20525,24 @@ self.onmessage = function (e) {
 
             // Total
             const totalDelta = this._formatDelta(raw.total, prevRaw?.total);
-            html += `<div style="color:#4ade80;">&#9632; ${t('Total:')} ${formatters_js.networthFormatter(raw.total)}${totalDelta}</div>`;
+            html += `<div style="color:#4ade80;">&#9632; ${i18n_js.t('Total:')} ${formatters_js.networthFormatter(raw.total)}${totalDelta}</div>`;
 
             // Category breakdown
             const categories = [];
-            categories.push({ label: t('Gold'), value: raw.gold || 0, prev: prevRaw?.gold });
+            categories.push({ label: i18n_js.t('Gold'), value: raw.gold || 0, prev: prevRaw?.gold });
 
             const inventoryExGold = (raw.inventory || 0) - (raw.gold || 0);
             const prevInventoryExGold = prevRaw ? (prevRaw.inventory || 0) - (prevRaw.gold || 0) : null;
-            categories.push({ label: t('Inventory'), value: inventoryExGold, prev: prevInventoryExGold });
+            categories.push({ label: i18n_js.t('Inventory'), value: inventoryExGold, prev: prevInventoryExGold });
 
-            categories.push({ label: t('Equipment'), value: raw.equipment || 0, prev: prevRaw?.equipment });
-            categories.push({ label: t('Listings'), value: raw.listings || 0, prev: prevRaw?.listings });
-            categories.push({ label: t('House'), value: raw.house || 0, prev: prevRaw?.house });
-            categories.push({ label: t('Abilities'), value: raw.abilities || 0, prev: prevRaw?.abilities });
+            categories.push({ label: i18n_js.t('Equipment'), value: raw.equipment || 0, prev: prevRaw?.equipment });
+            categories.push({ label: i18n_js.t('Listings'), value: raw.listings || 0, prev: prevRaw?.listings });
+            categories.push({ label: i18n_js.t('House'), value: raw.house || 0, prev: prevRaw?.house });
+            categories.push({ label: i18n_js.t('Abilities'), value: raw.abilities || 0, prev: prevRaw?.abilities });
             if (raw.nonExcluded != null && raw.nonExcluded !== raw.total) {
                 const excluded = raw.total - raw.nonExcluded;
                 const prevExcluded = prevRaw?.nonExcluded != null ? prevRaw.total - prevRaw.nonExcluded : null;
-                categories.push({ label: t('Excluded'), value: excluded, prev: prevExcluded });
+                categories.push({ label: i18n_js.t('Excluded'), value: excluded, prev: prevExcluded });
             }
 
             for (const cat of categories) {
@@ -20668,8 +20628,8 @@ self.onmessage = function (e) {
             popup.innerHTML = `
             <div style="margin-bottom:4px;font-weight:500;color:#fff;">${date}</div>
             <div style="margin-bottom:10px;color:${config.COLOR_ACCENT};">${formatters_js.networthFormatter(snapshot.total)}</div>
-            <button id="mwi-nw-delete-confirm" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:11px;margin-right:6px;">${t('Delete point')}</button>
-            <button id="mwi-nw-delete-cancel" style="background:#2a2a2a;color:#999;border:1px solid #444;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:11px;">${t('Cancel')}</button>
+            <button id="mwi-nw-delete-confirm" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:11px;margin-right:6px;">${i18n_js.t('Delete point')}</button>
+            <button id="mwi-nw-delete-cancel" style="background:#2a2a2a;color:#999;border:1px solid #444;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:11px;">${i18n_js.t('Cancel')}</button>
         `;
 
             document.body.appendChild(popup);
@@ -21040,7 +21000,7 @@ self.onmessage = function (e) {
 
             const title = document.createElement('span');
             title.style.cssText = `font-size: 0.9rem; font-weight: 600; color: ${config.COLOR_ACCENT};`;
-            title.textContent = t('Net Worth Exclusions');
+            title.textContent = i18n_js.t('Net Worth Exclusions');
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '×';
@@ -21097,12 +21057,12 @@ self.onmessage = function (e) {
             currentLabel.style.cssText = `font-size: 0.75rem; color: rgba(255,255,255,0.45); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: space-between;`;
 
             const labelText = document.createElement('span');
-            labelText.textContent = exclusions.length > 0 ? t('Current Exclusions') : t('No exclusions configured');
+            labelText.textContent = exclusions.length > 0 ? i18n_js.t('Current Exclusions') : i18n_js.t('No exclusions configured');
             currentLabel.appendChild(labelText);
 
             if (exclusions.length > 0) {
                 const clearBtn = document.createElement('button');
-                clearBtn.textContent = t('Clear All');
+                clearBtn.textContent = i18n_js.t('Clear All');
                 clearBtn.style.cssText = `
                 background: transparent;
                 border: 1px solid rgba(255,100,100,0.4);
@@ -21153,7 +21113,7 @@ self.onmessage = function (e) {
             // ── Search section ──
             const searchInput = document.createElement('input');
             searchInput.type = 'search';
-            searchInput.placeholder = t('Search items, categories, houses, loadouts...');
+            searchInput.placeholder = i18n_js.t('Search items, categories, houses, loadouts...');
             searchInput.style.cssText = `
             width: 100%;
             box-sizing: border-box;
@@ -21268,7 +21228,7 @@ self.onmessage = function (e) {
             if (filtered.length === 0) {
                 const empty = document.createElement('div');
                 empty.style.cssText = `color: rgba(255,255,255,0.3); font-size: 0.8rem; text-align: center; padding: 12px 0;`;
-                empty.textContent = t('No results');
+                empty.textContent = i18n_js.t('No results');
                 container.appendChild(empty);
                 return;
             }
@@ -21336,7 +21296,7 @@ self.onmessage = function (e) {
                 white-space: nowrap;
                 flex-shrink: 0;
             `;
-                actionBtn.textContent = alreadyExcluded ? t('✕ Remove') : t('+ Exclude');
+                actionBtn.textContent = alreadyExcluded ? i18n_js.t('✕ Remove') : i18n_js.t('+ Exclude');
                 actionBtn.addEventListener('mouseenter', () => {
                     actionBtn.style.opacity = '1';
                     actionBtn.style.borderColor = alreadyExcluded ? 'rgba(255,100,100,0.9)' : config.COLOR_ACCENT;
@@ -21404,21 +21364,21 @@ self.onmessage = function (e) {
             if (entry) return entry.name;
 
             const ASSET_TYPE_NAMES = {
-                equipped: t('All Equipped Items'),
-                listings: t('All Market Listings'),
-                houses: t('All Houses'),
-                abilities: t('All Abilities'),
-                abilityBooks: t('All Ability Books'),
+                equipped: i18n_js.t('All Equipped Items'),
+                listings: i18n_js.t('All Market Listings'),
+                houses: i18n_js.t('All Houses'),
+                abilities: i18n_js.t('All Abilities'),
+                abilityBooks: i18n_js.t('All Ability Books'),
             };
             if (exc.type === 'assetType') return ASSET_TYPE_NAMES[exc.value] ?? exc.value;
-            if (exc.type === 'loadout') return t('Loadout: {name}', { name: exc.value });
+            if (exc.type === 'loadout') return i18n_js.t('Loadout: {name}', { name: exc.value });
 
             const gd = dataManager.getInitClientData();
             if (!gd) return exc.value;
 
             if (exc.type === 'category') {
                 const name = gd.itemCategoryDetailMap?.[exc.value]?.name;
-                return name ? t('{name} (category)', { name }) : exc.value;
+                return name ? i18n_js.t('{name} (category)', { name }) : exc.value;
             }
             if (exc.type === 'item') return gd.itemDetailMap?.[exc.value]?.name ?? exc.value;
             if (exc.type === 'houseRoom') return gd.houseRoomDetailMap?.[exc.value]?.name ?? exc.value;
@@ -21452,7 +21412,7 @@ self.onmessage = function (e) {
 
             const removeBtn = document.createElement('span');
             removeBtn.textContent = '×';
-            removeBtn.title = t('Remove exclusion');
+            removeBtn.title = i18n_js.t('Remove exclusion');
             removeBtn.style.cssText = `cursor: pointer; color: rgba(255,100,100,0.7); font-size: 0.9rem; line-height: 1;`;
             removeBtn.addEventListener('mouseenter', () => (removeBtn.style.color = 'rgba(255,100,100,1)'));
             removeBtn.addEventListener('mouseleave', () => (removeBtn.style.color = 'rgba(255,100,100,0.7)'));
@@ -21665,7 +21625,7 @@ self.onmessage = function (e) {
             totalLevelElem.insertAdjacentElement('afterend', this.container);
 
             // Initial render with loading state
-            this.renderGoldDisplay(t('Loading...'));
+            this.renderGoldDisplay(i18n_js.t('Loading...'));
 
             // Trigger recalculation immediately to update from "Loading..." to actual value
             if (this.networthFeature && typeof this.networthFeature.recalculate === 'function') {
@@ -21713,7 +21673,7 @@ self.onmessage = function (e) {
 
             // Create text span
             const textSpan = document.createElement('span');
-            textSpan.textContent = t('Gold: {0}', value);
+            textSpan.textContent = i18n_js.t('Gold: {0}', value);
 
             // Assemble
             wrapper.appendChild(textSpan);
@@ -21833,7 +21793,7 @@ self.onmessage = function (e) {
             } else {
                 this.container.innerHTML = `
                 <div style="font-weight: bold; cursor: pointer;">
-                    ${t('Networth: Loading...')}
+                    ${i18n_js.t('Networth: Loading...')}
                 </div>
             `;
             }
@@ -21910,11 +21870,11 @@ self.onmessage = function (e) {
             this.container.innerHTML = `
             <div style="display: flex; align-items: center; gap: 6px;">
                 <div style="cursor: pointer; font-weight: bold; flex: 1;" id="mwi-networth-toggle">
-                        + ${t('Net Worth: {0}', totalNetworth)}
+                        + ${i18n_js.t('Net Worth: {0}', totalNetworth)}
                 </div>
                 ${
                     showChartBtn
-                        ? `<span id="mwi-networth-chart-btn" title="${t('Net Worth History Chart')}" style="
+                        ? `<span id="mwi-networth-chart-btn" title="${i18n_js.t('Net Worth History Chart')}" style="
                     cursor: pointer;
                     font-size: 14px;
                     opacity: 0.7;
@@ -21924,7 +21884,7 @@ self.onmessage = function (e) {
                 ">&#x1F4C8;</span>`
                         : ''
                 }
-                <span id="mwi-networth-exclusions-btn" title="${t('Configure Net Worth Exclusions')}" style="
+                <span id="mwi-networth-exclusions-btn" title="${i18n_js.t('Configure Net Worth Exclusions')}" style="
                     cursor: pointer;
                     font-size: 12px;
                     opacity: 0.6;
@@ -21939,7 +21899,7 @@ self.onmessage = function (e) {
                         ? `
                 <!-- Current Assets -->
                 <div style="cursor: pointer; margin-top: 8px;" id="mwi-current-assets-toggle">
-                    + ${t('Current Assets: {0}', formatters_js.networthFormatter(Math.round(ca.total)))}
+                    + ${i18n_js.t('Current Assets: {0}', formatters_js.networthFormatter(Math.round(ca.total)))}
                 </div>
                 <div id="mwi-current-assets-details" style="display: none; margin-left: 20px;">
                     ${
@@ -21947,7 +21907,7 @@ self.onmessage = function (e) {
                             ? `
                     <!-- Equipment Value -->
                     <div style="cursor: pointer; margin-top: 4px;" id="mwi-equipment-toggle">
-                        + ${t('Equipment value: {0}', formatters_js.networthFormatter(Math.round(ca.equipped.value)))}
+                        + ${i18n_js.t('Equipment value: {0}', formatters_js.networthFormatter(Math.round(ca.equipped.value)))}
                     </div>
                     <div id="mwi-equipment-breakdown" style="display: none; margin-left: 20px; font-size: 0.8rem; color: #bbb; white-space: pre-line;">${this.renderEquipmentBreakdown(ca.equipped.breakdown)}</div>
                     `
@@ -21959,7 +21919,7 @@ self.onmessage = function (e) {
                             ? `
                     <!-- Inventory Value -->
                     <div style="cursor: pointer; margin-top: 4px;" id="mwi-inventory-toggle">
-                        + ${t('Inventory value: {0}', formatters_js.networthFormatter(Math.round(ca.inventory.value)))}
+                        + ${i18n_js.t('Inventory value: {0}', formatters_js.networthFormatter(Math.round(ca.inventory.value)))}
                     </div>
                     <div id="mwi-inventory-breakdown" style="display: none; margin-left: 20px;">
                         ${this.renderInventoryBreakdown(ca.inventory)}
@@ -21973,7 +21933,7 @@ self.onmessage = function (e) {
                             ? `
                     <!-- Market Listings -->
                     <div style="cursor: pointer; margin-top: 4px;" id="mwi-listings-toggle">
-                        + ${t('Market listings: {0}', formatters_js.networthFormatter(Math.round(ca.listings.value)))}
+                        + ${i18n_js.t('Market listings: {0}', formatters_js.networthFormatter(Math.round(ca.listings.value)))}
                     </div>
                     <div id="mwi-listings-breakdown" style="display: none; margin-left: 20px; font-size: 0.8rem; color: #bbb; white-space: pre-line;">${this.renderListingsBreakdown(ca.listings.breakdown)}</div>
                     `
@@ -21989,7 +21949,7 @@ self.onmessage = function (e) {
                         ? `
                 <!-- Fixed Assets -->
                 <div style="cursor: pointer; margin-top: 8px;" id="mwi-fixed-assets-toggle">
-                    + ${t('Fixed Assets: {0}', formatters_js.networthFormatter(Math.round(fa.total)))}
+                    + ${i18n_js.t('Fixed Assets: {0}', formatters_js.networthFormatter(Math.round(fa.total)))}
                 </div>
                 <div id="mwi-fixed-assets-details" style="display: none; margin-left: 20px;">
                     ${
@@ -21997,7 +21957,7 @@ self.onmessage = function (e) {
                             ? `
                     <!-- Houses -->
                     <div style="cursor: pointer; margin-top: 4px;" id="mwi-houses-toggle">
-                        + ${t('Houses: {0}', formatters_js.networthFormatter(Math.round(fa.houses.totalCost)))}
+                        + ${i18n_js.t('Houses: {0}', formatters_js.networthFormatter(Math.round(fa.houses.totalCost)))}
                     </div>
                     <div id="mwi-houses-breakdown" style="display: none; margin-left: 20px; font-size: 0.8rem; color: #bbb; white-space: pre-line;">${this.renderHousesBreakdown(fa.houses.breakdown)}</div>
                     `
@@ -22009,12 +21969,12 @@ self.onmessage = function (e) {
                             ? `
                     <!-- Abilities -->
                     <div style="cursor: pointer; margin-top: 4px;" id="mwi-abilities-toggle">
-                        + ${t('Abilities: {0}', formatters_js.networthFormatter(Math.round(fa.abilities.totalCost)))}
+                        + ${i18n_js.t('Abilities: {0}', formatters_js.networthFormatter(Math.round(fa.abilities.totalCost)))}
                     </div>
                     <div id="mwi-abilities-details" style="display: none; margin-left: 20px;">
                         <!-- Equipped Abilities -->
                         <div style="cursor: pointer; margin-top: 4px;" id="mwi-equipped-abilities-toggle">
-                            + ${t('Equipped ({0}): {1}', fa.abilities.equippedBreakdown.length, formatters_js.networthFormatter(Math.round(fa.abilities.equippedCost)))}
+                            + ${i18n_js.t('Equipped ({0}): {1}', fa.abilities.equippedBreakdown.length, formatters_js.networthFormatter(Math.round(fa.abilities.equippedCost)))}
                         </div>
                         <div id="mwi-equipped-abilities-breakdown" style="display: none; margin-left: 20px; font-size: 0.8rem; color: #bbb; white-space: pre-line;">${this.renderAbilitiesBreakdown(fa.abilities.equippedBreakdown)}</div>
 
@@ -22022,7 +21982,7 @@ self.onmessage = function (e) {
                             fa.abilities.otherBreakdown.length > 0
                                 ? `
                             <div style="cursor: pointer; margin-top: 4px;" id="mwi-other-abilities-toggle">
-                                + ${t('Other Abilities ({0}): {1}', fa.abilities.otherBreakdown.length, formatters_js.networthFormatter(Math.round(fa.abilities.totalCost - fa.abilities.equippedCost)))}
+                                + ${i18n_js.t('Other Abilities ({0}): {1}', fa.abilities.otherBreakdown.length, formatters_js.networthFormatter(Math.round(fa.abilities.totalCost - fa.abilities.equippedCost)))}
                             </div>
                             <div id="mwi-other-abilities-breakdown" style="display: none; margin-left: 20px; font-size: 0.8rem; color: #bbb; white-space: pre-line;">${this.renderAbilitiesBreakdown(fa.abilities.otherBreakdown)}</div>
                         `
@@ -22037,7 +21997,7 @@ self.onmessage = function (e) {
                         fa.abilityBooks.breakdown.length > 0
                             ? `
                         <div style="cursor: pointer; margin-top: 4px;" id="mwi-ability-books-toggle">
-                            + ${t('Ability Books ({0}): {1}', fa.abilityBooks.breakdown.length, formatters_js.networthFormatter(Math.round(fa.abilityBooks.totalCost)))}
+                            + ${i18n_js.t('Ability Books ({0}): {1}', fa.abilityBooks.breakdown.length, formatters_js.networthFormatter(Math.round(fa.abilityBooks.totalCost)))}
                         </div>
                         <div id="mwi-ability-books-breakdown" style="display: none; margin-left: 20px; font-size: 0.8rem; color: #bbb; white-space: pre-line;">${this.renderAbilityBooksBreakdown(fa.abilityBooks.breakdown)}</div>
                     `
@@ -22053,7 +22013,7 @@ self.onmessage = function (e) {
                         ? `
                 <!-- Excluded -->
                 <div style="cursor: pointer; margin-top: 8px; opacity: 0.6;" id="mwi-excluded-toggle">
-                    + ${t('Excluded: {0}', formatters_js.networthFormatter(Math.round(excl.total)))}
+                    + ${i18n_js.t('Excluded: {0}', formatters_js.networthFormatter(Math.round(excl.total)))}
                 </div>
                 <div id="mwi-excluded-details" style="display: none; margin-left: 20px; font-size: 0.8rem;">
                     ${excl.items
@@ -22061,7 +22021,7 @@ self.onmessage = function (e) {
                             (item) => `
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 3px; color: rgba(255,255,255,0.45);">
                             <span style="text-decoration: line-through;">${item.name}: ${formatters_js.networthFormatter(Math.round(item.amount))}</span>
-                             <span class="mwi-excluded-remove" data-type="${item.type}" data-value="${item.value.replace(/"/g, '&quot;')}" style="cursor: pointer; color: rgba(255,100,100,0.7); margin-left: 8px; font-size: 0.75rem;" title="${t('Remove exclusion')}">✕</span>
+                             <span class="mwi-excluded-remove" data-type="${item.type}" data-value="${item.value.replace(/"/g, '&quot;')}" style="cursor: pointer; color: rgba(255,100,100,0.7); margin-left: 8px; font-size: 0.75rem;" title="${i18n_js.t('Remove exclusion')}">✕</span>
                         </div>
                     `
                         )
@@ -22109,7 +22069,7 @@ self.onmessage = function (e) {
          */
         renderHousesBreakdown(breakdown) {
             if (breakdown.length === 0) {
-                return `<div>${t('No houses built')}</div>`;
+                return `<div>${i18n_js.t('No houses built')}</div>`;
             }
 
             return breakdown
@@ -22126,7 +22086,7 @@ self.onmessage = function (e) {
          */
         renderAbilitiesBreakdown(breakdown) {
             if (breakdown.length === 0) {
-                return `<div>${t('No abilities')}</div>`;
+                return `<div>${i18n_js.t('No abilities')}</div>`;
             }
 
             return breakdown
@@ -22143,7 +22103,7 @@ self.onmessage = function (e) {
          */
         renderAbilityBooksBreakdown(breakdown) {
             if (breakdown.length === 0) {
-                return `<div>${t('No ability books')}</div>`;
+                return `<div>${i18n_js.t('No ability books')}</div>`;
             }
 
             return breakdown
@@ -22160,7 +22120,7 @@ self.onmessage = function (e) {
          */
         renderEquipmentBreakdown(breakdown) {
             if (breakdown.length === 0) {
-                return `<div>${t('No equipment')}</div>`;
+                return `<div>${i18n_js.t('No equipment')}</div>`;
             }
 
             return breakdown
@@ -22177,12 +22137,12 @@ self.onmessage = function (e) {
          */
         renderListingsBreakdown(breakdown) {
             if (!breakdown || breakdown.length === 0) {
-                return `<div>${t('No market listings')}</div>`;
+                return `<div>${i18n_js.t('No market listings')}</div>`;
             }
 
             return breakdown
                 .map((listing) => {
-                    const typeLabel = listing.isSell ? t('Sell') : t('Buy');
+                    const typeLabel = listing.isSell ? i18n_js.t('Sell') : i18n_js.t('Buy');
                     return `${listing.name} (${typeLabel}): ${formatters_js.networthFormatter(Math.round(listing.value))}`;
                 })
                 .join('\n');
@@ -22198,7 +22158,7 @@ self.onmessage = function (e) {
             const coinItem = inventory.breakdown?.find((item) => item.itemHrid === '/items/coin') ?? null;
 
             if (Object.keys(byCategory).length === 0 && !coinItem) {
-                return `<div>${t('No inventory')}</div>`;
+                return `<div>${i18n_js.t('No inventory')}</div>`;
             }
 
             // Sort categories by total value descending
@@ -22228,7 +22188,7 @@ self.onmessage = function (e) {
             };
 
             const coinHTML = coinItem
-                ? `<div style="margin-top: 4px; font-size: 0.85rem;">${t('Coin: {0}', formatters_js.networthFormatter(Math.round(coinItem.value)))}</div>`
+                ? `<div style="margin-top: 4px; font-size: 0.85rem;">${i18n_js.t('Coin: {0}', formatters_js.networthFormatter(Math.round(coinItem.value)))}</div>`
                 : '';
 
             // Insert coin at the right position based on value (sorted descending with categories)
@@ -22261,7 +22221,7 @@ self.onmessage = function (e) {
             this.setupToggle(
                 'mwi-networth-toggle',
                 'mwi-networth-details',
-                t('Net Worth: {0}', formatters_js.networthFormatter(Math.round(networthData.totalNetworth)))
+                i18n_js.t('Net Worth: {0}', formatters_js.networthFormatter(Math.round(networthData.totalNetworth)))
             );
 
             // Chart button
@@ -22301,7 +22261,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-current-assets-toggle',
                     'mwi-current-assets-details',
-                    t('Current Assets: {0}', formatters_js.networthFormatter(Math.round(ca.total)))
+                    i18n_js.t('Current Assets: {0}', formatters_js.networthFormatter(Math.round(ca.total)))
                 );
             }
 
@@ -22310,7 +22270,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-equipment-toggle',
                     'mwi-equipment-breakdown',
-                    t('Equipment value: {0}', formatters_js.networthFormatter(Math.round(ca.equipped.value)))
+                    i18n_js.t('Equipment value: {0}', formatters_js.networthFormatter(Math.round(ca.equipped.value)))
                 );
             }
 
@@ -22319,7 +22279,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-inventory-toggle',
                     'mwi-inventory-breakdown',
-                    t('Inventory value: {0}', formatters_js.networthFormatter(Math.round(ca.inventory.value)))
+                    i18n_js.t('Inventory value: {0}', formatters_js.networthFormatter(Math.round(ca.inventory.value)))
                 );
 
                 // Inventory category toggles
@@ -22353,7 +22313,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-listings-toggle',
                     'mwi-listings-breakdown',
-                    t('Market listings: {0}', formatters_js.networthFormatter(Math.round(ca.listings.value)))
+                    i18n_js.t('Market listings: {0}', formatters_js.networthFormatter(Math.round(ca.listings.value)))
                 );
             }
 
@@ -22362,7 +22322,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-fixed-assets-toggle',
                     'mwi-fixed-assets-details',
-                    t('Fixed Assets: {0}', formatters_js.networthFormatter(Math.round(fa.total)))
+                    i18n_js.t('Fixed Assets: {0}', formatters_js.networthFormatter(Math.round(fa.total)))
                 );
             }
 
@@ -22371,7 +22331,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-houses-toggle',
                     'mwi-houses-breakdown',
-                    t('Houses: {0}', formatters_js.networthFormatter(Math.round(fa.houses.totalCost)))
+                    i18n_js.t('Houses: {0}', formatters_js.networthFormatter(Math.round(fa.houses.totalCost)))
                 );
             }
 
@@ -22380,14 +22340,14 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-abilities-toggle',
                     'mwi-abilities-details',
-                    t('Abilities: {0}', formatters_js.networthFormatter(Math.round(fa.abilities.totalCost)))
+                    i18n_js.t('Abilities: {0}', formatters_js.networthFormatter(Math.round(fa.abilities.totalCost)))
                 );
 
                 // Equipped abilities toggle
                 this.setupToggle(
                     'mwi-equipped-abilities-toggle',
                     'mwi-equipped-abilities-breakdown',
-                    t(
+                    i18n_js.t(
                         'Equipped ({0}): {1}',
                         fa.abilities.equippedBreakdown.length,
                         formatters_js.networthFormatter(Math.round(fa.abilities.equippedCost))
@@ -22399,7 +22359,7 @@ self.onmessage = function (e) {
                     this.setupToggle(
                         'mwi-other-abilities-toggle',
                         'mwi-other-abilities-breakdown',
-                        t(
+                        i18n_js.t(
                             'Other Abilities ({0}): {1}',
                             fa.abilities.otherBreakdown.length,
                             formatters_js.networthFormatter(Math.round(fa.abilities.totalCost - fa.abilities.equippedCost))
@@ -22413,7 +22373,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-ability-books-toggle',
                     'mwi-ability-books-breakdown',
-                    t(
+                    i18n_js.t(
                         'Ability Books ({0}): {1}',
                         fa.abilityBooks.breakdown.length,
                         formatters_js.networthFormatter(Math.round(fa.abilityBooks.totalCost))
@@ -22426,7 +22386,7 @@ self.onmessage = function (e) {
                 this.setupToggle(
                     'mwi-excluded-toggle',
                     'mwi-excluded-details',
-                    t('Excluded: {0}', formatters_js.networthFormatter(Math.round(excl.total)))
+                    i18n_js.t('Excluded: {0}', formatters_js.networthFormatter(Math.round(excl.total)))
                 );
 
                 // ✕ remove buttons on excluded rows
@@ -22492,11 +22452,11 @@ self.onmessage = function (e) {
          * @returns {string} HTML string
          */
         buildChestDropsHTML(evData, keyPrice, keyName) {
-            let html = `<div>${t('EV: {0}/chest', formatters_js.networthFormatter(Math.round(evData.expectedValue)))}</div>`;
+            let html = `<div>${i18n_js.t('EV: {0}/chest', formatters_js.networthFormatter(Math.round(evData.expectedValue)))}</div>`;
             if (keyPrice > 0) {
-                const label = keyName ? t('Key ({0})', keyName) : t('Key Cost');
+                const label = keyName ? i18n_js.t('Key ({0})', keyName) : i18n_js.t('Key Cost');
                 html += `<div>\u2212 ${label}: ${formatters_js.networthFormatter(Math.round(keyPrice))}</div>`;
-                html += `<div>${t('Net: {0}/chest', formatters_js.networthFormatter(Math.round(evData.expectedValue - keyPrice)))}</div>`;
+                html += `<div>${i18n_js.t('Net: {0}/chest', formatters_js.networthFormatter(Math.round(evData.expectedValue - keyPrice)))}</div>`;
             }
             const pricedDrops = evData.drops.filter((d) => d.hasPriceData);
             if (pricedDrops.length > 0) {
@@ -23778,11 +23738,11 @@ self.onmessage = function (e) {
 
             // Sort label and buttons
             const sortLabel = document.createElement('span');
-            sortLabel.textContent = t('Sort:');
+            sortLabel.textContent = i18n_js.t('Sort:');
 
-            const askButton = this.createSortButton(t('Ask'), 'ask');
-            const bidButton = this.createSortButton(t('Bid'), 'bid');
-            const noneButton = this.createSortButton(t('None'), 'none');
+            const askButton = this.createSortButton(i18n_js.t('Ask'), 'ask');
+            const bidButton = this.createSortButton(i18n_js.t('Bid'), 'bid');
+            const noneButton = this.createSortButton(i18n_js.t('None'), 'none');
 
             // Assemble controls
             this.controlsContainer.appendChild(sortLabel);
@@ -24521,7 +24481,7 @@ self.onmessage = function (e) {
             const shopItems = this._getDungeonShopItems(tokenHrid);
             if (!shopItems || shopItems.length === 0) return;
 
-            this._injectShopTable(tooltipElement, shopItems, t('Token Shop Value:'), t('Gold/Token'), isCollectionTooltip);
+            this._injectShopTable(tooltipElement, shopItems, i18n_js.t('Token Shop Value:'), i18n_js.t('Gold/Token'), isCollectionTooltip);
             dom.fixTooltipOverflow(tooltipElement);
         }
 
@@ -24533,7 +24493,7 @@ self.onmessage = function (e) {
             const shopItems = this._getTaskShopItems();
             if (!shopItems || shopItems.length === 0) return;
 
-            this._injectShopTable(tooltipElement, shopItems, t('Task Shop Value:'), t('Gold/Token'), isCollectionTooltip);
+            this._injectShopTable(tooltipElement, shopItems, i18n_js.t('Task Shop Value:'), i18n_js.t('Gold/Token'), isCollectionTooltip);
             dom.fixTooltipOverflow(tooltipElement);
         }
 
@@ -24547,8 +24507,8 @@ self.onmessage = function (e) {
             this._injectShopTable(
                 tooltipElement,
                 shopItems,
-                t('Labyrinth Shop Value:'),
-                t('Gold/Token'),
+                i18n_js.t('Labyrinth Shop Value:'),
+                i18n_js.t('Gold/Token'),
                 isCollectionTooltip
             );
             dom.fixTooltipOverflow(tooltipElement);
@@ -24648,7 +24608,7 @@ self.onmessage = function (e) {
                     if (!askPrice || askPrice <= 0) return null;
 
                     return {
-                        name: itemDetails?.name || t('Unknown Item'),
+                        name: itemDetails?.name || i18n_js.t('Unknown Item'),
                         cost: tokenCost,
                         askPrice,
                         goldPerToken: askPrice / tokenCost,
@@ -24697,7 +24657,7 @@ self.onmessage = function (e) {
                     if (itemValue <= 0) return null;
 
                     return {
-                        name: itemDetails?.name || t('Unknown Item'),
+                        name: itemDetails?.name || i18n_js.t('Unknown Item'),
                         cost: tokenCost,
                         askPrice: itemValue,
                         goldPerToken: itemValue / tokenCost,
@@ -24734,7 +24694,7 @@ self.onmessage = function (e) {
                     const totalValue = askPrice * outputCount;
 
                     return {
-                        name: itemDetails?.name || t('Unknown Item'),
+                        name: itemDetails?.name || i18n_js.t('Unknown Item'),
                         cost: tokenCost,
                         askPrice: totalValue,
                         goldPerToken: totalValue / tokenCost,
@@ -27851,7 +27811,7 @@ self.onmessage = function (e) {
 
             <div class="toolasha-ct-modal-footer">
                 <button class="toolasha-ct-delete-btn">Delete Tab</button>
-                <button class="toolasha-ct-clear-btn">${t('Clear All')}</button>
+                <button class="toolasha-ct-clear-btn">${i18n_js.t('Clear All')}</button>
                 <button class="toolasha-ct-close-btn">Close</button>
             </div>
         `;
@@ -29046,4 +29006,4 @@ self.onmessage = function (e) {
 
     console.log('[Toolasha] Market library loaded');
 
-})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.marketAPI, Toolasha.Utils.houseEfficiency, Toolasha.Utils.efficiency, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.formatters, Toolasha.Utils.marketData, Toolasha.Utils.teaParser, Toolasha.Core.storage, Toolasha.Utils.profitConstants, Toolasha.Utils.profitHelpers, Toolasha.Utils.buffParser, Toolasha.Utils.equipmentParser, Toolasha.Utils.actionCalculator, Toolasha.Utils.tokenValuation, Toolasha.Utils.enhancementConfig, Toolasha.Utils.dom, Toolasha.Utils.materialCalculator, Toolasha.Utils.timerRegistry, Toolasha.Utils.cleanupRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.enhancementMultipliers, Toolasha.Utils.reactInput, Toolasha.Core.webSocketHook, Toolasha.Utils.abilityCalc, Toolasha.Utils.houseCostCalculator);
+})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.marketAPI, Toolasha.Utils.houseEfficiency, Toolasha.Utils.efficiency, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.formatters, Toolasha.Utils.marketData, Toolasha.Utils.teaParser, Toolasha.Core.i18n, Toolasha.Core.storage, Toolasha.Utils.profitConstants, Toolasha.Utils.profitHelpers, Toolasha.Utils.buffParser, Toolasha.Utils.equipmentParser, Toolasha.Utils.actionCalculator, Toolasha.Utils.tokenValuation, Toolasha.Utils.enhancementConfig, Toolasha.Utils.dom, Toolasha.Utils.materialCalculator, Toolasha.Utils.timerRegistry, Toolasha.Utils.cleanupRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.enhancementMultipliers, Toolasha.Utils.reactInput, Toolasha.Core.webSocketHook, Toolasha.Utils.abilityCalc, Toolasha.Utils.houseCostCalculator);

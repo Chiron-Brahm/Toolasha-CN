@@ -1,11 +1,11 @@
 /**
  * Toolasha UI Library
  * UI enhancements, tasks, skills, and misc features
- * Version: 2.70.1
+ * Version: 2.70.2
  * License: CC-BY-NC-SA-4.0
  */
 
-(function (config, dataManager, domObserver, formatters_js, timerRegistry_js, domObserverHelpers_js, dom_js, storage, marketAPI, efficiency_js, webSocketHook, reactInput_js, actionPanelHelper_js, expectedValueCalculator, bonusRevenueCalculator_js, marketData_js, profitConstants_js, profitHelpers_js, profitCalculator, selectors_js, actionCalculator_js, equipmentParser_js, cleanupRegistry_js, settingsSchema_js, settingsStorage, enhancementConfig_js, materialCalculator_js, enhancementCalculator_js, teaParser_js) {
+(function (config, dataManager, domObserver, formatters_js, timerRegistry_js, domObserverHelpers_js, i18n_js, dom_js, storage, marketAPI, efficiency_js, webSocketHook, reactInput_js, actionPanelHelper_js, expectedValueCalculator, bonusRevenueCalculator_js, marketData_js, profitConstants_js, profitHelpers_js, profitCalculator, selectors_js, actionCalculator_js, equipmentParser_js, cleanupRegistry_js, settingsSchema_js, settingsStorage, enhancementConfig_js, materialCalculator_js, enhancementCalculator_js, teaParser_js) {
     'use strict';
 
     /**
@@ -657,46 +657,6 @@
     skillExperiencePercentage.setupSettingListener();
 
     /**
-     * Internationalization (i18n) Module
-     * Lightweight translation layer with English-as-key fallback.
-     *
-     * Usage:
-     *   import { t, registerLocale } from '../core/i18n.js';
-     *   t('Market Prices in Tooltips')  →  '市场价格提示' (if translated)
-     *   t('Market Prices in Tooltips')  →  'Market Prices in Tooltips' (fallback)
-     *   t('Cost: {0}/hr', '100K')       →  '花费: 100K/时'
-     */
-
-    /** @type {Record<string, string>} */
-    const translations = {};
-
-    /**
-     * Translate a string. Returns the Chinese translation if available, otherwise the English key itself.
-     * Supports positional interpolation with {0}, {1}, etc.
-     *
-     * @param {string} str - English key string
-     * @param {...(string|number)} args - Positional arguments for interpolation
-     * @returns {string} Translated or fallback string
-     *
-     * @example
-     *   t('Hello')                          // '你好'
-     *   t('Unknown key')                    // 'Unknown key' (fallback)
-     *   t('Profit: {0}/hr', '12.3K')        // '利润: 12.3K/时'
-     */
-    function t(str, ...args) {
-        const translated = translations[str] !== undefined ? translations[str] : str;
-
-        if (args.length === 0) {
-            return translated;
-        }
-
-        return translated.replace(/\{(\d+)\}/g, (_, index) => {
-            const arg = args[parseInt(index, 10)];
-            return arg !== undefined ? String(arg) : `{${index}}`;
-        });
-    }
-
-    /**
      * External Links
      * Adds links to external MWI tools in the left sidebar navigation
      */
@@ -757,27 +717,27 @@
         addLinks(container) {
             const links = [
                 {
-                    label: t('Combat Sim'),
+                    label: i18n_js.t('Combat Sim'),
                     url: 'https://shykai.github.io/MWICombatSimulatorTest/dist/',
                 },
                 {
-                    label: t('Milkyway Market'),
+                    label: i18n_js.t('Milkyway Market'),
                     url: 'https://milkyway.market/',
                 },
                 {
-                    label: t('Enhancelator'),
+                    label: i18n_js.t('Enhancelator'),
                     url: 'https://doh-nuts.github.io/Enhancelator/',
                 },
                 {
-                    label: t('Milkonomy'),
+                    label: i18n_js.t('Milkonomy'),
                     url: 'https://hyhfish.github.io/milkonomy/#/dashboard',
                 },
                 {
-                    label: t("Socko's Combat Tracker"),
+                    label: i18n_js.t("Socko's Combat Tracker"),
                     url: 'https://sockosnewcombattracker.pages.dev/',
                 },
                 {
-                    label: t('mwilinks'),
+                    label: i18n_js.t('mwilinks'),
                     url: 'https://www.mwilinks.site/',
                 },
             ];
@@ -1559,14 +1519,14 @@
             popover.appendChild(nameDiv);
 
             // View Action button
-            const viewActionBtn = this.createNavButton(t('View Action'), () => {
+            const viewActionBtn = this.createNavButton(i18n_js.t('View Action'), () => {
                 this.dismissPopover();
                 navigateToItem(itemHrid);
             });
             popover.appendChild(viewActionBtn);
 
             // Item Dictionary button
-            const dictBtn = this.createNavButton(t('Item Dictionary'), () => {
+            const dictBtn = this.createNavButton(i18n_js.t('Item Dictionary'), () => {
                 this.dismissPopover();
                 const game = getGameObject$1();
                 const itemDetails = dataManager.getItemDetails(itemHrid);
@@ -1665,12 +1625,12 @@
                 return;
             }
 
-            const viewActionBtn = this.createNavButton(t('View Action'), () => {
+            const viewActionBtn = this.createNavButton(i18n_js.t('View Action'), () => {
                 navigateToItem(itemHrid);
             });
             actionMenu.appendChild(viewActionBtn);
 
-            const dictBtn = this.createNavButton(t('Item Dictionary'), () => {
+            const dictBtn = this.createNavButton(i18n_js.t('Item Dictionary'), () => {
                 const game = getGameObject$1();
                 const itemDetails = dataManager.getItemDetails(itemHrid);
                 if (game?.handleOpenItemDictionary && itemDetails) {
@@ -2533,12 +2493,12 @@ ${starCSS}
             panelEl.insertAdjacentHTML(
                 'beforeend',
                 `<div class="toolasha-cf cf-sort-row" style="display:flex;align-items:center;gap:6px;margin-top:4px;">` +
-                    `<span style="font-size:12px;color:#aaa;">${t('Sort:')}</span>` +
+                    `<span style="font-size:12px;color:#aaa;">${i18n_js.t('Sort:')}</span>` +
                     `<select class="toolasha-cf cf-sort-select" style="font-size:12px;background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:1px 4px;">` +
-                    `<option value="default"${this.sortMode === 'default' ? ' selected' : ''}>${t('Default')}</option>` +
-                    `<option value="items-needed"${this.sortMode === 'items-needed' ? ' selected' : ''}>${t('Items to next tier')}</option>` +
-                    `<option value="gold-cost"${this.sortMode === 'gold-cost' ? ' selected' : ''}>${t('Gold cost to next tier')}</option>` +
-                    `<option value="time-to-next-tier"${this.sortMode === 'time-to-next-tier' ? ' selected' : ''}>${t('Time to next tier')}</option>` +
+                    `<option value="default"${this.sortMode === 'default' ? ' selected' : ''}>${i18n_js.t('Default')}</option>` +
+                    `<option value="items-needed"${this.sortMode === 'items-needed' ? ' selected' : ''}>${i18n_js.t('Items to next tier')}</option>` +
+                    `<option value="gold-cost"${this.sortMode === 'gold-cost' ? ' selected' : ''}>${i18n_js.t('Gold cost to next tier')}</option>` +
+                    `<option value="time-to-next-tier"${this.sortMode === 'time-to-next-tier' ? ' selected' : ''}>${i18n_js.t('Time to next tier')}</option>` +
                     `</select></div>`
             );
             panelEl.querySelector('.cf-sort-select').addEventListener('change', (e) => {
@@ -2674,7 +2634,7 @@ ${starCSS}
 
             const header = document.createElement('div');
             header.className = 'toolasha-cf-favorites-header';
-            header.textContent = t('Favorites');
+            header.textContent = i18n_js.t('Favorites');
             section.appendChild(header);
 
             // Record positions: use the next non-favorite sibling as reference
@@ -2880,11 +2840,11 @@ ${starCSS}
          */
         _getBadgeStalenessTooltip(count) {
             if (!this.collectionsLastUpdated) {
-                return t('Collection data not yet loaded \u2014 visit Collections page to refresh');
+                return i18n_js.t('Collection data not yet loaded \u2014 visit Collections page to refresh');
             }
             const age = Date.now() - this.collectionsLastUpdated;
             const relativeTime = formatters_js.formatRelativeTime(age);
-            return t('{0} collected \u2014 updated {1} ago', formatCount(count), relativeTime);
+            return i18n_js.t('{0} collected \u2014 updated {1} ago', formatCount(count), relativeTime);
         }
 
         /**
@@ -3138,7 +3098,7 @@ ${starCSS}
                         this.openItemDictionary(itemHrid);
                     } else {
                         // Item not found in game data (best effort normalization was used)
-                        this.showError(t('Item "{0}" not found in game data', command.itemName));
+                        this.showError(i18n_js.t('Item "{0}" not found in game data', command.itemName));
                     }
                     break;
 
@@ -3152,7 +3112,7 @@ ${starCSS}
                         this.openMarketplace(itemHrid, command.enhancementLevel ?? 0);
                     } else {
                         // Item not found in game data (best effort normalization was used)
-                        this.showError(t('Item "{0}" not found in game data', command.itemName));
+                        this.showError(i18n_js.t('Item "{0}" not found in game data', command.itemName));
                     }
                     break;
             }
@@ -3241,7 +3201,7 @@ ${starCSS}
             });
 
             const matchList = properNames.slice(0, 5).join(', ') + (properNames.length > 5 ? '...' : '');
-            messageDiv.textContent = t('Multiple items match: {0}. Please be more specific.', matchList);
+            messageDiv.textContent = i18n_js.t('Multiple items match: {0}. Please be more specific.', matchList);
 
             chatHistory.appendChild(messageDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -3294,7 +3254,7 @@ ${starCSS}
          */
         openItemDictionary(itemHrid) {
             if (!this.gameCore?.handleOpenItemDictionary) {
-                this.showError(t('Feature unavailable after 2/21/26 game update'));
+                this.showError(i18n_js.t('Feature unavailable after 2/21/26 game update'));
                 return;
             }
 
@@ -3302,7 +3262,7 @@ ${starCSS}
                 this.gameCore.handleOpenItemDictionary(itemHrid);
             } catch (error) {
                 console.error('[Chat Commands] Failed to open Item Dictionary:', error);
-                this.showError(t('Failed to open Item Dictionary'));
+                this.showError(i18n_js.t('Failed to open Item Dictionary'));
             }
         }
 
@@ -3313,7 +3273,7 @@ ${starCSS}
          */
         openMarketplace(itemHrid, enhancementLevel = 0) {
             if (!this.gameCore?.handleGoToMarketplace) {
-                this.showError(t('Feature unavailable after 2/21/26 game update'));
+                this.showError(i18n_js.t('Feature unavailable after 2/21/26 game update'));
                 return;
             }
 
@@ -3321,7 +3281,7 @@ ${starCSS}
                 this.gameCore.handleGoToMarketplace(itemHrid, enhancementLevel);
             } catch (error) {
                 console.error('[Chat Commands] Failed to open marketplace:', error);
-                this.showError(t('Failed to open marketplace'));
+                this.showError(i18n_js.t('Failed to open marketplace'));
             }
         }
 
@@ -3538,7 +3498,7 @@ ${starCSS}
             font-weight: 600;
             color: ${config.COLOR_ACCENT};
         `;
-            title.textContent = t('Mentions — {0}', channelDisplayName);
+            title.textContent = i18n_js.t('Mentions — {0}', channelDisplayName);
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '×';
@@ -3585,7 +3545,7 @@ ${starCSS}
          */
         _updateContent(mentions, channelDisplayName) {
             const title = this.container.querySelector('#mwi-mention-popup-title');
-            if (title) title.textContent = t('Mentions — {0}', channelDisplayName);
+            if (title) title.textContent = i18n_js.t('Mentions — {0}', channelDisplayName);
 
             const body = this.container.querySelector('#mwi-mention-popup-body');
             if (body) {
@@ -3608,7 +3568,7 @@ ${starCSS}
                 font-size: 0.85rem;
                 text-align: center;
             `;
-                empty.textContent = t('No mentions');
+                empty.textContent = i18n_js.t('No mentions');
                 body.appendChild(empty);
                 return;
             }
@@ -4567,7 +4527,7 @@ ${starCSS}
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${t('MWI Chat')}</title>
+<title>${i18n_js.t('MWI Chat')}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -4717,7 +4677,7 @@ ${starCSS}
 </head>
 <body>
 <div id="topbar">
-  <span id="topbar-title">${t('MWI Chat')}</span>
+  <span id="topbar-title">${i18n_js.t('MWI Chat')}</span>
   <span id="topbar-name"></span>
   <button id="add-pane-btn">+ Pane</button>
   <label id="vertical-label"><input type="checkbox" id="vertical-toggle"> Vertical</label>
@@ -9221,14 +9181,14 @@ ${starCSS}
             if (profitData.rewards?.error || profitData.totalProfit === null || profitData.totalProfit === undefined) {
                 return {
                     value: null,
-                    unitLabel: t('gold/hr'),
-                    error: profitData.rewards?.error || t('Missing price data'),
+                    unitLabel: i18n_js.t('gold/hr'),
+                    error: profitData.rewards?.error || i18n_js.t('Missing price data'),
                 };
             }
 
             return {
                 value: profitData.totalProfit / hours,
-                unitLabel: t('gold/hr'),
+                unitLabel: i18n_js.t('gold/hr'),
                 error: null,
             };
         }
@@ -9236,7 +9196,7 @@ ${starCSS}
         const tokensReceived = profitData.rewards?.breakdown?.tokensReceived ?? 0;
         return {
             value: tokensReceived / hours,
-            unitLabel: t('tokens/hr'),
+            unitLabel: i18n_js.t('tokens/hr'),
             error: null,
         };
     }
@@ -11870,7 +11830,7 @@ ${starCSS}
             }
 
             if (parts.length > 0) {
-                displayElement.textContent = t('Reroll spent: ') + parts.join(' + ');
+                displayElement.textContent = i18n_js.t('Reroll spent: ') + parts.join(' + ');
                 displayElement.style.display = 'block';
             } else {
                 displayElement.style.display = 'none';
@@ -12844,8 +12804,8 @@ ${starCSS}
             font-weight: 500;
             margin-top: 4px;
         `;
-            warning.textContent = `⚠ ${t('Combat icons unavailable')} - ${t('visit Combat to load sprites')}`;
-            warning.title = t('Combat monster sprites need to be loaded. Visit the Combat panel to load them.');
+            warning.textContent = `⚠ ${i18n_js.t('Combat icons unavailable')} - ${i18n_js.t('visit Combat to load sprites')}`;
+            warning.title = i18n_js.t('Combat monster sprites need to be loaded. Visit the Combat panel to load them.');
 
             titleElement.appendChild(warning);
             this.spriteWarningShown = true;
@@ -13511,7 +13471,7 @@ ${starCSS}
             if (!config.getSetting('taskSorter_hideButton')) {
                 this.sortButton = document.createElement('button');
                 this.sortButton.className = 'Button_button__1Fe9z Button_small__3fqC7';
-                this.sortButton.textContent = t('Sort Tasks');
+                this.sortButton.textContent = i18n_js.t('Sort Tasks');
                 this.sortButton.style.marginLeft = '8px';
                 this.sortButton.setAttribute('data-mwi-task-sort', 'true');
                 this.sortButton.addEventListener('click', () => this.sortTasks());
@@ -13892,7 +13852,7 @@ ${starCSS}
             // Create button
             this.highlightButton = document.createElement('button');
             this.highlightButton.className = 'Button_button__1Fe9z Button_small__3fqC7';
-            this.highlightButton.textContent = t('Highlight Task Items');
+            this.highlightButton.textContent = i18n_js.t('Highlight Task Items');
             this.highlightButton.style.marginLeft = '8px';
             this.highlightButton.setAttribute('data-mwi-task-highlight', 'true');
 
@@ -13931,7 +13891,7 @@ ${starCSS}
 
             // Update button state
             this.isHighlightActive = true;
-            this.highlightButton.textContent = t('Clear Highlight');
+            this.highlightButton.textContent = i18n_js.t('Clear Highlight');
             this.highlightButton.style.backgroundColor = '#22c55e';
         }
 
@@ -13951,7 +13911,7 @@ ${starCSS}
             // Update button state
             this.isHighlightActive = false;
             if (this.highlightButton) {
-                this.highlightButton.textContent = t('Highlight Task Items');
+                this.highlightButton.textContent = i18n_js.t('Highlight Task Items');
                 this.highlightButton.style.backgroundColor = '';
             }
         }
@@ -14951,7 +14911,7 @@ ${starCSS}
 
             const count = this._getClaimableButtons(taskList).length;
             if (count > 0) {
-                this.proxyButton.textContent = count > 1 ? `${t('Claim Reward')} (${count})` : t('Claim Reward');
+                this.proxyButton.textContent = count > 1 ? `${i18n_js.t('Claim Reward')} (${count})` : i18n_js.t('Claim Reward');
                 this.proxyButton.style.display = '';
             } else {
                 this.proxyButton.style.display = 'none';
@@ -15098,7 +15058,7 @@ ${starCSS}
             const btn = document.createElement('span');
             btn.className = 'mwi-task-protection-btn';
             btn.textContent = '🛡️';
-            btn.title = t('Configure task reroll protection');
+            btn.title = i18n_js.t('Configure task reroll protection');
             btn.style.cssText = 'cursor:pointer; font-size:16px; margin-left:6px; opacity:0.7; transition:opacity 0.1s;';
             btn.addEventListener('mouseover', () => {
                 btn.style.opacity = '1';
@@ -15287,7 +15247,7 @@ ${starCSS}
                         const lockdownTimer = setTimeout(() => {
                             card.dataset.mwiRerollLocked = '';
                             card.dataset.mwiRerollConfirmed = '1';
-                            this._showWarning(card, t('Click reroll now to confirm.'));
+                            this._showWarning(card, i18n_js.t('Click reroll now to confirm.'));
 
                             // Auto-clear confirmation after another 3s
                             const confirmTimer = setTimeout(() => {
@@ -15309,7 +15269,7 @@ ${starCSS}
          * @param {string} [message='Protected task! Unlocks in 3s...']
          * @private
          */
-        _showWarning(taskCard, message = t('Protected task! Unlocks in 3s...')) {
+        _showWarning(taskCard, message = i18n_js.t('Protected task! Unlocks in 3s...')) {
             this._clearWarning(taskCard);
 
             const warning = document.createElement('div');
@@ -15523,7 +15483,7 @@ ${starCSS}
             flex-shrink: 0;
         `;
             header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:#4a9eff;">${t('Protected Tasks')}</span>
+            <span style="font-weight:700; font-size:14px; color:#4a9eff;">${i18n_js.t('Protected Tasks')}</span>
             <button id="mwi-task-protection-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">×</button>
@@ -15534,7 +15494,7 @@ ${starCSS}
             searchDiv.style.cssText = 'padding: 8px 14px; flex-shrink: 0;';
             const searchInput = document.createElement('input');
             searchInput.type = 'search';
-            searchInput.placeholder = t('Search actions, monsters, zones...');
+            searchInput.placeholder = i18n_js.t('Search actions, monsters, zones...');
             searchInput.style.cssText = `
             width: 100%;
             padding: 6px 10px;
@@ -15566,7 +15526,7 @@ ${starCSS}
 
                 let html = '';
                 if (!query && filtered.length === 0) {
-                    html = `<div style="color:#666; text-align:center; padding:20px 0;">${t('No protected tasks yet. Search to add.')}</div>`;
+                    html = `<div style="color:#666; text-align:center; padding:20px 0;">${i18n_js.t('No protected tasks yet. Search to add.')}</div>`;
                 }
 
                 for (const item of filtered.slice(0, 50)) {
@@ -15602,7 +15562,7 @@ ${starCSS}
                 }
 
                 if (filtered.length > 50) {
-                    html += `<div style="color:#666; text-align:center; padding:8px;">...${filtered.length - 50} ${t('more (refine search)')}</div>`;
+                    html += `<div style="color:#666; text-align:center; padding:8px;">...${filtered.length - 50} ${i18n_js.t('more (refine search)')}</div>`;
                 }
 
                 listContainer.innerHTML = html;
@@ -15754,7 +15714,7 @@ ${starCSS}
     const taskRerollProtection = new TaskRerollProtection();
 
     var taskRerollProtection$1 = {
-        name: t('Task Reroll Protection'),
+        name: i18n_js.t('Task Reroll Protection'),
         initialize: async () => {
             await taskRerollProtection.initialize();
         },
@@ -15833,7 +15793,7 @@ ${starCSS}
             const btn = document.createElement('span');
             btn.className = 'mwi-task-autoreroll-btn';
             btn.textContent = '\u{1F3AF}';
-            btn.title = t('Configure task auto-reroll reminders');
+            btn.title = i18n_js.t('Configure task auto-reroll reminders');
             btn.style.cssText = 'cursor:pointer; font-size:16px; margin-left:6px; opacity:0.7; transition:opacity 0.1s;';
             btn.addEventListener('mouseover', () => {
                 btn.style.opacity = '1';
@@ -15873,7 +15833,7 @@ ${starCSS}
 
             const badge = document.createElement('div');
             badge.className = 'mwi-autoreroll-badge';
-            badge.textContent = t('Reroll!');
+            badge.textContent = i18n_js.t('Reroll!');
             badge.style.cssText = `
             position: absolute;
             top: 4px;
@@ -16041,7 +16001,7 @@ ${starCSS}
             flex-shrink: 0;
         `;
             header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:#ef4444;">${t('Auto-Reroll List')}</span>
+            <span style="font-weight:700; font-size:14px; color:#ef4444;">${i18n_js.t('Auto-Reroll List')}</span>
             <button id="mwi-task-autoreroll-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">\u00d7</button>
@@ -16051,7 +16011,7 @@ ${starCSS}
             searchDiv.style.cssText = 'padding: 8px 14px; flex-shrink: 0;';
             const searchInput = document.createElement('input');
             searchInput.type = 'search';
-            searchInput.placeholder = t('Search actions, monsters, zones...');
+            searchInput.placeholder = i18n_js.t('Search actions, monsters, zones...');
             searchInput.style.cssText = `
             width: 100%;
             padding: 6px 10px;
@@ -16081,7 +16041,7 @@ ${starCSS}
 
                 let html = '';
                 if (!query && filtered.length === 0) {
-                    html = `<div style="color:#666; text-align:center; padding:20px 0;">${t('No auto-reroll tasks yet. Search to add.')}</div>`;
+                    html = `<div style="color:#666; text-align:center; padding:20px 0;">${i18n_js.t('No auto-reroll tasks yet. Search to add.')}</div>`;
                 }
 
                 for (const item of filtered.slice(0, 50)) {
@@ -16117,7 +16077,7 @@ ${starCSS}
                 }
 
                 if (filtered.length > 50) {
-                    html += `<div style="color:#666; text-align:center; padding:8px;">...${filtered.length - 50} ${t('more (refine search)')}</div>`;
+                    html += `<div style="color:#666; text-align:center; padding:8px;">...${filtered.length - 50} ${i18n_js.t('more (refine search)')}</div>`;
                 }
 
                 listContainer.innerHTML = html;
@@ -16195,7 +16155,7 @@ ${starCSS}
     const taskAutoReroll = new TaskAutoReroll();
 
     var taskAutoReroll$1 = {
-        name: t('Task Auto-Reroll Reminder'),
+        name: i18n_js.t('Task Auto-Reroll Reminder'),
         initialize: async () => {
             await taskAutoReroll.initialize();
         },
@@ -16392,7 +16352,7 @@ ${starCSS}
                 // Create the remaining XP display
                 const xpDisplay = document.createElement('span');
                 xpDisplay.className = 'mwi-remaining-xp';
-                xpDisplay.textContent = t('{0} XP left', formatters_js.formatLargeNumber(remainingXP));
+                xpDisplay.textContent = i18n_js.t('{0} XP left', formatters_js.formatLargeNumber(remainingXP));
 
                 // Build style with optional text shadow
                 const useBlackBorder = config.getSetting('skillRemainingXP_blackBorder', true);
@@ -16667,12 +16627,12 @@ ${starCSS}
         const s = (n) => (n === 1 ? '' : 's');
         const parts = [];
 
-        if (w >= 1) parts.push(t('{0} week{1}', w, s(w)));
-        if (d >= 1) parts.push(t('{0} day{1}', d, s(d)));
-        if (ms < w1 && h >= 1) parts.push(t('{0} hour{1}', h, s(h)));
-        if (ms < 6 * h1 && m >= 1) parts.push(t('{0} minute{1}', m, s(m)));
+        if (w >= 1) parts.push(i18n_js.t('{0} week{1}', w, s(w)));
+        if (d >= 1) parts.push(i18n_js.t('{0} day{1}', d, s(d)));
+        if (ms < w1 && h >= 1) parts.push(i18n_js.t('{0} hour{1}', h, s(h)));
+        if (ms < 6 * h1 && m >= 1) parts.push(i18n_js.t('{0} minute{1}', m, s(m)));
 
-        return parts.join(' ') || t('< 1 minute');
+        return parts.join(' ') || i18n_js.t('< 1 minute');
     }
 
     class XPTracker {
@@ -16805,7 +16765,7 @@ ${starCSS}
 
                 if (rate <= 0) return;
 
-                const rateText = t('{0} xp/h', formatters_js.formatKMB(rate));
+                const rateText = i18n_js.t('{0} xp/h', formatters_js.formatKMB(rate));
                 const rateSpan = document.createElement('span');
                 rateSpan.className = 'mwi-xp-rate';
                 rateSpan.textContent = rateText;
@@ -16919,7 +16879,7 @@ ${starCSS}
             const div = document.createElement('div');
             div.className = 'mwi-xp-time-left';
             div.style.cssText = `font-size: 12px; color: ${config.COLOR_HOURS_TO_LEVEL}; margin-top: 4px;`;
-            div.innerHTML = `<span style="font-weight:700">${timeStr}</span> ${t('till next level')}`;
+            div.innerHTML = `<span style="font-weight:700">${timeStr}</span> ${i18n_js.t('till next level')}`;
 
             divs[3].insertAdjacentElement('afterend', div);
         }
@@ -18099,7 +18059,7 @@ ${starCSS}
          */
         getItemName(itemHrid) {
             if (itemHrid === '/items/coin') {
-                return t('Gold');
+                return i18n_js.t('Gold');
             }
 
             return itemNameTranslator.getDisplayName(itemHrid);
@@ -18113,7 +18073,7 @@ ${starCSS}
         getRoomName(houseRoomHrid) {
             const initData = dataManager.getInitClientData();
             const roomData = initData?.houseRoomDetailMap?.[houseRoomHrid];
-            return roomData?.name || t('Unknown Room');
+            return roomData?.name || i18n_js.t('Unknown Room');
         }
     }
 
@@ -18688,7 +18648,7 @@ ${starCSS}
             color: ${config.COLOR_ACCENT};
             text-align: center;
         `;
-            totalDiv.textContent = t('Total Market Value: {0}', formatters_js.coinFormatter(costData.totalValue));
+            totalDiv.textContent = i18n_js.t('Total Market Value: {0}', formatters_js.coinFormatter(costData.totalValue));
             costsSection.appendChild(totalDiv);
         }
 
@@ -18725,7 +18685,7 @@ ${starCSS}
             font-weight: bold;
             font-size: 0.875rem;
         `;
-            label.textContent = t('Cumulative to Level:');
+            label.textContent = i18n_js.t('Cumulative to Level:');
 
             const dropdown = document.createElement('select');
             dropdown.style.cssText = `
@@ -18832,7 +18792,7 @@ ${starCSS}
             color: ${config.COLOR_ACCENT};
             text-align: center;
         `;
-            totalDiv.textContent = t('Total Market Value: {0}', formatters_js.coinFormatter(costData.totalValue));
+            totalDiv.textContent = i18n_js.t('Total Market Value: {0}', formatters_js.coinFormatter(costData.totalValue));
             container.appendChild(totalDiv);
 
             // Add Missing Mats Marketplace button if any materials are missing
@@ -18906,7 +18866,7 @@ ${starCSS}
             margin-left: auto;
             text-align: right;
         `;
-            missingSpan.textContent = t('Missing: {0}', formatters_js.coinFormatter(amountNeeded));
+            missingSpan.textContent = i18n_js.t('Missing: {0}', formatters_js.coinFormatter(amountNeeded));
             row.appendChild(missingSpan);
 
             container.appendChild(row);
@@ -18974,7 +18934,7 @@ ${starCSS}
             transition: all 0.2s ease;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         `;
-            button.textContent = t('Missing Mats Marketplace');
+            button.textContent = i18n_js.t('Missing Mats Marketplace');
 
             // Hover effects
             button.addEventListener('mouseenter', () => {
@@ -19248,14 +19208,14 @@ ${starCSS}
 
                 if (!material) {
                     statusColor = '#4ade80';
-                    statusText = t('Complete');
+                    statusText = i18n_js.t('Complete');
                 } else if (!material.isTradeable) {
                     statusColor = '#888888';
-                    statusText = t('Not Tradeable');
+                    statusText = i18n_js.t('Not Tradeable');
                     displayName = material.itemName;
                 } else {
                     statusColor = '#ef4444';
-                    statusText = t('Missing: {0}', formatters_js.formatWithSeparator(material.missing));
+                    statusText = i18n_js.t('Missing: {0}', formatters_js.formatWithSeparator(material.missing));
                     displayName = material.itemName;
                 }
 
@@ -19784,8 +19744,8 @@ ${starCSS}
 
             const title = document.createElement('span');
             title.style.cssText = `font-size: 0.9rem; font-weight: 600; color: ${config.COLOR_ACCENT};`;
-            const contextLabel = this.loadoutName ? this.loadoutName : t('Scroll Defaults');
-            title.textContent = `${t('Scroll Simulation')} — ${contextLabel}`;
+            const contextLabel = this.loadoutName ? this.loadoutName : i18n_js.t('Scroll Defaults');
+            title.textContent = `${i18n_js.t('Scroll Simulation')} — ${contextLabel}`;
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '×';
@@ -19835,8 +19795,8 @@ ${starCSS}
             line-height: 1.4;
         `;
             note.textContent = this.loadoutName
-                ? t('These scrolls override the defaults when this loadout is active for a skill.')
-                : t('Applied when no loadout matches the current skill (or loadout snapshots are disabled).');
+                ? i18n_js.t('These scrolls override the defaults when this loadout is active for a skill.')
+                : i18n_js.t('Applied when no loadout matches the current skill (or loadout snapshots are disabled).');
             body.appendChild(note);
 
             // Scroll rows
@@ -19965,7 +19925,7 @@ ${starCSS}
 
         const button = document.createElement('button');
         button.id = BUTTON_ID;
-        button.textContent = t('Scroll Simulation');
+        button.textContent = i18n_js.t('Scroll Simulation');
         button.className = 'Button_button__1Fe9z';
         button.style.cssText = `white-space: nowrap;`;
         button.addEventListener('click', () => popup.open(loadoutName));
@@ -20009,7 +19969,7 @@ ${starCSS}
     }
 
     var scrollSimulatorUI = {
-        name: t('Scroll Simulator UI'),
+        name: i18n_js.t('Scroll Simulator UI'),
         initialize,
         openDefaultsPopup,
         disable,
@@ -20295,7 +20255,7 @@ ${starCSS}
             this.headerEl = header;
 
             const title = document.createElement('span');
-            title.textContent = t('PFormance');
+            title.textContent = i18n_js.t('PFormance');
             title.style.fontWeight = 'bold';
             title.style.color = COLORS.accent;
 
@@ -20310,7 +20270,7 @@ ${starCSS}
             });
 
             const closeBtn = this._headerButton('✕', () => this._removePanel());
-            closeBtn.title = t('Close');
+            closeBtn.title = i18n_js.t('Close');
 
             buttons.appendChild(collapseBtn);
             buttons.appendChild(closeBtn);
@@ -20425,12 +20385,12 @@ ${starCSS}
 
             this.contentEl.innerHTML = '';
             this.contentEl.appendChild(
-                this._createSection(t('Feature Init'), initEntries, this.featureSectionCollapsed, (v) => {
+                this._createSection(i18n_js.t('Feature Init'), initEntries, this.featureSectionCollapsed, (v) => {
                     this.featureSectionCollapsed = v;
                 })
             );
             this.contentEl.appendChild(
-                this._createSection(t('DOM Observers'), domEntries, this.domSectionCollapsed, (v) => {
+                this._createSection(i18n_js.t('DOM Observers'), domEntries, this.domSectionCollapsed, (v) => {
                     this.domSectionCollapsed = v;
                 })
             );
@@ -20477,7 +20437,7 @@ ${starCSS}
 
             if (entries.length === 0) {
                 const empty = document.createElement('div');
-                empty.textContent = t('No data');
+                empty.textContent = i18n_js.t('No data');
                 empty.style.padding = '4px 6px';
                 empty.style.color = COLORS.textDim;
                 empty.style.fontSize = '11px';
@@ -20495,9 +20455,9 @@ ${starCSS}
             const thead = document.createElement('thead');
             const headRow = document.createElement('tr');
             const columns =
-                title === t('Feature Init')
-                    ? [t('Name'), t('Time (ms)')]
-                    : [t('Name'), t('Calls/s'), t('Total ms'), t('CPU %')];
+                title === i18n_js.t('Feature Init')
+                    ? [i18n_js.t('Name'), i18n_js.t('Time (ms)')]
+                    : [i18n_js.t('Name'), i18n_js.t('Calls/s'), i18n_js.t('Total ms'), i18n_js.t('CPU %')];
 
             for (const col of columns) {
                 const th = document.createElement('th');
@@ -21035,7 +20995,7 @@ ${starCSS}
                 header.innerHTML = `
                 <span class="collapse-icon">▼</span>
                 <span class="icon">${group.icon}</span>
-                ${t(group.title)}
+                ${i18n_js.t(group.title)}
             `;
                 // Bind toggleGroup method to this instance
                 header.addEventListener('click', this.toggleGroup.bind(this, groupContainer));
@@ -21163,13 +21123,13 @@ ${starCSS}
             // Create label
             const label = document.createElement('span');
             label.className = 'toolasha-setting-label';
-            label.textContent = t(settingDef.label);
+            label.textContent = i18n_js.t(settingDef.label);
 
             // Add help text if present
             if (settingDef.help) {
                 const help = document.createElement('span');
                 help.className = 'toolasha-setting-help';
-                help.textContent = t(settingDef.help);
+                help.textContent = i18n_js.t(settingDef.help);
                 label.appendChild(help);
             }
 
@@ -21265,7 +21225,7 @@ ${starCSS}
                     const optionsHTML = options
                         .map((option) => {
                             const optValue = typeof option === 'object' ? option.value : option;
-                            const optLabel = t(typeof option === 'object' ? option.label : option);
+                            const optLabel = i18n_js.t(typeof option === 'object' ? option.label : option);
                             const selected = optValue === value ? 'selected' : '';
                             return `<option value="${optValue}" ${selected}>${optLabel}</option>`;
                         })
@@ -21312,7 +21272,7 @@ ${starCSS}
                         const options = settingDef.tiers
                             .map(
                                 (_tier) =>
-                                    `<option value="${_tier.value}" ${_tier.value === selectedTier ? 'selected' : ''}>${t(_tier.label)}</option>`
+                                    `<option value="${_tier.value}" ${_tier.value === selectedTier ? 'selected' : ''}>${i18n_js.t(_tier.label)}</option>`
                             )
                             .join('');
                         tierHTML = `<select id="${settingId}_tier" class="toolasha-select-input" style="width:100px; font-size:12px; padding:2px 4px; ${disabledStyle}">${options}</select>`;
@@ -21860,7 +21820,7 @@ ${starCSS}
                 const params = enhancementConfig_js.getEnhancingParams();
                 const fmt = (v) => (typeof v === 'number' ? v.toFixed(2).replace(/\.?0+$/, '') : v);
                 return `
-                <span style="color:#6b9fff; font-weight:bold;">${t('Computed Stats')}</span><br>
+                <span style="color:#6b9fff; font-weight:bold;">${i18n_js.t('Computed Stats')}</span><br>
                 Effective Level: <span style="color:#e0e0e0;">${fmt(params.enhancingLevel)}</span> &nbsp;|&nbsp;
                 Tool Success: <span style="color:#e0e0e0;">${fmt(params.toolBonus)}%</span> &nbsp;|&nbsp;
                 Speed: <span style="color:#e0e0e0;">${fmt(params.speedBonus)}%</span><br>
@@ -22202,7 +22162,7 @@ ${starCSS}
             padding-bottom: 10px;
         `;
             header.innerHTML = `
-            <h3 style="margin: 0; color: #e0e0e0;">${t('Edit Template')}</h3>
+            <h3 style="margin: 0; color: #e0e0e0;">${i18n_js.t('Edit Template')}</h3>
             <button class="toolasha-template-close-btn" style="
                 background: none;
                 border: none;
@@ -22498,7 +22458,7 @@ ${starCSS}
             padding-bottom: 10px;
         `;
             header.innerHTML = `
-            <h3 style="margin: 0; color: #e0e0e0;">${t('Custom Price Overrides')}</h3>
+            <h3 style="margin: 0; color: #e0e0e0;">${i18n_js.t('Custom Price Overrides')}</h3>
             <button class="toolasha-cpo-close-btn" style="
                 background: none;
                 border: none;
@@ -22720,8 +22680,8 @@ ${starCSS}
             `;
                 headerRow.innerHTML = `
                 <div style="flex: 1;">Item</div>
-                <div style="width: 80px; text-align: center;">${t('Buy Price')}</div>
-                <div style="width: 80px; text-align: center;">${t('Sell Price')}</div>
+                <div style="width: 80px; text-align: center;">${i18n_js.t('Buy Price')}</div>
+                <div style="width: 80px; text-align: center;">${i18n_js.t('Sell Price')}</div>
                 <div style="width: 28px;"></div>
             `;
                 tableContainer.appendChild(headerRow);
@@ -23566,7 +23526,7 @@ ${starCSS}
             if (!actionInfo) return;
 
             const btn = document.createElement('button');
-            btn.textContent = t('View Action');
+            btn.textContent = i18n_js.t('View Action');
 
             // Copy class from existing popup button for visual consistency
             const existingBtn = actionMenu.querySelector('button');
@@ -23615,7 +23575,7 @@ ${starCSS}
             // Create the action button
             const actionButton = document.createElement('button');
             actionButton.className = 'mwi-view-action-button';
-            actionButton.textContent = t('View Action');
+            actionButton.textContent = i18n_js.t('View Action');
             actionButton.style.cssText = `
             background: #2a2a2a;
             color: #ffffff;
@@ -29569,7 +29529,7 @@ ${starCSS}
                 alchemyPanel.dataset.mwiAlchemyLocked = '1';
 
                 const categoryName = this._getCategoryDisplayName(categoryHrid);
-                this._showWarning(alchemyPanel, t('Protected category ({0})! Unlocks in 3s...', categoryName));
+                this._showWarning(alchemyPanel, i18n_js.t('Protected category ({0})! Unlocks in 3s...', categoryName));
 
                 if (this.lockdownTimer) clearTimeout(this.lockdownTimer);
                 if (this.confirmTimer) clearTimeout(this.confirmTimer);
@@ -29577,7 +29537,7 @@ ${starCSS}
                 this.lockdownTimer = setTimeout(() => {
                     alchemyPanel.dataset.mwiAlchemyLocked = '';
                     alchemyPanel.dataset.mwiAlchemyConfirmed = '1';
-                    this._showWarning(alchemyPanel, t('Click again to confirm.'));
+                    this._showWarning(alchemyPanel, i18n_js.t('Click again to confirm.'));
 
                     this.confirmTimer = setTimeout(() => {
                         alchemyPanel.dataset.mwiAlchemyConfirmed = '';
@@ -29638,7 +29598,7 @@ ${starCSS}
             pinIcon.innerHTML = '\u{1F4CC}';
             pinIcon.style.cssText =
                 'cursor:pointer; font-size:16px; transition:all 0.2s; text-align:center; filter: grayscale(100%) brightness(0.7); display:none;';
-            pinIcon.title = t('Pin this action');
+            pinIcon.title = i18n_js.t('Pin this action');
 
             const updatePinIcon = () => {
                 const alchemyType = this._getAlchemyType();
@@ -29653,11 +29613,11 @@ ${starCSS}
                 if (isPinned) {
                     pinIcon.style.filter = 'grayscale(0%) brightness(1.2) drop-shadow(0 0 3px rgba(255, 100, 0, 0.8))';
                     pinIcon.style.transform = 'scale(1.1)';
-                    pinIcon.title = t('Unpin this action');
+                    pinIcon.title = i18n_js.t('Unpin this action');
                 } else {
                     pinIcon.style.filter = 'grayscale(100%) brightness(0.7)';
                     pinIcon.style.transform = 'scale(1)';
-                    pinIcon.title = t('Pin this action');
+                    pinIcon.title = i18n_js.t('Pin this action');
                 }
             };
 
@@ -29854,7 +29814,7 @@ ${starCSS}
             }
 
             const color = hasEnough ? '#4caf50' : '#ff6b6b';
-            const text = t('Gold for {0}: {1} / {2}', label, formatters_js.formatLargeNumber(goldNeeded), formatters_js.formatLargeNumber(goldBalance));
+            const text = i18n_js.t('Gold for {0}: {1} / {2}', label, formatters_js.formatLargeNumber(goldNeeded), formatters_js.formatLargeNumber(goldBalance));
             if (summaryDiv.textContent === text && summaryDiv.style.display === 'block') return;
             summaryDiv.style.display = 'block';
             summaryDiv.style.color = color;
@@ -29925,7 +29885,7 @@ ${starCSS}
 
             const header = document.createElement('div');
             header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;';
-            header.innerHTML = `<h3 style="margin:0; font-size:16px; color:#eee;">${t('Alchemy Action Protection')}</h3>`;
+            header.innerHTML = `<h3 style="margin:0; font-size:16px; color:#eee;">${i18n_js.t('Alchemy Action Protection')}</h3>`;
 
             const closeBtn = document.createElement('button');
             closeBtn.textContent = '\u2715';
@@ -29937,7 +29897,7 @@ ${starCSS}
 
             const desc = document.createElement('p');
             desc.style.cssText = 'color:#999; margin:0 0 10px 0; font-size:12px;';
-            desc.textContent = t(
+            desc.textContent = i18n_js.t(
                 'Select which item categories to protect from each alchemy action. Protected items require a 3-second confirmation before the action proceeds.'
             );
             popup.appendChild(desc);
@@ -30075,7 +30035,7 @@ ${starCSS}
     const alchemyActionProtection = new AlchemyActionProtection();
 
     var alchemyActionProtection$1 = {
-        name: t('Alchemy Action Protection'),
+        name: i18n_js.t('Alchemy Action Protection'),
         initialize: async () => {
             await alchemyActionProtection.initialize();
         },
@@ -33135,7 +33095,7 @@ ${starCSS}
 
             const btn = document.createElement('button');
             btn.className = BTN_CLASS;
-            btn.textContent = t('XPH Calc');
+            btn.textContent = i18n_js.t('XPH Calc');
             btn.style.cssText = `
             background: linear-gradient(180deg, rgba(0,200,150,0.2) 0%, rgba(0,200,150,0.1) 100%);
             color: #e0e0e0;
@@ -33194,7 +33154,7 @@ ${starCSS}
             flex-shrink: 0;
         `;
             header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:#00c896;">${t('Enhancement XPH Calculator')}</span>
+            <span style="font-weight:700; font-size:14px; color:#00c896;">${i18n_js.t('Enhancement XPH Calculator')}</span>
             <button id="mwi-xph-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">×</button>
@@ -33219,9 +33179,9 @@ ${starCSS}
                 'width:46px; background:#1a1a2e; color:#e0e0e0; border:1px solid #444; border-radius:4px; padding:3px 6px; font-size:12px; text-align:center;';
 
             controls.innerHTML = `
-            <label style="color:#888; font-size:12px;">${t('Max level')}</label>
+            <label style="color:#888; font-size:12px;">${i18n_js.t('Max level')}</label>
             <input id="mwi-xph-maxlevel" type="number" min="1" max="20" value="${defaultMax}" style="${inputStyle}">
-            <label style="color:#888; font-size:12px; margin-left:6px;">${t('Protect from')}</label>
+            <label style="color:#888; font-size:12px; margin-left:6px;">${i18n_js.t('Protect from')}</label>
             <input id="mwi-xph-protect" type="number" min="0" max="19" value="${defaultProtect}" style="${inputStyle}">
             <button id="mwi-xph-run" style="
                 margin-left: auto;
@@ -33232,7 +33192,7 @@ ${starCSS}
                 padding: 5px 14px;
                 font-size: 12px;
                 font-weight: 600;
-                cursor: pointer;">${t('Calculate')}</button>
+                cursor: pointer;">${i18n_js.t('Calculate')}</button>
         `;
 
             // Table container
@@ -33245,10 +33205,10 @@ ${starCSS}
             <table style="width:100%; border-collapse:collapse;">
                 <thead style="position:sticky; top:0; background:#0a0a14; z-index:1;">
                     <tr>
-                        <th id="mwi-xph-th-name" style="${thBase} text-align:left;">${t('# Item')}</th>
-                        <th id="mwi-xph-th-xph"  style="${thBase} text-align:right;">${t('XP/hr')} ▼</th>
-                        <th id="mwi-xph-th-gpx"  style="${thBase} text-align:right;">${t('Gold/XP')}</th>
-                        <th id="mwi-xph-th-cphr" style="${thBase} text-align:right;">${t('Cost/hr')}</th>
+                        <th id="mwi-xph-th-name" style="${thBase} text-align:left;">${i18n_js.t('# Item')}</th>
+                        <th id="mwi-xph-th-xph"  style="${thBase} text-align:right;">${i18n_js.t('XP/hr')} ▼</th>
+                        <th id="mwi-xph-th-gpx"  style="${thBase} text-align:right;">${i18n_js.t('Gold/XP')}</th>
+                        <th id="mwi-xph-th-cphr" style="${thBase} text-align:right;">${i18n_js.t('Cost/hr')}</th>
                     </tr>
                 </thead>
                 <tbody id="mwi-xph-tbody"></tbody>
@@ -33260,7 +33220,7 @@ ${starCSS}
             status.id = 'mwi-xph-status';
             status.style.cssText =
                 'padding:6px 14px; color:#555; font-size:11px; border-top:1px solid #1a1a1a; flex-shrink:0; text-align:center;';
-            status.textContent = t('Enter parameters and click Calculate.');
+            status.textContent = i18n_js.t('Enter parameters and click Calculate.');
 
             this.panel.appendChild(header);
             this.panel.appendChild(controls);
@@ -33334,7 +33294,7 @@ ${starCSS}
             const gameData = dataManager.getInitClientData();
             const status = this.panel.querySelector('#mwi-xph-status');
             if (!gameData) {
-                status.textContent = t('No game data available.');
+                status.textContent = i18n_js.t('No game data available.');
                 return;
             }
 
@@ -33354,9 +33314,9 @@ ${starCSS}
             this._updateSortIndicators();
 
             const withCost = results.filter((r) => r.costPerHour !== null).length;
-            const partialNote = results.some((r) => r.costPartial) ? ` ${t('* = partial price data.')}` : '';
+            const partialNote = results.some((r) => r.costPartial) ? ` ${i18n_js.t('* = partial price data.')}` : '';
             status.textContent =
-                t('{count} items · {withCost} with cost data', { count: results.length, withCost }) + partialNote;
+                i18n_js.t('{count} items · {withCost} with cost data', { count: results.length, withCost }) + partialNote;
         }
 
         _sort(col) {
@@ -34052,12 +34012,12 @@ ${starCSS}
         const s = (n) => (n === 1 ? '' : 's');
         const parts = [];
 
-        if (w >= 1) parts.push(`${w} ${t('week')}${s(w)}`);
-        if (d >= 1) parts.push(`${d} ${t('day')}${s(d)}`);
-        if (ms < w1 && h >= 1) parts.push(`${h} ${t('hour')}${s(h)}`);
-        if (ms < 6 * h1 && m >= 1) parts.push(`${m} ${t('minute')}${s(m)}`);
+        if (w >= 1) parts.push(`${w} ${i18n_js.t('week')}${s(w)}`);
+        if (d >= 1) parts.push(`${d} ${i18n_js.t('day')}${s(d)}`);
+        if (ms < w1 && h >= 1) parts.push(`${h} ${i18n_js.t('hour')}${s(h)}`);
+        if (ms < 6 * h1 && m >= 1) parts.push(`${m} ${i18n_js.t('minute')}${s(m)}`);
 
-        return parts.join(' ') || t('< 1 minute');
+        return parts.join(' ') || i18n_js.t('< 1 minute');
     }
 
     /**
@@ -34089,7 +34049,7 @@ ${starCSS}
      * @returns {string} HTML
      */
     function buildChart(chart) {
-        if (chart.length === 0) return `<div style="color: var(--color-disabled);">${t('Not enough data for chart')}</div>`;
+        if (chart.length === 0) return `<div style="color: var(--color-disabled);">${i18n_js.t('Not enough data for chart')}</div>`;
 
         // Truncate outliers at 2x the median
         let maxXPH = 0;
@@ -34434,7 +34394,7 @@ ${starCSS}
             const stats = guildXPTracker.getGuildStats(guildName);
 
             // XP/h stats row
-            const rateLabel = stats.lastHourXPH > 0 ? t('Last hour XP/h') : t('Last XP/h');
+            const rateLabel = stats.lastHourXPH > 0 ? i18n_js.t('Last hour XP/h') : i18n_js.t('Last XP/h');
             const rateValue = stats.lastHourXPH > 0 ? stats.lastHourXPH : stats.lastXPH;
 
             const statsHTML = `
@@ -34444,7 +34404,7 @@ ${starCSS}
                     <div class="GuildPanel_value__Hm2I9">${fNum(rateValue)}</div>
                 </div>
                 <div class="GuildPanel_dataBlock__3qVhK">
-                    <div class="GuildPanel_label__-A63g">${t('Last day XP/h')}</div>
+                    <div class="GuildPanel_label__-A63g">${i18n_js.t('Last day XP/h')}</div>
                     <div class="GuildPanel_value__Hm2I9">${fNum(stats.lastDayXPH)}</div>
                 </div>
             </div>`;
@@ -34453,7 +34413,7 @@ ${starCSS}
             const chartHTML = `
             <div class="GuildPanel_dataBlockGroup__1d2rR ${CSS_PREFIX}" style="grid-column: 1 / 3; max-width: none;">
                 <div class="GuildPanel_dataBlock__3qVhK" style="height: 240px;">
-                    <div class="GuildPanel_label__-A63g">${t('Last week XP/h')}</div>
+                    <div class="GuildPanel_label__-A63g">${i18n_js.t('Last week XP/h')}</div>
                     ${buildChart(stats.chart)}
                 </div>
             </div>`;
@@ -34554,7 +34514,7 @@ ${starCSS}
 
             // Game Mode column
             addColumn(tableEl, {
-                name: t('Game Mode'),
+                name: i18n_js.t('Game Mode'),
                 insertAfter,
                 data: allStats.map((s) => s.gameMode),
                 format: (v) => gameModes[v] || v || '',
@@ -34565,7 +34525,7 @@ ${starCSS}
 
             // Joined column
             addColumn(tableEl, {
-                name: t('Joined'),
+                name: i18n_js.t('Joined'),
                 insertAfter: insertAfter + 1,
                 data: allStats.map((s) => s.joinTime),
                 format: (v) =>
@@ -34579,7 +34539,7 @@ ${starCSS}
 
             // Last XP/h column
             addColumn(tableEl, {
-                name: t('Last XP/h'),
+                name: i18n_js.t('Last XP/h'),
                 insertAfter: insertAfter + 2,
                 data: allStats.map((s) => s.lastXPH),
                 format: (v, i) => {
@@ -34593,7 +34553,7 @@ ${starCSS}
 
             // Last day XP/h column
             addColumn(tableEl, {
-                name: t('Last day XP/h'),
+                name: i18n_js.t('Last day XP/h'),
                 insertAfter: insertAfter + 3,
                 data: allStats.map((s) => s.lastDayXPH),
                 format: (v, i) => {
@@ -34770,7 +34730,7 @@ ${starCSS}
 
             // Last XP/h
             addColumn(tableEl, {
-                name: t('Last XP/h'),
+                name: i18n_js.t('Last XP/h'),
                 insertAfter,
                 data: allStats.map((s) => s.lastXPH),
                 format: (v, i) => {
@@ -34785,7 +34745,7 @@ ${starCSS}
 
             // Last day XP/h
             addColumn(tableEl, {
-                name: t('Last day XP/h'),
+                name: i18n_js.t('Last day XP/h'),
                 insertAfter: insertAfter + 1,
                 data: allStats.map((s) => s.lastDayXPH),
                 format: (v, i) => {
@@ -34998,8 +34958,8 @@ ${starCSS}
                 }
 
                 // Use standard Notification API
-                const notification = new Notification(t('Milky Way Idle'), {
-                    body: t('Your action queue is empty!'),
+                const notification = new Notification(i18n_js.t('Milky Way Idle'), {
+                    body: i18n_js.t('Your action queue is empty!'),
                     icon: 'https://www.milkywayidle.com/favicon.ico',
                     tag: 'empty-queue',
                     requireInteraction: false,
@@ -35324,7 +35284,7 @@ ${starCSS}
             user-select: none;
         `;
             header.innerHTML = `
-            <span style="font-weight:600; font-size:12px; color:${ACCENT};">${t('Queue Monitor')}</span>
+            <span style="font-weight:600; font-size:12px; color:${ACCENT};">${i18n_js.t('Queue Monitor')}</span>
             <button id="toolasha-qm-toggle" style="
                 background:none; border:none; color:#aaa; font-size:16px;
                 cursor:pointer; padding:0; line-height:1;">${this.collapsed ? '+' : '−'}</button>
@@ -35405,7 +35365,7 @@ ${starCSS}
 
             if (snapshots.length === 0) {
                 this.bodyEl.innerHTML = `<div style="color:#666; font-size:11px; text-align:center; padding:4px 0;">
-                ${t('No other character data yet.')}<br>${t('Switch characters to capture queue state.')}
+                ${i18n_js.t('No other character data yet.')}<br>${i18n_js.t('Switch characters to capture queue state.')}
             </div>`;
                 return;
             }
@@ -35435,11 +35395,11 @@ ${starCSS}
                 // Time display
                 let timeDisplay;
                 if (snap.actions.length === 0) {
-                    timeDisplay = t('Idle');
+                    timeDisplay = i18n_js.t('Idle');
                 } else if (snap.hasInfiniteAction && remaining <= 0) {
                     timeDisplay = '∞';
                 } else if (remaining <= 0) {
-                    timeDisplay = t('Done');
+                    timeDisplay = i18n_js.t('Done');
                 } else {
                     timeDisplay = formatters_js.timeReadableZh(remaining);
                     if (snap.hasInfiniteAction) {
@@ -35456,7 +35416,7 @@ ${starCSS}
                 html += `</div>`;
 
                 if (isStale) {
-                    html += `<div style="color:#f39c12; font-size:10px; margin-left:14px; margin-top:2px;">${t('Stale')} (>${Math.round((Date.now() - snap.timestamp) / 3600000)}h ago)</div>`;
+                    html += `<div style="color:#f39c12; font-size:10px; margin-left:14px; margin-top:2px;">${i18n_js.t('Stale')} (>${Math.round((Date.now() - snap.timestamp) / 3600000)}h ago)</div>`;
                 }
 
                 // Expanded action details
@@ -35469,7 +35429,7 @@ ${starCSS}
                             actionTimeStr = '∞';
                         } else if (action.estimatedSeconds !== null) {
                             const actionRemaining = Math.max(0, action.estimatedSeconds - Math.max(0, actionElapsed));
-                            actionTimeStr = actionRemaining <= 0 ? t('Done') : formatters_js.timeReadableZh(actionRemaining);
+                            actionTimeStr = actionRemaining <= 0 ? i18n_js.t('Done') : formatters_js.timeReadableZh(actionRemaining);
                         } else {
                             actionTimeStr = '?';
                         }
@@ -35623,4 +35583,4 @@ ${starCSS}
 
     console.log('[Toolasha] UI library loaded');
 
-})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Utils.formatters, Toolasha.Utils.timerRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.dom, Toolasha.Core.storage, Toolasha.Core.marketAPI, Toolasha.Utils.efficiency, Toolasha.Core.webSocketHook, Toolasha.Utils.reactInput, Toolasha.Utils.actionPanelHelper, Toolasha.Market.expectedValueCalculator, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.marketData, Toolasha.Utils.profitConstants, Toolasha.Utils.profitHelpers, Toolasha.Market.profitCalculator, Toolasha.Utils.selectors, Toolasha.Utils.actionCalculator, Toolasha.Utils.equipmentParser, Toolasha.Utils.cleanupRegistry, Toolasha.Core, Toolasha.Core.settingsStorage, Toolasha.Utils.enhancementConfig, Toolasha.Utils.materialCalculator, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.teaParser);
+})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Utils.formatters, Toolasha.Utils.timerRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Core.i18n, Toolasha.Utils.dom, Toolasha.Core.storage, Toolasha.Core.marketAPI, Toolasha.Utils.efficiency, Toolasha.Core.webSocketHook, Toolasha.Utils.reactInput, Toolasha.Utils.actionPanelHelper, Toolasha.Market.expectedValueCalculator, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.marketData, Toolasha.Utils.profitConstants, Toolasha.Utils.profitHelpers, Toolasha.Market.profitCalculator, Toolasha.Utils.selectors, Toolasha.Utils.actionCalculator, Toolasha.Utils.equipmentParser, Toolasha.Utils.cleanupRegistry, Toolasha.Core, Toolasha.Core.settingsStorage, Toolasha.Utils.enhancementConfig, Toolasha.Utils.materialCalculator, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.teaParser);

@@ -1,7 +1,7 @@
 /**
  * Toolasha Core Library
  * Core infrastructure and API clients
- * Version: 2.70.1
+ * Version: 2.70.2
  * License: CC-BY-NC-SA-4.0
  */
 
@@ -616,6 +616,8 @@
             return arg !== undefined ? String(arg) : `{${index}}`;
         });
     }
+
+    var i18n = { t, registerLocale };
 
     registerLocale('zh-CN', {
         ' (Default)': '（默认）',
@@ -9494,6 +9496,7 @@
     toolashaRoot.Core = {
         storage,
         config,
+        i18n,
         webSocketHook,
         domObserver,
         dataManager,

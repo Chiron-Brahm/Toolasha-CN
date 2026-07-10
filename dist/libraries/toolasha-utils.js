@@ -1,52 +1,12 @@
 /**
  * Toolasha Utils Library
  * All utility modules
- * Version: 2.70.1
+ * Version: 2.70.2
  * License: CC-BY-NC-SA-4.0
  */
 
-(function (config, dataManager, webSocketHook, storage, marketAPI, domObserver) {
+(function (config, i18n_js, dataManager, webSocketHook, storage, marketAPI, domObserver) {
     'use strict';
-
-    /**
-     * Internationalization (i18n) Module
-     * Lightweight translation layer with English-as-key fallback.
-     *
-     * Usage:
-     *   import { t, registerLocale } from '../core/i18n.js';
-     *   t('Market Prices in Tooltips')  →  '市场价格提示' (if translated)
-     *   t('Market Prices in Tooltips')  →  'Market Prices in Tooltips' (fallback)
-     *   t('Cost: {0}/hr', '100K')       →  '花费: 100K/时'
-     */
-
-    /** @type {Record<string, string>} */
-    const translations = {};
-
-    /**
-     * Translate a string. Returns the Chinese translation if available, otherwise the English key itself.
-     * Supports positional interpolation with {0}, {1}, etc.
-     *
-     * @param {string} str - English key string
-     * @param {...(string|number)} args - Positional arguments for interpolation
-     * @returns {string} Translated or fallback string
-     *
-     * @example
-     *   t('Hello')                          // '你好'
-     *   t('Unknown key')                    // 'Unknown key' (fallback)
-     *   t('Profit: {0}/hr', '12.3K')        // '利润: 12.3K/时'
-     */
-    function t(str, ...args) {
-        const translated = translations[str] !== undefined ? translations[str] : str;
-
-        if (args.length === 0) {
-            return translated;
-        }
-
-        return translated.replace(/\{(\d+)\}/g, (_, index) => {
-            const arg = args[parseInt(index, 10)];
-            return arg !== undefined ? String(arg) : `{${index}}`;
-        });
-    }
 
     /**
      * Formatting Utilities
@@ -491,8 +451,8 @@
         const days = Math.floor(hours / 24);
 
         // Edge cases
-        if (minutes < 1) return t('Just now');
-        if (days > 30) return t('30+ days');
+        if (minutes < 1) return i18n_js.t('Just now');
+        if (days > 30) return i18n_js.t('30+ days');
 
         // Format based on age
         if (days > 7) return `${days}d`;
@@ -9991,4 +9951,4 @@ self.onmessage = function (e) {
 
     console.log('[Toolasha] Utils library loaded');
 
-})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.webSocketHook, Toolasha.Core.storage, Toolasha.Core.marketAPI, Toolasha.Core.domObserver);
+})(Toolasha.Core.config, Toolasha.Core.i18n, Toolasha.Core.dataManager, Toolasha.Core.webSocketHook, Toolasha.Core.storage, Toolasha.Core.marketAPI, Toolasha.Core.domObserver);
