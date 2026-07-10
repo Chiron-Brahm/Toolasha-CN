@@ -1,11 +1,11 @@
 /**
  * Toolasha Actions Library
  * Production, gathering, and alchemy features
- * Version: 2.63.2
+ * Version: 2.70.0
  * License: CC-BY-NC-SA-4.0
  */
 
-(function (dataManager, domObserver, config, enhancementConfig_js, enhancementCalculator_js, profitConstants_js, formatters_js, marketAPI, domObserverHelpers_js, bonusRevenueCalculator_js, marketData_js, efficiency_js, profitHelpers_js, storage, profitCalculator, uiComponents_js, actionPanelHelper_js, webSocketHook, dom_js, timerRegistry_js, actionCalculator_js, cleanupRegistry_js, teaParser_js, buffParser_js, equipmentParser_js, houseEfficiency_js, experienceParser_js, reactInput_js, experienceCalculator_js, materialCalculator_js, expectedValueCalculator, alchemyProfitCalculator) {
+(function (dataManager, domObserver, config, enhancementConfig_js, enhancementCalculator_js, profitConstants_js, formatters_js, marketAPI, domObserverHelpers_js, bonusRevenueCalculator_js, marketData_js, efficiency_js, profitHelpers_js, storage, profitCalculator, uiComponents_js, actionPanelHelper_js, webSocketHook, dom_js, timerRegistry_js, alchemyProfitCalculator, actionCalculator_js, cleanupRegistry_js, teaParser_js, buffParser_js, equipmentParser_js, experienceParser_js, reactInput_js, experienceCalculator_js, materialCalculator_js, expectedValueCalculator) {
     'use strict';
 
     /**
@@ -2151,6 +2151,17 @@
         'Expert Coffee Crate': '专家咖啡箱',
     };
 
+    // Ability name English → Chinese translation map.
+    // Populated from the game's abilityDetailMap.
+    // To add more, visit the ability panel in game and the auto-observer will capture them.
+    var abilityNamesZh = {
+        'Mystic Aura': '神秘光环',
+        'Elemental Affinity': '元素亲和',
+        Firestorm: '烈焰风暴',
+        'Flame Blast': '烈焰冲击',
+        Fireball: '火球术',
+    };
+
     /**
      * Auto-discovers Chinese item names from the game DOM and builds a
      * Chinese → English mapping cached in IndexedDB. Provides a unified
@@ -2168,6 +2179,11 @@
         '[class*="ItemTooltipText_name"]',
         '[class*="Item_craftingItemName"]',
         'svg[aria-label]',
+        '[class*="Ability_"][class*="name"]',
+        '[class*="AbilitiesPanel_"]',
+        '[class*="SkillActionDetail_"]',
+        '[class*="CombatPanel_"]',
+        '[class*="SimEditor_"]',
     ];
 
     const ENHANCEMENT_STRIP_REGEX = /\s*\+\d+$/;
@@ -2271,6 +2287,50 @@
             }
         }
 
+        getDisplayName(itemHrid) {
+            if (!itemHrid) return '';
+            if (!this.isLoaded) this._lazyLoad();
+
+            const cached = this.cnNames[itemHrid];
+            if (cached) return cached;
+
+            const item = dataManager.getItemDetails(itemHrid);
+            const enName = item?.name;
+            if (enName) {
+                const staticCn = itemNamesZh[enName];
+                if (staticCn) {
+                    this.cnNames[itemHrid] = staticCn;
+                    return staticCn;
+                }
+                return enName;
+            }
+
+            const ability = this._getAbilityDetails(itemHrid);
+            if (ability?.name) {
+                const staticCn = itemNamesZh[ability.name] || abilityNamesZh[ability.name];
+                if (staticCn) {
+                    this.cnNames[itemHrid] = staticCn;
+                    return staticCn;
+                }
+                return ability.name;
+            }
+
+            return itemHrid;
+        }
+
+        _getAbilityDetails(abilityHrid) {
+            if (!abilityHrid || !abilityHrid.startsWith('/abilities/')) return null;
+            try {
+                const initData = dataManager.getInitClientData();
+                return initData?.abilityDetailMap?.[abilityHrid] || null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        _lazyLoad() {
+            this.load().catch(() => {});
+        }
         getHridFromChineseName(chineseName) {
             if (!chineseName) return null;
             const baseName = chineseName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
@@ -2360,21 +2420,6 @@
                     this._failCount++;
                 }
             }
-        }
-
-        /**
-         * Get the display name for an item.
-         * Returns the Chinese name if cached, otherwise the English name from game data,
-         * and as a final fallback parses the HRID into a readable label.
-         * @param {string} itemHrid - Item HRID (e.g., '/items/essence')
-         * @returns {string} Display name
-         */
-        getDisplayName(itemHrid) {
-            const cnName = this.cnNames[itemHrid];
-            if (cnName) return cnName;
-            const enName = dataManager.getItemDetails(itemHrid)?.name;
-            if (enName) return enName;
-            return itemHrid.split('/').pop().replace(/_/g, ' ');
         }
     }
 
@@ -2740,7 +2785,7 @@
     /**
      * Action types for production skills (5 skills)
      */
-    const PRODUCTION_TYPES$6 = [
+    const PRODUCTION_TYPES$7 = [
         '/action_types/brewing',
         '/action_types/cooking',
         '/action_types/cheesesmithing',
@@ -2762,7 +2807,7 @@
         }
 
         // Only process production actions with outputs
-        if (!PRODUCTION_TYPES$6.includes(actionDetail.type)) {
+        if (!PRODUCTION_TYPES$7.includes(actionDetail.type)) {
             return null;
         }
 
@@ -2879,6 +2924,7 @@
             name: loadout.name,
             actionTypeHrid: loadout.actionTypeHrid || '',
             isDefault: !!loadout.isDefault,
+            useExactEnhancement: loadout.useExactEnhancement ?? false,
             equipment,
             abilities,
             food,
@@ -2996,6 +3042,8 @@
         updateEnhancementLevel(itemHrid, newLevel) {
             let changed = false;
             for (const snapshot of Object.values(this.snapshots)) {
+                // Exact-mode snapshots intentionally hold a frozen level — never auto-update them.
+                if (snapshot.useExactEnhancement) continue;
                 for (const eq of snapshot.equipment || []) {
                     if (eq.itemHrid === itemHrid && eq.enhancementLevel !== newLevel) {
                         eq.enhancementLevel = newLevel;
@@ -6754,7 +6802,7 @@
     /**
      * Action types for production skills (5 skills)
      */
-    const PRODUCTION_TYPES$5 = [
+    const PRODUCTION_TYPES$6 = [
         '/action_types/brewing',
         '/action_types/cooking',
         '/action_types/cheesesmithing',
@@ -6805,6 +6853,7 @@
      * CSS selectors for action panel detection
      */
     const SELECTORS = {
+        MODAL_CONTAINER: '.Modal_modalContainer__3B80m',
         REGULAR_PANEL: 'div.SkillActionDetail_regularComponent__3oCgr',
         ENHANCING_PANEL: 'div.SkillActionDetail_enhancingComponent__17bOx',
         EXP_GAIN: 'div.SkillActionDetail_expGain__F5xHu',
@@ -6870,7 +6919,7 @@
 
     /**
      * Set up listeners for equipment and consumable changes
-     * Refreshes enhancement calculator when gear or teas change
+     * Refreshes enhancement calculator and production/gathering profit panels when gear or teas change
      */
     function setupEnhancementRefreshListeners() {
         // Listen for equipment changes (equipping/unequipping items) with debouncing
@@ -6879,6 +6928,7 @@
                 clearTimeout(itemsUpdatedDebounceTimer);
                 itemsUpdatedDebounceTimer = setTimeout(() => {
                     refreshEnhancementCalculator();
+                    refreshProfitPanel();
                 }, DEBOUNCE_DELAY);
             };
             dataManager.on('items_updated', itemsUpdatedHandler);
@@ -6890,6 +6940,7 @@
                 clearTimeout(consumablesUpdatedDebounceTimer);
                 consumablesUpdatedDebounceTimer = setTimeout(() => {
                     refreshEnhancementCalculator();
+                    refreshProfitPanel();
                 }, DEBOUNCE_DELAY);
             };
             dataManager.on('consumables_updated', consumablesUpdatedHandler);
@@ -6908,6 +6959,19 @@
 
         // Trigger debounced update
         triggerEnhancementUpdate(panel, itemHrid);
+    }
+
+    /**
+     * Refresh production/gathering profit panel if currently visible in a modal
+     */
+    function refreshProfitPanel() {
+        const modal = document.querySelector(SELECTORS.MODAL_CONTAINER);
+        if (!modal) return;
+
+        const panel = modal.querySelector(SELECTORS.REGULAR_PANEL);
+        if (!panel) return;
+
+        handleActionPanel(panel);
     }
 
     /**
@@ -7065,7 +7129,7 @@
         }
 
         // Check if this is a production action
-        if (PRODUCTION_TYPES$5.includes(actionDetail.type)) {
+        if (PRODUCTION_TYPES$6.includes(actionDetail.type)) {
             await displayProductionProfit(panel, actionHrid, SELECTORS.DROP_TABLE);
         }
     }
@@ -7595,6 +7659,7 @@
     class ActionTimeDisplay {
         constructor() {
             this.displayElement = null;
+            this.profitElement = null;
             this.isInitialized = false;
             this.updateTimer = null;
             this.unregisterQueueObserver = null;
@@ -7603,6 +7668,7 @@
             this.unregisterActionNameObserver = null;
             this.characterInitHandler = null; // Handler for character switch
             this.activeProfitCalculationId = null; // Track active profit calculation to prevent race conditions
+            this.activeBarProfitId = null;
             this.waitForPanelTimeout = null;
             this.retryUpdateTimeout = null;
             this.cleanupRegistry = cleanupRegistry_js.createCleanupRegistry();
@@ -7631,6 +7697,7 @@
                 'actionBar_showActionDuration',
                 'actionBar_showActionsPerHour',
                 'actionBar_showTimeRemaining',
+                'profitCalc_pricingMode',
             ];
             for (const key of actionBarSettings) {
                 config.onSettingChange(key, (newValue) => {
@@ -7869,7 +7936,8 @@
                     if (!hasInfinite && !result.isTrulyInfinite) {
                         const completionDate = new Date();
                         completionDate.setSeconds(completionDate.getSeconds() + accumulatedTime);
-                        timeText += ` Complete at ${formatCompletionTime(completionDate, false)}`;
+                        const isToday = completionDate.toDateString() === new Date().toDateString();
+                        timeText += ` Complete at ${formatCompletionTime(completionDate, !isToday)}`;
                     }
 
                     this.appendTimeToActionDiv(actionDiv, timeText);
@@ -8147,6 +8215,7 @@
 
             // Clear display element reference (already removed from DOM by game)
             this.displayElement = null;
+            this.profitElement = null;
 
             // Re-initialize action panel display for new character
             this.waitForActionPanel();
@@ -8233,11 +8302,27 @@
             // Insert after action name
             actionNameContainer.parentNode.insertBefore(this.displayElement, actionNameContainer.nextSibling);
 
+            // Create profit element (below time display)
+            this.profitElement = document.createElement('div');
+            this.profitElement.id = 'mwi-action-profit-display';
+            this.profitElement.style.cssText = `
+            font-size: 0.9em;
+            color: var(--text-color-secondary, ${config.COLOR_TEXT_SECONDARY});
+            line-height: 1.4;
+            text-align: left;
+            white-space: pre-wrap;
+        `;
+            this.displayElement.parentNode.insertBefore(this.profitElement, this.displayElement.nextSibling);
+
             this.cleanupRegistry.registerCleanup(() => {
                 if (this.displayElement && this.displayElement.parentNode) {
                     this.displayElement.parentNode.removeChild(this.displayElement);
                 }
                 this.displayElement = null;
+                if (this.profitElement && this.profitElement.parentNode) {
+                    this.profitElement.parentNode.removeChild(this.profitElement);
+                }
+                this.profitElement = null;
             });
         }
 
@@ -8287,6 +8372,7 @@
             // Check if no action is running ("Doing nothing...")
             if (actionNameText.includes('Doing nothing')) {
                 this.displayElement.innerHTML = '';
+                if (this.profitElement) this.profitElement.innerHTML = '';
                 this.clearAppendedStats(actionNameElement);
                 // Reconnect observer
                 this.reconnectActionNameObserver(actionNameElement);
@@ -8333,6 +8419,7 @@
             // Skip combat actions - no time display for combat
             if (actionDetails.type === '/action_types/combat') {
                 this.displayElement.innerHTML = '';
+                if (this.profitElement) this.profitElement.innerHTML = '';
                 this.clearAppendedStats(actionNameElement);
 
                 const combatCompact = config.getSetting('actionBar_compactWidth');
@@ -8389,6 +8476,7 @@
 
             // Handle enhancing actions with specialized display
             if (actionDetails.type === '/action_types/enhancing') {
+                if (this.profitElement) this.profitElement.innerHTML = '';
                 this.buildEnhancingDisplay(action, actionDetails, actionNameElement);
                 this.reconnectActionNameObserver(actionNameElement);
                 return;
@@ -8732,10 +8820,13 @@
                     const recycleClockTime = formatCompletionTime(recycleCompletion, !recycleIsToday);
                     recycleHtml = `<span style="color:#4dd0a0; margin-left:12px; font-size:11px;">Est. w/ recycle: ${recycleTimeStr} → ${recycleClockTime}</span>`;
                 }
-                this.displayElement.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${matsLabel} ${timeStr} → ${clockTime}${recycleHtml}`;
+                this.displayElement.innerHTML = `<span style="display: inline-flex; flex-wrap: nowrap; align-items: baseline; gap: 0.25em;"><span>⏱</span>${matsLabel} ${timeStr} → ${clockTime}</span>${recycleHtml}`;
             } else {
                 this.displayElement.innerHTML = '';
             }
+
+            // Line 3: Profit display (async, non-blocking)
+            this.updateActionBarProfit(action, remainingQueuedActions);
 
             // Reconnect observer to watch for game's updates
             this.reconnectActionNameObserver(actionNameElement);
@@ -8950,7 +9041,7 @@
 
                 const itemIconHtml = this.getItemIconHtml(limitingItemHrid);
                 const matsLabel = itemIconHtml ? `${itemIconHtml}:` : 'Mats:';
-                this.displayElement.innerHTML = `<span style="display: inline-block; margin-right: 0.25em;">⏱</span> ${matsLabel} ${timeStr} → ${clockTime} (${formatters_js.formatWithSeparator(materialLimit)} actions)`;
+                this.displayElement.innerHTML = `<span style="display: inline-flex; flex-wrap: nowrap; align-items: baseline; gap: 0.25em;"><span>⏱</span>${matsLabel} ${timeStr} → ${clockTime} (${formatters_js.formatWithSeparator(materialLimit)} actions)</span>`;
             } else {
                 this.displayElement.innerHTML = '';
             }
@@ -9681,6 +9772,7 @@
                         if (actionTimeSeconds > 0 && !isEnhancing) {
                             actionsToCalculate.push({
                                 actionHrid: currentAction.actionHrid,
+                                primaryItemHash: currentAction.primaryItemHash || null,
                                 timeSeconds: actionTimeSeconds,
                                 count: count,
                                 baseActionsNeeded: baseActionsNeeded,
@@ -9825,6 +9917,7 @@
                     if (actionTimeSeconds > 0 && !isTrulyInfinite && !isEnhancing) {
                         actionsToCalculate.push({
                             actionHrid: actionObj.actionHrid,
+                            primaryItemHash: actionObj.primaryItemHash || null,
                             timeSeconds: actionTimeSeconds,
                             count: count,
                             baseActionsNeeded: baseActionsNeeded,
@@ -9837,8 +9930,9 @@
                     if (!hasInfinite && !isTrulyInfinite) {
                         const completionDate = new Date();
                         completionDate.setSeconds(completionDate.getSeconds() + accumulatedTime);
+                        const isToday = completionDate.toDateString() === new Date().toDateString();
 
-                        completionText = ` Complete at ${formatCompletionTime(completionDate, false)}`;
+                        completionText = ` Complete at ${formatCompletionTime(completionDate, !isToday)}`;
                     }
 
                     // Create time display element
@@ -10057,11 +10151,20 @@
 
             // Get profit data (already has profitPerAction calculated)
             let profitData = null;
-            const gatheringProfit = await calculateGatheringProfit(action.actionHrid);
-            if (gatheringProfit) {
-                profitData = gatheringProfit;
-            } else if (actionDetails.outputItems?.[0]?.itemHrid) {
-                profitData = await profitCalculator.calculateProfit(actionDetails.outputItems[0].itemHrid);
+            let isAlchemy = false;
+
+            if (actionDetails.type === '/action_types/alchemy' && action.primaryItemHash) {
+                profitData = this.calculateAlchemyProfitForAction(action);
+                isAlchemy = !!profitData;
+            }
+
+            if (!profitData) {
+                const gatheringProfit = await calculateGatheringProfit(action.actionHrid);
+                if (gatheringProfit) {
+                    profitData = gatheringProfit;
+                } else if (actionDetails.outputItems?.[0]?.itemHrid) {
+                    profitData = await profitCalculator.calculateProfit(actionDetails.outputItems[0].itemHrid);
+                }
             }
 
             if (!profitData) {
@@ -10077,7 +10180,17 @@
                 return null;
             }
 
-            if (gatheringProfit) {
+            if (isAlchemy) {
+                const profitPerAction = profitData.profitPerHour / profitData.actionsPerHour;
+                const totalProfit = profitPerAction * actionsCount;
+                if (valueMode === 'estimated_value') {
+                    const revenuePerAction = (profitData.revenuePerHour || 0) / profitData.actionsPerHour;
+                    return revenuePerAction * actionsCount;
+                }
+                return totalProfit;
+            }
+
+            if (profitData.baseOutputs) {
                 const totals = profitHelpers_js.calculateGatheringActionTotalsFromBase({
                     actionsCount,
                     actionsPerHour: profitData.actionsPerHour,
@@ -10107,11 +10220,109 @@
         }
 
         /**
+         * Calculate alchemy profit for a queued action using the alchemy profit calculator.
+         * @param {Object} action - Action object with {actionHrid, primaryItemHash}
+         * @returns {Object|null} Profit data with profitPerHour and actionsPerHour, or null
+         */
+        calculateAlchemyProfitForAction(action) {
+            const { itemHrid, level: enhancementLevel } = this.parseItemHash(action.primaryItemHash);
+            if (!itemHrid) return null;
+
+            const actionHrid = action.actionHrid;
+
+            if (actionHrid === '/actions/alchemy/coinify') {
+                return alchemyProfitCalculator.calculateCoinifyProfit(itemHrid, enhancementLevel || 0, true);
+            } else if (actionHrid === '/actions/alchemy/transmute') {
+                return alchemyProfitCalculator.calculateTransmuteProfit(itemHrid, true);
+            } else if (actionHrid === '/actions/alchemy/decompose') {
+                return alchemyProfitCalculator.calculateDecomposeProfit(itemHrid, enhancementLevel || 0, true);
+            }
+
+            return null;
+        }
+
+        /**
+         * Calculate and display profit in the action bar for the current action.
+         * @param {Object} action - Current action object from dataManager
+         * @param {number} remainingActions - Remaining queued actions (Infinity if unlimited)
+         */
+        async updateActionBarProfit(action, remainingActions) {
+            if (!this.profitElement) return;
+            if (!config.getSetting('actionBar_showProfit')) {
+                this.profitElement.innerHTML = '';
+                return;
+            }
+
+            const calcId = Date.now() + Math.random();
+            this.activeBarProfitId = calcId;
+
+            try {
+                const actionHrid = action.actionHrid;
+                const actionDetails = dataManager.getActionDetails(actionHrid);
+                if (!actionDetails) {
+                    this.profitElement.innerHTML = '';
+                    return;
+                }
+
+                let profitData = null;
+
+                if (actionDetails.type === '/action_types/alchemy' && action.primaryItemHash) {
+                    profitData = this.calculateAlchemyProfitForAction(action);
+                }
+
+                if (!profitData) {
+                    const gatheringProfit = await calculateGatheringProfit(actionHrid);
+                    if (gatheringProfit) {
+                        profitData = gatheringProfit;
+                    } else if (actionDetails.outputItems?.[0]?.itemHrid) {
+                        profitData = await profitCalculator.calculateProfit(actionDetails.outputItems[0].itemHrid);
+                    }
+                }
+
+                if (this.activeBarProfitId !== calcId) return;
+
+                if (!profitData || typeof profitData.profitPerHour !== 'number') {
+                    this.profitElement.innerHTML = '';
+                    return;
+                }
+
+                const profitPerHour = profitData.profitPerHour;
+                const profitColor =
+                    profitPerHour >= 0
+                        ? config.getSettingValue('color_profit', '#4ade80')
+                        : config.getSettingValue('color_loss', '#f87171');
+                const sign = profitPerHour >= 0 ? '+' : '';
+
+                let html = `<span style="color:#888;">Profit:</span> <span style="color:${profitColor}; font-weight:600;">${sign}${this.formatLargeNumber(Math.abs(Math.round(profitPerHour)))}/hr</span>`;
+
+                if (isFinite(remainingActions) && remainingActions > 0 && profitData.actionsPerHour > 0) {
+                    const profitPerAction =
+                        profitPerHour / (profitData.actionsPerHour * (profitData.efficiencyMultiplier || 1));
+                    const remainingProfit = profitPerAction * remainingActions;
+                    const remColor =
+                        remainingProfit >= 0
+                            ? config.getSettingValue('color_profit', '#4ade80')
+                            : config.getSettingValue('color_loss', '#f87171');
+                    const remSign = remainingProfit >= 0 ? '+' : '';
+                    html += ` <span style="color:#888;">·</span> <span style="color:#888;">remaining</span> <span style="color:${remColor}; font-weight:600;">${remSign}${this.formatLargeNumber(Math.abs(Math.round(remainingProfit)))}</span>`;
+                }
+
+                if (this.activeBarProfitId !== calcId) return;
+                this.profitElement.innerHTML = html;
+            } catch {
+                if (this.activeBarProfitId === calcId) {
+                    this.profitElement.innerHTML = '';
+                }
+            }
+        }
+
+        /**
          * Disable the action time display (cleanup)
          */
         disable() {
             this.cleanupRegistry.cleanupAll();
             this.displayElement = null;
+            this.profitElement = null;
             this.updateTimer = null;
             this.unregisterQueueObserver = null;
             this.actionNameObserver = null;
@@ -10119,6 +10330,7 @@
             this.characterInitHandler = null;
             this.waitForPanelTimeout = null;
             this.activeProfitCalculationId = null;
+            this.activeBarProfitId = null;
             this.isInitialized = false;
         }
     }
@@ -10302,6 +10514,130 @@
     const actionCountdown = new ActionCountdown();
 
     /**
+     * Locale-safe DOM matching utilities for game UI interactions.
+     * All functions use CSS classes, data attributes, or structural positions
+     * instead of textContent matching, which breaks when the game is in Chinese.
+     */
+
+    /**
+     * Check if a tabs container belongs to the marketplace panel.
+     * Uses the panel's CSS module class (partial match for hash stability).
+     *
+     * @param {Element} tablistContainer - A tablist container element
+     * @returns {boolean} True if the container is part of the marketplace panel
+     */
+    function isMarketplacePanel(tablistContainer) {
+        return !!tablistContainer.closest('[class*="MarketplacePanel_marketplacePanel"]');
+    }
+
+    /**
+     * Get the "My Listings" tab from a marketplace tablist.
+     * "My Listings" tab is at index 1 in the marketplace MUI tab bar.
+     * Index 0 = search/filter tab (verified via the panel detection above).
+     *
+     * @param {Element} tablist - The marketplace tablist element
+     * @returns {Element|null} The "My Listings" tab element, or null if not found
+     */
+    function getMyListingsTab(tablist) {
+        // Skip non-native tabs (Toolasha inventory tabs, missing material tabs)
+        // to find the second native marketplace tab
+        const nativeTabs = Array.from(tablist.children).filter(
+            (child) => !child.hasAttribute('data-mwi-custom-tab') && !child.classList.contains('toolasha-inv-tab')
+        );
+        return nativeTabs[1] || null;
+    }
+
+    // Chinese monster name mapping (sprite name → Chinese)
+    const CN_MONSTER_NAMES = {
+        fly: '苍蝇',
+        rat: '杰瑞',
+        skunk: '臭鼬',
+        porcupine: '豪猪',
+        slimy: '史莱姆',
+        smelly_planet: '臭臭星球',
+        frog: '青蛙',
+        snake: '蛇',
+        swampy: '沼泽虫',
+        alligator: '夏洛克',
+        swamp_planet: '沼泽星球',
+        sea_snail: '蜗牛',
+        crab: '螃蟹',
+        aquahorse: '水马',
+        nom_nom: '咬咬鱼',
+        turtle: '忍者龟',
+        aqua_planet: '海洋星球',
+        jungle_sprite: '丛林精灵',
+        myconid: '蘑菇人',
+        treant: '树人',
+        centaur_archer: '半人马弓箭手',
+        jungle_planet: '丛林星球',
+        gobo_stabby: '刺刺',
+        gobo_slashy: '砍砍',
+        gobo_smashy: '锤锤',
+        gobo_shooty: '咻咻',
+        gobo_boomy: '轰轰',
+        gobo_planet: '哥布林星球',
+        eye: '独眼',
+        eyes: '叠眼',
+        veyes: '复眼',
+        planet_of_the_eyes: '眼球星球',
+        novice_sorcerer: '新手巫师',
+        ice_sorcerer: '冰霜巫师',
+        flame_sorcerer: '火焰巫师',
+        elementalist: '元素法师',
+        sorcerers_tower: '巫师之塔',
+        gummy_bear: '软糖熊',
+        panda: '熊猫',
+        black_bear: '黑熊',
+        grizzly_bear: '棕熊',
+        polar_bear: '北极熊',
+        bear_with_it: '熊熊星球',
+        magnetic_golem: '磁力魔像',
+        stalactite_golem: '钟乳石魔像',
+        granite_golem: '花岗岩魔像',
+        golem_cave: '魔像洞穴',
+        zombie: '僵尸',
+        vampire: '吸血鬼',
+        werewolf: '狼人',
+        twilight_zone: '暮光之地',
+        abyssal_imp: '深渊小鬼',
+        soul_hunter: '灵魂猎手',
+        infernal_warlock: '地狱术士',
+        infernal_abyss: '地狱深渊',
+        chimerical_den: '奇幻洞穴',
+        sinister_circus: '阴森马戏团',
+        enchanted_fortress: '秘法要塞',
+        pirate_cove: '海盗基地',
+        // House rooms
+        'Archery Range': '射箭场',
+        Armory: '军械库',
+        Brewery: '冲泡坊',
+        'Dairy Barn': '奶牛棚',
+        'Dining Room': '餐厅',
+        Dojo: '道场',
+        Forge: '锻造间',
+        Garden: '花园',
+        Gym: '健身房',
+        Kitchen: '厨房',
+        Laboratory: '实验室',
+        Library: '图书馆',
+        'Log Shed': '木棚',
+        'Mystical Study': '神秘研究室',
+        Observatory: '天文台',
+        'Sewing Parlor': '缝纫室',
+        Workshop: '工作间',
+    };
+
+    function getHouseRoomDisplayName(houseRoomHrid) {
+        const slug = houseRoomHrid.split('/').pop();
+        const name = slug
+            .split('_')
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(' ');
+        return CN_MONSTER_NAMES[name] || name;
+    }
+
+    /**
      * Quick Input Buttons Module
      *
      * Adds quick action buttons (10, 100, 1000, Max) to action panels
@@ -10328,6 +10664,50 @@
             `<svg width="${size}" height="${size}" style="vertical-align:middle;margin-right:3px">` +
             `<use href="${_qibSpriteUrl}#${itemSuffix}"></use></svg>`
         );
+    }
+
+    /**
+     * Compute wall-clock seconds for a queue, accounting for efficiency gains as levels are gained.
+     * Each level gained adds 1% efficiency (game mechanic: efficiency = effective_level − requirement).
+     * @param {number} queueCount - Number of queued actions
+     * @param {Object} levelContext - From _buildLevelContext: { currentLevel, currentXP, modifiedXP, levelExperienceTable }
+     * @param {number} baseEfficiency - Current efficiency percentage (e.g., 131.02)
+     * @param {number} actionTime - Seconds per time-consuming action
+     * @returns {number} Total wall-clock seconds
+     */
+    function computeProgressiveQueueTime(queueCount, levelContext, baseEfficiency, actionTime) {
+        let remaining = queueCount;
+        let totalTime = 0;
+        let level = levelContext.currentLevel;
+        let xp = levelContext.currentXP;
+        let levelsGained = 0;
+        const { levelExperienceTable, modifiedXP } = levelContext;
+
+        while (remaining > 0) {
+            const effMult = 1 + (baseEfficiency + levelsGained) / 100;
+            const nextLevelXP = levelExperienceTable[level + 1];
+
+            if (!nextLevelXP) {
+                totalTime += (remaining / effMult) * actionTime;
+                break;
+            }
+
+            const xpToNextLevel = nextLevelXP - xp;
+            const queueActionsToLevel = xpToNextLevel / modifiedXP;
+
+            if (remaining <= queueActionsToLevel) {
+                totalTime += (remaining / effMult) * actionTime;
+                break;
+            }
+
+            totalTime += (queueActionsToLevel / effMult) * actionTime;
+            remaining -= queueActionsToLevel;
+            level++;
+            xp = nextLevelXP;
+            levelsGained++;
+        }
+
+        return totalTime;
     }
 
     /**
@@ -10497,7 +10877,6 @@
          * Start observing for action panels using centralized observer
          */
         startObserving() {
-            // Register with centralized DOM observer
             this.unregisterObserver = domObserver.onClass(
                 'QuickInputButtons',
                 'SkillActionDetail_skillActionDetail',
@@ -10514,7 +10893,6 @@
                 }
             });
 
-            // Check for existing action panels that may already be open
             const existingPanels = document.querySelectorAll('[class*="SkillActionDetail_skillActionDetail"]');
             existingPanels.forEach((panel) => {
                 this.injectButtons(panel);
@@ -10528,6 +10906,8 @@
         injectButtons(panel) {
             let actionDetails = null;
             try {
+                // ponytail: log className once for F12 diagnosis if anything else fails
+                console.warn('[QuickInput] inject called for:', panel.className?.slice(0, 80));
                 // Check if already injected for this same action
                 const actionNameElement = panel.querySelector('[class*="SkillActionDetail_name"]');
                 const currentActionName = actionNameElement?.textContent?.trim() || '';
@@ -10535,6 +10915,7 @@
 
                 if (panel.querySelector('.mwi-collapsible-section') || panel.querySelector('.mwi-quick-input-btn')) {
                     if (currentActionName && currentActionName === previousActionName) {
+                        console.warn('[QuickInput] skip: already injected for', currentActionName);
                         return;
                     }
                     // Action changed (React reused the panel) — remove old injections
@@ -10553,28 +10934,37 @@
                     numberInput = panel.querySelector('input[type="number"]');
                 }
                 if (!numberInput) {
-                    // This is a panel type that doesn't have queue inputs (Enhancing, Alchemy, etc.)
-                    // Skip silently - not an error, just not applicable
+                    console.warn('[QuickInput] skip: no number input found in', panel.className?.slice(0, 80));
                     return;
                 }
 
-                // Cache game data once for all method calls
+                // ponytail: gameData missing (e.g. network failed loading marketplace) — inject count-only buttons anyway
                 const gameData = dataManager.getInitClientData();
                 if (!gameData) {
-                    console.warn('[Quick Input Buttons] No game data available');
+                    console.warn('[QuickInput] no game data, injecting count-only buttons');
+                    const fallbackInput = numberInput;
+                    const fallbackPanel = panel;
+                    const fallbackActionName = currentActionName;
+                    this._createCountPresetRow(
+                        fallbackPanel,
+                        fallbackInput,
+                        { itemDetailMap: {}, actionDetailMap: {} },
+                        { hrid: '', name: fallbackActionName, type: '', baseTimeCost: 0 }
+                    );
+                    this._finalizeInjection(fallbackPanel, fallbackActionName, fallbackInput);
                     return;
                 }
 
                 // Get action details for time-based calculations
                 if (!actionNameElement) {
-                    console.warn('[Quick Input Buttons] No action name element found');
+                    console.warn('[QuickInput] skip: no SkillActionDetail_name in', panel.className?.slice(0, 80));
                     return;
                 }
 
                 const actionName = currentActionName;
                 actionDetails = this.getActionDetailsByName(actionName, gameData);
                 if (!actionDetails) {
-                    console.warn('[Quick Input Buttons] No action details found for:', actionName);
+                    console.warn('[QuickInput] skip: no action details for', actionName);
                     return;
                 }
 
@@ -10597,6 +10987,7 @@
                     gameData
                 );
                 const efficiencyMultiplier = 1 + totalEfficiency / 100;
+                let levelContext = null;
 
                 // Find the container to insert after (same as original MWI Tools)
                 const inputContainer = numberInput.parentNode.parentNode.parentNode;
@@ -10620,6 +11011,8 @@
                 let speedSection = null;
 
                 if (hasNormalXP) {
+                    levelContext = this._buildLevelContext(actionDetails, gameData);
+
                     const speedContent = document.createElement('div');
                     speedContent.style.cssText = `
                 color: var(--text-color-secondary, ${config.COLOR_TEXT_SECONDARY});
@@ -10812,6 +11205,11 @@
                 margin-top: 4px;
             `;
 
+                    const computeTotalSeconds = (queueCount) =>
+                        levelContext
+                            ? computeProgressiveQueueTime(queueCount, levelContext, totalEfficiency, actionTime)
+                            : Math.ceil(queueCount / efficiencyMultiplier) * actionTime;
+
                     const updateTotalTime = () => {
                         const inputValue = numberInput.value;
 
@@ -10822,11 +11220,7 @@
 
                         const queueCount = parseInt(inputValue) || 0;
                         if (queueCount > 0) {
-                            // Input is number of ACTIONS to complete
-                            // With efficiency, queued actions complete more quickly
-                            // Calculate time-consuming actions needed
-                            const baseActionsNeeded = Math.ceil(queueCount / efficiencyMultiplier);
-                            const totalSeconds = baseActionsNeeded * actionTime;
+                            const totalSeconds = computeTotalSeconds(queueCount);
                             totalTimeLine.textContent = t('Total time: {0}', formatters_js.timeReadableZh(totalSeconds));
                         } else {
                             totalTimeLine.textContent = t('Total time: 0s');
@@ -10904,8 +11298,7 @@
                             } else {
                                 const queueCount = parseInt(inputValue) || 0;
                                 if (queueCount > 0) {
-                                    const baseActionsNeeded = Math.ceil(queueCount / efficiencyMultiplier);
-                                    const totalSeconds = baseActionsNeeded * actionTime;
+                                    const totalSeconds = computeTotalSeconds(queueCount);
                                     speedSummaryDiv.textContent = t(
                                         '{0}/hr | Total time: {1}',
                                         actionsPerHourWithEfficiency,
@@ -10969,7 +11362,9 @@
                     actionDetails,
                     actionTime,
                     gameData,
-                    numberInput
+                    numberInput,
+                    totalEfficiency,
+                    levelContext
                 );
 
                 let queueContent = null;
@@ -11146,12 +11541,7 @@
             if (!roomHrid) return t('Unknown Room');
 
             const room = houseRooms.get(roomHrid);
-            const roomName = roomHrid
-                .split('/')
-                .pop()
-                .split('_')
-                .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                .join(' ');
+            const roomName = getHouseRoomDisplayName(roomHrid);
             const level = room?.level || 0;
 
             return `${roomName} level ${level}`;
@@ -11392,55 +11782,38 @@
         }
 
         /**
-         * Get total efficiency percentage for current action
-         * @param {Object} actionDetails - Action details
-         * @param {Object} gameData - Game data
-         * @returns {number} Total efficiency percentage
+         * Build the level context object needed for level progress display and progressive time estimation.
+         * Returns null if the action has no XP gain, the player is at max level, or required data is missing.
+         * @param {Object} actionDetails
+         * @param {Object} gameData
+         * @returns {Object|null}
          */
-        getTotalEfficiency(actionDetails, gameData) {
-            const equipment = dataManager.getEquipment();
-            const skills = dataManager.getSkills();
-            const itemDetailMap = gameData?.itemDetailMap || {};
-
-            // Calculate all efficiency components (reuse existing logic)
-            const skillLevel = this.getSkillLevel(skills, actionDetails.type);
-            if (!actionDetails.levelRequirement) {
-                console.error(`[QuickInputButtons] Action has no levelRequirement: ${actionDetails.hrid}`);
+        _buildLevelContext(actionDetails, gameData) {
+            const experienceGain = actionDetails.experienceGain;
+            if (!experienceGain || !experienceGain.skillHrid || experienceGain.value <= 0) {
+                return null;
             }
-            const baseRequirement = actionDetails.levelRequirement?.level || 1;
 
-            const drinkConcentration = teaParser_js.getDrinkConcentration(equipment, itemDetailMap);
-            const activeDrinks = dataManager.getActionDrinkSlots(actionDetails.type);
+            const skillHrid = experienceGain.skillHrid;
+            const skills = dataManager.getSkills();
+            if (!skills) return null;
 
-            const actionLevelBonus = teaParser_js.parseActionLevelBonus(activeDrinks, itemDetailMap, drinkConcentration);
-            const effectiveRequirement = baseRequirement + Math.floor(actionLevelBonus);
+            const skill = skills.find((s) => s.skillHrid === skillHrid);
+            if (!skill) return null;
 
-            // Calculate tea skill level bonus (e.g., +8 Cheesesmithing from Ultra Cheesesmithing Tea)
-            const teaSkillLevelBonus = teaParser_js.parseTeaSkillLevelBonus(
-                actionDetails.type,
-                activeDrinks,
-                itemDetailMap,
-                drinkConcentration
-            );
+            const levelExperienceTable = gameData?.levelExperienceTable;
+            if (!levelExperienceTable) return null;
 
-            // Apply tea skill level bonus to effective player level
-            const effectiveLevel = skillLevel + teaSkillLevelBonus;
-            const levelEfficiency = Math.max(0, effectiveLevel - effectiveRequirement);
-            const houseEfficiency = houseEfficiency_js.calculateHouseEfficiency(actionDetails.type);
-            const equipmentEfficiency = equipmentParser_js.parseEquipmentEfficiencyBonuses(equipment, actionDetails.type, itemDetailMap);
+            const currentLevel = skill.level;
+            const currentXP = skill.experience || 0;
 
-            const teaBreakdown = teaParser_js.parseTeaEfficiencyBreakdown(
-                actionDetails.type,
-                activeDrinks,
-                itemDetailMap,
-                drinkConcentration
-            );
-            const teaEfficiency = teaBreakdown.reduce((sum, tea) => sum + tea.efficiency, 0);
+            if (!levelExperienceTable[currentLevel + 1]) return null; // max level
 
-            const communityBuffLevel = dataManager.getCommunityBuffLevel('/community_buff_types/production_efficiency');
-            const communityEfficiency = communityBuffLevel ? (0.14 + (communityBuffLevel - 1) * 0.003) * 100 : 0;
+            const xpData = experienceParser_js.calculateExperienceMultiplier(skillHrid, actionDetails.type);
+            const baseXP = experienceGain.value;
+            const modifiedXP = baseXP * xpData.totalMultiplier;
 
-            return efficiency_js.stackAdditive(levelEfficiency, houseEfficiency, equipmentEfficiency, teaEfficiency, communityEfficiency);
+            return { skillHrid, skill, currentLevel, currentXP, levelExperienceTable, xpData, baseXP, modifiedXP };
         }
 
         /**
@@ -11449,49 +11822,19 @@
          * @param {number} actionTime - Time per action in seconds
          * @param {Object} gameData - Cached game data from dataManager
          * @param {HTMLInputElement} numberInput - Queue input element
+         * @param {number} totalEfficiency - Current efficiency percentage
+         * @param {Object|null} levelContext - Pre-computed from _buildLevelContext; null returns null
          * @returns {HTMLElement|null} Level progress section or null if not applicable
          */
-        createLevelProgressSection(actionDetails, actionTime, gameData, numberInput) {
+        createLevelProgressSection(actionDetails, actionTime, gameData, numberInput, totalEfficiency, levelContext) {
             try {
-                // Get XP information from action
-                const experienceGain = actionDetails.experienceGain;
-                if (!experienceGain || !experienceGain.skillHrid || experienceGain.value <= 0) {
-                    return null; // No XP gain for this action
-                }
-
-                const skillHrid = experienceGain.skillHrid;
-                const xpPerAction = experienceGain.value;
-
-                // Get character skills
-                const skills = dataManager.getSkills();
-                if (!skills) {
+                if (!levelContext) {
                     return null;
                 }
 
-                // Find the skill
-                const skill = skills.find((s) => s.skillHrid === skillHrid);
-                if (!skill) {
-                    return null;
-                }
-
-                // Get level experience table
-                const levelExperienceTable = gameData?.levelExperienceTable;
-                if (!levelExperienceTable) {
-                    return null;
-                }
-
-                // Current level and XP
-                const currentLevel = skill.level;
-                const currentXP = skill.experience || 0;
-
-                // XP needed for next level
+                const { currentLevel, currentXP, levelExperienceTable, xpData, baseXP, modifiedXP } = levelContext;
                 const nextLevel = currentLevel + 1;
                 const xpForNextLevel = levelExperienceTable[nextLevel];
-
-                if (!xpForNextLevel) {
-                    // Max level reached
-                    return null;
-                }
 
                 // Calculate progress (XP gained this level / XP needed for this level)
                 const xpForCurrentLevel = levelExperienceTable[currentLevel] || 0;
@@ -11500,25 +11843,14 @@
                 const progressPercent = (xpGainedThisLevel / xpNeededThisLevel) * 100;
                 const xpNeeded = xpForNextLevel - currentXP;
 
-                // Calculate XP multipliers and breakdown (MUST happen before calculating actions/rates)
-                const xpData = experienceParser_js.calculateExperienceMultiplier(skillHrid, actionDetails.type);
-
-                // Calculate modified XP per action (base XP × multiplier)
-                const baseXP = xpPerAction;
-                const modifiedXP = xpPerAction * xpData.totalMultiplier;
-
                 // Calculate actions and time needed (using modified XP)
                 const actionsNeeded = Math.ceil(xpNeeded / modifiedXP);
-                const _timeNeeded = actionsNeeded * actionTime;
 
                 // Calculate rates using shared utility (includes efficiency)
                 const expData = experienceCalculator_js.calculateExpPerHour(actionDetails.hrid);
                 const xpPerHour =
                     expData?.expPerHour || (actionsNeeded > 0 ? profitHelpers_js.calculateActionsPerHour(actionTime) * modifiedXP : 0);
                 const xpPerDay = xpPerHour * 24;
-
-                // Calculate daily level progress
-                const _dailyLevelProgress = xpPerDay / xpNeededThisLevel;
 
                 // Create content
                 const content = document.createElement('div');
@@ -11582,6 +11914,11 @@
                         lines.push(`    • Achievement: +${xpData.breakdown.achievementWisdom.toFixed(2)}%`);
                     }
 
+                    // MooPass wisdom
+                    if (xpData.breakdown.mooPassWisdom > 0) {
+                        lines.push(`    • MooPass: +${xpData.breakdown.mooPassWisdom.toFixed(2)}%`);
+                    }
+
                     // Personal buff (Scroll of Wisdom)
                     if (xpData.breakdown.personalWisdom > 0) {
                         const simSprite = dataManager.isBuffBeingSimulated(actionDetails.type, '/buff_types/wisdom')
@@ -11591,9 +11928,6 @@
                     }
                 }
 
-                // Get base efficiency for this action
-                const baseEfficiency = this.getTotalEfficiency(actionDetails, gameData);
-
                 lines.push('');
 
                 // Single level progress (always shown)
@@ -11601,7 +11935,7 @@
                     currentLevel,
                     currentXP,
                     nextLevel,
-                    baseEfficiency,
+                    totalEfficiency,
                     actionTime,
                     modifiedXP,
                     levelExperienceTable
@@ -11668,7 +12002,7 @@
                             currentLevel,
                             currentXP,
                             targetLevel,
-                            baseEfficiency,
+                            totalEfficiency,
                             actionTime,
                             modifiedXP,
                             levelExperienceTable
@@ -12137,7 +12471,7 @@
      * Action type constants for classification
      */
     const GATHERING_TYPES$2 = ['/action_types/foraging', '/action_types/woodcutting', '/action_types/milking'];
-    const PRODUCTION_TYPES$4 = [
+    const PRODUCTION_TYPES$5 = [
         '/action_types/brewing',
         '/action_types/cooking',
         '/action_types/cheesesmithing',
@@ -12204,12 +12538,19 @@
                     this.updateAllCounts();
                 }, this.DEBOUNCE_DELAY);
             };
+            this.consumablesUpdatedHandler = () => {
+                clearTimeout(this.itemsUpdatedDebounceTimer);
+                this.itemsUpdatedDebounceTimer = setTimeout(() => {
+                    this.updateAllCounts();
+                }, this.DEBOUNCE_DELAY);
+            };
             this.characterSwitchingHandler = () => {
                 this.clearAllReferences();
             };
 
             // Event-driven updates (no polling needed)
             dataManager.on('items_updated', this.itemsUpdatedHandler);
+            dataManager.on('consumables_updated', this.consumablesUpdatedHandler);
             dataManager.on('character_switching', this.characterSwitchingHandler);
 
             this.pricingModeHandler = () => {
@@ -12462,29 +12803,31 @@
             const artisanBonus = teaParser_js.parseArtisanBonus(activeDrinks, itemDetailMap, drinkConcentration);
 
             // Calculate max crafts per input (using O(1) Map lookup instead of O(n) array find)
+            let upgradeAccountedFor = false;
             const maxCraftsPerInput = actionDetails.inputItems.map((input) => {
                 const invItem = inventoryIndex.get(input.itemHrid);
-                let invCount = invItem?.count || 0;
-
-                // If this input item is also the upgrade item, 1 unit per craft is reserved
-                // for the upgrade slot and is not available for the input requirement.
-                if (actionDetails.upgradeItemHrid === input.itemHrid) {
-                    invCount = Math.max(0, invCount - 1);
-                }
+                const invCount = invItem?.count || 0;
 
                 // Apply Artisan reduction (10% base, scaled by Drink Concentration)
                 // Materials consumed per action = base requirement × (1 - artisan bonus)
-                const materialsPerAction = input.count * (1 - artisanBonus);
-                const maxCrafts = Math.floor(invCount / materialsPerAction);
+                let materialsPerAction = input.count * (1 - artisanBonus);
 
-                return maxCrafts;
+                // If this input item is also the upgrade item, each craft consumes 1 additional
+                // unit for the upgrade slot (not affected by Artisan Tea).
+                if (actionDetails.upgradeItemHrid === input.itemHrid) {
+                    materialsPerAction += 1;
+                    upgradeAccountedFor = true;
+                }
+
+                return Math.floor(invCount / materialsPerAction);
             });
 
             let minCrafts = Math.min(...maxCraftsPerInput);
 
             // Check upgrade item (e.g., Enhancement Stones)
             // NOTE: Upgrade items are NOT affected by Artisan Tea (only regular inputItems are)
-            if (actionDetails.upgradeItemHrid) {
+            // Skip if the upgrade item was already counted as part of an input's per-craft cost.
+            if (actionDetails.upgradeItemHrid && !upgradeAccountedFor) {
                 const upgradeItem = inventoryIndex.get(actionDetails.upgradeItemHrid);
                 const upgradeCount = upgradeItem?.count || 0;
                 minCrafts = Math.min(minCrafts, upgradeCount);
@@ -12528,7 +12871,7 @@
                     const profitData = await calculateGatheringProfit(data.actionHrid);
                     profitPerHour = profitData?.profitPerHour || null;
                     hasMissingPrices = profitData?.hasMissingPrices || false;
-                } else if (PRODUCTION_TYPES$4.includes(actionDetails.type)) {
+                } else if (PRODUCTION_TYPES$5.includes(actionDetails.type)) {
                     const profitData = await calculateProductionProfit(data.actionHrid);
                     profitPerHour = profitData?.profitPerHour || null;
                     hasMissingPrices = profitData?.hasMissingPrices || false;
@@ -13042,6 +13385,11 @@
             if (this.itemsUpdatedHandler) {
                 dataManager.off('items_updated', this.itemsUpdatedHandler);
                 this.itemsUpdatedHandler = null;
+            }
+
+            if (this.consumablesUpdatedHandler) {
+                dataManager.off('consumables_updated', this.consumablesUpdatedHandler);
+                this.consumablesUpdatedHandler = null;
             }
 
             if (this.characterSwitchingHandler) {
@@ -13832,8 +14180,8 @@
         }
 
         updateRequiredMaterials(panel, amount) {
-            // Remove existing displays
-            const existingDisplays = panel.querySelectorAll('.mwi-required-materials');
+            // Remove existing displays and artisan warning
+            const existingDisplays = panel.querySelectorAll('.mwi-required-materials, .mwi-artisan-warning');
             existingDisplays.forEach((el) => el.remove());
 
             const numActions = parseInt(amount) || 0;
@@ -13860,6 +14208,15 @@
             const requiresDiv = panel.querySelector('[class*="SkillActionDetail_itemRequirements"]');
             if (!requiresDiv) {
                 return;
+            }
+
+            // Warn if artisan tea is slotted but out of stock
+            if (materialCalculator_js.isArtisanTeaOutOfStock(actionHrid)) {
+                const warning = document.createElement('div');
+                warning.className = 'mwi-artisan-warning';
+                warning.style.cssText = 'color:#f0a830; font-size:11px; text-align:center; padding:3px 0 1px 0;';
+                warning.textContent = '⚠ Artisan Tea out of stock — full material amounts shown';
+                requiresDiv.insertAdjacentElement('afterend', warning);
             }
 
             // Process each material
@@ -14334,40 +14691,6 @@
             game.handleGoToMarketplace(itemHrid, enhancementLevel);
         }
         // Silently fail if game API unavailable - feature still provides value without auto-navigation
-    }
-
-    /**
-     * Locale-safe DOM matching utilities for game UI interactions.
-     * All functions use CSS classes, data attributes, or structural positions
-     * instead of textContent matching, which breaks when the game is in Chinese.
-     */
-
-    /**
-     * Check if a tabs container belongs to the marketplace panel.
-     * Uses the panel's CSS module class (partial match for hash stability).
-     *
-     * @param {Element} tablistContainer - A tablist container element
-     * @returns {boolean} True if the container is part of the marketplace panel
-     */
-    function isMarketplacePanel(tablistContainer) {
-        return !!tablistContainer.closest('[class*="MarketplacePanel_marketplacePanel"]');
-    }
-
-    /**
-     * Get the "My Listings" tab from a marketplace tablist.
-     * "My Listings" tab is at index 1 in the marketplace MUI tab bar.
-     * Index 0 = search/filter tab (verified via the panel detection above).
-     *
-     * @param {Element} tablist - The marketplace tablist element
-     * @returns {Element|null} The "My Listings" tab element, or null if not found
-     */
-    function getMyListingsTab(tablist) {
-        // Skip non-native tabs (Toolasha inventory tabs, missing material tabs)
-        // to find the second native marketplace tab
-        const nativeTabs = Array.from(tablist.children).filter(
-            (child) => !child.hasAttribute('data-mwi-custom-tab') && !child.classList.contains('toolasha-inv-tab')
-        );
-        return nativeTabs[1] || null;
     }
 
     /**
@@ -15114,9 +15437,9 @@
      */
     let cleanupObserver$1 = null;
     const currentMaterialsTabs = [];
-    let domObserverUnregister = null;
+    let domObserverUnregister$1 = null;
     let enhancementDomObserverUnregister = null;
-    let processedPanels = new WeakSet();
+    let processedPanels$1 = new WeakSet();
     let processedEnhancingPanels = new WeakSet();
     let inventoryUpdateHandler = null;
     let storedActionHrid = null;
@@ -15133,7 +15456,7 @@
     /**
      * Production action types (where button should appear)
      */
-    const PRODUCTION_TYPES$3 = [
+    const PRODUCTION_TYPES$4 = [
         '/action_types/brewing',
         '/action_types/cooking',
         '/action_types/cheesesmithing',
@@ -15144,15 +15467,15 @@
     /**
      * Initialize missing materials button feature
      */
-    function initialize() {
+    function initialize$1() {
         cleanupObserver$1 = setupMarketplaceCleanupObserver(handleMarketplaceCleanup, currentMaterialsTabs);
         autofillManager$1.initialize();
 
         // Watch for production action panels appearing
-        domObserverUnregister = domObserver.onClass(
+        domObserverUnregister$1 = domObserver.onClass(
             'MissingMaterialsButton-ActionPanel',
             'SkillActionDetail_skillActionDetail',
-            () => processActionPanels()
+            () => processActionPanels$1()
         );
 
         // Watch for enhancement panels appearing
@@ -15163,17 +15486,17 @@
         );
 
         // Process existing panels
-        processActionPanels();
+        processActionPanels$1();
         processExistingEnhancingPanels();
     }
 
     /**
      * Cleanup function
      */
-    function cleanup() {
-        if (domObserverUnregister) {
-            domObserverUnregister();
-            domObserverUnregister = null;
+    function cleanup$1() {
+        if (domObserverUnregister$1) {
+            domObserverUnregister$1();
+            domObserverUnregister$1 = null;
         }
 
         if (enhancementDomObserverUnregister) {
@@ -15193,7 +15516,7 @@
         handleMarketplaceCleanup();
 
         // Clear processed panels
-        processedPanels = new WeakSet();
+        processedPanels$1 = new WeakSet();
         processedEnhancingPanels = new WeakSet();
 
         // Clear enhancement debounce
@@ -15208,11 +15531,11 @@
     /**
      * Process action panels - watch for input changes
      */
-    function processActionPanels() {
+    function processActionPanels$1() {
         const panels = document.querySelectorAll('[class*="SkillActionDetail_skillActionDetail"]');
 
         panels.forEach((panel) => {
-            if (processedPanels.has(panel)) {
+            if (processedPanels$1.has(panel)) {
                 return;
             }
 
@@ -15223,7 +15546,7 @@
             }
 
             // Mark as processed
-            processedPanels.add(panel);
+            processedPanels$1.add(panel);
 
             // Attach input listeners using utility
             actionPanelHelper_js.attachInputListeners(panel, inputField, (value) => {
@@ -15256,7 +15579,7 @@
             return;
         }
 
-        const actionHrid = getActionHridFromPanel$2(panel);
+        const actionHrid = getActionHridFromPanel$3(panel);
         if (!actionHrid) {
             return;
         }
@@ -15268,7 +15591,7 @@
         }
 
         // Verify this is a production action
-        if (!PRODUCTION_TYPES$3.includes(actionDetail.type)) {
+        if (!PRODUCTION_TYPES$4.includes(actionDetail.type)) {
             return;
         }
 
@@ -15315,7 +15638,7 @@
      * @param {HTMLElement} panel - Action panel element
      * @returns {string|null} Action HRID or null
      */
-    function getActionHridFromPanel$2(panel) {
+    function getActionHridFromPanel$3(panel) {
         // Get action name from panel
         const actionNameElement = panel.querySelector('[class*="SkillActionDetail_name"]');
         if (!actionNameElement) {
@@ -15938,12 +16261,12 @@
      */
     async function handleReturnToAction() {
         const game = getGameObject$1();
-        if (!game?.handleGoToAction) return;
+        if (!game) return;
 
         if (storedActionHrid) {
             game.handleGoToAction(storedActionHrid);
         } else if (storedEnhancementContext) {
-            game.handleGoToAction('/actions/enhancing');
+            game.handleChangeNavTarget('enhancing');
         } else {
             return;
         }
@@ -16195,8 +16518,8 @@
     }
 
     var missingMaterialsButton = {
-        initialize,
-        cleanup,
+        initialize: initialize$1,
+        cleanup: cleanup$1,
     };
 
     /**
@@ -16206,7 +16529,7 @@
      */
 
 
-    const PRODUCTION_TYPES$2 = [
+    const PRODUCTION_TYPES$3 = [
         '/action_types/brewing',
         '/action_types/cooking',
         '/action_types/cheesesmithing',
@@ -16214,7 +16537,7 @@
         '/action_types/tailoring',
     ];
 
-    const UI_ID$1 = 'mwi-budget-calculator';
+    const UI_ID$2 = 'mwi-budget-calculator';
 
     /**
      * Parse a KMB shorthand string to a number.
@@ -16235,7 +16558,7 @@
      * @param {HTMLElement} panel
      * @returns {string|null}
      */
-    function getActionHridFromPanel$1(panel) {
+    function getActionHridFromPanel$2(panel) {
         const nameEl = panel.querySelector('[class*="SkillActionDetail_name"]');
         if (!nameEl) return null;
         const actionName = Array.from(nameEl.childNodes)
@@ -16265,7 +16588,7 @@
         const gameData = dataManager.getInitClientData();
         const actionDetail = gameData?.actionDetailMap[actionHrid];
         if (!actionDetail) return null;
-        if (!PRODUCTION_TYPES$2.includes(actionDetail.type)) return null;
+        if (!PRODUCTION_TYPES$3.includes(actionDetail.type)) return null;
         if (!actionDetail.inputItems?.length) return null;
 
         // Verify at least one tradeable material has a market price
@@ -16492,12 +16815,12 @@
             document.querySelectorAll('[class*="SkillActionDetail_skillActionDetail"]').forEach((panel) => {
                 if (this.processedPanels.has(panel)) return;
 
-                const actionHrid = getActionHridFromPanel$1(panel);
+                const actionHrid = getActionHridFromPanel$2(panel);
                 if (!actionHrid) return;
 
                 const gameData = dataManager.getInitClientData();
                 const actionDetail = gameData?.actionDetailMap[actionHrid];
-                if (!actionDetail || !PRODUCTION_TYPES$2.includes(actionDetail.type)) return;
+                if (!actionDetail || !PRODUCTION_TYPES$3.includes(actionDetail.type)) return;
                 if (!actionDetail.inputItems?.length) return;
 
                 this.processedPanels.add(panel);
@@ -16514,7 +16837,7 @@
             const ui = this._createUI(panel);
 
             const position = () => {
-                const existing = panel.querySelector(`#${UI_ID$1}`);
+                const existing = panel.querySelector(`#${UI_ID$2}`);
                 const missingMatsBtn = panel.querySelector('#mwi-missing-mats-button');
                 const itemRequirements = panel.querySelector('[class*="SkillActionDetail_itemRequirements"]');
                 const anchor = missingMatsBtn || itemRequirements;
@@ -16535,7 +16858,7 @@
             // Re-position whenever the panel's children change (e.g. missing mats button recreated)
             const obs = new MutationObserver((mutations) => {
                 const relevant = mutations.some((m) =>
-                    [...m.addedNodes, ...m.removedNodes].some((n) => n.id === 'mwi-missing-mats-button' || n.id === UI_ID$1)
+                    [...m.addedNodes, ...m.removedNodes].some((n) => n.id === 'mwi-missing-mats-button' || n.id === UI_ID$2)
                 );
                 if (relevant) position();
             });
@@ -16550,7 +16873,7 @@
          */
         _createUI(panel) {
             const wrapper = document.createElement('div');
-            wrapper.id = UI_ID$1;
+            wrapper.id = UI_ID$2;
             wrapper.style.cssText = 'display:flex; align-items:center; gap:6px; margin: 4px 0 8px 0; padding: 0 0;';
 
             const input = document.createElement('input');
@@ -16612,7 +16935,7 @@
                 }
                 input.style.borderColor = '#555';
 
-                const actionHrid = getActionHridFromPanel$1(panel);
+                const actionHrid = getActionHridFromPanel$2(panel);
                 if (!actionHrid) return;
 
                 const result = findMaxUnits(actionHrid, budget);
@@ -16660,7 +16983,7 @@
             this.unregisterHandlers = [];
             this.timerRegistry.clearAll();
 
-            document.querySelectorAll(`#${UI_ID$1}`).forEach((el) => el.remove());
+            document.querySelectorAll(`#${UI_ID$2}`).forEach((el) => el.remove());
             document.getElementById('mwi-budget-modal-overlay')?.remove();
 
             // Disconnect all panel observers
@@ -17049,6 +17372,247 @@
             children,
         };
     }
+
+    /**
+     * Cost Summary
+     * Compact 4-line cost comparison block for production action panels.
+     * Shows: direct recipe cost, missing direct mats cost, best crafting plan
+     * cost, and finished item market price for the selected produce quantity.
+     */
+
+
+    const UI_ID$1 = 'mwi-cost-summary';
+
+    const PRODUCTION_TYPES$2 = [
+        '/action_types/brewing',
+        '/action_types/cooking',
+        '/action_types/cheesesmithing',
+        '/action_types/crafting',
+        '/action_types/tailoring',
+    ];
+
+    const PRICING_MODE_LABELS = {
+        conservative: 'Buy: Ask / Sell: Bid',
+        hybrid: 'Buy: Ask / Sell: Ask',
+        optimistic: 'Buy: Bid / Sell: Ask',
+        patientBuy: 'Buy: Bid / Sell: Bid',
+    };
+
+    let domObserverUnregister = null;
+    let processedPanels = new WeakSet();
+
+    function initialize() {
+        domObserverUnregister = domObserver.onClass('CostSummary-ActionPanel', 'SkillActionDetail_skillActionDetail', () =>
+            processActionPanels()
+        );
+        processActionPanels();
+    }
+
+    function cleanup() {
+        if (domObserverUnregister) {
+            domObserverUnregister();
+            domObserverUnregister = null;
+        }
+        document.querySelectorAll(`#${UI_ID$1}`).forEach((el) => el.remove());
+        processedPanels = new WeakSet();
+    }
+
+    function processActionPanels() {
+        const panels = document.querySelectorAll('[class*="SkillActionDetail_skillActionDetail"]');
+        panels.forEach((panel) => {
+            if (processedPanels.has(panel)) return;
+            const inputField = actionPanelHelper_js.findActionInput(panel);
+            if (!inputField) return;
+            processedPanels.add(panel);
+            actionPanelHelper_js.attachInputListeners(panel, inputField, (value) => updatePanel(panel, value));
+            actionPanelHelper_js.performInitialUpdate(inputField, (value) => updatePanel(panel, value));
+        });
+    }
+
+    function getActionHridFromPanel$1(panel) {
+        const nameEl = panel.querySelector('[class*="SkillActionDetail_name"]');
+        if (!nameEl) return null;
+        const actionName = Array.from(nameEl.childNodes)
+            .filter((n) => n.nodeType === Node.TEXT_NODE)
+            .map((n) => n.textContent)
+            .join('')
+            .trim();
+        return getActionHridFromName(actionName);
+    }
+
+    function updatePanel(panel, value) {
+        const existing = panel.querySelector(`#${UI_ID$1}`);
+        if (existing) existing.remove();
+
+        if (!config.getSetting('actions_costSummary')) return;
+
+        const numActions = parseInt(value) || 0;
+        if (numActions <= 0) return;
+
+        const actionHrid = getActionHridFromPanel$1(panel);
+        if (!actionHrid) return;
+
+        const gameData = dataManager.getInitClientData();
+        const actionDetail = gameData?.actionDetailMap?.[actionHrid];
+        if (!actionDetail) return;
+        if (!PRODUCTION_TYPES$2.includes(actionDetail.type)) return;
+        if (!actionDetail.inputItems || actionDetail.inputItems.length === 0) return;
+
+        const output = actionDetail.outputItems?.[0];
+        const outputHrid = output?.itemHrid || null;
+        const outputCount = (output?.count || 1) * numActions;
+
+        const block = buildBlock(actionHrid, numActions, outputHrid, outputCount);
+        insertBlock(panel, block);
+    }
+
+    function insertBlock(panel, block) {
+        const budgetCalc = panel.querySelector('#mwi-budget-calculator');
+        const missingMatsBtn = panel.querySelector('#mwi-missing-mats-button');
+        const itemRequirements = panel.querySelector('[class*="SkillActionDetail_itemRequirements"]');
+
+        if (budgetCalc) {
+            budgetCalc.parentNode.insertBefore(block, budgetCalc);
+        } else if (missingMatsBtn) {
+            missingMatsBtn.parentNode.insertBefore(block, missingMatsBtn.nextSibling);
+        } else if (itemRequirements) {
+            itemRequirements.parentNode.insertBefore(block, itemRequirements.nextSibling);
+        } else {
+            panel.appendChild(block);
+        }
+    }
+
+    function buildBlock(actionHrid, numActions, outputHrid, outputCount) {
+        const materials = materialCalculator_js.calculateMaterialRequirements(actionHrid, numActions, true);
+
+        let directCost = 0;
+        let missingCost = 0;
+        let directComplete = true;
+        let missingComplete = true;
+
+        for (const mat of materials) {
+            if (!mat.isTradeable) continue;
+            const unitPrice = marketData_js.getItemPrice(mat.itemHrid, { context: 'profit', side: 'buy' });
+            if (unitPrice === null) {
+                if (mat.required > 0) directComplete = false;
+                if (mat.missing > 0) missingComplete = false;
+                continue;
+            }
+            directCost += unitPrice * mat.required;
+            missingCost += unitPrice * mat.missing;
+        }
+
+        let planCost = null;
+        if (outputHrid) {
+            try {
+                const pricingMode = config.getSetting('profitCalc_pricingMode') || 'hybrid';
+                const plan = computeBestCraftingPlan(outputHrid, outputCount, pricingMode);
+                if (plan && plan.totalCost !== Infinity && plan.totalCost !== null) {
+                    planCost = plan.totalCost;
+                }
+            } catch (error) {
+                console.error('[CostSummary] computeBestCraftingPlan error:', error);
+            }
+        }
+
+        let marketCost = null;
+        if (outputHrid) {
+            const unitSellPrice = marketData_js.getItemPrice(outputHrid, { context: 'profit', side: 'sell' });
+            if (unitSellPrice !== null) {
+                marketCost = unitSellPrice * outputCount;
+            }
+        }
+
+        const pricingMode = config.getSetting('profitCalc_pricingMode') || 'hybrid';
+        const pricingLabel = PRICING_MODE_LABELS[pricingMode] || pricingMode;
+
+        return renderBlock({
+            directCost,
+            directComplete,
+            missingCost,
+            missingComplete,
+            planCost,
+            marketCost,
+            pricingLabel,
+        });
+    }
+
+    function renderBlock({ directCost, directComplete, missingCost, missingComplete, planCost, marketCost, pricingLabel }) {
+        const container = document.createElement('div');
+        container.id = UI_ID$1;
+        container.style.cssText = `
+        margin: 8px 0 16px 0;
+        padding: 10px 14px;
+        background: linear-gradient(180deg, rgba(91, 141, 239, 0.12) 0%, rgba(91, 141, 239, 0.05) 100%);
+        border: 1px solid rgba(91, 141, 239, 0.3);
+        border-radius: 8px;
+        color: #ffffff;
+        font-size: 13px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    `;
+
+        const header = document.createElement('div');
+        header.textContent = 'Cost Summary';
+        header.style.cssText = `
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 6px;
+        color: #93c5fd;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    `;
+        container.appendChild(header);
+
+        container.appendChild(renderLine('Direct recipe cost', directCost, !directComplete));
+        container.appendChild(renderLine('Missing direct mats', missingCost, !missingComplete));
+        container.appendChild(renderLine('Best crafting plan', planCost));
+        container.appendChild(renderLine('Finished item market', marketCost));
+
+        const footer = document.createElement('div');
+        footer.textContent = `Pricing: ${pricingLabel}`;
+        footer.style.cssText = `
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px solid rgba(91, 141, 239, 0.2);
+        font-size: 11px;
+        color: #94a3b8;
+    `;
+        container.appendChild(footer);
+
+        return container;
+    }
+
+    function renderLine(label, value, partial = false) {
+        const row = document.createElement('div');
+        row.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        line-height: 1.5;
+    `;
+        const labelEl = document.createElement('span');
+        labelEl.textContent = label;
+        labelEl.style.color = '#cbd5e1';
+        const valueEl = document.createElement('span');
+        if (value === null || value === undefined || value === 0) {
+            valueEl.textContent = '—';
+            valueEl.style.color = '#64748b';
+        } else {
+            valueEl.textContent = marketData_js.formatPrice(value, { decimals: 1 }) + (partial ? '*' : '');
+            valueEl.style.color = '#e2e8f0';
+            valueEl.style.fontVariantNumeric = 'tabular-nums';
+            if (partial) {
+                valueEl.title = 'Partial — some materials have no market data';
+            }
+        }
+        row.appendChild(labelEl);
+        row.appendChild(valueEl);
+        return row;
+    }
+
+    var costSummary = {
+        initialize,
+        cleanup,
+    };
 
     /**
      * Crafting Plan Display
@@ -24804,6 +25368,7 @@
         requiredMaterials,
         missingMaterialsButton,
         budgetCalculator,
+        costSummary,
         craftingPlan,
         alchemyProfitDisplay,
         alchemyBestItems,
@@ -24814,4 +25379,4 @@
 
     console.log('[Toolasha] Actions library loaded');
 
-})(Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.config, Toolasha.Utils.enhancementConfig, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.profitConstants, Toolasha.Utils.formatters, Toolasha.Core.marketAPI, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.marketData, Toolasha.Utils.efficiency, Toolasha.Utils.profitHelpers, Toolasha.Core.storage, Toolasha.Market.profitCalculator, Toolasha.Utils.uiComponents, Toolasha.Utils.actionPanelHelper, Toolasha.Core.webSocketHook, Toolasha.Utils.dom, Toolasha.Utils.timerRegistry, Toolasha.Utils.actionCalculator, Toolasha.Utils.cleanupRegistry, Toolasha.Utils.teaParser, Toolasha.Utils.buffParser, Toolasha.Utils.equipmentParser, Toolasha.Utils.houseEfficiency, Toolasha.Utils.experienceParser, Toolasha.Utils.reactInput, Toolasha.Utils.experienceCalculator, Toolasha.Utils.materialCalculator, Toolasha.Market.expectedValueCalculator, Toolasha.Market.alchemyProfitCalculator);
+})(Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.config, Toolasha.Utils.enhancementConfig, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.profitConstants, Toolasha.Utils.formatters, Toolasha.Core.marketAPI, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.bonusRevenueCalculator, Toolasha.Utils.marketData, Toolasha.Utils.efficiency, Toolasha.Utils.profitHelpers, Toolasha.Core.storage, Toolasha.Market.profitCalculator, Toolasha.Utils.uiComponents, Toolasha.Utils.actionPanelHelper, Toolasha.Core.webSocketHook, Toolasha.Utils.dom, Toolasha.Utils.timerRegistry, Toolasha.Market.alchemyProfitCalculator, Toolasha.Utils.actionCalculator, Toolasha.Utils.cleanupRegistry, Toolasha.Utils.teaParser, Toolasha.Utils.buffParser, Toolasha.Utils.equipmentParser, Toolasha.Utils.experienceParser, Toolasha.Utils.reactInput, Toolasha.Utils.experienceCalculator, Toolasha.Utils.materialCalculator, Toolasha.Market.expectedValueCalculator);

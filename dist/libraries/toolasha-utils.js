@@ -1,7 +1,7 @@
 /**
  * Toolasha Utils Library
  * All utility modules
- * Version: 2.63.2
+ * Version: 2.70.0
  * License: CC-BY-NC-SA-4.0
  */
 
@@ -694,7 +694,7 @@
      * @returns {string}
      */
     function formatDateTime(date, options = {}) {
-        const { includeDate = true, includeTime = true, includeSeconds = true } = options;
+        const { includeDate = true, includeTime = true, includeSeconds = true, includeYear = false } = options;
         const use24h = config.getSettingValue('market_listingTimeFormat', '24hour') === '24hour';
         const dateFormat = config.getSettingValue('market_listingDateFormat', 'MM-DD');
 
@@ -703,7 +703,9 @@
         if (includeDate) {
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
-            parts.push(dateFormat === 'DD-MM' ? `${day}-${month}` : `${month}-${day}`);
+            let datePart = dateFormat === 'DD-MM' ? `${day}-${month}` : `${month}-${day}`;
+            if (includeYear) datePart += `-${String(date.getFullYear()).slice(-2)}`;
+            parts.push(datePart);
         }
 
         if (includeTime) {
@@ -830,6 +832,7 @@
             name: loadout.name,
             actionTypeHrid: loadout.actionTypeHrid || '',
             isDefault: !!loadout.isDefault,
+            useExactEnhancement: loadout.useExactEnhancement ?? false,
             equipment,
             abilities,
             food,
@@ -947,6 +950,8 @@
         updateEnhancementLevel(itemHrid, newLevel) {
             let changed = false;
             for (const snapshot of Object.values(this.snapshots)) {
+                // Exact-mode snapshots intentionally hold a frozen level — never auto-update them.
+                if (snapshot.useExactEnhancement) continue;
                 for (const eq of snapshot.equipment || []) {
                     if (eq.itemHrid === itemHrid && eq.enhancementLevel !== newLevel) {
                         eq.enhancementLevel = newLevel;
@@ -1060,6 +1065,48 @@
     }
 
     const loadoutSnapshot = new LoadoutSnapshot();
+
+    /**
+     * Action context resolver
+     *
+     * Returns the equipment and active drinks to use when predicting an action's
+     * outcome (XP, time, profit, materials). When the loadoutSnapshot feature is
+     * enabled and a saved loadout matches the action type, that snapshot is used
+     * — so predictions reflect the gear the user would auto-equip rather than
+     * whatever happens to be on their character right now.
+     *
+     * Resolution priority (handled inside loadoutSnapshot._findSnapshot):
+     *   1. Skill-specific default loadout
+     *   2. All-skills default loadout
+     *   3. Skill-specific non-default
+     *   4. All-skills non-default
+     *   5. Fall back to currently-equipped gear / current drinks
+     *
+     * Equipment and drinks are resolved independently — it's valid to inherit the
+     * snapshot's equipment while no snapshot drinks exist, in which case the
+     * current drinks are used (and vice-versa).
+     */
+
+
+    /**
+     * @param {string} actionTypeHrid - e.g. "/action_types/cooking"
+     * @returns {{equipment: Map, drinks: Array}}
+     */
+    function resolveActionContext(actionTypeHrid) {
+        const rawDrinks =
+            loadoutSnapshot.getSnapshotDrinksForSkill(actionTypeHrid) ?? dataManager.getActionDrinkSlots(actionTypeHrid);
+
+        // Only include drinks that are actually in stock — slotted-but-empty teas give no buff
+        const inventory = dataManager.getInventory();
+        const drinks = (rawDrinks || []).filter(
+            (d) => d?.itemHrid && inventory.some((i) => i.itemHrid === d.itemHrid && (i.count || 0) > 0)
+        );
+
+        return {
+            equipment: loadoutSnapshot.getSnapshotForSkill(actionTypeHrid) ?? dataManager.getEquipment(),
+            drinks,
+        };
+    }
 
     var itemNamesZh = {
         Coin: '金币',
@@ -1997,6 +2044,17 @@
         'Expert Coffee Crate': '专家咖啡箱',
     };
 
+    // Ability name English → Chinese translation map.
+    // Populated from the game's abilityDetailMap.
+    // To add more, visit the ability panel in game and the auto-observer will capture them.
+    var abilityNamesZh = {
+        'Mystic Aura': '神秘光环',
+        'Elemental Affinity': '元素亲和',
+        Firestorm: '烈焰风暴',
+        'Flame Blast': '烈焰冲击',
+        Fireball: '火球术',
+    };
+
     /**
      * Auto-discovers Chinese item names from the game DOM and builds a
      * Chinese → English mapping cached in IndexedDB. Provides a unified
@@ -2014,6 +2072,11 @@
         '[class*="ItemTooltipText_name"]',
         '[class*="Item_craftingItemName"]',
         'svg[aria-label]',
+        '[class*="Ability_"][class*="name"]',
+        '[class*="AbilitiesPanel_"]',
+        '[class*="SkillActionDetail_"]',
+        '[class*="CombatPanel_"]',
+        '[class*="SimEditor_"]',
     ];
 
     const ENHANCEMENT_STRIP_REGEX = /\s*\+\d+$/;
@@ -2117,6 +2180,50 @@
             }
         }
 
+        getDisplayName(itemHrid) {
+            if (!itemHrid) return '';
+            if (!this.isLoaded) this._lazyLoad();
+
+            const cached = this.cnNames[itemHrid];
+            if (cached) return cached;
+
+            const item = dataManager.getItemDetails(itemHrid);
+            const enName = item?.name;
+            if (enName) {
+                const staticCn = itemNamesZh[enName];
+                if (staticCn) {
+                    this.cnNames[itemHrid] = staticCn;
+                    return staticCn;
+                }
+                return enName;
+            }
+
+            const ability = this._getAbilityDetails(itemHrid);
+            if (ability?.name) {
+                const staticCn = itemNamesZh[ability.name] || abilityNamesZh[ability.name];
+                if (staticCn) {
+                    this.cnNames[itemHrid] = staticCn;
+                    return staticCn;
+                }
+                return ability.name;
+            }
+
+            return itemHrid;
+        }
+
+        _getAbilityDetails(abilityHrid) {
+            if (!abilityHrid || !abilityHrid.startsWith('/abilities/')) return null;
+            try {
+                const initData = dataManager.getInitClientData();
+                return initData?.abilityDetailMap?.[abilityHrid] || null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        _lazyLoad() {
+            this.load().catch(() => {});
+        }
         getHridFromChineseName(chineseName) {
             if (!chineseName) return null;
             const baseName = chineseName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
@@ -2206,21 +2313,6 @@
                     this._failCount++;
                 }
             }
-        }
-
-        /**
-         * Get the display name for an item.
-         * Returns the Chinese name if cached, otherwise the English name from game data,
-         * and as a final fallback parses the HRID into a readable label.
-         * @param {string} itemHrid - Item HRID (e.g., '/items/essence')
-         * @returns {string} Display name
-         */
-        getDisplayName(itemHrid) {
-            const cnName = this.cnNames[itemHrid];
-            if (cnName) return cnName;
-            const enName = dataManager.getItemDetails(itemHrid)?.name;
-            if (enName) return enName;
-            return itemHrid.split('/').pop().replace(/_/g, ' ');
         }
     }
 
@@ -3247,6 +3339,103 @@
     });
 
     /**
+     * Locale-safe DOM matching utilities for game UI interactions.
+     * All functions use CSS classes, data attributes, or structural positions
+     * instead of textContent matching, which breaks when the game is in Chinese.
+     */
+
+
+    // Chinese monster name mapping (sprite name → Chinese)
+    const CN_MONSTER_NAMES = {
+        fly: '苍蝇',
+        rat: '杰瑞',
+        skunk: '臭鼬',
+        porcupine: '豪猪',
+        slimy: '史莱姆',
+        smelly_planet: '臭臭星球',
+        frog: '青蛙',
+        snake: '蛇',
+        swampy: '沼泽虫',
+        alligator: '夏洛克',
+        swamp_planet: '沼泽星球',
+        sea_snail: '蜗牛',
+        crab: '螃蟹',
+        aquahorse: '水马',
+        nom_nom: '咬咬鱼',
+        turtle: '忍者龟',
+        aqua_planet: '海洋星球',
+        jungle_sprite: '丛林精灵',
+        myconid: '蘑菇人',
+        treant: '树人',
+        centaur_archer: '半人马弓箭手',
+        jungle_planet: '丛林星球',
+        gobo_stabby: '刺刺',
+        gobo_slashy: '砍砍',
+        gobo_smashy: '锤锤',
+        gobo_shooty: '咻咻',
+        gobo_boomy: '轰轰',
+        gobo_planet: '哥布林星球',
+        eye: '独眼',
+        eyes: '叠眼',
+        veyes: '复眼',
+        planet_of_the_eyes: '眼球星球',
+        novice_sorcerer: '新手巫师',
+        ice_sorcerer: '冰霜巫师',
+        flame_sorcerer: '火焰巫师',
+        elementalist: '元素法师',
+        sorcerers_tower: '巫师之塔',
+        gummy_bear: '软糖熊',
+        panda: '熊猫',
+        black_bear: '黑熊',
+        grizzly_bear: '棕熊',
+        polar_bear: '北极熊',
+        bear_with_it: '熊熊星球',
+        magnetic_golem: '磁力魔像',
+        stalactite_golem: '钟乳石魔像',
+        granite_golem: '花岗岩魔像',
+        golem_cave: '魔像洞穴',
+        zombie: '僵尸',
+        vampire: '吸血鬼',
+        werewolf: '狼人',
+        twilight_zone: '暮光之地',
+        abyssal_imp: '深渊小鬼',
+        soul_hunter: '灵魂猎手',
+        infernal_warlock: '地狱术士',
+        infernal_abyss: '地狱深渊',
+        chimerical_den: '奇幻洞穴',
+        sinister_circus: '阴森马戏团',
+        enchanted_fortress: '秘法要塞',
+        pirate_cove: '海盗基地',
+        // House rooms
+        'Archery Range': '射箭场',
+        Armory: '军械库',
+        Brewery: '冲泡坊',
+        'Dairy Barn': '奶牛棚',
+        'Dining Room': '餐厅',
+        Dojo: '道场',
+        Forge: '锻造间',
+        Garden: '花园',
+        Gym: '健身房',
+        Kitchen: '厨房',
+        Laboratory: '实验室',
+        Library: '图书馆',
+        'Log Shed': '木棚',
+        'Mystical Study': '神秘研究室',
+        Observatory: '天文台',
+        'Sewing Parlor': '缝纫室',
+        Workshop: '工作间',
+    };
+
+    function getHouseRoomDisplayName(houseRoomHrid) {
+        const slug = houseRoomHrid.split('/').pop();
+        const name = slug
+            .split('_')
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(' ');
+        return CN_MONSTER_NAMES[name] || name;
+    }
+
+    /**
      * House Efficiency Utility
      * Calculates efficiency bonuses from house rooms
      *
@@ -3310,19 +3499,7 @@
      * @returns {string} Friendly name
      */
     function getHouseRoomName(houseRoomHrid) {
-        const names = {
-            '/house_rooms/brewery': 'Brewery',
-            '/house_rooms/forge': 'Forge',
-            '/house_rooms/kitchen': 'Kitchen',
-            '/house_rooms/workshop': 'Workshop',
-            '/house_rooms/garden': 'Garden',
-            '/house_rooms/dairy_barn': 'Dairy Barn',
-            '/house_rooms/sewing_parlor': 'Sewing Parlor',
-            '/house_rooms/log_shed': 'Log Shed',
-            '/house_rooms/laboratory': 'Laboratory',
-        };
-
-        return names[houseRoomHrid] || 'Unknown';
+        return getHouseRoomDisplayName(houseRoomHrid);
     }
 
     /**
@@ -3579,13 +3756,10 @@
         const { isProduction = false, gameData = null, communityEfficiency = 0 } = options;
 
         const skills = dataManager.getSkills();
-        const equipment = loadoutSnapshot.getSnapshotForSkill(actionDetails.type) ?? dataManager.getEquipment();
+        const { equipment, drinks: drinkSlots } = resolveActionContext(actionDetails.type);
         const itemDetailMap = gameData?.itemDetailMap ?? dataManager.getInitClientData()?.itemDetailMap ?? {};
 
-        // Drink slots and concentration
-        const drinkSlots =
-            loadoutSnapshot.getSnapshotDrinksForSkill(actionDetails.type) ??
-            dataManager.getActionDrinkSlots(actionDetails.type);
+        // Drink concentration
         const drinkConcentration = getDrinkConcentration(equipment, itemDetailMap);
 
         // Action time (nanoseconds → seconds)
@@ -3992,6 +4166,9 @@
                         selectedPriceType = 'ask';
                 }
                 return selectedPriceType;
+            }
+            case 'networth': {
+                return config.getSettingValue('networth_pricingMode') || 'ask';
             }
             default: {
                 const warningKey = `context:${context}`;
@@ -6910,15 +7087,12 @@ self.onmessage = function (e) {
      * @returns {Object} Experience data with breakdown
      */
     function calculateExperienceMultiplier(skillHrid, actionTypeHrid) {
-        const equipment = dataManager.getEquipment();
+        const { equipment, drinks: activeDrinks } = resolveActionContext(actionTypeHrid);
         const gameData = dataManager.getInitClientData();
         const itemDetailMap = gameData?.itemDetailMap || {};
 
         // Get drink concentration
         const drinkConcentration = equipment ? calculateDrinkConcentration(equipment, itemDetailMap) : 0;
-
-        // Get active drinks for this action type
-        const activeDrinks = dataManager.getActionDrinkSlots(actionTypeHrid);
 
         // Parse wisdom from all sources
         const equipmentWisdomData = parseEquipmentWisdom(equipment, itemDetailMap);
@@ -7138,8 +7312,8 @@ self.onmessage = function (e) {
             // Get drink concentration
             const drinkConcentration = getDrinkConcentration(equipment, itemDetailMap);
 
-            // Get active drinks for this action type
-            const activeDrinks = dataManager.getActionDrinkSlots(actionDetails.type);
+            // Get active drinks for this action type (loadout-snapshot aware)
+            const activeDrinks = resolveActionContext(actionDetails.type).drinks;
 
             // Calculate Action Level bonus from teas
             const actionLevelBonus = parseActionLevelBonus(activeDrinks, itemDetailMap, drinkConcentration);
@@ -7605,7 +7779,7 @@ self.onmessage = function (e) {
 
         // Get character data
         const skills = dataManager.getSkills();
-        const equipment = dataManager.getEquipment();
+        const { equipment } = resolveActionContext(actionDetails.type);
         const gameData = dataManager.getInitClientData();
 
         if (!gameData || !skills || !equipment) {
@@ -9309,19 +9483,48 @@ self.onmessage = function (e) {
                 return 0;
             }
 
-            // Get character data
-            const equipment = dataManager.getEquipment();
+            const { equipment, drinks: activeDrinks } = resolveActionContext(actionDetails.type);
             const itemDetailMap = gameData.itemDetailMap || {};
-
-            // Calculate artisan bonus (material reduction from Artisan Tea)
             const drinkConcentration = getDrinkConcentration(equipment, itemDetailMap);
-            const activeDrinks = dataManager.getActionDrinkSlots(actionDetails.type);
-            const artisanBonus = parseArtisanBonus(activeDrinks, itemDetailMap, drinkConcentration);
 
-            return artisanBonus;
+            return parseArtisanBonus(activeDrinks, itemDetailMap, drinkConcentration);
         } catch (error) {
             console.error('[Material Calculator] Error calculating artisan bonus:', error);
             return 0;
+        }
+    }
+
+    /**
+     * Returns true if artisan tea is selected in a drink slot but has 0 quantity in inventory.
+     * Used to warn the user that material counts reflect no artisan reduction.
+     * @param {string} actionHrid
+     * @returns {boolean}
+     */
+    function isArtisanTeaOutOfStock(actionHrid) {
+        try {
+            const actionDetails = dataManager.getActionDetails(actionHrid);
+            if (!actionDetails) return false;
+
+            const gameData = dataManager.getInitClientData();
+            if (!gameData) return false;
+
+            const itemDetailMap = gameData.itemDetailMap || {};
+
+            // Raw slotted drinks (ignoring stock)
+            const rawDrinks = dataManager.getActionDrinkSlots(actionDetails.type);
+            if (!rawDrinks?.length) return false;
+
+            // In-stock drinks come from resolveActionContext (already filtered)
+            const { equipment, drinks: inStockDrinks } = resolveActionContext(actionDetails.type);
+            const drinkConcentration = getDrinkConcentration(equipment, itemDetailMap);
+
+            return (
+                parseArtisanBonus(rawDrinks, itemDetailMap, drinkConcentration) > 0 &&
+                parseArtisanBonus(inStockDrinks, itemDetailMap, drinkConcentration) === 0
+            );
+        } catch (error) {
+            console.error('[Material Calculator] Error checking artisan tea stock:', error);
+            return false;
         }
     }
 
@@ -9445,7 +9648,8 @@ self.onmessage = function (e) {
         calculateArtisanBonus: calculateArtisanBonus,
         calculateEnhancementMaterialRequirements: calculateEnhancementMaterialRequirements,
         calculateMaterialRequirements: calculateMaterialRequirements,
-        calculateQueuedMaterialsForAction: calculateQueuedMaterialsForAction
+        calculateQueuedMaterialsForAction: calculateQueuedMaterialsForAction,
+        isArtisanTeaOutOfStock: isArtisanTeaOutOfStock
     });
 
     /**

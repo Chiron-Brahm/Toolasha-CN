@@ -1,11 +1,11 @@
 /**
  * Toolasha Combat Library
  * Combat, abilities, and combat stats features
- * Version: 2.63.2
+ * Version: 2.70.0
  * License: CC-BY-NC-SA-4.0
  */
 
-(function (config, dataManager, domObserver, storage, webSocketHook, timerRegistry_js, domObserverHelpers_js, formatters_js, marketAPI, expectedValueCalculator, reactInput_js, profitHelpers_js, marketData_js, enhancementCalculator_js, enhancementConfig_js, teaParser_js, abilityCostCalculator_js, equipmentParser_js, dom, houseCostCalculator_js) {
+(function (config, dataManager, domObserver, storage, webSocketHook, timerRegistry_js, domObserverHelpers_js, formatters_js, marketAPI, expectedValueCalculator, reactInput_js, profitHelpers_js, marketData_js, enhancementCalculator_js, enhancementConfig_js, teaParser_js, abilityCostCalculator_js, equipmentParser_js, dom, houseCostCalculator_js, cleanupRegistry_js) {
     'use strict';
 
     /**
@@ -829,6 +829,7 @@
             name: loadout.name,
             actionTypeHrid: loadout.actionTypeHrid || '',
             isDefault: !!loadout.isDefault,
+            useExactEnhancement: loadout.useExactEnhancement ?? false,
             equipment,
             abilities,
             food,
@@ -946,6 +947,8 @@
         updateEnhancementLevel(itemHrid, newLevel) {
             let changed = false;
             for (const snapshot of Object.values(this.snapshots)) {
+                // Exact-mode snapshots intentionally hold a frozen level — never auto-update them.
+                if (snapshot.useExactEnhancement) continue;
                 for (const eq of snapshot.equipment || []) {
                     if (eq.itemHrid === itemHrid && eq.enhancementLevel !== newLevel) {
                         eq.enhancementLevel = newLevel;
@@ -1155,6 +1158,7 @@
 
 
     const panels = new Set();
+    const removalObservers = new Map();
 
     /**
      * Register a floating panel element for z-index management
@@ -1162,6 +1166,22 @@
      */
     function registerFloatingPanel(el) {
         panels.add(el);
+
+        // Auto-remove when element is removed from DOM
+        if (!removalObservers.has(el)) {
+            const observer = new MutationObserver(() => {
+                if (!document.body.contains(el)) {
+                    panels.delete(el);
+                    observer.disconnect();
+                    removalObservers.delete(el);
+                }
+            });
+            observer.observe(el.parentElement || document.body, {
+                childList: true,
+                subtree: true,
+            });
+            removalObservers.set(el, observer);
+        }
     }
 
     /**
@@ -1170,6 +1190,11 @@
      */
     function unregisterFloatingPanel(el) {
         panels.delete(el);
+        const observer = removalObservers.get(el);
+        if (observer) {
+            observer.disconnect();
+            removalObservers.delete(el);
+        }
     }
 
     /**
@@ -7069,6 +7094,14 @@
             const labyrinth = data.labyrinth;
             if (!labyrinth?.isActive) return;
 
+            // Cross-check: only trust labyrinth state if the player's current action is
+            // actually the labyrinth explore action. Stale labyrinth_updated messages
+            // can arrive shortly after exiting and otherwise stamp "Attempt #N" onto
+            // the next regular combat zone.
+            const actions = dataManager.getCurrentActions();
+            const activeLabAction = actions.find((a) => a.actionHrid === '/actions/labyrinth/explore' && !a.isDone);
+            if (!activeLabAction) return;
+
             let pathCoords;
             try {
                 pathCoords = JSON.parse(labyrinth.pathData || '[]');
@@ -7090,6 +7123,10 @@
         }
 
         _onNewBattle(data) {
+            // A new battle implies we're not in a static labyrinth state — clear any
+            // lingering labyrinth attempt count so it can't leak into a render.
+            this.isLabyrinth = false;
+            this.labyrinthAttempt = 0;
             this.battleId = data.battleId;
             const actions = dataManager.getCurrentActions();
             const combatAction = actions.find((a) => a.actionHrid?.startsWith('/actions/combat/') && !a.isDone);
@@ -7110,6 +7147,22 @@
             if (this.battleId === 0 && this.labyrinthAttempt === 0) {
                 document.getElementById(COUNTER_ID)?.remove();
                 return;
+            }
+
+            // Defensive: if state claims labyrinth but the current action isn't a
+            // labyrinth explore, clear the labyrinth flags and re-derive what to
+            // render from the remaining state.
+            if (this.isLabyrinth) {
+                const actions = dataManager.getCurrentActions();
+                const isCurrentlyLab = actions.some((a) => a.actionHrid === '/actions/labyrinth/explore' && !a.isDone);
+                if (!isCurrentlyLab) {
+                    this.isLabyrinth = false;
+                    this.labyrinthAttempt = 0;
+                    if (this.battleId === 0) {
+                        document.getElementById(COUNTER_ID)?.remove();
+                        return;
+                    }
+                }
             }
 
             const currentAction = document.querySelector(CURRENT_ACTION_SELECTOR);
@@ -8563,22 +8616,28 @@
         const abilityDetailMap = gameData.abilityDetailMap || {};
 
         // Convert equipment: snapshot uses itemHrid, DTO keys by equipmentDetail.type.
-        // Cross-reference live data for accurate enhancement levels (loadouts with
-        // useExactEnhancement=false store 0 for most levels in the wearable hash).
-        const liveEquipment = dataManager.characterEquipment;
+        // When useExactEnhancement=false, the wearable hash may store 0 for enhancement.
+        // Resolve by finding the highest enhancement of each item across all owned inventory,
+        // matching how the game treats "highest owned" loadout mode.
+        const characterData = dataManager.characterData;
+        const maxEnhancementByItem = new Map();
+        for (const item of characterData?.characterItems || []) {
+            if (!item?.itemHrid || !(item.count > 0)) continue;
+            const level = item.enhancementLevel || 0;
+            const existing = maxEnhancementByItem.get(item.itemHrid);
+            if (existing === undefined || level > existing) {
+                maxEnhancementByItem.set(item.itemHrid, level);
+            }
+        }
+
         const newEquipment = {};
         for (const equip of snapshot.equipment || []) {
             const itemDetail = itemDetailMap[equip.itemHrid];
             const equipType = itemDetail?.equipmentDetail?.type;
             if (equipType) {
                 let enhancementLevel = equip.enhancementLevel || 0;
-                if (enhancementLevel === 0 && liveEquipment) {
-                    for (const [, liveItem] of liveEquipment) {
-                        if (liveItem.itemHrid === equip.itemHrid) {
-                            enhancementLevel = liveItem.enhancementLevel || 0;
-                            break;
-                        }
-                    }
+                if (enhancementLevel === 0) {
+                    enhancementLevel = maxEnhancementByItem.get(equip.itemHrid) || 0;
                 }
                 newEquipment[equipType] = {
                     hrid: equip.itemHrid,
@@ -8590,7 +8649,6 @@
 
         // Ability levels come from current character (not the snapshot)
         // Use characterAbilities (all learned) not combatUnit.combatAbilities (equipped only)
-        const characterData = dataManager.characterData;
         const currentAbilityLevels = {};
         for (const ability of characterData?.characterAbilities || []) {
             if (ability?.abilityHrid) {
@@ -8685,13 +8743,21 @@
                 const rewardDropTable = actionDetail?.combatZoneInfo?.dungeonInfo?.rewardDropTable;
 
                 if (rewardDropTable) {
+                    const baseChestCount = 5;
+                    const chestsPerCompletion = (baseChestCount / numberOfPlayers) * (1 + combatDropQuantity);
+
                     for (const drop of rewardDropTable) {
                         const baseRate = drop.dropRate + (drop.dropRatePerDifficultyTier ?? 0) * difficultyTier;
                         const adjustedRate = Math.min(1.0, Math.max(0, baseRate));
                         if (adjustedRate <= 0) continue;
 
                         const avgCount = (drop.minCount + drop.maxCount) / 2;
-                        const expected = simResult.dungeonsCompleted * adjustedRate * avgCount;
+                        let expected;
+                        if (adjustedRate >= 1.0) {
+                            expected = simResult.dungeonsCompleted * chestsPerCompletion * avgCount;
+                        } else {
+                            expected = simResult.dungeonsCompleted * adjustedRate * avgCount;
+                        }
 
                         totalDropMap.set(drop.itemHrid, (totalDropMap.get(drop.itemHrid) || 0) + expected);
                     }
@@ -8983,6 +9049,15 @@
     const MAX_WORKERS = 4;
 
     /**
+     * @returns {number} Max worker count from setting, or hardware concurrency if 0/unset
+     */
+    function getMaxWorkers() {
+        const setting = config.getSetting('combatSim_maxThreads') || 0;
+        const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
+        return setting > 0 ? Math.min(setting, cores) : Math.min(MAX_WORKERS, cores);
+    }
+
+    /**
      * Get or create the worker Blob URL (created once, reused).
      * @returns {string}
      */
@@ -9224,8 +9299,7 @@
         cancelSimulation();
 
         // Determine worker count
-        const availableCores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 2 : 2;
-        const maxWorkers = Math.min(MAX_WORKERS, availableCores);
+        const maxWorkers = getMaxWorkers();
         const workerCount =
             hours >= MIN_HOURS_PER_WORKER * 2 ? Math.min(maxWorkers, Math.floor(hours / MIN_HOURS_PER_WORKER)) : 1;
 
@@ -9510,6 +9584,119 @@
         }
 
         /**
+         * Get crate buffs for combat rooms (coffee + food only, no tea)
+         */
+        getCombatCrateBuffs() {
+            const labyrinth = dataManager.characterData?.characterLabyrinth;
+            const setting = dataManager.characterData?.characterSetting;
+            const gameData = dataManager.getInitClientData();
+            if (!gameData?.labyrinthCrateDetailMap) return [];
+
+            const crateHrids = [
+                labyrinth?.coffeeCrateItemHrid || setting?.labyrinthCoffeeCrateHrid || '',
+                labyrinth?.foodCrateItemHrid || setting?.labyrinthFoodCrateHrid || '',
+            ];
+
+            const allBuffs = [];
+            for (const hrid of crateHrids) {
+                if (!hrid) continue;
+                const buffs = gameData.labyrinthCrateDetailMap[hrid];
+                if (Array.isArray(buffs)) {
+                    allBuffs.push(...buffs);
+                }
+            }
+            return allBuffs;
+        }
+
+        /**
+         * Get crate buffs for tea crate only (used for room-assignment effective level)
+         */
+        getTeaCrateBuffs() {
+            const labyrinth = dataManager.characterData?.characterLabyrinth;
+            const setting = dataManager.characterData?.characterSetting;
+            const gameData = dataManager.getInitClientData();
+            if (!gameData?.labyrinthCrateDetailMap) return [];
+
+            const teaHrid = labyrinth?.teaCrateItemHrid || setting?.labyrinthTeaCrateHrid || '';
+            if (!teaHrid) return [];
+
+            const buffs = gameData.labyrinthCrateDetailMap[teaHrid];
+            return Array.isArray(buffs) ? buffs : [];
+        }
+
+        /**
+         * Get the labyrinth loadout ID for a skill from characterSetting
+         */
+        getSkillingLoadoutId(skillHrid) {
+            const charSetting = dataManager.characterData?.characterSetting;
+            if (!charSetting) return 0;
+
+            const skillId = skillHrid.replace('/skills/', '');
+            const pascal = skillId.charAt(0).toUpperCase() + skillId.slice(1);
+            return Number(charSetting[`labyrinthLoadout${pascal}`]) || 0;
+        }
+
+        /**
+         * Compute equipment noncombat stat buffs from a loadout snapshot's equipment.
+         * Replicates the reference's buildLoadoutNoncombatStatTotals + buildSkillingEquipmentBuffsFromTotals.
+         * @param {number} loadoutId - Loadout ID
+         * @param {string} skillId - e.g. "milking"
+         * @returns {Array} Array of buff-like objects with typeHrid and flatBoost/ratioBoost
+         */
+        getLoadoutEquipmentBuffs(loadoutId, skillId) {
+            const snapshot = loadoutSnapshot.snapshots[loadoutId];
+            if (!snapshot?.equipment?.length) return [];
+
+            const gameData = dataManager.getInitClientData();
+            if (!gameData?.itemDetailMap) return [];
+
+            const enhTable = gameData.enhancementLevelTotalBonusMultiplierTable || {};
+            const toolSlot = `/item_locations/${skillId}_tool`;
+
+            const totals = {};
+            for (const equip of snapshot.equipment) {
+                if (!equip.itemHrid || !equip.itemLocationHrid) continue;
+
+                // Filter tool slots: only include the tool slot matching this skill
+                if (equip.itemLocationHrid.endsWith('_tool') && equip.itemLocationHrid !== toolSlot) {
+                    continue;
+                }
+
+                const itemDetail = gameData.itemDetailMap[equip.itemHrid];
+                const equipDetail = itemDetail?.equipmentDetail;
+                if (!equipDetail) continue;
+
+                const baseStats = equipDetail.noncombatStats || {};
+                const enhStats = equipDetail.noncombatEnhancementBonuses || {};
+                const enhLevel = equip.enhancementLevel || 0;
+                const enhMultiplier = enhTable[enhLevel] ?? enhLevel;
+
+                for (const [key, value] of Object.entries(baseStats)) {
+                    if (!Number.isFinite(value)) continue;
+                    totals[key] = (totals[key] || 0) + value;
+                }
+                for (const [key, value] of Object.entries(enhStats)) {
+                    if (!Number.isFinite(value)) continue;
+                    totals[key] = (totals[key] || 0) + value * enhMultiplier;
+                }
+            }
+
+            // Convert totals to buff array matching the format expected by applyBuff
+            const buffs = [];
+            const actionSpeed = (totals[`${skillId}Speed`] || 0) + (totals.skillingSpeed || 0);
+            const efficiency = (totals[`${skillId}Efficiency`] || 0) + (totals.skillingEfficiency || 0);
+            const success = totals[`${skillId}Success`] || 0;
+            const gathering = totals.gatheringQuantity || 0;
+
+            if (actionSpeed) buffs.push({ typeHrid: '/buff_types/action_speed', flatBoost: actionSpeed, ratioBoost: 0 });
+            if (efficiency) buffs.push({ typeHrid: '/buff_types/efficiency', flatBoost: efficiency, ratioBoost: 0 });
+            if (success) buffs.push({ typeHrid: `/buff_types/${skillId}_success`, flatBoost: 0, ratioBoost: success });
+            if (gathering) buffs.push({ typeHrid: '/buff_types/gathering', flatBoost: gathering, ratioBoost: 0 });
+
+            return buffs;
+        }
+
+        /**
          * Aggregate all buff sources into skilling metrics for a given skill
          * @param {string} skillId - e.g. "woodcutting"
          * @param {string} actionTypeHrid - e.g. "/action_types/woodcutting"
@@ -9521,6 +9708,7 @@
                 actionSpeedBonus: 0,
                 successBonus: 0,
                 doubleProgressBonus: 0,
+                gatheringBonus: 0,
             };
             const charData = dataManager.characterData;
             if (!charData) return metrics;
@@ -9528,8 +9716,12 @@
             const skillLevelType = `/buff_types/${skillId}_level`;
             const skillSuccessType = `/buff_types/${skillId}_success`;
 
+            // Equipment buffs come from the labyrinth loadout, not currently worn gear
+            const loadoutId = this.getSkillingLoadoutId(`/skills/${skillId}`);
+            const loadoutEquipBuffs = loadoutId ? this.getLoadoutEquipmentBuffs(loadoutId, skillId) : null;
+
             const buffSources = [
-                charData.equipmentActionTypeBuffsMap?.[actionTypeHrid],
+                loadoutEquipBuffs || charData.equipmentActionTypeBuffsMap?.[actionTypeHrid],
                 charData.communityActionTypeBuffsMap?.[actionTypeHrid],
                 charData.houseActionTypeBuffsMap?.[actionTypeHrid],
                 charData.achievementActionTypeBuffsMap?.[actionTypeHrid],
@@ -9542,7 +9734,7 @@
                     if (!buff?.typeHrid) continue;
                     const amount = (buff.flatBoost || 0) + (buff.ratioBoost || 0);
                     if (amount === 0) continue;
-                    this.applyBuff(metrics, buff.typeHrid, amount, skillLevelType, skillSuccessType);
+                    this.applyBuff(metrics, buff.typeHrid, amount, skillLevelType, skillSuccessType, skillId);
                 }
             }
 
@@ -9551,7 +9743,7 @@
                 if (!buff?.typeHrid) continue;
                 const amount = (buff.flatBoost || 0) + (buff.ratioBoost || 0);
                 if (amount === 0) continue;
-                this.applyBuff(metrics, buff.typeHrid, amount, skillLevelType, skillSuccessType);
+                this.applyBuff(metrics, buff.typeHrid, amount, skillLevelType, skillSuccessType, skillId);
             }
 
             const upgrades = this.getLabyrinthUpgrades();
@@ -9566,7 +9758,7 @@
         /**
          * Apply a single buff to metrics based on its type
          */
-        applyBuff(metrics, typeHrid, amount, skillLevelType, skillSuccessType) {
+        applyBuff(metrics, typeHrid, amount, skillLevelType, skillSuccessType, skillId) {
             if (typeHrid === skillLevelType) {
                 metrics.skillLevelBonus += amount;
             } else if (typeHrid === '/buff_types/efficiency') {
@@ -9577,6 +9769,12 @@
                 metrics.doubleProgressBonus += amount;
             } else if (typeHrid === '/buff_types/success_rate' || typeHrid === skillSuccessType) {
                 metrics.successBonus += amount;
+            } else if (
+                (typeHrid === '/buff_types/gathering' &&
+                    (skillId === 'milking' || skillId === 'foraging' || skillId === 'woodcutting')) ||
+                (typeHrid === '/buff_types/gourmet' && (skillId === 'cooking' || skillId === 'brewing'))
+            ) {
+                metrics.gatheringBonus += amount;
             }
         }
 
@@ -9596,7 +9794,7 @@
             const levelDelta = effectiveLevel - roomLevel;
             const levelBonus = levelDelta >= 0 ? levelDelta * 0.005 : levelDelta * 0.01;
             const successChance = Math.min(1, Math.max(0, 0.8 * (1 + levelBonus + metrics.successBonus)));
-            const doubleChance = Math.min(1, Math.max(0, metrics.doubleProgressBonus));
+            const doubleChance = Math.min(1, Math.max(0, metrics.doubleProgressBonus + (metrics.gatheringBonus || 0)));
 
             const workPower = effectiveLevel * (1 + metrics.efficiencyBonus);
             const progressPerSuccess = Math.max(0, Math.floor(workPower));
@@ -9787,17 +9985,27 @@
         }
 
         /**
-         * Get effective level for a skill (base + buff bonuses)
+         * Get effective level for room assignment (base + tea crate only).
+         * The game uses this to determine what room level a skip threshold maps to.
          */
         getEffectiveLevel(skillHrid) {
             const skillId = skillHrid.replace('/skills/', '');
-            const actionTypeHrid = `/action_types/${skillId}`;
-            const metrics = this.getSkillingMetrics(skillId, actionTypeHrid);
 
             const skills = dataManager.getSkills();
             const skill = skills?.find((s) => s.skillHrid === skillHrid);
             const baseLevel = skill?.level || 1;
-            return baseLevel + metrics.skillLevelBonus;
+
+            const teaCrateBuffs = this.getTeaCrateBuffs();
+            const skillLevelType = `/buff_types/${skillId}_level`;
+            let teaLevelBonus = 0;
+            for (const buff of teaCrateBuffs) {
+                if (!buff?.typeHrid) continue;
+                if (buff.typeHrid === skillLevelType) {
+                    teaLevelBonus += (buff.flatBoost || 0) + (buff.ratioBoost || 0);
+                }
+            }
+
+            return baseLevel + teaLevelBonus;
         }
 
         /**
@@ -9819,7 +10027,7 @@
          * skill level types (averaged).
          */
         _getCrateCombatLevelBonus() {
-            const crateBuffs = this.getCrateBuffs();
+            const crateBuffs = this.getCombatCrateBuffs();
             if (crateBuffs.length === 0) return 0;
 
             const skillLevelTypes = new Set([
@@ -10070,9 +10278,9 @@
         findRecommendedThreshold(skillHrid, targetRate) {
             const effectiveLevel = this.getEffectiveLevel(skillHrid);
             const isEnhancing = skillHrid === '/skills/enhancing';
-            let low = 0;
+            let low = -300;
             let high = 300;
-            let bestThreshold = 0;
+            let bestThreshold = null;
 
             while (low <= high) {
                 const mid = Math.floor((low + high) / 2);
@@ -10099,9 +10307,9 @@
          */
         async findRecommendedThresholdCombat(monsterHrid, targetRate) {
             const effectiveCombatLevel = this.getPlayerEffectiveCombatLevel();
-            let low = 0;
+            let low = -300;
             let high = 300;
-            let bestThreshold = 0;
+            let bestThreshold = null;
 
             while (low <= high) {
                 const mid = Math.floor((low + high) / 2);
@@ -10161,14 +10369,14 @@
                     const threshold = this.findRecommendedThreshold(roomHrid, targetRate);
                     this.recommendations.set(roomHrid, { threshold });
                 } else {
-                    if (button) button.textContent = t('Recommending... ({0}/{1})', completed + 1, totalRooms);
+                    if (button) button.textContent = `Recommending... (${completed + 1}/${totalRooms})`;
                     const threshold = await this.findRecommendedThresholdCombat(roomHrid, targetRate);
                     this.recommendations.set(roomHrid, { threshold });
                 }
                 completed++;
             }
 
-            if (button) button.textContent = t('Recommend');
+            if (button) button.textContent = 'Recommend';
             this.recommendRunning = false;
             this.injectRecommendationBadges();
         }
@@ -10186,7 +10394,7 @@
                 if (!roomHrid) continue;
 
                 const rec = this.recommendations.get(roomHrid);
-                if (!rec) continue;
+                if (!rec || rec.threshold === null) continue;
 
                 const isSkill = roomHrid.startsWith('/skills/');
                 const currentThreshold = isSkill ? this.getSkipThreshold(roomHrid) : this.getCombatSkipThreshold(roomHrid);
@@ -10194,9 +10402,9 @@
                 const badge = document.createElement('span');
                 badge.className = RECOMMEND_CLASS;
                 badge.style.cssText = 'font-size:0.7rem; margin-left:6px; white-space:nowrap; font-weight:bold;';
-                badge.textContent = t('Rec: +{0}', rec.threshold);
+                badge.textContent = `Rec: ${rec.threshold >= 0 ? '+' : ''}${rec.threshold}`;
 
-                badge.title = t('Recommended skip threshold for ≥{0}% clear rate', this._recommendTargetPct);
+                badge.title = `Recommended skip threshold for ≥${this._recommendTargetPct}% clear rate`;
 
                 if (currentThreshold <= rec.threshold) {
                     badge.style.color = '#00c896';
@@ -10239,7 +10447,7 @@
 
             const rateLabel = document.createElement('span');
             rateLabel.style.cssText = labelStyle;
-            rateLabel.textContent = t('Target Win %');
+            rateLabel.textContent = 'Target Win %';
 
             const rateInput = document.createElement('input');
             rateInput.type = 'number';
@@ -10255,7 +10463,7 @@
 
             const hoursLabel = document.createElement('span');
             hoursLabel.style.cssText = labelStyle;
-            hoursLabel.textContent = t('Sim Hours');
+            hoursLabel.textContent = 'Sim Hours';
 
             const hoursInput = document.createElement('input');
             hoursInput.type = 'number';
@@ -10270,7 +10478,7 @@
             });
 
             const button = document.createElement('button');
-            button.textContent = t('Recommend');
+            button.textContent = 'Recommend';
             button.style.cssText =
                 'padding:2px 10px; cursor:pointer; font-size:0.75rem; border-radius:4px; border:1px solid #555; background:#333; color:#ccc;';
             button.addEventListener('click', () => this.runRecommendations());
@@ -10387,29 +10595,19 @@
 
             const chancePct = (estimate.clearChance * 100).toFixed(1);
             if (estimate.isEnhancing) {
-                node.textContent = t(
-                    ' [Clear {0}% | +{1}/+{2} | {3} left]',
-                    chancePct,
-                    estimate.currentLevel,
-                    estimate.targetLevel,
-                    estimate.attemptsLeft
-                );
+                node.textContent = ` [Clear ${chancePct}% | +${estimate.currentLevel}/+${estimate.targetLevel} | ${estimate.attemptsLeft} left]`;
             } else {
-                node.textContent = t(' [Clear {0}% | {1} left]', chancePct, estimate.attemptsLeft);
+                node.textContent = ` [Clear ${chancePct}% | ${estimate.attemptsLeft} left]`;
             }
 
             const tooltipLines = [
-                t(
-                    'Success: {0}% | Double: {1}%',
-                    (estimate.successChance * 100).toFixed(1),
-                    (estimate.doubleChance * 100).toFixed(1)
-                ),
-                t('Actions: {0}/{1}', estimate.actionCounter, estimate.totalAttempts),
+                `Success: ${(estimate.successChance * 100).toFixed(1)}% | Double: ${(estimate.doubleChance * 100).toFixed(1)}%`,
+                `Actions: ${estimate.actionCounter}/${estimate.totalAttempts}`,
             ];
             if (estimate.isEnhancing) {
-                tooltipLines.push(t('Enhance: +{0}/+{1}', estimate.currentLevel, estimate.targetLevel));
+                tooltipLines.push(`Enhance: +${estimate.currentLevel}/+${estimate.targetLevel}`);
             } else {
-                tooltipLines.push(t('Progress: {0}/{1}', estimate.currentWorkValue, estimate.targetWorkValue));
+                tooltipLines.push(`Progress: ${estimate.currentWorkValue}/${estimate.targetWorkValue}`);
             }
             node.title = tooltipLines.join('\n');
         }
@@ -10516,7 +10714,7 @@
             badge.className = BADGE_CLASS;
             badge.style.cssText = 'font-size:0.7rem; margin-left:6px; white-space:nowrap; color:#999;';
             badge.textContent = '...';
-            badge.title = t('Simulating combat...');
+            badge.title = 'Simulating combat...';
             cell.appendChild(badge);
             return badge;
         }
@@ -10575,44 +10773,34 @@
 
             if (result.type === 'skilling') {
                 return [
-                    t('Success: {0} | Double: {1}', pct(result.successChance), pct(result.doubleChance)),
-                    t('Actions: {0} @ {1}s each', result.attempts, result.actionSeconds.toFixed(2)),
-                    t(
-                        'Work Power: {0} → Progress: {1}/{2} per success',
-                        Math.floor(result.workPower),
-                        result.progressPerSuccess,
-                        result.targetProgress
-                    ),
-                    t(
-                        'Effective Level: {0} (base {1} + {2})',
-                        Math.floor(result.effectiveLevel),
-                        result.baseLevel,
-                        Math.floor(result.effectiveLevel - result.baseLevel)
-                    ),
-                    t('Room Level: {0} | XP/room: {1}', result.roomLevel, result.xpPerRoom),
+                    `Success: ${pct(result.successChance)} | Double: ${pct(result.doubleChance)}`,
+                    `Actions: ${result.attempts} @ ${result.actionSeconds.toFixed(2)}s each`,
+                    `Work Power: ${Math.floor(result.workPower)} → Progress: ${result.progressPerSuccess}/${result.targetProgress} per success`,
+                    `Effective Level: ${Math.floor(result.effectiveLevel)} (base ${result.baseLevel} + ${Math.floor(result.effectiveLevel - result.baseLevel)})`,
+                    `Room Level: ${result.roomLevel} | XP/room: ${result.xpPerRoom}`,
                 ].join('\n');
             }
 
             if (result.type === 'enhancing') {
                 return [
-                    t('Success: {0} | Double: {1}', pct(result.successChance), pct(result.doubleChance)),
-                    t('Actions: {0} @ {1}s each', result.attempts, result.actionSeconds.toFixed(2)),
-                    t('Target: +{0} | Effective Level: {1}', result.targetLevel, Math.floor(result.effectiveLevel)),
-                    t('Room Level: {0}', result.roomLevel),
+                    `Success: ${pct(result.successChance)} | Double: ${pct(result.doubleChance)}`,
+                    `Actions: ${result.attempts} @ ${result.actionSeconds.toFixed(2)}s each`,
+                    `Target: +${result.targetLevel} | Effective Level: ${Math.floor(result.effectiveLevel)}`,
+                    `Room Level: ${result.roomLevel}`,
                 ].join('\n');
             }
 
             if (result.type === 'combat') {
                 return [
-                    t('Win Rate: {0} | Avg Fight: {1}s', pct(result.winRate), Math.round(result.avgFightSeconds)),
-                    t('Monster: {0} | Room Level: {1}', result.monsterName, result.roomLevel),
-                    t('Loadout: "{0}"', result.loadoutName),
+                    `Win Rate: ${pct(result.winRate)} | Avg Fight: ${Math.round(result.avgFightSeconds)}s`,
+                    `Monster: ${result.monsterName} | Room Level: ${result.roomLevel}`,
+                    `Loadout: "${result.loadoutName}"`,
                 ].join('\n');
             }
 
             const clearPct = Math.round(result.clearChance * 100);
             const timeText = this.formatTime(result.expectedSeconds);
-            return t('Clear: {0}% | Expected: {1} | Room level: {2}', clearPct, timeText, roomLevel);
+            return `Clear: ${clearPct}% | Expected: ${timeText} | Room level: ${roomLevel}`;
         }
 
         getBadgeColor(clearChance) {
@@ -10690,7 +10878,7 @@
             const levelDelta = effectiveLevel - roomLevel;
             const levelBonus = levelDelta >= 0 ? levelDelta * 0.005 : levelDelta * 0.01;
             const successChance = Math.min(1, Math.max(0, 0.8 * (1 + levelBonus + metrics.successBonus)));
-            const doubleChance = Math.min(1, Math.max(0, metrics.doubleProgressBonus));
+            const doubleChance = Math.min(1, Math.max(0, metrics.doubleProgressBonus + (metrics.gatheringBonus || 0)));
 
             const workPower = effectiveLevel * (1 + metrics.efficiencyBonus);
             const progressPerSuccess = Math.max(0, Math.floor(workPower));
@@ -13094,7 +13282,8 @@
         const simulationTimeLimit = hours * ONE_HOUR_NS;
 
         const availableCores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
-        const maxWorkers = availableCores;
+        const maxThreadsSetting = config.getSetting('combatSim_maxThreads') || 0;
+        const maxWorkers = maxThreadsSetting > 0 ? Math.min(maxThreadsSetting, availableCores) : availableCores;
 
         return new Promise((resolve, reject) => {
             // Store reject so cancelAllZonesSimulation can unblock the promise
@@ -14140,6 +14329,17 @@
         'Expert Coffee Crate': '专家咖啡箱',
     };
 
+    // Ability name English → Chinese translation map.
+    // Populated from the game's abilityDetailMap.
+    // To add more, visit the ability panel in game and the auto-observer will capture them.
+    var abilityNamesZh = {
+        'Mystic Aura': '神秘光环',
+        'Elemental Affinity': '元素亲和',
+        Firestorm: '烈焰风暴',
+        'Flame Blast': '烈焰冲击',
+        Fireball: '火球术',
+    };
+
     /**
      * Auto-discovers Chinese item names from the game DOM and builds a
      * Chinese → English mapping cached in IndexedDB. Provides a unified
@@ -14157,6 +14357,11 @@
         '[class*="ItemTooltipText_name"]',
         '[class*="Item_craftingItemName"]',
         'svg[aria-label]',
+        '[class*="Ability_"][class*="name"]',
+        '[class*="AbilitiesPanel_"]',
+        '[class*="SkillActionDetail_"]',
+        '[class*="CombatPanel_"]',
+        '[class*="SimEditor_"]',
     ];
 
     const ENHANCEMENT_STRIP_REGEX = /\s*\+\d+$/;
@@ -14260,6 +14465,50 @@
             }
         }
 
+        getDisplayName(itemHrid) {
+            if (!itemHrid) return '';
+            if (!this.isLoaded) this._lazyLoad();
+
+            const cached = this.cnNames[itemHrid];
+            if (cached) return cached;
+
+            const item = dataManager.getItemDetails(itemHrid);
+            const enName = item?.name;
+            if (enName) {
+                const staticCn = itemNamesZh[enName];
+                if (staticCn) {
+                    this.cnNames[itemHrid] = staticCn;
+                    return staticCn;
+                }
+                return enName;
+            }
+
+            const ability = this._getAbilityDetails(itemHrid);
+            if (ability?.name) {
+                const staticCn = itemNamesZh[ability.name] || abilityNamesZh[ability.name];
+                if (staticCn) {
+                    this.cnNames[itemHrid] = staticCn;
+                    return staticCn;
+                }
+                return ability.name;
+            }
+
+            return itemHrid;
+        }
+
+        _getAbilityDetails(abilityHrid) {
+            if (!abilityHrid || !abilityHrid.startsWith('/abilities/')) return null;
+            try {
+                const initData = dataManager.getInitClientData();
+                return initData?.abilityDetailMap?.[abilityHrid] || null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        _lazyLoad() {
+            this.load().catch(() => {});
+        }
         getHridFromChineseName(chineseName) {
             if (!chineseName) return null;
             const baseName = chineseName.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
@@ -14349,21 +14598,6 @@
                     this._failCount++;
                 }
             }
-        }
-
-        /**
-         * Get the display name for an item.
-         * Returns the Chinese name if cached, otherwise the English name from game data,
-         * and as a final fallback parses the HRID into a readable label.
-         * @param {string} itemHrid - Item HRID (e.g., '/items/essence')
-         * @returns {string} Display name
-         */
-        getDisplayName(itemHrid) {
-            const cnName = this.cnNames[itemHrid];
-            if (cnName) return cnName;
-            const enName = dataManager.getItemDetails(itemHrid)?.name;
-            if (enName) return enName;
-            return itemHrid.split('/').pop().replace(/_/g, ' ');
         }
     }
 
@@ -15214,17 +15448,24 @@
     }
 
     /**
-     * Find the best off-hand item for a given combat style and level range.
-     * For melee/ranged: picks highest-level defensive off-hand.
-     * For magic: prefers off-hands with magic stats, falls back to defensive.
+     * Find candidate off-hand items for a given combat style and level range.
+     * Returns up to two options (deduped):
+     *  - Style-matched: highest-itemLevel off-hand whose offensive stats match the
+     *    weapon's damage style (e.g. Manticore Shield for ranged).
+     *  - Highest-itemLevel: the strongest off-hand by item level overall, regardless
+     *    of style fit (e.g. Knight's Aegis for any cross-slot upgrade).
      * @param {Object} gameData - Game data
      * @param {string} damageStyle - Primary damage style of the weapon
      * @param {number} maxItemLevel - Maximum item level to consider
-     * @returns {{hrid: string, itemLevel: number}|null}
+     * @returns {Array<{hrid: string, itemLevel: number}>}
      */
     function findBestOffHand(gameData, damageStyle, maxItemLevel) {
-        let best = null;
         const isMagic = damageStyle === 'magic';
+        const isRanged = damageStyle === 'ranged';
+        const isMelee = damageStyle === 'slash' || damageStyle === 'stab' || damageStyle === 'smash';
+
+        let styleMatched = null; // highest-itemLevel off-hand with style-matched stats
+        let highest = null; // highest-itemLevel off-hand overall (with magic-exclusion for non-magic)
 
         for (const [itemHrid, item] of Object.entries(gameData.itemDetailMap)) {
             const eq = item.equipmentDetail;
@@ -15234,26 +15475,45 @@
 
             const level = item.itemLevel || 0;
             const stats = eq.combatStats || {};
+            const hasMagicStats = (stats.magicDamage || 0) > 0 || (stats.magicAccuracy || 0) > 0;
 
+            // Build "highest overall" candidate (mirrors original behavior)
             if (isMagic) {
-                const hasMagicStats = (stats.magicDamage || 0) > 0 || (stats.magicAccuracy || 0) > 0;
-                if (!best) {
-                    best = { hrid: itemHrid, itemLevel: level, isMagic: hasMagicStats };
-                } else if (hasMagicStats && !best.isMagic) {
-                    best = { hrid: itemHrid, itemLevel: level, isMagic: true };
-                } else if (hasMagicStats === best.isMagic && level > best.itemLevel) {
-                    best = { hrid: itemHrid, itemLevel: level, isMagic: hasMagicStats };
+                if (!highest) {
+                    highest = { hrid: itemHrid, itemLevel: level, isMagic: hasMagicStats };
+                } else if (hasMagicStats && !highest.isMagic) {
+                    highest = { hrid: itemHrid, itemLevel: level, isMagic: true };
+                } else if (hasMagicStats === highest.isMagic && level > highest.itemLevel) {
+                    highest = { hrid: itemHrid, itemLevel: level, isMagic: hasMagicStats };
                 }
-            } else {
-                const hasMagicStats = (stats.magicDamage || 0) > 0;
-                if (hasMagicStats) continue;
-                if (!best || level > best.itemLevel) {
-                    best = { hrid: itemHrid, itemLevel: level };
-                }
+            } else if (!hasMagicStats && (!highest || level > highest.itemLevel)) {
+                // For non-magic, exclude off-hands with magic stats from "highest"
+                highest = { hrid: itemHrid, itemLevel: level };
+            }
+
+            // Build "style-matched" candidate — highest itemLevel among off-hands whose
+            // offensive stats match the weapon's damage style.
+            let styleMatch = false;
+            if (isMagic) {
+                styleMatch = hasMagicStats;
+            } else if (isRanged) {
+                styleMatch = (stats.rangedDamage || 0) > 0 || (stats.rangedAccuracy || 0) > 0;
+            } else if (isMelee) {
+                const meleeDmg = (stats.stabDamage || 0) + (stats.slashDamage || 0) + (stats.smashDamage || 0);
+                const meleeAcc = (stats.stabAccuracy || 0) + (stats.slashAccuracy || 0) + (stats.smashAccuracy || 0);
+                styleMatch = meleeDmg > 0 || meleeAcc > 0;
+            }
+            if (styleMatch && (!styleMatched || level > styleMatched.itemLevel)) {
+                styleMatched = { hrid: itemHrid, itemLevel: level };
             }
         }
 
-        return best ? { hrid: best.hrid, itemLevel: best.itemLevel } : null;
+        const out = [];
+        if (styleMatched) out.push({ hrid: styleMatched.hrid, itemLevel: styleMatched.itemLevel });
+        if (highest && (!styleMatched || highest.hrid !== styleMatched.hrid)) {
+            out.push({ hrid: highest.hrid, itemLevel: highest.itemLevel });
+        }
+        return out;
     }
 
     /**
@@ -15337,21 +15597,87 @@
                     // Offensive items: keep existing role-based tier progression
                     const slotKey = `${slot}|${role}`;
                     const slotItems = tierProgression[slotKey];
+                    const offensiveCurrentName = itemDetails?.name || currentHrid.split('/').pop();
+                    const offensiveCandidateHrids = new Set();
                     if (slotItems) {
                         const currentIdx = slotItems.findIndex((item) => item.hrid === currentHrid);
                         if (currentIdx >= 0 && currentIdx < slotItems.length - 1) {
                             const nextTier = slotItems[currentIdx + 1];
                             const nextName = nextTier.name || nextTier.hrid.split('/').pop();
-                            const currentName = gameData.itemDetailMap[currentHrid]?.name || currentHrid.split('/').pop();
                             candidates.push({
                                 slot,
                                 currentHrid,
                                 currentLevel,
                                 upgradeHrid: nextTier.hrid,
                                 upgradeLevel: currentLevel,
-                                description: `${currentName} → ${nextName} (+${currentLevel})`,
+                                description: `${offensiveCurrentName} → ${nextName} (+${currentLevel})`,
                                 type: 'tier',
                             });
+                            offensiveCandidateHrids.add(nextTier.hrid);
+
+                            // Also suggest the highest non-refined item in the same slot|role
+                            // when the player is already wearing high-tier gear (T60+). This
+                            // surfaces direct T95 jumps (e.g. Sighted → Marksman) that the
+                            // single-step progression would otherwise hide behind T75 stepping
+                            // stones.
+                            const currentItemLevel = itemDetails?.itemLevel || 0;
+                            if (currentItemLevel >= 60) {
+                                let highestNonRefined = null;
+                                for (let i = slotItems.length - 1; i >= 0; i--) {
+                                    if (!slotItems[i].hrid.endsWith('_refined')) {
+                                        highestNonRefined = slotItems[i];
+                                        break;
+                                    }
+                                }
+                                if (
+                                    highestNonRefined &&
+                                    highestNonRefined.hrid !== currentHrid &&
+                                    highestNonRefined.hrid !== nextTier.hrid &&
+                                    highestNonRefined.itemLevel > currentItemLevel
+                                ) {
+                                    const highestName = highestNonRefined.name || highestNonRefined.hrid.split('/').pop();
+                                    candidates.push({
+                                        slot,
+                                        currentHrid,
+                                        currentLevel,
+                                        upgradeHrid: highestNonRefined.hrid,
+                                        upgradeLevel: currentLevel,
+                                        description: `${offensiveCurrentName} → ${highestName} (+${currentLevel})`,
+                                        type: 'tier',
+                                    });
+                                    offensiveCandidateHrids.add(highestNonRefined.hrid);
+                                }
+                            }
+                        }
+                    }
+
+                    // Also walk the crafting-chain upgradeMap for offensive items so that
+                    // direct upgrade-action targets — most importantly the refined version
+                    // of the current weapon (e.g. Furious Spear → Furious Spear ★) — surface
+                    // even when the role-grouped progression would step sideways to a
+                    // different damage style first.
+                    const offensiveUpgrades = upgradeMap.get(currentHrid);
+                    if (offensiveUpgrades) {
+                        for (const upgradeHrid of offensiveUpgrades) {
+                            if (offensiveCandidateHrids.has(upgradeHrid)) continue;
+                            if (upgradeHrid === currentHrid) continue;
+                            const upgradeItem = gameData.itemDetailMap[upgradeHrid];
+                            if (!upgradeItem?.equipmentDetail) continue;
+                            if (upgradeItem.equipmentDetail.type !== slot) continue;
+                            const upgradeRole = getItemRole(upgradeItem.equipmentDetail?.combatStats);
+                            if (upgradeRole !== role) continue;
+
+                            const upgradeName = upgradeItem.name || upgradeHrid.split('/').pop();
+                            candidates.push({
+                                slot,
+                                currentHrid,
+                                currentLevel,
+                                upgradeHrid,
+                                upgradeLevel: currentLevel,
+                                description: `${offensiveCurrentName} → ${upgradeName} (+${currentLevel})`,
+                                type: 'tier',
+                            });
+                            offensiveCandidateHrids.add(upgradeHrid);
                         }
                     }
                 }
@@ -15382,29 +15708,33 @@
                         const style = getItemDamageStyle(eq.combatStats);
                         if (style !== damageStyle) continue;
 
-                        // Find best off-hand at this tier
-                        const bestOH = findBestOffHand(gameData, damageStyle, item.itemLevel || 999);
-                        if (!bestOH) continue;
+                        // Find candidate off-hands at this tier (may return 1 or 2 options:
+                        // style-matched and/or highest-itemLevel).
+                        const offHandCandidates = findBestOffHand(gameData, damageStyle, item.itemLevel || 999);
+                        if (!offHandCandidates.length) continue;
 
                         const mainName = item.name || itemHrid.split('/').pop();
-                        const ohItem = gameData.itemDetailMap[bestOH.hrid];
-                        const ohName = ohItem?.name || bestOH.hrid.split('/').pop();
                         const currentName = twoHandItem?.name || twoHandEquip.hrid.split('/').pop();
 
-                        candidates.push({
-                            slot: '/equipment_types/two_hand',
-                            currentHrid: twoHandEquip.hrid,
-                            currentLevel: enhLevel,
-                            upgradeHrid: itemHrid,
-                            upgradeLevel: enhLevel,
-                            addedSlots: {
-                                '/equipment_types/main_hand': { hrid: itemHrid, enhancementLevel: enhLevel },
-                                '/equipment_types/off_hand': { hrid: bestOH.hrid, enhancementLevel: enhLevel },
-                            },
-                            clearedSlots: ['/equipment_types/two_hand'],
-                            description: `${currentName} → ${mainName} + ${ohName} (+${enhLevel})`,
-                            type: 'cross_slot',
-                        });
+                        for (const bestOH of offHandCandidates) {
+                            const ohItem = gameData.itemDetailMap[bestOH.hrid];
+                            const ohName = ohItem?.name || bestOH.hrid.split('/').pop();
+
+                            candidates.push({
+                                slot: '/equipment_types/two_hand',
+                                currentHrid: twoHandEquip.hrid,
+                                currentLevel: enhLevel,
+                                upgradeHrid: itemHrid,
+                                upgradeLevel: enhLevel,
+                                addedSlots: {
+                                    '/equipment_types/main_hand': { hrid: itemHrid, enhancementLevel: enhLevel },
+                                    '/equipment_types/off_hand': { hrid: bestOH.hrid, enhancementLevel: enhLevel },
+                                },
+                                clearedSlots: ['/equipment_types/two_hand'],
+                                description: `${currentName} → ${mainName} + ${ohName} (+${enhLevel})`,
+                                type: 'cross_slot',
+                            });
+                        }
                     }
                 }
             } else if (mainHandEquip) {
@@ -17038,7 +17368,7 @@
 
         /** @private */
         _renderAbilitiesSection(dto, gameData) {
-            const abilityDetailMap = gameData.abilityDetailMap || {};
+            gameData.abilityDetailMap || {};
             const abilityCount = dto.abilities.filter((a) => a).length;
 
             let html = `<div style="margin-bottom:10px;">`;
@@ -17063,9 +17393,7 @@
                     continue;
                 }
 
-                const detail = abilityDetailMap[ability.hrid];
-                const name = detail?.name || ability.hrid.split('/').pop();
-                // Cant translate abilities (game data names only, no Chinese equivalent in DOM)
+                const name = itemNameTranslator.getDisplayName(ability.hrid) || ability.hrid.split('/').pop();
 
                 html += `<div style="display:flex; align-items:center; gap:6px; padding:2px 0; font-size:12px;">`;
                 html += `<span style="color:#888; width:50px; flex-shrink:0;">${slotLabel}</span>`;
@@ -17544,7 +17872,7 @@
 
                 items.push({
                     hrid,
-                    name: ability.name || hrid.split('/').pop(),
+                    name: itemNameTranslator.getDisplayName(hrid) || ability.name || hrid.split('/').pop(),
                     categoryLabel,
                     conflict: usedHrids.has(hrid),
                 });
@@ -20394,13 +20722,11 @@
                 });
             });
 
-            // History row click handler — set comparison baseline
+            // History row click handler — show detail view for that scenario
             container.querySelectorAll('[data-history-idx]').forEach((row) => {
                 const idx = parseInt(row.dataset.historyIdx, 10);
-                // Don't allow clicking the current result as comparison
-                if (idx === this._simHistory.length - 1) return;
                 row.addEventListener('click', () => {
-                    this._comparisonIndex = idx;
+                    this._activeDetailIndex = idx;
                     this._displayResults(this._lastSimResult, this._lastSimHours, this._lastGameData);
                 });
             });
@@ -20682,7 +21008,7 @@
 
             // Baseline row
             const baseProfitColor = baseM?.profitPerHr >= 0 ? '#7ec87e' : '#ff6b6b';
-            html += '<tr style="background:rgba(232,168,124,0.08);">';
+            html += '<tr style="background:rgba(232,168,124,0.08); cursor:pointer;" data-history-idx="' + baseIdx + '">';
             html +=
                 '<td style="padding:2px 4px; color:#e8a87c; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' +
                 baseEntry.label +
@@ -20732,7 +21058,7 @@
                 const profitDelta = baseM && m ? this._formatDelta(m.profitPerHr, baseM.profitPerHr, true, true) : '';
                 const xpDelta = baseM && m ? this._formatDelta(m.totalXpPerHr, baseM.totalXpPerHr, true) : '';
 
-                html += '<tr>';
+                html += '<tr style="cursor:pointer;" data-history-idx="' + idx + '">';
                 html +=
                     '<td style="padding:2px 4px; color:#ccc; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' +
                     entry.label +
@@ -21610,7 +21936,7 @@
             flex-shrink: 0;
         `;
             header.innerHTML = `
-            <span style="font-weight:700; font-size:14px; color:${ACCENT};">Lab Simulator</span>
+            <span style="font-weight:700; font-size:14px; color:${ACCENT};">${t('Lab Simulator')}</span>
             <button id="mwi-labsim-close" style="
                 background:none; border:none; color:#aaa; font-size:22px;
                 cursor:pointer; padding:0; line-height:1;">\u00d7</button>
@@ -21636,10 +21962,10 @@
             border-bottom: 2px solid ${active ? ACCENT : 'transparent'};
         `;
             tabBar.innerHTML = `
-            <button id="mwi-labsim-tab-configure" style="${tabStyle(true)}">Configure</button>
-            <button id="mwi-labsim-tab-maxlevel" style="${tabStyle(false)}">Max Level</button>
-            <button id="mwi-labsim-tab-upgrade" style="${tabStyle(false)}">Upgrade</button>
-            <button id="mwi-labsim-tab-skilling" style="${tabStyle(false)}">Skilling</button>
+            <button id="mwi-labsim-tab-configure" style="${tabStyle(true)}">${t('Configure')}</button>
+            <button id="mwi-labsim-tab-maxlevel" style="${tabStyle(false)}">${t('Max Level')}</button>
+            <button id="mwi-labsim-tab-upgrade" style="${tabStyle(false)}">${t('Upgrade')}</button>
+            <button id="mwi-labsim-tab-skilling" style="${tabStyle(false)}">${t('Skilling')}</button>
         `;
 
             // ── Configure tab ──
@@ -21701,7 +22027,7 @@
             buffsHeader.style.cssText =
                 'display:flex; align-items:center; justify-content:space-between; padding:6px 14px; cursor:pointer; color:#888; font-size:12px;';
             buffsHeader.innerHTML = `
-            <span>Labyrinth Buffs</span>
+            <span>${t('Labyrinth Buffs')}</span>
             <span id="mwi-labsim-buffs-toggle" style="font-size:10px;">\u25B6</span>
         `;
 
@@ -21805,11 +22131,11 @@
             padding: 10px 14px; border-bottom: 1px solid #222; flex-shrink: 0;
         `;
             upgradeControls.innerHTML = `
-            <label style="color:#888; font-size:12px;">Player</label>
+            <label style="color:#888; font-size:12px;">${t('Player')}</label>
             <select id="mwi-labsim-upgrade-player" style="${selectStyle}"></select>
-            <label style="color:#888; font-size:12px;">Enemy Level</label>
+            <label style="color:#888; font-size:12px;">${t('Enemy Level')}</label>
             <input id="mwi-labsim-upgrade-level" type="number" min="20" max="300" value="100" style="${inputStyle}"
-                title="Defaults to Max Level result when available">
+                title="${t('Defaults to Max Level result when available')}">
             <button id="mwi-labsim-upgrade-run" style="
                 margin-left: auto;
                 background: ${ACCENT_BTN_BG};
@@ -21820,7 +22146,7 @@
                 font-size: 12px;
                 font-weight: 600;
                 cursor: pointer;
-                font-family: inherit;">Analyze</button>
+                font-family: inherit;">${t('Analyze')}</button>
             <button id="mwi-labsim-upgrade-stop" style="
                 display:none;
                 background:rgba(244, 67, 54, 0.2);
@@ -21865,7 +22191,7 @@
             padding: 10px 14px; border-bottom: 1px solid #222; flex-shrink: 0;
         `;
             skillingControls.innerHTML = `
-            <label style="color:#888; font-size:12px;">Room Level</label>
+            <label style="color:#888; font-size:12px;">${t('Room Level')}</label>
             <input id="mwi-labsim-skilling-level" type="number" min="1" max="300" value="100" style="${inputStyle}">
             <button id="mwi-labsim-skilling-calc" style="
                 background: ${ACCENT_BTN_BG};
@@ -21885,7 +22211,7 @@
                 padding: 5px 10px;
                 font-size: 12px;
                 cursor: pointer;
-                font-family: inherit;">Analyze Upgrades</button>
+                font-family: inherit;">${t('Analyze Upgrades')}</button>
             <button id="mwi-labsim-skilling-stop" style="
                 display:none;
                 background:rgba(244, 67, 54, 0.2);
@@ -21906,7 +22232,7 @@
                 font-size:11px;
                 font-family:inherit;
                 margin-left:auto;">
-                <option value="">All Skills</option>
+                <option value="">${t('All Skills')}</option>
                 <option value="/skills/woodcutting">Woodcutting</option>
                 <option value="/skills/foraging">Foraging</option>
                 <option value="/skills/milking">Milking</option>
@@ -22394,7 +22720,11 @@
             const simHours = (simResult.simulatedTime || 0) / (3600 * 1e9) || hours;
             const winRate = attempts > 0 ? ((encounters / attempts) * 100).toFixed(2) : '0.00';
 
-            const monsterName = monsterHrid.split('/').pop().replace(/_/g, ' ');
+            const monsterName = monsterHrid
+                .split('/')
+                .pop()
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, (c) => c.toUpperCase());
 
             container.innerHTML = `
             <div style="margin-bottom:12px;">
@@ -22402,10 +22732,10 @@
                     ${monsterName} \u2014 Level ${roomLevel}
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 20px; font-size:12px;">
-                    <div><span style="color:#888;">Win Rate:</span> <span style="color:${parseFloat(winRate) >= 95 ? '#4caf50' : parseFloat(winRate) >= 50 ? '#ff9800' : '#f44336'}; font-weight:600;">${winRate}%</span></div>
-                    <div><span style="color:#888;">Encounters:</span> ${formatters_js.formatWithSeparator(attempts)}</div>
-                    <div><span style="color:#888;">Deaths:</span> <span style="color:${deaths > 0 ? '#f44336' : '#4caf50'};">${formatters_js.formatWithSeparator(deaths)}</span></div>
-                    <div><span style="color:#888;">Sim Time:</span> ${simHours.toFixed(1)}h</div>
+                    <div><span style="color:#888;">${t('Win Rate:')}</span> <span style="color:${parseFloat(winRate) >= 95 ? '#4caf50' : parseFloat(winRate) >= 50 ? '#ff9800' : '#f44336'}; font-weight:600;">${winRate}%</span></div>
+                    <div><span style="color:#888;">${t('Encounters:')}</span> ${formatters_js.formatWithSeparator(attempts)}</div>
+                    <div><span style="color:#888;">${t('Deaths:')}</span> <span style="color:${deaths > 0 ? '#f44336' : '#4caf50'};">${formatters_js.formatWithSeparator(deaths)}</span></div>
+                    <div><span style="color:#888;">${t('Sim Time:')}</span> ${simHours.toFixed(1)}h</div>
                 </div>
                 <div style="color:#555; font-size:10px; margin-top:6px;">Completed in ${totalElapsed}</div>
             </div>
@@ -22420,7 +22750,13 @@
             if (!container) return;
 
             const totalElapsed = formatElapsed((Date.now() - simStartTime) / 1000);
-            const monsterName = monsterHrid.split('/').pop().replace(/_/g, ' ');
+            const monsterName = monsterHrid
+                .split('/')
+                .pop()
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, (c) => c.toUpperCase());
+            const effectiveCombatLevel = labyrinthClearRate.getPlayerEffectiveCombatLevel();
+            const recommendedSkip = maxResult.maxLevel - effectiveCombatLevel + 1;
 
             container.innerHTML = `
             <div style="margin-bottom:12px;">
@@ -22433,6 +22769,9 @@
                 <div style="font-size:12px; color:#888;">
                     Win Rate: <span style="color:#e0e0e0; font-weight:600;">${(maxResult.winRate * 100).toFixed(1)}%</span>
                     at level ${maxResult.maxLevel}
+                </div>
+                <div style="font-size:12px; color:#888; margin-top:4px;">
+                    Recommended skip: <span style="color:#e0e0e0; font-weight:600;">${recommendedSkip}</span>
                 </div>
                 <div style="color:#555; font-size:10px; margin-top:6px;">Completed in ${totalElapsed} (${maxResult.steps} steps)</div>
             </div>
@@ -22628,7 +22967,7 @@
                     return `<th data-sort-key="${key}" data-table="token" style="${style}">${label}${ind}</th>`;
                 };
 
-                let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">Token Upgrades</div>`;
+                let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">${t('Token Upgrades')}</div>`;
                 html += '<table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:12px;">';
                 html += `<thead><tr>
                 ${th('Upgrade', 'desc', 'left')}
@@ -22659,7 +22998,7 @@
                     return `<th data-sort-key="${key}" data-table="gold" style="${style}">${label}${ind}</th>`;
                 };
 
-                let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">Gold Upgrades</div>`;
+                let html = `<div style="color:${ACCENT}; font-weight:700; font-size:12px; margin-bottom:4px;">${t('Gold Upgrades')}</div>`;
                 html += '<table style="width:100%; border-collapse:collapse; font-size:11px;">';
                 html += `<thead><tr>
                 ${th('Upgrade', 'desc', 'left')}
@@ -25546,7 +25885,7 @@
             const formatPrice = (val) => formatters_js.formatKMB(Math.round(val));
             const showDropsSetting = config.getSettingValue('expectedValue_showDrops', 'All');
 
-            let html = `<div style="font-weight:bold;margin-bottom:4px;">EXPECTED VALUE</div>`;
+            let html = `<div style="font-weight:bold;margin-bottom:4px;">${t('EXPECTED VALUE')}</div>`;
             html += `<div style="font-size:0.9em;margin-left:8px;">`;
             html += `<div style="color:${config.COLOR_TOOLTIP_PROFIT};font-weight:bold;">Expected Return: ${formatPrice(evData.expectedValue)}</div>`;
             html += `</div>`;
@@ -26891,12 +27230,8 @@ self.onmessage = function (e) {
             const cost = abilityCostCalculator_js.calculateAbilityCost(ability.abilityHrid, ability.level);
             totalCost += cost;
 
-            // Format ability name for display
-            const abilityName = ability.abilityHrid
-                .replace('/abilities/', '')
-                .split('_')
-                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                .join(' ');
+            // Use CN translation for display name (falls back to English if unavailable)
+            const abilityName = itemNameTranslator.getDisplayName(ability.abilityHrid);
 
             breakdown.push({
                 name: `${abilityName} ${ability.level}`,
@@ -26982,8 +27317,8 @@ self.onmessage = function (e) {
             // Categorize item by skill requirements
             const category = categorizeEquipmentItem(slot, itemDetails.equipmentDetail);
 
-            // Filter by score type
-            if (scoreType === 'combat' && !category.combat) continue;
+            // Combat score includes all equipped items (matching MWITools)
+            // Skiller score only includes skiller items
             if (scoreType === 'skiller' && !category.skiller) continue;
 
             const enhancementLevel = itemData.enhancementLevel || 0;
@@ -27118,8 +27453,8 @@ self.onmessage = function (e) {
 
             totalValue += itemCost;
 
-            // Format item name for display
-            const itemName = item.itemDetails.name || item.itemHrid.replace('/items/', '');
+            // Format item name for display — use CN translation when available
+            const itemName = itemNameTranslator.getDisplayName(item.itemHrid);
             const displayName = item.enhancementLevel > 0 ? `${itemName} +${item.enhancementLevel}` : itemName;
 
             // Only add to breakdown if formatted value is not "0.0"
@@ -28155,25 +28490,25 @@ self.onmessage = function (e) {
                 " title="${t('Close')}">×</span>
             </div>
             <div style="cursor: pointer; font-weight: bold; margin-bottom: 8px; color: ${config.COLOR_PROFIT}; ${!config.getSetting('combatScore') ? 'display: none;' : ''}" id="mwi-score-toggle">
-                + ${t('Combat Score: {0}', formatters_js.numberFormatter(scoreData.total.toFixed(1)))}${equipmentHiddenText}
+                + ${t('Combat Score: {0}', scoreData.total.toFixed(1))}${equipmentHiddenText}
             </div>
             <div id="mwi-score-details" style="display: none; margin-left: 10px; color: ${config.COLOR_TEXT_PRIMARY};">
                 <div style="cursor: pointer; margin-bottom: 4px;" id="mwi-house-toggle">
-                    + ${t('House: {0}', formatters_js.numberFormatter(scoreData.house.toFixed(1)))}
+                    + ${t('House: {0}', scoreData.house.toFixed(1))}
                 </div>
                 <div id="mwi-house-breakdown" style="display: none; margin-bottom: 6px;">
                     ${houseBreakdownHTML}
                 </div>
 
                 <div style="cursor: pointer; margin-bottom: 4px;" id="mwi-ability-toggle">
-                    + ${t('Ability: {0}', formatters_js.numberFormatter(scoreData.ability.toFixed(1)))}
+                    + ${t('Ability: {0}', scoreData.ability.toFixed(1))}
                 </div>
                 <div id="mwi-ability-breakdown" style="display: none; margin-bottom: 6px;">
                     ${abilityBreakdownHTML}
                 </div>
 
                 <div style="cursor: pointer; margin-bottom: 4px;" id="mwi-equipment-toggle">
-                    + ${t('Equipment: {0}', formatters_js.numberFormatter(scoreData.equipment.toFixed(1)))}
+                    + ${t('Equipment: {0}', scoreData.equipment.toFixed(1))}
                 </div>
                 <div id="mwi-equipment-breakdown" style="display: none;">
                     ${equipmentBreakdownHTML}
@@ -28181,11 +28516,11 @@ self.onmessage = function (e) {
             </div>
 
             <div style="cursor: pointer; font-weight: bold; margin-top: 12px; margin-bottom: 8px; color: ${config.COLOR_PROFIT}; ${!config.getSetting('combatScore') ? 'display: none;' : ''}" id="mwi-skiller-score-toggle">
-                + ${t('Skiller Score: {0}', formatters_js.numberFormatter(scoreData.skillerTotal.toFixed(1)))}
+                + ${t('Skiller Score: {0}', scoreData.skillerTotal.toFixed(1))}
             </div>
             <div id="mwi-skiller-score-details" style="display: none; margin-left: 10px; color: ${config.COLOR_TEXT_PRIMARY};">
                 <div style="cursor: pointer; margin-bottom: 4px;" id="mwi-skiller-equipment-toggle">
-                    + ${t('Equipment: {0}', formatters_js.numberFormatter(scoreData.skillerEquipment.toFixed(1)))}
+                    + ${t('Equipment: {0}', scoreData.skillerEquipment.toFixed(1))}
                 </div>
                 <div id="mwi-skiller-equipment-breakdown" style="display: none;">
                     ${skillerEquipmentBreakdownHTML}
@@ -28324,7 +28659,7 @@ self.onmessage = function (e) {
                     details.style.display = isCollapsed ? 'block' : 'none';
                     toggleBtn.textContent =
                         (isCollapsed ? '- ' : '+ ') +
-                        t('Combat Score: {0}', formatters_js.numberFormatter(scoreData.total.toFixed(1))) +
+                        t('Combat Score: {0}', scoreData.total.toFixed(1)) +
                         equipmentHiddenText;
                 });
             }
@@ -28336,8 +28671,7 @@ self.onmessage = function (e) {
                 houseToggle.addEventListener('click', () => {
                     const isCollapsed = houseBreakdown.style.display === 'none';
                     houseBreakdown.style.display = isCollapsed ? 'block' : 'none';
-                    houseToggle.textContent =
-                        (isCollapsed ? '- ' : '+ ') + t('House: {0}', formatters_js.numberFormatter(scoreData.house.toFixed(1)));
+                    houseToggle.textContent = (isCollapsed ? '- ' : '+ ') + t('House: {0}', scoreData.house.toFixed(1));
                 });
             }
 
@@ -28349,7 +28683,7 @@ self.onmessage = function (e) {
                     const isCollapsed = abilityBreakdown.style.display === 'none';
                     abilityBreakdown.style.display = isCollapsed ? 'block' : 'none';
                     abilityToggle.textContent =
-                        (isCollapsed ? '- ' : '+ ') + t('Ability: {0}', formatters_js.numberFormatter(scoreData.ability.toFixed(1)));
+                        (isCollapsed ? '- ' : '+ ') + t('Ability: {0}', scoreData.ability.toFixed(1));
                 });
             }
 
@@ -28361,7 +28695,7 @@ self.onmessage = function (e) {
                     const isCollapsed = equipmentBreakdown.style.display === 'none';
                     equipmentBreakdown.style.display = isCollapsed ? 'block' : 'none';
                     equipmentToggle.textContent =
-                        (isCollapsed ? '- ' : '+ ') + t('Equipment: {0}', formatters_js.numberFormatter(scoreData.equipment.toFixed(1)));
+                        (isCollapsed ? '- ' : '+ ') + t('Equipment: {0}', scoreData.equipment.toFixed(1));
                 });
             }
 
@@ -28373,8 +28707,7 @@ self.onmessage = function (e) {
                     const isCollapsed = skillerScoreDetails.style.display === 'none';
                     skillerScoreDetails.style.display = isCollapsed ? 'block' : 'none';
                     skillerScoreToggle.textContent =
-                        (isCollapsed ? '- ' : '+ ') +
-                        t('Skiller Score: {0}', formatters_js.numberFormatter(scoreData.skillerTotal.toFixed(1)));
+                        (isCollapsed ? '- ' : '+ ') + t('Skiller Score: {0}', scoreData.skillerTotal.toFixed(1));
                 });
             }
 
@@ -28386,8 +28719,7 @@ self.onmessage = function (e) {
                     const isCollapsed = skillerEquipmentBreakdown.style.display === 'none';
                     skillerEquipmentBreakdown.style.display = isCollapsed ? 'block' : 'none';
                     skillerEquipmentToggle.textContent =
-                        (isCollapsed ? '- ' : '+ ') +
-                        t('Equipment: {0}', formatters_js.numberFormatter(scoreData.skillerEquipment.toFixed(1)));
+                        (isCollapsed ? '- ' : '+ ') + t('Equipment: {0}', scoreData.skillerEquipment.toFixed(1));
                 });
             }
 
@@ -29261,6 +29593,155 @@ self.onmessage = function (e) {
     combatScore.setupSettingListener();
 
     /**
+     * Self Combat Score Widget
+     * Renders combat score breakdown above the inventory grid using self data.
+     */
+
+    const WIDGET_ID = 'mwi-self-combat-score';
+    const SCORE_FMT = (v) => v.toFixed(1);
+
+    const makeToggle = (toggleEl, detailsEl, label) => {
+        if (!toggleEl || !detailsEl) return;
+        const text = (expanded) => `${expanded ? '↓ ' : '+ '}${label}`;
+        toggleEl.addEventListener('click', () => {
+            const expanded = detailsEl.style.display !== 'none';
+            detailsEl.style.display = expanded ? 'none' : 'block';
+            toggleEl.textContent = text(expanded);
+        });
+    };
+
+    class SelfCombatScore {
+        constructor() {
+            this.widget = null;
+            this.cleanup = cleanupRegistry_js.createCleanupRegistry();
+            this.lastScoreData = null;
+            this.refreshTimer = null;
+        }
+
+        buildSelfProfileData() {
+            const cd = dataManager.characterData;
+            return {
+                profile: {
+                    characterHouseRoomMap:
+                        cd?.characterHouseRoomMap || Object.fromEntries(dataManager.characterHouseRooms || new Map()),
+                    equippedAbilities: cd?.equippedAbilities || cd?.characterAbilities || [],
+                    wearableItemMap: cd?.wearableItemMap || Object.fromEntries(dataManager.characterEquipment || new Map()),
+                    hideWearableItems: false,
+                },
+            };
+        }
+
+        async refresh() {
+            if (!this.widget || !document.body.contains(this.widget)) return;
+            const profileData = this.buildSelfProfileData();
+            let scoreData;
+            try {
+                scoreData = await calculateCombatScore(profileData);
+            } catch (error) {
+                console.error('[SelfCombatScore] Error calculating score:', error);
+                return;
+            }
+            this.lastScoreData = scoreData;
+            this.populateWidget(this.widget, scoreData);
+        }
+
+        populateWidget(widget, scoreData) {
+            const score = SCORE_FMT(scoreData.total);
+            const house = SCORE_FMT(scoreData.house);
+            const ability = SCORE_FMT(scoreData.ability);
+            const equipment = SCORE_FMT(scoreData.equipment);
+            const skillerTotal = SCORE_FMT(scoreData.skillerTotal);
+            const skillerEquipment = SCORE_FMT(scoreData.skillerEquipment);
+
+            widget.innerHTML = `
+            <div style="cursor: pointer; font-weight: bold; color: ${config.COLOR_PROFIT};" id="mwi-self-score-toggle">
+                + ${t('Combat Score: {0}', score)}
+            </div>
+            <div id="mwi-self-score-details" style="display: none; margin-left: 20px;">
+                <div>${t('House: {0}', house)}</div>
+                <div>${t('Ability: {0}', ability)}</div>
+                <div>${t('Equipment: {0}', equipment)}</div>
+            </div>
+            <div style="cursor: pointer; font-weight: bold; color: ${config.COLOR_PROFIT}; margin-top: 8px;" id="mwi-self-skiller-score-toggle">
+                + ${t('Skiller Score: {0}', skillerTotal)}
+            </div>
+            <div id="mwi-self-skiller-score-details" style="display: none; margin-left: 20px;">
+                <div>${t('Equipment: {0}', skillerEquipment)}</div>
+            </div>
+        `;
+
+            makeToggle(
+                widget.querySelector('#mwi-self-score-toggle'),
+                widget.querySelector('#mwi-self-score-details'),
+                t('Combat Score: {0}', score)
+            );
+            makeToggle(
+                widget.querySelector('#mwi-self-skiller-score-toggle'),
+                widget.querySelector('#mwi-self-skiller-score-details'),
+                t('Skiller Score: {0}', skillerTotal)
+            );
+        }
+
+        async renderWidget(inventoryElem) {
+            if (!inventoryElem?.parentElement) return;
+
+            if (this.widget && this.widget.nextElementSibling === inventoryElem) {
+                await this.refresh();
+                return;
+            }
+            if (this.widget) this.widget.remove();
+
+            const widget = document.createElement('div');
+            widget.id = WIDGET_ID;
+            widget.style.cssText = `
+            background: rgba(30, 30, 30, 0.95);
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            font-size: 0.875rem;
+            color: ${config.COLOR_TEXT_PRIMARY};
+        `;
+            this.widget = widget;
+            inventoryElem.insertAdjacentElement('beforebegin', widget);
+
+            await this.refresh();
+        }
+
+        initialize() {
+            if (!config.getSetting('selfCombatScore')) return;
+
+            this.cleanup.registerCleanup(
+                domObserver.onClass('SelfCombatScore', 'Inventory_items', (elem) => {
+                    this.renderWidget(elem);
+                })
+            );
+            const existing = document.querySelector('[class*="Inventory_items"]');
+            if (existing) this.renderWidget(existing);
+
+            const onItemsUpdated = () => {
+                clearTimeout(this.refreshTimer);
+                this.refreshTimer = setTimeout(() => this.refresh(), 300);
+            };
+            dataManager.on('items_updated', onItemsUpdated);
+            this.cleanup.registerCleanup(() => dataManager.off('items_updated', onItemsUpdated));
+            this.cleanup.registerCleanup(() => clearTimeout(this.refreshTimer));
+        }
+
+        disable() {
+            this.cleanup.cleanupAll();
+            if (this.widget) {
+                this.widget.remove();
+                this.widget = null;
+            }
+        }
+    }
+
+    const instance = new SelfCombatScore();
+    config.onSettingChange('selfCombatScore', (enabled) => (enabled ? instance.initialize() : instance.disable()));
+    instance.initialize();
+
+    /**
      * Combat Library
      * Combat, abilities, and combat stats features
      *
@@ -29299,6 +29780,7 @@ self.onmessage = function (e) {
         },
         combatStats,
         abilityBookCalculator,
+        selfCombatScore: instance,
         combatScore,
         characterCardButton,
         combatSim,
@@ -29307,4 +29789,4 @@ self.onmessage = function (e) {
 
     console.log('[Toolasha] Combat library loaded');
 
-})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.storage, Toolasha.Core.webSocketHook, Toolasha.Utils.timerRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.formatters, Toolasha.Core.marketAPI, Toolasha.Market.expectedValueCalculator, Toolasha.Utils.reactInput, Toolasha.Utils.profitHelpers, Toolasha.Utils.marketData, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.enhancementConfig, Toolasha.Utils.teaParser, Toolasha.Utils.abilityCalc, Toolasha.Utils.equipmentParser, Toolasha.Utils.dom, Toolasha.Utils.houseCostCalculator);
+})(Toolasha.Core.config, Toolasha.Core.dataManager, Toolasha.Core.domObserver, Toolasha.Core.storage, Toolasha.Core.webSocketHook, Toolasha.Utils.timerRegistry, Toolasha.Utils.domObserverHelpers, Toolasha.Utils.formatters, Toolasha.Core.marketAPI, Toolasha.Market.expectedValueCalculator, Toolasha.Utils.reactInput, Toolasha.Utils.profitHelpers, Toolasha.Utils.marketData, Toolasha.Utils.enhancementCalculator, Toolasha.Utils.enhancementConfig, Toolasha.Utils.teaParser, Toolasha.Utils.abilityCalc, Toolasha.Utils.equipmentParser, Toolasha.Utils.dom, Toolasha.Utils.houseCostCalculator, Toolasha.Utils.cleanupRegistry);
