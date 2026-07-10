@@ -131,7 +131,7 @@ function detectTaskType(taskDescription) {
     }
 
     // Combat
-    if (skill === 'defeat') {
+    if (skill === 'defeat' || skill === '击败') {
         return 'combat';
     }
 

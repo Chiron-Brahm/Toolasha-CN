@@ -178,6 +178,15 @@ export function getMonsterDisplayName(monsterHrid) {
     return CN_MONSTER_NAMES[spriteName] || spriteName;
 }
 
+export function getHouseRoomDisplayName(houseRoomHrid) {
+    const slug = houseRoomHrid.split('/').pop();
+    const name = slug
+        .split('_')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+    return CN_MONSTER_NAMES[name] || name;
+}
+
 // Chinese zone name mapping (from game's official Chinese translation)
 const CN_ZONE_NAMES = {
     // Non-dungeon zones

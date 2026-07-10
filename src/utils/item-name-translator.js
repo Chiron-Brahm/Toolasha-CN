@@ -261,21 +261,6 @@ class ItemNameTranslator {
             }
         }
     }
-
-    /**
-     * Get the display name for an item.
-     * Returns the Chinese name if cached, otherwise the English name from game data,
-     * and as a final fallback parses the HRID into a readable label.
-     * @param {string} itemHrid - Item HRID (e.g., '/items/essence')
-     * @returns {string} Display name
-     */
-    getDisplayName(itemHrid) {
-        const cnName = this.cnNames[itemHrid];
-        if (cnName) return cnName;
-        const enName = dataManager.getItemDetails(itemHrid)?.name;
-        if (enName) return enName;
-        return itemHrid.split('/').pop().replace(/_/g, ' ');
-    }
 }
 
 export const itemNameTranslator = new ItemNameTranslator();

@@ -32,7 +32,38 @@ class HousePanelObserver {
         // Register modal observer
         this.registerObservers();
 
+        // Check for existing modal that may have opened before observer was ready
+        const existingModal = document.querySelector('[class*="HousePanel_modalContent"]');
+        if (existingModal) {
+            this.handleHouseModal(existingModal);
+        }
+
+        // Also start a periodic check as a fallback for timing issues
+        this._startPeriodicCheck();
+
         this.isActive = true;
+    }
+
+    /**
+     * Start periodic check for house modal
+     * This is a fallback for when the DOM observer misses the modal
+     */
+    _startPeriodicCheck() {
+        this._periodicCheckInterval = setInterval(() => {
+            if (!this.isActive) return;
+            
+            const modalContent = document.querySelector('[class*="HousePanel_modalContent"]');
+            if (modalContent && !this.processedCards.has(modalContent)) {
+                this.handleHouseModal(modalContent);
+            }
+        }, 500);
+        
+        this.cleanupRegistry.registerCleanup(() => {
+            if (this._periodicCheckInterval) {
+                clearInterval(this._periodicCheckInterval);
+                this._periodicCheckInterval = null;
+            }
+        });
     }
 
     /**
@@ -56,7 +87,9 @@ class HousePanelObserver {
      * @param {Element} modalContent - The house panel modal content element
      */
     async handleHouseModal(modalContent) {
-        // Wait a moment for content to fully load
+        if (this.processedCards.has(modalContent)) return;
+        this.processedCards.add(modalContent);
+
         await new Promise((resolve) => {
             const loadTimeout = setTimeout(resolve, 100);
             this.cleanupRegistry.registerTimeout(loadTimeout);
@@ -130,24 +163,16 @@ class HousePanelObserver {
      * @param {Element} modalContent - The house panel modal content
      */
     observeModalChanges(modalContent) {
+        const header = modalContent.querySelector('[class*="HousePanel_header"]');
+        if (!header) return;
+
         const observer = createMutationWatcher(
-            modalContent,
-            (mutations) => {
-                // Check if header changed (indicates room switch)
-                for (const mutation of mutations) {
-                    if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                        const header = modalContent.querySelector('[class*="HousePanel_header"]');
-                        if (header && mutation.target.contains(header)) {
-                            // Room switched, reprocess
-                            this.processModalContent(modalContent);
-                            break;
-                        }
-                    }
-                }
+            header,
+            () => {
+                this.processModalContent(modalContent);
             },
             {
                 childList: true,
-                subtree: true,
                 characterData: true,
             },
             { debounce: true, debounceDelay: 150 }

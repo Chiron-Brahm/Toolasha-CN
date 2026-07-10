@@ -16,6 +16,7 @@ import settingsStorage from '../core/settings-storage.js';
 import { settingsGroups } from '../core/settings-schema.js';
 import { setCurrentProfile, getCurrentProfile, clearCurrentProfile } from '../core/profile-manager.js';
 import tooltipObserver from '../core/tooltip-observer.js';
+import observerLeakFix from '../core/observer-leak-fix.js';
 import performanceMonitor from '../utils/performance-monitor.js';
 
 // API modules
@@ -42,6 +43,7 @@ toolashaRoot.Core = {
     settingsStorage,
     settingsGroups,
     tooltipObserver,
+    observerLeakFix,
     profileManager: {
         setCurrentProfile,
         getCurrentProfile,

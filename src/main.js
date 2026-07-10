@@ -7,6 +7,7 @@ import storage from './core/storage.js';
 import config from './core/config.js';
 import webSocketHook from './core/websocket.js';
 import domObserver from './core/dom-observer.js';
+import observerLeakFix from './core/observer-leak-fix.js';
 import dataManager from './core/data-manager.js';
 import featureRegistry from './core/feature-registry.js';
 import networkAlert from './features/market/network-alert.js';
@@ -37,6 +38,9 @@ if (isCombatSimulatorPage()) {
 
     // CRITICAL: Start centralized DOM observer SECOND, before features initialize
     domObserver.start();
+
+    // Prevent game's MutationObserver leak from accumulating 250+ observers
+    observerLeakFix.install();
 
     // Set up scroll listener to dismiss stuck tooltips
     setupScrollTooltipDismissal();

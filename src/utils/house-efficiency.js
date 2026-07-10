@@ -9,6 +9,7 @@
  */
 
 import dataManager from '../core/data-manager.js';
+import { getHouseRoomDisplayName } from './game-locale.js';
 
 /**
  * Map action type HRID to house room HRID
@@ -63,19 +64,7 @@ export function calculateHouseEfficiency(actionTypeHrid) {
  * @returns {string} Friendly name
  */
 export function getHouseRoomName(houseRoomHrid) {
-    const names = {
-        '/house_rooms/brewery': 'Brewery',
-        '/house_rooms/forge': 'Forge',
-        '/house_rooms/kitchen': 'Kitchen',
-        '/house_rooms/workshop': 'Workshop',
-        '/house_rooms/garden': 'Garden',
-        '/house_rooms/dairy_barn': 'Dairy Barn',
-        '/house_rooms/sewing_parlor': 'Sewing Parlor',
-        '/house_rooms/log_shed': 'Log Shed',
-        '/house_rooms/laboratory': 'Laboratory',
-    };
-
-    return names[houseRoomHrid] || 'Unknown';
+    return getHouseRoomDisplayName(houseRoomHrid);
 }
 
 /**

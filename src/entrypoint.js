@@ -20,7 +20,7 @@ const Combat = window.Toolasha?.Combat;
 const UI = window.Toolasha?.UI;
 
 // Destructure core modules
-const { storage, config, webSocketHook, domObserver, dataManager, featureRegistry } = Core || {};
+const { storage, config, webSocketHook, domObserver, observerLeakFix, dataManager, featureRegistry } = Core || {};
 
 const { setupScrollTooltipDismissal } = Utils?.dom || {};
 
@@ -325,6 +325,13 @@ function registerFeatures() {
         },
         { key: 'zoneIndices', name: 'Zone Indices', category: 'Combat', module: Combat.zoneIndices, async: false },
         { key: 'combatScore', name: 'Combat Score', category: 'Profile', module: Combat.combatScore, async: false },
+        {
+            key: 'selfCombatScore',
+            name: 'Self Combat Score',
+            category: 'Profile',
+            module: Combat.selfCombatScore,
+            async: false,
+        },
         {
             key: 'characterCardButton',
             name: 'Character Card Button',
@@ -712,6 +719,9 @@ if (!LIBRARIES_LOADED) {
 
     // CRITICAL: Start centralized DOM observer SECOND, before features initialize
     domObserver.start();
+
+    // Prevent game's MutationObserver leak from accumulating 250+ observers
+    observerLeakFix.install();
 
     // Set up scroll listener to dismiss stuck tooltips
     setupScrollTooltipDismissal();

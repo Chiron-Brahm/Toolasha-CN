@@ -15,6 +15,7 @@ import config from '../../core/config.js';
 import { calculateEnhancementBatch } from '../../utils/enhancement-worker-manager.js';
 import { getCheapestProtectionPrice, getRealisticBaseItemPrice } from '../enhancement/tooltip-enhancement.js';
 import { getShopCoinCost } from '../../utils/game-lookups.js';
+import { itemNameTranslator } from '../../utils/item-name-translator.js';
 
 /**
  * Token-based item data for untradeable back slot items (capes/cloaks/quivers)
@@ -261,12 +262,8 @@ function calculateAbilityScore(profileData) {
         const cost = calculateAbilityCost(ability.abilityHrid, ability.level);
         totalCost += cost;
 
-        // Format ability name for display
-        const abilityName = ability.abilityHrid
-            .replace('/abilities/', '')
-            .split('_')
-            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
+        // Use CN translation for display name (falls back to English if unavailable)
+        const abilityName = itemNameTranslator.getDisplayName(ability.abilityHrid);
 
         breakdown.push({
             name: `${abilityName} ${ability.level}`,
@@ -352,8 +349,8 @@ async function calculateEquipmentScore(profileData, scoreType = 'combat') {
         // Categorize item by skill requirements
         const category = categorizeEquipmentItem(slot, itemDetails.equipmentDetail);
 
-        // Filter by score type
-        if (scoreType === 'combat' && !category.combat) continue;
+        // Combat score includes all equipped items (matching MWITools)
+        // Skiller score only includes skiller items
         if (scoreType === 'skiller' && !category.skiller) continue;
 
         const enhancementLevel = itemData.enhancementLevel || 0;
@@ -488,8 +485,8 @@ async function calculateEquipmentScore(profileData, scoreType = 'combat') {
 
         totalValue += itemCost;
 
-        // Format item name for display
-        const itemName = item.itemDetails.name || item.itemHrid.replace('/items/', '');
+        // Format item name for display — use CN translation when available
+        const itemName = itemNameTranslator.getDisplayName(item.itemHrid);
         const displayName = item.enhancementLevel > 0 ? `${itemName} +${item.enhancementLevel}` : itemName;
 
         // Only add to breakdown if formatted value is not "0.0"

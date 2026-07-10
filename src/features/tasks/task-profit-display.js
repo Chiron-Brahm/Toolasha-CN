@@ -15,6 +15,7 @@ import { calculateTaskProfit, calculateTaskRewardValue } from './task-profit-cal
 import expectedValueCalculator from '../market/expected-value-calculator.js';
 import { timeReadable, formatPercentage, formatKMB } from '../../utils/formatters.js';
 import { GAME, TOOLASHA } from '../../utils/selectors.js';
+import { getHouseRoomDisplayName } from '../../utils/game-locale.js';
 import {
     calculateSecondsForActions,
     calculateEffectiveActionsPerHour,
@@ -2082,12 +2083,7 @@ class TaskProfitDisplay {
             let roomLabel = 'Unknown Room';
             if (roomHrid) {
                 const room = dataManager.getHouseRooms().get(roomHrid);
-                const roomName = roomHrid
-                    .split('/')
-                    .pop()
-                    .split('_')
-                    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                    .join(' ');
+                const roomName = getHouseRoomDisplayName(roomHrid);
                 roomLabel = `${roomName} level ${room?.level || 0}`;
             }
             lines.push(

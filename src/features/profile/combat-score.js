@@ -8,7 +8,6 @@ import dataManager from '../../core/data-manager.js';
 import storage from '../../core/storage.js';
 import webSocketHook from '../../core/websocket.js';
 import { calculateCombatScore } from './score-calculator.js';
-import { numberFormatter } from '../../utils/formatters.js';
 import { constructExportObject } from '../combat/combat-sim-export.js';
 import { constructMilkonomyExport } from '../combat/milkonomy-export.js';
 import { handleViewCardClick, handleViewCardFromSnapshot } from './character-card-button.js';
@@ -270,25 +269,25 @@ class CombatScore {
                 " title="${t('Close')}">×</span>
             </div>
             <div style="cursor: pointer; font-weight: bold; margin-bottom: 8px; color: ${config.COLOR_PROFIT}; ${!config.getSetting('combatScore') ? 'display: none;' : ''}" id="mwi-score-toggle">
-                + ${t('Combat Score: {0}', numberFormatter(scoreData.total.toFixed(1)))}${equipmentHiddenText}
+                + ${t('Combat Score: {0}', scoreData.total.toFixed(1))}${equipmentHiddenText}
             </div>
             <div id="mwi-score-details" style="display: none; margin-left: 10px; color: ${config.COLOR_TEXT_PRIMARY};">
                 <div style="cursor: pointer; margin-bottom: 4px;" id="mwi-house-toggle">
-                    + ${t('House: {0}', numberFormatter(scoreData.house.toFixed(1)))}
+                    + ${t('House: {0}', scoreData.house.toFixed(1))}
                 </div>
                 <div id="mwi-house-breakdown" style="display: none; margin-bottom: 6px;">
                     ${houseBreakdownHTML}
                 </div>
 
                 <div style="cursor: pointer; margin-bottom: 4px;" id="mwi-ability-toggle">
-                    + ${t('Ability: {0}', numberFormatter(scoreData.ability.toFixed(1)))}
+                    + ${t('Ability: {0}', scoreData.ability.toFixed(1))}
                 </div>
                 <div id="mwi-ability-breakdown" style="display: none; margin-bottom: 6px;">
                     ${abilityBreakdownHTML}
                 </div>
 
                 <div style="cursor: pointer; margin-bottom: 4px;" id="mwi-equipment-toggle">
-                    + ${t('Equipment: {0}', numberFormatter(scoreData.equipment.toFixed(1)))}
+                    + ${t('Equipment: {0}', scoreData.equipment.toFixed(1))}
                 </div>
                 <div id="mwi-equipment-breakdown" style="display: none;">
                     ${equipmentBreakdownHTML}
@@ -296,11 +295,11 @@ class CombatScore {
             </div>
 
             <div style="cursor: pointer; font-weight: bold; margin-top: 12px; margin-bottom: 8px; color: ${config.COLOR_PROFIT}; ${!config.getSetting('combatScore') ? 'display: none;' : ''}" id="mwi-skiller-score-toggle">
-                + ${t('Skiller Score: {0}', numberFormatter(scoreData.skillerTotal.toFixed(1)))}
+                + ${t('Skiller Score: {0}', scoreData.skillerTotal.toFixed(1))}
             </div>
             <div id="mwi-skiller-score-details" style="display: none; margin-left: 10px; color: ${config.COLOR_TEXT_PRIMARY};">
                 <div style="cursor: pointer; margin-bottom: 4px;" id="mwi-skiller-equipment-toggle">
-                    + ${t('Equipment: {0}', numberFormatter(scoreData.skillerEquipment.toFixed(1)))}
+                    + ${t('Equipment: {0}', scoreData.skillerEquipment.toFixed(1))}
                 </div>
                 <div id="mwi-skiller-equipment-breakdown" style="display: none;">
                     ${skillerEquipmentBreakdownHTML}
@@ -439,7 +438,7 @@ class CombatScore {
                 details.style.display = isCollapsed ? 'block' : 'none';
                 toggleBtn.textContent =
                     (isCollapsed ? '- ' : '+ ') +
-                    t('Combat Score: {0}', numberFormatter(scoreData.total.toFixed(1))) +
+                    t('Combat Score: {0}', scoreData.total.toFixed(1)) +
                     equipmentHiddenText;
             });
         }
@@ -452,7 +451,7 @@ class CombatScore {
                 const isCollapsed = houseBreakdown.style.display === 'none';
                 houseBreakdown.style.display = isCollapsed ? 'block' : 'none';
                 houseToggle.textContent =
-                    (isCollapsed ? '- ' : '+ ') + t('House: {0}', numberFormatter(scoreData.house.toFixed(1)));
+                    (isCollapsed ? '- ' : '+ ') + t('House: {0}', scoreData.house.toFixed(1));
             });
         }
 
@@ -464,7 +463,7 @@ class CombatScore {
                 const isCollapsed = abilityBreakdown.style.display === 'none';
                 abilityBreakdown.style.display = isCollapsed ? 'block' : 'none';
                 abilityToggle.textContent =
-                    (isCollapsed ? '- ' : '+ ') + t('Ability: {0}', numberFormatter(scoreData.ability.toFixed(1)));
+                    (isCollapsed ? '- ' : '+ ') + t('Ability: {0}', scoreData.ability.toFixed(1));
             });
         }
 
@@ -476,7 +475,7 @@ class CombatScore {
                 const isCollapsed = equipmentBreakdown.style.display === 'none';
                 equipmentBreakdown.style.display = isCollapsed ? 'block' : 'none';
                 equipmentToggle.textContent =
-                    (isCollapsed ? '- ' : '+ ') + t('Equipment: {0}', numberFormatter(scoreData.equipment.toFixed(1)));
+                    (isCollapsed ? '- ' : '+ ') + t('Equipment: {0}', scoreData.equipment.toFixed(1));
             });
         }
 
@@ -489,7 +488,7 @@ class CombatScore {
                 skillerScoreDetails.style.display = isCollapsed ? 'block' : 'none';
                 skillerScoreToggle.textContent =
                     (isCollapsed ? '- ' : '+ ') +
-                    t('Skiller Score: {0}', numberFormatter(scoreData.skillerTotal.toFixed(1)));
+                    t('Skiller Score: {0}', scoreData.skillerTotal.toFixed(1));
             });
         }
 
@@ -502,7 +501,7 @@ class CombatScore {
                 skillerEquipmentBreakdown.style.display = isCollapsed ? 'block' : 'none';
                 skillerEquipmentToggle.textContent =
                     (isCollapsed ? '- ' : '+ ') +
-                    t('Equipment: {0}', numberFormatter(scoreData.skillerEquipment.toFixed(1)));
+                    t('Equipment: {0}', scoreData.skillerEquipment.toFixed(1));
             });
         }
 

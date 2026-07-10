@@ -32,6 +32,7 @@ import { createMutationWatcher } from '../../utils/dom-observer-helpers.js';
 import scrollSimulator from '../combat/scroll-simulator.js';
 import { SCROLL_BUFF_ITEMS } from '../../utils/scroll-buff-values.js';
 import { t } from '../../core/i18n.js';
+import { getHouseRoomDisplayName } from '../../utils/game-locale.js';
 
 let _qibSpriteUrl = null;
 function scrollSpriteHtml(buffTypeHrid, size = 14) {
@@ -258,7 +259,6 @@ class QuickInputButtons {
      * Start observing for action panels using centralized observer
      */
     startObserving() {
-        // Register with centralized DOM observer
         this.unregisterObserver = domObserver.onClass(
             'QuickInputButtons',
             'SkillActionDetail_skillActionDetail',
@@ -275,7 +275,6 @@ class QuickInputButtons {
             }
         });
 
-        // Check for existing action panels that may already be open
         const existingPanels = document.querySelectorAll('[class*="SkillActionDetail_skillActionDetail"]');
         existingPanels.forEach((panel) => {
             this.injectButtons(panel);
@@ -289,6 +288,8 @@ class QuickInputButtons {
     injectButtons(panel) {
         let actionDetails = null;
         try {
+            // ponytail: log className once for F12 diagnosis if anything else fails
+            console.warn('[QuickInput] inject called for:', panel.className?.slice(0, 80));
             // Check if already injected for this same action
             const actionNameElement = panel.querySelector('[class*="SkillActionDetail_name"]');
             const currentActionName = actionNameElement?.textContent?.trim() || '';
@@ -296,6 +297,7 @@ class QuickInputButtons {
 
             if (panel.querySelector('.mwi-collapsible-section') || panel.querySelector('.mwi-quick-input-btn')) {
                 if (currentActionName && currentActionName === previousActionName) {
+                    console.warn('[QuickInput] skip: already injected for', currentActionName);
                     return;
                 }
                 // Action changed (React reused the panel) — remove old injections
@@ -314,28 +316,32 @@ class QuickInputButtons {
                 numberInput = panel.querySelector('input[type="number"]');
             }
             if (!numberInput) {
-                // This is a panel type that doesn't have queue inputs (Enhancing, Alchemy, etc.)
-                // Skip silently - not an error, just not applicable
+                console.warn('[QuickInput] skip: no number input found in', panel.className?.slice(0, 80));
                 return;
             }
 
-            // Cache game data once for all method calls
+            // ponytail: gameData missing (e.g. network failed loading marketplace) — inject count-only buttons anyway
             const gameData = dataManager.getInitClientData();
             if (!gameData) {
-                console.warn('[Quick Input Buttons] No game data available');
+                console.warn('[QuickInput] no game data, injecting count-only buttons');
+                const fallbackInput = numberInput;
+                const fallbackPanel = panel;
+                const fallbackActionName = currentActionName;
+                this._createCountPresetRow(fallbackPanel, fallbackInput, { itemDetailMap: {}, actionDetailMap: {} }, { hrid: '', name: fallbackActionName, type: '', baseTimeCost: 0 });
+                this._finalizeInjection(fallbackPanel, fallbackActionName, fallbackInput);
                 return;
             }
 
             // Get action details for time-based calculations
             if (!actionNameElement) {
-                console.warn('[Quick Input Buttons] No action name element found');
+                console.warn('[QuickInput] skip: no SkillActionDetail_name in', panel.className?.slice(0, 80));
                 return;
             }
 
             const actionName = currentActionName;
             actionDetails = this.getActionDetailsByName(actionName, gameData);
             if (!actionDetails) {
-                console.warn('[Quick Input Buttons] No action details found for:', actionName);
+                console.warn('[QuickInput] skip: no action details for', actionName);
                 return;
             }
 
@@ -912,12 +918,7 @@ class QuickInputButtons {
         if (!roomHrid) return t('Unknown Room');
 
         const room = houseRooms.get(roomHrid);
-        const roomName = roomHrid
-            .split('/')
-            .pop()
-            .split('_')
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-            .join(' ');
+        const roomName = getHouseRoomDisplayName(roomHrid);
         const level = room?.level || 0;
 
         return `${roomName} level ${level}`;
