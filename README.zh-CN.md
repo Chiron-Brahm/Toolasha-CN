@@ -119,16 +119,16 @@ Toolasha 是对流行的 MWITools 用户脚本的完整重写，使用现代 Jav
 ### 从 GitHub Release 安装
 
 1. **下载最新版本**
-   - 访问 [Releases 页面](../../releases)
-   - 下载 `Toolasha.user.js`
+    - 访问 [Releases 页面](../../releases)
+    - 下载 `Toolasha.user.js`
 
 2. **在 Tampermonkey 中安装**
-   - 点击下载的文件，或
-   - 打开 Tampermonkey 面板 → 工具 → 从文件导入
+    - 点击下载的文件，或
+    - 打开 Tampermonkey 面板 → 工具 → 从文件导入
 
 3. **访问游戏**
-   - 前往 [Milky Way Idle](https://www.milkywayidle.com/game)
-   - Toolasha 自动加载
+    - 前往 [Milky Way Idle](https://www.milkywayidle.com/game)
+    - Toolasha 自动加载
 
 > 入口脚本会自动从 GitHub raw URL 加载所需库。
 
