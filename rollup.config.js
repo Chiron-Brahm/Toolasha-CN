@@ -21,6 +21,7 @@ const entrypointHeader = readFileSync(join(__dirname, 'library-headers/entrypoin
 const normalizeModuleId = (id) => (id ? normalize(id.split('?')[0]) : id);
 
 const coreExternalGlobals = new Map([
+    [normalize(join(__dirname, 'src/core/i18n.js')), 'Toolasha.Core.i18n'],
     [normalize(join(__dirname, 'src/core/storage.js')), 'Toolasha.Core.storage'],
     [normalize(join(__dirname, 'src/core/config.js')), 'Toolasha.Core.config'],
     [normalize(join(__dirname, 'src/core/websocket.js')), 'Toolasha.Core.webSocketHook'],
