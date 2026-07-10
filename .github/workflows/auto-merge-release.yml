@@ -20,13 +20,22 @@ jobs:
                   echo "Waiting for CI checks to complete..."
                   for i in $(seq 1 60); do
                     STATUS=$(gh api "repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}/check-runs" \
-                      --jq '.check_runs[] | select(.name=="lint-and-build") | .status + ":" + .conclusion')
-                    echo "Check $i: $STATUS"
-                    case "$STATUS" in
-                      "completed:success") echo "✅ CI passed"; break ;;
-                      "completed:failure"|"completed:cancelled"|"completed:timed_out") echo "❌ CI failed"; exit 1 ;;
-                      *) sleep 15 ;;
-                    esac
+                      --jq '.check_runs[] | select(.name=="lint-and-build" or .name=="format-release-notes") | .name + ":" + .status + ":" + .conclusion' | tr '\n' ' ')
+                    
+                    LINT_STATUS=$(echo "$STATUS" | grep -o 'lint-and-build:[^ ]*' | head -1 | cut -d: -f2-)
+                    FORMAT_STATUS=$(echo "$STATUS" | grep -o 'format-release-notes:[^ ]*' | head -1 | cut -d: -f2-)
+                    
+                    echo "Check $i: lint=$LINT_STATUS format=$FORMAT_STATUS"
+                    
+                    if echo "$LINT_STATUS" | grep -q "completed:success" && echo "$FORMAT_STATUS" | grep -q "completed:success"; then
+                      echo "✅ All checks passed"
+                      break
+                    elif echo "$LINT_STATUS" | grep -qE "completed:(failure|cancelled|timed_out)" || echo "$FORMAT_STATUS" | grep -qE "completed:(failure|cancelled|timed_out)"; then
+                      echo "❌ A check failed"
+                      exit 1
+                    else
+                      sleep 15
+                    fi
                   done
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
