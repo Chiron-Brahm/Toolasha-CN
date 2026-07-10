@@ -9,4 +9,4 @@ dist/
 .tmp/
 docs/
 .playwright-mcp
-.opencode/skills/*/workspace
+.opencode
