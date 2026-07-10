@@ -2,10 +2,9 @@
 
 ## [2.70.3](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.2...v2.70.3) (2026-07-10)
 
-
 ### 其他杂项
 
-* translate release-please changelog sections to Chinese ([7a36b6c](https://github.com/Chiron-Brahm/Toolasha-CN/commit/7a36b6ca42b73f1ae669cfc7ed2b377582be9b36))
+- translate release-please changelog sections to Chinese ([7a36b6c](https://github.com/Chiron-Brahm/Toolasha-CN/commit/7a36b6ca42b73f1ae669cfc7ed2b377582be9b36))
 
 ## [2.70.2](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.1...v2.70.2) (2026-07-10)
 
