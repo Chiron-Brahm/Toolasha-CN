@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.70.5](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.4...v2.70.5) (2026-07-11)
+
+### 问题修复
+
+- observer leak fix 只处理 MarketplacePanel 元素，避免干扰其他脚本 ([2b5310b](https://github.com/Chiron-Brahm/Toolasha-CN/commit/2b5310b025e641621348bb3c6165252b98296368))
+
 ## [2.70.4](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.3...v2.70.4) (2026-07-10)
 
 ### 其他杂项
