@@ -4,8 +4,8 @@
  * The game creates redundant MutationObservers on MarketplacePanel_tabsComponent
  * on every React render without disconnecting old ones (251+ observed).
  * This patches observe() to deduplicate: same target + same options → keep newest 2.
+ * Only targets MarketplacePanel elements to avoid interfering with other scripts.
  */
-// ponytail: per-target-cap dedup, add per-checkbox observer pool if needed
 const MAX_OBSERVERS = 2;
 
 function serializeOptions(options) {
@@ -21,6 +21,12 @@ function serializeOptions(options) {
 
 const targetRegistry = new WeakMap();
 
+function isMarketplacePanel(element) {
+    if (!element || !(element instanceof Element)) return false;
+    const cls = element.className || '';
+    return typeof cls === 'string' && cls.includes('MarketplacePanel');
+}
+
 function install() {
     const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
     const pageMO = targetWindow.MutationObserver;
@@ -29,7 +35,7 @@ function install() {
     const originalObserve = pageMO.prototype.observe;
 
     pageMO.prototype.observe = function (target, options) {
-        if (!(target instanceof Element)) {
+        if (!(target instanceof Element) || !isMarketplacePanel(target)) {
             return originalObserve.call(this, target, options);
         }
 
