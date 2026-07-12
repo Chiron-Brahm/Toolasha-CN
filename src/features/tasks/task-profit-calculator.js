@@ -12,6 +12,9 @@ import {
     calculateProductionActionTotalsFromBase,
     calculateGatheringActionTotalsFromBase,
 } from '../../utils/profit-helpers.js';
+import itemNameTranslator from '../../utils/item-name-translator.js';
+
+const CJK_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
 
 /**
  * Calculate Task Token value from Task Shop items
@@ -120,13 +123,26 @@ function detectTaskType(taskDescription) {
 
     const skill = skillMatch[1].trim().toLowerCase();
 
-    // Gathering skills
-    if (['foraging', 'woodcutting', 'milking'].includes(skill)) {
+    // Gathering skills (English + Chinese)
+    if (['foraging', 'woodcutting', 'milking', '采集', '伐木', '挤奶'].includes(skill)) {
         return 'gathering';
     }
 
-    // Production skills
-    if (['cheesesmithing', 'brewing', 'cooking', 'crafting', 'tailoring'].includes(skill)) {
+    // Production skills (English + Chinese)
+    if (
+        [
+            'cheesesmithing',
+            'brewing',
+            'cooking',
+            'crafting',
+            'tailoring',
+            '奶酪制作',
+            '酿造',
+            '烹饪',
+            '制作',
+            '裁缝',
+        ].includes(skill)
+    ) {
         return 'production';
     }
 
@@ -175,6 +191,21 @@ function parseTaskDescription(taskDescription, taskType, quantity, currentProgre
     for (const [actionHrid, actionDetail] of Object.entries(actionDetailMap)) {
         if (actionDetail.name && actionDetail.name.toLowerCase() === actionName.toLowerCase()) {
             return { actionHrid, quantity, currentProgress, description: taskDescription };
+        }
+    }
+
+    // Chinese name fallback: map Chinese action name → item HRID → English item name → action
+    if (CJK_REGEX.test(actionName)) {
+        const itemHrid = itemNameTranslator.getHridFromChineseName(actionName);
+        if (itemHrid) {
+            const item = dataManager.getItemDetails(itemHrid);
+            if (item?.name) {
+                for (const [actionHrid, actionDetail] of Object.entries(actionDetailMap)) {
+                    if (actionDetail.name && actionDetail.name.toLowerCase() === item.name.toLowerCase()) {
+                        return { actionHrid, quantity, currentProgress, description: taskDescription };
+                    }
+                }
+            }
         }
     }
 
