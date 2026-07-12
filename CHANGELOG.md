@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.70.6](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.5...v2.70.6) (2026-07-12)
+
+### 问题修复
+
+- 修复中文界面下任务利润计算失效的问题 ([2f9fdb5](https://github.com/Chiron-Brahm/Toolasha-CN/commit/2f9fdb5b6a76a9a8fb1fd687bed07846509952a3))
+
 ## [2.70.5](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.4...v2.70.5) (2026-07-11)
 
 ### 问题修复
