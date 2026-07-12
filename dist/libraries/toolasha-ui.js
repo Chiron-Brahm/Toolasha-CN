@@ -1,7 +1,7 @@
 /**
  * Toolasha UI Library
  * UI enhancements, tasks, skills, and misc features
- * Version: 2.70.5
+ * Version: 2.70.6
  * License: CC-BY-NC-SA-4.0
  */
 
@@ -6497,7 +6497,7 @@ ${starCSS}
     ];
 
     const ENHANCEMENT_STRIP_REGEX = /\s*\+\d+$/;
-    const CJK_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
+    const CJK_REGEX$1 = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
 
     class ItemNameTranslator {
         constructor() {
@@ -6538,7 +6538,7 @@ ${starCSS}
         captureFromDOM(element, itemHrid) {
             if (!element || !itemHrid) return;
             const text = (element.textContent || element.getAttribute('aria-label') || '').trim();
-            if (!text || !CJK_REGEX.test(text)) return;
+            if (!text || !CJK_REGEX$1.test(text)) return;
             const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
             if (!baseName) return;
             if (this.cnNames[itemHrid] === baseName) return;
@@ -6709,7 +6709,7 @@ ${starCSS}
             const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
             if (!text) return;
 
-            if (!CJK_REGEX.test(text)) return;
+            if (!CJK_REGEX$1.test(text)) return;
 
             const baseName = text.replace(ENHANCEMENT_STRIP_REGEX, '').trim();
             if (!baseName) return;
@@ -7148,6 +7148,8 @@ ${starCSS}
      */
 
 
+    const CJK_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
+
     /**
      * Calculate Task Token value from Task Shop items
      * Uses same approach as Ranged Way Idle - find best Task Shop item
@@ -7255,13 +7257,26 @@ ${starCSS}
 
         const skill = skillMatch[1].trim().toLowerCase();
 
-        // Gathering skills
-        if (['foraging', 'woodcutting', 'milking'].includes(skill)) {
+        // Gathering skills (English + Chinese)
+        if (['foraging', 'woodcutting', 'milking', '采集', '伐木', '挤奶'].includes(skill)) {
             return 'gathering';
         }
 
-        // Production skills
-        if (['cheesesmithing', 'brewing', 'cooking', 'crafting', 'tailoring'].includes(skill)) {
+        // Production skills (English + Chinese)
+        if (
+            [
+                'cheesesmithing',
+                'brewing',
+                'cooking',
+                'crafting',
+                'tailoring',
+                '奶酪制作',
+                '酿造',
+                '烹饪',
+                '制作',
+                '裁缝',
+            ].includes(skill)
+        ) {
             return 'production';
         }
 
@@ -7310,6 +7325,21 @@ ${starCSS}
         for (const [actionHrid, actionDetail] of Object.entries(actionDetailMap)) {
             if (actionDetail.name && actionDetail.name.toLowerCase() === actionName.toLowerCase()) {
                 return { actionHrid, quantity, currentProgress, description: taskDescription };
+            }
+        }
+
+        // Chinese name fallback: map Chinese action name → item HRID → English item name → action
+        if (CJK_REGEX.test(actionName)) {
+            const itemHrid = itemNameTranslator.getHridFromChineseName(actionName);
+            if (itemHrid) {
+                const item = dataManager.getItemDetails(itemHrid);
+                if (item?.name) {
+                    for (const [actionHrid, actionDetail] of Object.entries(actionDetailMap)) {
+                        if (actionDetail.name && actionDetail.name.toLowerCase() === item.name.toLowerCase()) {
+                            return { actionHrid, quantity, currentProgress, description: taskDescription };
+                        }
+                    }
+                }
             }
         }
 
