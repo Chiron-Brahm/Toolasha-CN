@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.71.0](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.6...v2.71.0) (2026-07-16)
+
+### 新功能
+
+- 支持中文动作名查找并本地化制作弹窗统计信息 ([45a4ad4](https://github.com/Chiron-Brahm/Toolasha-CN/commit/45a4ad424cf4cb1ff9d2347861d1ac5d9f2c68c9))
+
 ## [2.70.6](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.5...v2.70.6) (2026-07-12)
 
 ### 问题修复
