@@ -1,7 +1,7 @@
 /**
  * Toolasha Core Library
  * Core infrastructure and API clients
- * Version: 2.70.6
+ * Version: 2.71.0
  * License: CC-BY-NC-SA-4.0
  */
 
@@ -1549,6 +1549,7 @@
         'Level < ': '等级 < ',
         'Level >= ': '等级 >= ',
         'Level Bonus': '等级加成',
+        'Level Progress': '等级进度',
         'Level advantage:': '等级优势：',
         'Level:': '等级：',
         'Limits action bar width to 800px. Useful for wide monitors.': '将行动栏宽度限制为800px。适用于宽屏显示器。',
@@ -1794,6 +1795,7 @@
         Orders: '订单',
         Other: '其他',
         'Other Abilities ({0}): {1}': '其他能力({0})：{1}',
+        'Output: ×{0}': '产出：×{0}',
         'Outbid by 1 (best buy + 1)': '加价1（最优买入+1）',
         Overview: '概览',
         'Owned: ': '拥有：',
@@ -2178,6 +2180,8 @@
         'Suppresses injected tooltip content (prices, profit, milestones) when browsing items in the enhancement selector':
             '在强化选择器中浏览物品时抑制注入的提示内容（价格、利润、里程碑）',
         'Switch characters to capture queue state.': '切换角色以捕获队列状态。',
+        'Target Level Calculator:': '目标等级计算器：',
+        'Task Speed (multiplicative):': '任务速度（乘算）：',
         Tailoring: '裁缝',
         Target: '目标',
         'Target Lv': '目标等级',
@@ -2265,6 +2269,9 @@
         'Total Income': '总收入',
         'Total Market Value: {0}': '市场总价值：{0}',
         'Total Price': '总价',
+        'To Level {0}:': '到等级{0}：',
+        'Total XP Bonus: +{0}': '总经验加成：+{0}',
+        'XP per action: {0} base → {1} (×{2})': '每次经验：{0} 基础 → {1}（×{2}）',
         'Total Profit (revenue - all costs)': '总利润（收入-所有成本）',
         'Total Profit:': '总利润：',
         'Total Revenue': '总收入',
@@ -2389,6 +2396,8 @@
         'Worst-case per action (ceil per craft)': '每次行动最坏情况（每次制作向上取整）',
         XP: '经验',
         'XP Rate Text': '经验比率文本',
+        'XP/day: {0}': '经验/天：{0}',
+        'XP/hour: {0}': '经验/时：{0}',
         'XP/Hour': '经验/时',
         'XP/hr': '经验/时',
         'XPH Calc': '经验/时计算器',
@@ -8293,17 +8302,13 @@
                 this.debouncedElements.delete(handlerName);
                 this.debounceTimers.delete(handlerName);
 
-                // Process all collected elements
-                // For most handlers, we only need to process the last element
-                // (e.g., task list updated multiple times, we only care about final state)
-                if (elements.length > 0) {
-                    const lastElement = elements[elements.length - 1];
+                for (const el of elements) {
                     if (performanceMonitor.enabled) {
                         const start = performance.now();
-                        handler.callback(lastElement.node, lastElement.mutation);
+                        handler.callback(el.node, el.mutation);
                         performanceMonitor.record(`dom:${handler.name}`, performance.now() - start);
                     } else {
-                        handler.callback(lastElement.node, lastElement.mutation);
+                        handler.callback(el.node, el.mutation);
                     }
                 }
             }, delay);
@@ -8378,21 +8383,15 @@
             return this.register(
                 name,
                 (node) => {
-                    // Safely get className as string (handles SVG elements)
                     const className = typeof node.className === 'string' ? node.className : '';
 
-                    // Check if node matches any of the target classes
                     for (const targetClass of classArray) {
                         if (className.includes(targetClass)) {
                             callback(node, true);
-                            return; // Only call once per node
+                            return;
                         }
                     }
 
-                    // Also check descendants when a container subtree is inserted.
-                    // Only applies when the node has children — leaf nodes are skipped,
-                    // which eliminates the bulk of querySelectorAll cost during React's
-                    // init burst (thousands of individual leaf additions).
                     if (node.childElementCount >= 3) {
                         const combinedSelector =
                             classArray.length === 1
