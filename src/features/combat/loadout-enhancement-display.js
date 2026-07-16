@@ -12,6 +12,8 @@ import domObserver from '../../core/dom-observer.js';
 
 const OVERLAY_CLASS = 'script_loadoutEnhLevel';
 
+const processedSlots = new WeakMap();
+
 /**
  * Build a map of itemHrid → highest enhancementLevel across all character items.
  * @returns {Map<string, number>}
@@ -55,12 +57,8 @@ function annotateLoadout() {
     });
     if (allUses.length > 0 && validUses.length === 0) return;
 
-    // DOM and data are ready — clear stale overlays and re-inject
-    for (const el of equipDiv.querySelectorAll(`.${OVERLAY_CLASS}`)) {
-        el.remove();
-    }
-
     const enhancementMap = buildEnhancementLevelMap();
+    const currentDivs = new Set();
 
     for (const use of validUses) {
         const href = use.getAttribute('href') || use.getAttribute('xlink:href') || '';
@@ -69,7 +67,6 @@ function annotateLoadout() {
         const itemHrid = `/items/${fragment}`;
 
         const enhLevel = enhancementMap.get(itemHrid) ?? 0;
-        if (enhLevel === 0) continue;
 
         // DOM: use → svg → Item_iconContainer → Item_item__
         const svg = use.closest('svg');
@@ -77,8 +74,16 @@ function annotateLoadout() {
         const itemDiv = svg.parentElement?.parentElement;
         if (!itemDiv) continue;
 
-        // Skip if already annotated
-        if (itemDiv.querySelector(`.${OVERLAY_CLASS}`)) continue;
+        currentDivs.add(itemDiv);
+        const stateKey = `${itemHrid}:${enhLevel}`;
+
+        if (processedSlots.get(itemDiv) === stateKey) continue;
+        processedSlots.set(itemDiv, stateKey);
+
+        const existing = itemDiv.querySelector(`.${OVERLAY_CLASS}`);
+        if (existing) existing.remove();
+
+        if (enhLevel === 0) continue;
 
         itemDiv.style.position = 'relative';
         const overlay = document.createElement('div');
@@ -97,6 +102,12 @@ function annotateLoadout() {
             pointer-events: none;
         `;
         itemDiv.appendChild(overlay);
+    }
+
+    for (const el of equipDiv.querySelectorAll(`.${OVERLAY_CLASS}`)) {
+        if (!currentDivs.has(el.parentElement)) {
+            el.remove();
+        }
     }
 }
 

@@ -93,13 +93,23 @@ class DOMObserver {
             this.debouncedElements.delete(handlerName);
             this.debounceTimers.delete(handlerName);
 
-            for (const el of elements) {
+            if (handler.callback.length === 0) {
                 if (performanceMonitor.enabled) {
                     const start = performance.now();
-                    handler.callback(el.node, el.mutation);
+                    handler.callback();
                     performanceMonitor.record(`dom:${handler.name}`, performance.now() - start);
                 } else {
-                    handler.callback(el.node, el.mutation);
+                    handler.callback();
+                }
+            } else {
+                for (const el of elements) {
+                    if (performanceMonitor.enabled) {
+                        const start = performance.now();
+                        handler.callback(el.node, el.mutation);
+                        performanceMonitor.record(`dom:${handler.name}`, performance.now() - start);
+                    } else {
+                        handler.callback(el.node, el.mutation);
+                    }
                 }
             }
         }, delay);
