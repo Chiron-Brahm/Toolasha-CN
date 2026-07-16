@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.71.1](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.71.0...v2.71.1) (2026-07-16)
+
+### 问题修复
+
+- 修复配装页面装备切换时卡死的问题 ([9867169](https://github.com/Chiron-Brahm/Toolasha-CN/commit/9867169531536a9ed485dfa54736e5469288b8ab))
+
 ## [2.71.0](https://github.com/Chiron-Brahm/Toolasha-CN/compare/v2.70.6...v2.71.0) (2026-07-16)
 
 ### 新功能
