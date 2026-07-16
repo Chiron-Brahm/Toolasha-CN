@@ -93,17 +93,13 @@ class DOMObserver {
             this.debouncedElements.delete(handlerName);
             this.debounceTimers.delete(handlerName);
 
-            // Process all collected elements
-            // For most handlers, we only need to process the last element
-            // (e.g., task list updated multiple times, we only care about final state)
-            if (elements.length > 0) {
-                const lastElement = elements[elements.length - 1];
+            for (const el of elements) {
                 if (performanceMonitor.enabled) {
                     const start = performance.now();
-                    handler.callback(lastElement.node, lastElement.mutation);
+                    handler.callback(el.node, el.mutation);
                     performanceMonitor.record(`dom:${handler.name}`, performance.now() - start);
                 } else {
-                    handler.callback(lastElement.node, lastElement.mutation);
+                    handler.callback(el.node, el.mutation);
                 }
             }
         }, delay);
@@ -178,21 +174,15 @@ class DOMObserver {
         return this.register(
             name,
             (node) => {
-                // Safely get className as string (handles SVG elements)
                 const className = typeof node.className === 'string' ? node.className : '';
 
-                // Check if node matches any of the target classes
                 for (const targetClass of classArray) {
                     if (className.includes(targetClass)) {
                         callback(node, true);
-                        return; // Only call once per node
+                        return;
                     }
                 }
 
-                // Also check descendants when a container subtree is inserted.
-                // Only applies when the node has children — leaf nodes are skipped,
-                // which eliminates the bulk of querySelectorAll cost during React's
-                // init burst (thousands of individual leaf additions).
                 if (node.childElementCount >= 3) {
                     const combinedSelector =
                         classArray.length === 1

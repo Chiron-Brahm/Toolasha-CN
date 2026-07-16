@@ -259,19 +259,23 @@ class QuickInputButtons {
      * Start observing for action panels using centralized observer
      */
     startObserving() {
-        this.unregisterObserver = domObserver.onClass(
-            'QuickInputButtons',
-            'SkillActionDetail_skillActionDetail',
-            (panel) => {
-                this.injectButtons(panel);
-            },
-            { debounce: true, debounceDelay: 150 }
-        );
+        this._modalObserver = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                for (const node of m.addedNodes) {
+                    if (node.nodeType !== 1) continue;
+                    const panel = node.classList?.contains('Modal_modalContainer__3B80m')
+                        ? node.querySelector('[class*="SkillActionDetail_skillActionDetail"]')
+                        : node.querySelector?.('[class*="SkillActionDetail_skillActionDetail"]');
+                    if (panel) this.injectButtons(panel);
+                }
+            }
+        });
+        this._modalObserver.observe(document.body, { childList: true, subtree: true });
 
         this.cleanupRegistry.registerCleanup(() => {
-            if (this.unregisterObserver) {
-                this.unregisterObserver();
-                this.unregisterObserver = null;
+            if (this._modalObserver) {
+                this._modalObserver.disconnect();
+                this._modalObserver = null;
             }
         });
 
@@ -288,16 +292,12 @@ class QuickInputButtons {
     injectButtons(panel) {
         let actionDetails = null;
         try {
-            // ponytail: log className once for F12 diagnosis if anything else fails
-            console.warn('[QuickInput] inject called for:', panel.className?.slice(0, 80));
-            // Check if already injected for this same action
             const actionNameElement = panel.querySelector('[class*="SkillActionDetail_name"]');
             const currentActionName = actionNameElement?.textContent?.trim() || '';
             const previousActionName = panel.dataset.mwiInjectedAction || '';
 
             if (panel.querySelector('.mwi-collapsible-section') || panel.querySelector('.mwi-quick-input-btn')) {
                 if (currentActionName && currentActionName === previousActionName) {
-                    console.warn('[QuickInput] skip: already injected for', currentActionName);
                     return;
                 }
                 // Action changed (React reused the panel) — remove old injections
@@ -415,11 +415,11 @@ class QuickInputButtons {
                     timeAfterEquipment < MIN_ACTION_TIME_SECONDS ? ` (${timeAfterEquipment.toFixed(2)}s)` : '';
 
                 speedLines.push(
-                    `Base: ${baseTime.toFixed(2)}s → ${displayTimeAfterEquipment.toFixed(2)}s${equipmentClampSuffix}`
+                    `${t('Base:')} ${baseTime.toFixed(2)}s → ${displayTimeAfterEquipment.toFixed(2)}s${equipmentClampSuffix}`
                 );
                 if (speedBonus > 0) {
                     speedLines.push(
-                        `Speed: +${formatPercentage(speedBonus, 1)} | ${calculateActionsPerHour(timeAfterEquipment).toFixed(0)}/hr`
+                        `${t('Speed:')} +${formatPercentage(speedBonus, 1)} | ${calculateActionsPerHour(timeAfterEquipment).toFixed(0)}/hr`
                     );
                 } else {
                     speedLines.push(`${calculateActionsPerHour(timeAfterEquipment).toFixed(0)}/hr`);
@@ -467,7 +467,7 @@ class QuickInputButtons {
                 if (isTaskAction && taskSpeedBonus > 0) {
                     speedLines.push(''); // Empty line separator
                     speedLines.push(
-                        `<span style="font-weight: 500;">Task Speed (multiplicative): +${taskSpeedBonus.toFixed(2)}%</span>`
+                        `<span style="font-weight: 500;">${t('Task Speed (multiplicative):')} +${taskSpeedBonus.toFixed(2)}%</span>`
                     );
                     speedLines.push(
                         `${displayTimeAfterEquipment.toFixed(2)}s${equipmentClampSuffix} → ${actionTime.toFixed(2)}s | ${calculateActionsPerHour(actionTime).toFixed(0)}/hr`
@@ -501,7 +501,7 @@ class QuickInputButtons {
                 // Add Efficiency breakdown
                 speedLines.push(''); // Empty line
                 speedLines.push(
-                    `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">Efficiency: +${totalEfficiency.toFixed(2)}% → Output: ×${efficiencyMultiplier.toFixed(2)} (${Math.round(calculateActionsPerHour(actionTime) * efficiencyMultiplier)}/hr)</span>`
+                    `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">${t('Efficiency:')} +${totalEfficiency.toFixed(2)}% → ${t('Output: ×{0}', efficiencyMultiplier.toFixed(2))} (${Math.round(calculateActionsPerHour(actionTime) * efficiencyMultiplier)}/hr)</span>`
                 );
 
                 // Detailed efficiency breakdown
@@ -513,7 +513,7 @@ class QuickInputButtons {
                     const rawLevelDelta = efficiencyBreakdown.skillLevel - efficiencyBreakdown.baseRequirement;
 
                     // Show final level efficiency
-                    speedLines.push(`  - Level: +${efficiencyBreakdown.levelEfficiency.toFixed(2)}%`);
+                    speedLines.push(`  - ${t('Level:')} +${efficiencyBreakdown.levelEfficiency.toFixed(2)}%`);
 
                     // Show raw level delta (what you'd get without Action Level bonuses)
                     speedLines.push(
@@ -535,7 +535,7 @@ class QuickInputButtons {
                             // Show DC contribution as additional reduction if > 0
                             if (tea.dcContribution > 0) {
                                 const dcImpact = -tea.dcContribution;
-                                speedLines.push(`      - Drink Concentration: ${dcImpact.toFixed(2)}%`);
+                                speedLines.push(`      - ${t('Drink Concentration: ')}${dcImpact.toFixed(2)}%`);
                             }
                         }
                     }
@@ -544,14 +544,16 @@ class QuickInputButtons {
                     // Get house room name
                     const houseRoomName = this.getHouseRoomName(actionDetails.type);
                     speedLines.push(
-                        `  - House: +${efficiencyBreakdown.houseEfficiency.toFixed(2)}% (${houseRoomName})`
+                        `  - ${t('House:')} +${efficiencyBreakdown.houseEfficiency.toFixed(2)}% (${houseRoomName})`
                     );
                 }
                 if (efficiencyBreakdown.equipmentEfficiency > 0) {
-                    speedLines.push(`  - Equipment: +${efficiencyBreakdown.equipmentEfficiency.toFixed(2)}%`);
+                    speedLines.push(`  - ${t('Equipment:')} +${efficiencyBreakdown.equipmentEfficiency.toFixed(2)}%`);
                 }
                 if (efficiencyBreakdown.achievementEfficiency > 0) {
-                    speedLines.push(`  - Achievement: +${efficiencyBreakdown.achievementEfficiency.toFixed(2)}%`);
+                    speedLines.push(
+                        `  - ${t('Achievement:')} +${efficiencyBreakdown.achievementEfficiency.toFixed(2)}%`
+                    );
                 }
                 // Break out individual teas - show BASE efficiency on main line, DC as sub-line
                 if (efficiencyBreakdown.teaBreakdown && efficiencyBreakdown.teaBreakdown.length > 0) {
@@ -560,7 +562,7 @@ class QuickInputButtons {
                         speedLines.push(`  - ${tea.name}: +${tea.baseEfficiency.toFixed(2)}%`);
                         // Show DC contribution as sub-line if > 0
                         if (tea.dcContribution > 0) {
-                            speedLines.push(`    - Drink Concentration: +${tea.dcContribution.toFixed(2)}%`);
+                            speedLines.push(`    - ${t('Drink Concentration: ')}${tea.dcContribution.toFixed(2)}%`);
                         }
                     }
                 }
@@ -828,6 +830,10 @@ class QuickInputButtons {
      */
     disable() {
         this.cleanupRegistry.cleanupAll();
+        if (this._modalObserver) {
+            this._modalObserver.disconnect();
+            this._modalObserver = null;
+        }
         document.querySelectorAll('.mwi-collapsible-section').forEach((section) => section.remove());
         document.querySelectorAll('.mwi-quick-input-btn').forEach((button) => button.remove());
         this.isInitialized = false;
@@ -1248,15 +1254,14 @@ class QuickInputButtons {
             lines.push(`Current: Level ${currentLevel} | ${progressPercent.toFixed(2)}% to Level ${nextLevel}`);
             lines.push('');
 
-            // Action details
             lines.push(
-                `XP per action: ${formatWithSeparator(baseXP.toFixed(2))} base → ${formatWithSeparator(modifiedXP.toFixed(2))} (×${xpData.totalMultiplier.toFixed(2)})`
+                `${t('XP per action: {0} base → {1} (×{2})', formatWithSeparator(baseXP.toFixed(2)), formatWithSeparator(modifiedXP.toFixed(2)), xpData.totalMultiplier.toFixed(2))}`
             );
 
             // XP breakdown (if any bonuses exist)
             if (xpData.totalWisdom > 0 || xpData.charmExperience > 0) {
                 const totalXPBonus = xpData.totalWisdom + xpData.charmExperience;
-                lines.push(`  Total XP Bonus: +${totalXPBonus.toFixed(2)}%`);
+                lines.push(`  ${t('Total XP Bonus: +{0}', totalXPBonus.toFixed(2))}`);
 
                 // List all sources that contribute
 
@@ -1324,7 +1329,7 @@ class QuickInputButtons {
             );
 
             lines.push(
-                `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">To Level ${nextLevel}:</span>`
+                `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">${t('To Level {0}:', nextLevel)}</span>`
             );
             lines.push(`  Actions: ${formatWithSeparator(singleLevel.actionsNeeded)}`);
             lines.push(`  Time: ${timeReadableZh(singleLevel.timeNeeded)}`);
@@ -1336,7 +1341,7 @@ class QuickInputButtons {
             const initialTargetLevel =
                 savedTargetLevel && savedTargetLevel > currentLevel ? savedTargetLevel : nextLevel;
             lines.push(
-                `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">Target Level Calculator:</span>`
+                `<span style="font-weight: 500; color: var(--text-color-primary, ${config.COLOR_TEXT_PRIMARY});">${t('Target Level Calculator:')}</span>`
             );
             lines.push(`<div style="margin-top: 4px;">
                 <span>To level </span>
@@ -1366,7 +1371,7 @@ class QuickInputButtons {
 
             lines.push('');
             lines.push(
-                `XP/hour: ${formatWithSeparator(Math.round(xpPerHour))} | XP/day: ${formatWithSeparator(Math.round(xpPerDay))}`
+                `${t('XP/hour: {0}', formatWithSeparator(Math.round(xpPerHour)))} | ${t('XP/day: {0}', formatWithSeparator(Math.round(xpPerDay)))}`
             );
 
             content.innerHTML = lines.join('<br>');
@@ -1417,7 +1422,7 @@ class QuickInputButtons {
             // Create collapsible section
             return createCollapsibleSection(
                 '📈',
-                'Level Progress',
+                t('Level Progress'),
                 summary,
                 content,
                 false // Collapsed by default

@@ -7,6 +7,7 @@
  */
 
 import dataManager from '../core/data-manager.js';
+import ACTION_NAMES_ZH from './action-names-zh.js';
 
 /**
  * Generate alternate display names to handle ★ ↔ (R) refined item naming.
@@ -22,6 +23,15 @@ function getRefinedNameVariants(name) {
         variants.push(name.replace(/\s*\(R\)/, ' ★'));
     }
     return variants;
+}
+
+let zhActionNameToHrid = null;
+
+function getZhActionNameMap() {
+    if (!zhActionNameToHrid) {
+        zhActionNameToHrid = new Map(Object.entries(ACTION_NAMES_ZH).map(([hrid, zhName]) => [zhName, hrid]));
+    }
+    return zhActionNameToHrid;
 }
 
 /**
@@ -43,7 +53,11 @@ export function getActionHridFromName(actionName) {
         }
     }
 
-    // Try ★ ↔ (R) variants for refined items
+    const zhHrid = getZhActionNameMap().get(actionName);
+    if (zhHrid && gameData.actionDetailMap[zhHrid]) {
+        return zhHrid;
+    }
+
     for (const variant of getRefinedNameVariants(actionName)) {
         for (const [hrid, detail] of Object.entries(gameData.actionDetailMap)) {
             if (detail.name === variant) {
